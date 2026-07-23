@@ -1,0 +1,6 @@
+_target_: deep_isochron.model.latent_dynamics.LinearLatentDynamics
+dim: 20
+num_eig_imag: 1
+num_eig_comp: 0
+positive_real_eigs_allowed: false
+key: ${..key}

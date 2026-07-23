@@ -1,1 +1,13 @@
-_target_: deep_isochron.models.LatentDynamicsModel
+defaults:
+  - latent_dynamics: hopf
+
+_target_: deep_isochron.model.PhaseAmplitudeAutoencoder
+obs_dim: ${..data.dim}
+mlp_depth: 3
+mlp_width: 32
+activation:
+  _target_: hydra.utils.get_method
+  path: jax.nn.gelu
+key:
+  _target_: jax.random.key
+  seed: 0
