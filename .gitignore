@@ -10,5 +10,11 @@ wheels/
 .venv
 
 # Hydra-related
-outputs
-multirun
+outputs/
+multirun/
+
+# Wandb
+wandb/
+
+# Results (checkpoints, etc.)
+results/

@@ -18,6 +18,7 @@ dependencies = [
     "matplotlib>=3.11.0",
     "numpy>=2.5.1",
     "optax>=0.2.8",
+    "orbax-checkpoint>=0.12.4",
     "quax>=0.3.7",
     "wandb>=0.28.0",
 ]

@@ -10,6 +10,7 @@ from .base import AbstractInvertibleTransform
 
 class AffineCoupling(AbstractInvertibleTransform):
     dim: int = eqx.field(static=True)
+    affine_clamping: float | None = eqx.field(static=True)
 
     split_idx: int
     flip: bool
@@ -24,6 +25,7 @@ class AffineCoupling(AbstractInvertibleTransform):
         width_hidden: int = 10,
         depth: int = 1,
         flip: bool = False,
+        affine_clamping: float | None = 2.0,
         activation: Callable = jax.nn.gelu,
         dtype=None,
         *,
@@ -32,6 +34,7 @@ class AffineCoupling(AbstractInvertibleTransform):
         self.dim = dim
         self.split_idx = dim // 2 if split_idx is None else split_idx
         self.flip = flip
+        self.affine_clamping = affine_clamping
 
         in_size, out_size = (
             self.split_sizes if not self.flip else self.split_sizes[::-1]
@@ -65,23 +68,41 @@ class AffineCoupling(AbstractInvertibleTransform):
         x_up, x_down = jnp.split(x, [self.split_idx])
 
         if not self.flip:
-            y_up = x_up
-            y_down = (x_down + self.t(x_up)) * self.s(x_up)
+            y_up = x_up**3
+            if self.affine_clamping is None:
+                scale = jnp.exp(self.s(x_up**3))
+            else:
+                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(x_up**3)))
+            y_down = x_down**3 * scale + self.t(x_up**3)
         else:
-            y_up = (x_up + self.t(x_down)) * self.s(x_down)
-            y_down = x_down
-
+            if self.affine_clamping is None:
+                scale = jnp.exp(self.s(x_down**3))
+            else:
+                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(x_down**3)))
+            y_up = x_up**3 * scale + self.t(x_down**3)
+            y_down = x_down**3
+        jax.debug.print("out={out}", out=jnp.concatenate((y_up, y_down)))
         return jnp.concatenate((y_up, y_down))
 
     def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
         y_up, y_down = jnp.split(y, [self.split_idx])
 
         if not self.flip:
-            x_up = y_up
-            x_down = y_down / self.s(y_up) - self.t(y_up)
+            x_up = y_up ** (1 / 3)
+            if self.affine_clamping is None:
+                scale = jnp.exp(self.s(y_up))
+            else:
+                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(y_up)))
+            x_down = (y_down - self.t(y_up)) / scale
+            x_down = x_down ** (1 / 3)
         else:
-            x_up = y_up / self.s(y_down) - self.t(y_down)
-            x_down = y_down
+            if self.affine_clamping is None:
+                scale = jnp.exp(self.s(y_down))
+            else:
+                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(y_down)))
+            x_up = (y_up - self.t(y_down)) / scale
+            x_up = x_up ** (1 / 3)
+            x_down = y_down ** (1 / 3)
 
         return jnp.concatenate((x_up, x_down))
 
