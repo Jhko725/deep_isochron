@@ -6,6 +6,8 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int, PRNGKeyArray
 
+from deep_isochron.misc import inv_softplus
+
 from .base import AbstractInvertibleTransform
 
 
@@ -82,6 +84,12 @@ class MonotonicRationalQuadraticSpline(AbstractInvertibleTransform):
 
 
 class MonotonicRQCoupling(AbstractInvertibleTransform):
+    """Monotonic rational quadratic spline coupling transform, as introduced in [1, 2].
+
+    [1] C. Durkan et al. Neural Spline Flows. NeurIPS (2019).
+    [2] https://github.com/bayesiains/nflows/blob/master/nflows/transforms/splines/rational_quadratic.py
+    """
+
     mlp: eqx.nn.MLP
 
     dim: int = eqx.field(static=True)
@@ -89,6 +97,9 @@ class MonotonicRQCoupling(AbstractInvertibleTransform):
     flip: bool = eqx.field(static=True)
     num_knots: int = eqx.field(static=True)
     xy_range: tuple[float, float] = eqx.field(static=True)
+    min_derivative: float = eqx.field(static=True)
+    min_rel_x_bin_width: float = eqx.field(static=True)
+    min_rel_y_bin_width: float = eqx.field(static=True)
 
     def __init__(
         self,
@@ -99,11 +110,21 @@ class MonotonicRQCoupling(AbstractInvertibleTransform):
         flip: bool = False,
         num_knots: int = 10,
         xy_range: tuple[float, float] = (-1, 1),
+        min_rel_x_bin_width: float = 1e-3,
+        min_rel_y_bin_width: float = 1e-3,
+        min_derivative: float = 1e-3,
         activation: Callable = jax.nn.gelu,
         dtype=None,
         *,
         key: PRNGKeyArray,
     ):
+        """**Arguments:**
+
+        - `dim`: Dimension of the inputs/outputs of the coupling transform.
+        - `min_derivative`: Minimum value of the derivative at the knot points.
+
+
+        """
         self.dim = dim
         self.split_idx = dim // 2 if split_idx is None else split_idx
         self.flip = flip
@@ -111,37 +132,54 @@ class MonotonicRQCoupling(AbstractInvertibleTransform):
         in_size, out_size = (
             self.split_sizes if not self.flip else self.split_sizes[::-1]
         )
-        self.mlp = eqx.nn.MLP(
+        mlp = eqx.nn.MLP(
             in_size=in_size,
-            out_size=(3 * num_knots - 2) * out_size,
+            out_size=(3 * num_knots - 4) * out_size,
             width_size=width_hidden,
             depth=depth,
             activation=activation,
             dtype=dtype,
             key=key,
         )
+        mlp = eqx.tree_at(lambda x: x.layers[-1].weight, mlp, replace_fn=jnp.zeros_like)
+        self.mlp = eqx.tree_at(
+            lambda x: x.layers[-1].bias,
+            mlp,
+            replace_fn=lambda x: jnp.ones_like(x) * inv_softplus(jnp.asarray(1.0)),
+        )
         self.num_knots = num_knots
         self.xy_range = xy_range
+        self.min_rel_x_bin_width = min_rel_x_bin_width
+        self.min_rel_y_bin_width = min_rel_y_bin_width
+        self.min_derivative = min_derivative
 
     @property
     def split_sizes(self) -> tuple[int, int]:
         out_sizes = self.split_idx, self.dim - self.split_idx
         return out_sizes
 
+    def _make_knots(
+        self,
+        unnormalized_bin_widths: Float[Array, " {self.num_knots}-1"],
+        knot_range: tuple[float, float],
+        min_bin_width: float,
+    ) -> Float[Array, " {self.num_knots}"]:
+        bin_widths = (
+            jax.nn.softmax(unnormalized_bin_widths)
+            * (1 - self.num_knots * min_bin_width)
+            + min_bin_width
+        )
+        knots = jnp.pad(jnp.cumsum(bin_widths), pad_width=(1, 0))
+        return knot_range[0] + (knot_range[1] - knot_range[0]) * knots
+
     def make_spline(
-        self, theta: Float[Array, " 3*{self.num_knots}-2"]
+        self, theta: Float[Array, " 3*{self.num_knots}-4"]
     ) -> MonotonicRationalQuadraticSpline:
-        xs, ys, ds = jnp.split(theta, [self.num_knots, 2 * self.num_knots])
-        xs = (
-            jnp.cumsum(jax.nn.softmax(xs)) * (self.xy_range[1] - self.xy_range[0])
-            + self.xy_range[0]
-        )
-        ys = (
-            jnp.cumsum(jax.nn.softmax(ys)) * (self.xy_range[1] - self.xy_range[0])
-            + self.xy_range[0]
-        )
+        xs, ys, ds = jnp.split(theta, [self.num_knots - 1, 2 * self.num_knots - 2])
+        xs = self._make_knots(xs, self.xy_range, self.min_rel_x_bin_width)
+        ys = self._make_knots(ys, self.xy_range, self.min_rel_y_bin_width)
         ds = jnp.pad(
-            jax.nn.softplus(ds),
+            jax.nn.softplus(ds) + self.min_derivative,
             1,
             mode="constant",
             constant_values=1,
@@ -151,7 +189,7 @@ class MonotonicRQCoupling(AbstractInvertibleTransform):
     def __call__(self, x: Float[Array, " dim"]) -> Float[Array, " dim"]:
         x_up, x_down = jnp.split(x, [self.split_idx])
         y_up = x_up
-        theta = self.mlp(x_up).reshape((-1, 3 * self.num_knots - 2))
+        theta = self.mlp(x_up).reshape((-1, 3 * self.num_knots - 4))
         spl = eqx.filter_vmap(self.make_spline)(theta)
         y_down = eqx.filter_vmap(lambda spl, x: spl(x))(spl, x_down)
         return jnp.concatenate((y_up, y_down))
@@ -159,7 +197,7 @@ class MonotonicRQCoupling(AbstractInvertibleTransform):
     def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
         y_up, y_down = jnp.split(y, [self.split_idx])
         x_up = y_up
-        theta = self.mlp(y_up).reshape((-1, 3 * self.num_knots - 2))
+        theta = self.mlp(y_up).reshape((-1, 3 * self.num_knots - 4))
         spl = eqx.filter_vmap(self.make_spline)(theta)
         x_down = eqx.filter_vmap(lambda spl, y: spl.inverse(y))(spl, y_down)
         return jnp.concatenate((x_up, x_down))

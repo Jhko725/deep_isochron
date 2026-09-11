@@ -6,7 +6,10 @@ from .base import (
     AbstractInvertibleTransform as AbstractInvertibleTransform,
     SequentialINN as SequentialINN,
 )
-from .linear import InvertibleLinear as InvertibleLinear
+from .linear import (
+    BiLipschitzLinear as BiLipschitzLinear,
+    InvertibleLinear as InvertibleLinear,
+)
 from .spline import (
     MonotonicRationalQuadraticSpline as MonotonicRationalQuadraticSpline,
     MonotonicRQCoupling as MonotonicRQCoupling,

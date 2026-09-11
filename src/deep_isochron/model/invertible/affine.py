@@ -5,6 +5,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, PRNGKeyArray
 
+from ..utils import zero_final_layer
 from .base import AbstractInvertibleTransform
 
 
@@ -40,7 +41,7 @@ class AffineCoupling(AbstractInvertibleTransform):
             self.split_sizes if not self.flip else self.split_sizes[::-1]
         )
         key_s, key_t = jax.random.split(key)
-        self.s = eqx.nn.MLP(
+        s = eqx.nn.MLP(
             in_size=in_size,
             out_size=out_size,
             width_size=width_hidden,
@@ -49,7 +50,9 @@ class AffineCoupling(AbstractInvertibleTransform):
             dtype=dtype,
             key=key_s,
         )
-        self.t = eqx.nn.MLP(
+        self.s = zero_final_layer(s)
+
+        t = eqx.nn.MLP(
             in_size=in_size,
             out_size=out_size,
             width_size=width_hidden,
@@ -58,6 +61,7 @@ class AffineCoupling(AbstractInvertibleTransform):
             dtype=dtype,
             key=key_t,
         )
+        self.t = zero_final_layer(t)
 
     @property
     def split_sizes(self) -> tuple[int, int]:
@@ -68,41 +72,38 @@ class AffineCoupling(AbstractInvertibleTransform):
         x_up, x_down = jnp.split(x, [self.split_idx])
 
         if not self.flip:
-            y_up = x_up**3
+            y_up = x_up
             if self.affine_clamping is None:
-                scale = jnp.exp(self.s(x_up**3))
+                scale = jnp.exp(self.s(x_up))
             else:
-                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(x_up**3)))
-            y_down = x_down**3 * scale + self.t(x_up**3)
+                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(x_up)))
+            y_down = x_down * scale + self.t(x_up)
         else:
             if self.affine_clamping is None:
-                scale = jnp.exp(self.s(x_down**3))
+                scale = jnp.exp(self.s(x_down))
             else:
-                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(x_down**3)))
-            y_up = x_up**3 * scale + self.t(x_down**3)
-            y_down = x_down**3
-        jax.debug.print("out={out}", out=jnp.concatenate((y_up, y_down)))
+                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(x_down)))
+            y_up = x_up * scale + self.t(x_down)
+            y_down = x_down
         return jnp.concatenate((y_up, y_down))
 
     def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
         y_up, y_down = jnp.split(y, [self.split_idx])
 
         if not self.flip:
-            x_up = y_up ** (1 / 3)
+            x_up = y_up
             if self.affine_clamping is None:
                 scale = jnp.exp(self.s(y_up))
             else:
                 scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(y_up)))
             x_down = (y_down - self.t(y_up)) / scale
-            x_down = x_down ** (1 / 3)
         else:
             if self.affine_clamping is None:
                 scale = jnp.exp(self.s(y_down))
             else:
                 scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(y_down)))
             x_up = (y_up - self.t(y_down)) / scale
-            x_up = x_up ** (1 / 3)
-            x_down = y_down ** (1 / 3)
+            x_down = y_down
 
         return jnp.concatenate((x_up, x_down))
 

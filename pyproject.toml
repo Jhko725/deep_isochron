@@ -16,6 +16,7 @@ dependencies = [
     "jax[cuda12]>=0.10.2",
     "jaxtyping>=0.3.11",
     "matplotlib>=3.11.0",
+    "nbformat>=5.11.1",
     "numpy>=2.5.1",
     "optax>=0.2.8",
     "orbax-checkpoint>=0.12.4",

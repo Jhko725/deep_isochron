@@ -7,7 +7,7 @@ from .base import AbstractODE
 
 
 class FitzhughNagumo(AbstractODE):
-    dim: ClassVar[int] = 2
+    dim: ClassVar[int] = 2  # ty: ignore
 
     a: float = 0.7
     b: float = 0.8

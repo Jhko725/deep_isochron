@@ -7,7 +7,7 @@ from .base import AbstractODE
 
 
 class HodgekinHuxley(AbstractODE):
-    dim: ClassVar[int] = 4
+    dim: ClassVar[int] = 4  # ty: ignore
 
     I: float = 30.0
     C: float = 1.0
