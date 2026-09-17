@@ -5,7 +5,7 @@ import equinox as eqx
 from jaxtyping import Array, Float
 
 
-class AbstractInvertibleTransform(eqx.Module):
+class AbstractBijection(eqx.Module):
     dim: eqx.AbstractVar[int]
 
     @abc.abstractmethod
@@ -15,15 +15,15 @@ class AbstractInvertibleTransform(eqx.Module):
     def inverse(self, y): ...
 
 
-# class CouplingTransformBase(AbstractInvertibleTransform):
+# class CouplingTransformBase(AbstractBijection):
 
 # TODO: could create a CouplingTransformBase class
 
 
-class SequentialINN(AbstractInvertibleTransform):
-    transforms: tuple[AbstractInvertibleTransform, ...]
+class SequentialINN(AbstractBijection):
+    transforms: tuple[AbstractBijection, ...]
 
-    def __init__(self, transforms: Sequence[AbstractInvertibleTransform]):
+    def __init__(self, transforms: Sequence[AbstractBijection]):
         dims = set([t.dim for t in transforms])
         if len(dims) != 1:
             raise ValueError(

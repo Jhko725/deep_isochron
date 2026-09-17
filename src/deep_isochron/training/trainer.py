@@ -1,215 +1,209 @@
-from abc import ABC, abstractmethod
-from collections.abc import Callable
+import datetime
+from collections.abc import Callable, Iterable
+from contextlib import ExitStack
+from dataclasses import replace
+from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Self, TypeVar
 
 import equinox as eqx
-import numpy as np
+import jax
+import jax.numpy as jnp
 import optax
-import orbax.checkpoint as ocp
 import wandb
-from jaxtyping import Array
-from orbax.checkpoint._src.checkpoint_managers.preservation_policy import BestN
-
-from .loaders import SegmentLoader
+from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree
+from orbax.checkpoint import v1 as ocp
 
 
-# TODO: better type signatures?
-AbstractDynamicsLoss = Callable
-AbstractDynamicsModel = Any
+FilterSpec = Callable
 
 
-class BaseTrainer(ABC):
+# Inspired by levanter
+class TrainerState[M: eqx.Module](eqx.Module):
+    step: Int[Array, ""]
+    model: M
+    opt_state: optax.OptState
+    training_key: PRNGKeyArray
+
+    optimizer: optax.GradientTransformation = eqx.field(static=True)
+    is_trainable: FilterSpec = eqx.field(static=True)
+
+    @classmethod
+    def init(
+        cls,
+        model: M,
+        optimizer: optax.GradientTransformation,
+        is_trainable: FilterSpec = eqx.is_inexact_array,
+        *,
+        key: PRNGKeyArray,
+    ):
+        # Making this as the __init__ will clash with the use of replace()
+        opt_state = optimizer.init(
+            eqx.filter(model, is_trainable)  # ty: ignore[invalid-argument-type]
+        )
+
+        return cls(
+            step=jnp.asarray(0, dtype=int),
+            model=model,
+            opt_state=opt_state,
+            training_key=key,
+            optimizer=optimizer,
+            is_trainable=is_trainable,
+        )
+
+    def take_step(
+        self,
+        grads: M,
+    ) -> Self:
+        """Given a pytree of model gradients, update model parameters using the
+        appropriate optimizer update function."""
+        grads = self.filter_trainable(grads)
+        updates, opt_state_next = self.optimizer.update(
+            grads,  # ty: ignore[invalid-argument-type]
+            self.opt_state,
+            self.filter_trainable(self.model),  # ty: ignore[invalid-argument-type]
+        )
+        model_next = eqx.apply_updates(self.model, updates)
+        return replace(
+            self,
+            step=self.step + 1,
+            model=model_next,
+            opt_state=opt_state_next,
+            training_key=jax.random.fold_in(self.training_key, self.step),
+        )
+
+    def filter_trainable(self, pytree: M) -> M:
+        """Filter the given pytree to retain the trainable model parameters, as
+        determined by self.is_trainable. Note that this function works on all pytrees
+        that are compatible with self.model."""
+        return eqx.filter(pytree, self.is_trainable)
+
+
+Batch = PyTree
+M = TypeVar("M", bound=eqx.Module)
+
+
+class Trainer:
+    loss_fn: Callable
     optimizer: optax.GradientTransformation
-    max_epochs: int
-    savedir: Path
-    savename: str
-    logger: wandb.sdk.wandb_run.Run
+    checkpoint_path: Path
+    wandb_kwargs: dict[str, Any]
 
     def __init__(
         self,
         optimizer: optax.GradientTransformation,
-        max_epochs: int,
-        savedir: Path | str,
-        savename: str,
-        wandb_entity: str | None = None,
-        wandb_project: str | None = None,
-        wandb_mode: Literal["online", "offline", "disabled", "shared"] = "online",
+        loss_fn: Callable,
+        checkpoint_dir: str | Path,
+        checkpoint_name: str | None,
+        wandb_kwargs: dict[str, Any],
+        config_dict: dict[str, Any],
     ):
         self.optimizer = optimizer
-        self.max_epochs = max_epochs
-
-        self.savedir = Path(savedir)
-        self.savename = savename
-
-        self.logger = wandb.init(
-            entity=wandb_entity, project=wandb_project, mode=wandb_mode
+        self.loss_fn = loss_fn
+        self.checkpoint_path = self._make_checkpoint_path(
+            checkpoint_dir, checkpoint_name
         )
+        self.wandb_kwargs = wandb_kwargs
+        self.config_dict = config_dict
+
+    def _make_checkpoint_path(
+        self, checkpoint_dir: str | Path, checkpoint_name: str | None
+    ) -> Path:
+        """Given checkpoint directory and name, return the absolute path to save
+        checkpoints in."""
+        now = datetime.datetime.now()
+        now_str = now.strftime("%y-%m-%d-%H_%M_%S")
+        if checkpoint_name is None:
+            checkpoint_name = ""
+
+        checkpoint_path = Path(checkpoint_dir) / checkpoint_name / now_str
+        # orbax.checkpoint does not like relative paths
+        checkpoint_path = checkpoint_path.resolve()
+        return checkpoint_path
 
     def train(
         self,
-        model: AbstractDynamicsModel,
-        loss_fn: AbstractDynamicsLoss,
-        train_loader: SegmentLoader,
-        validation_loader: SegmentLoader | None = None,
-        args: Any = None,
-        metric_fns: dict[str, Callable] | None = None,
+        model: M,
+        train_dataloader: Iterable[Batch],
+        loss_args: Any = None,
         *,
-        config: dict | None = None,
-        **kwargs,
+        trainable_filterspec: FilterSpec = eqx.is_inexact_array,
+        num_steps: int = 5000,
+        seed: int = 0,
     ):
-        step_fn = self.make_step_fn(
-            loss_fn, train_loader, validation_loader, metric_fns
+        self.checkpoint_path.mkdir(parents=True, exist_ok=True)
+
+        state = TrainerState[M].init(
+            model, self.optimizer, trainable_filterspec, key=jax.random.key(seed)
         )
+        train_dataiter = iter(train_dataloader)
 
-        opt_state = self.optimizer.init(eqx.filter(model, eqx.is_inexact_array))
-        if validation_loader is None:
-            loader_state = (train_loader.init(), None)
-            save_metric_name = "loss_train"
-        else:
-            loader_state = (train_loader.init(), validation_loader.init())
-            save_metric_name = "loss_validation"
+        save_metric = "train_loss"
 
-        ckpt_manager = ocp.CheckpointManager(
-            (self.savedir / self.savename).resolve(),
-            options=ocp.CheckpointManagerOptions(
-                preservation_policy=BestN(
-                    get_metric_fn=lambda metrics: metrics[save_metric_name],
-                    reverse=True,
-                    n=1,
-                )
-            ),
-            metadata=config["model"],
-        )
-
-        with self.logger as logger:
-            if config is not None:
-                self.logger.config.update(config)
-
-            with ckpt_manager as mngr:
-                loss_history = []
-                for step in range(self.max_epochs):
-                    loss, log_dict, model_next, loader_state, opt_state = step_fn(
-                        model, args, loader_state, opt_state
-                    )
-                    logger.log(log_dict, step=step)
-
-                    print(f"{step=}, {loss=}")
-                    loss_history.append(loss.item())
-                    mngr.save(
-                        step,
-                        args=ocp.args.StandardSave(eqx.filter(model, eqx.is_array)),
-                        metrics=log_dict,
-                    )
-                    model = model_next
-        return model, np.asarray(loss_history)
-
-    @abstractmethod
-    def make_step_fn(
-        self,
-        loss_fn: AbstractDynamicsLoss,
-        train_loader: SegmentLoader,
-        validation_loader: SegmentLoader | None,
-        metric_fn_dict: dict[str, Callable] | None,
-    ) -> Callable: ...
-
-    @property
-    def savedir(self) -> Path:
-        return self.__savedir
-
-    @savedir.setter
-    def savedir(self, value: Path | str):
-        self.__savedir = Path(value)
-        self.__savedir.mkdir(parents=True, exist_ok=True)
-
-    @property
-    def savepath(self) -> Path:
-        return self.savedir / self.savename
-
-
-class VanillaTrainer(BaseTrainer):
-    optimizer: optax.GradientTransformation
-    max_epochs: int
-    savedir: Path
-    savename: str
-    logger: wandb.sdk.wandb_run.Run
-
-    def __init__(
-        self,
-        optimizer: optax.GradientTransformation = optax.adabelief(1e-3),
-        max_epochs: int = 5000,
-        savedir: Path | str = "./results",
-        savename: str = "checkpoint.eqx",
-        wandb_entity: str | None = None,
-        wandb_project: str | None = None,
-        wandb_mode: Literal["online", "offline", "disabled", "shared"] = "online",
-    ):
-        super().__init__(
-            optimizer,
-            max_epochs,
-            savedir,
-            savename,
-            wandb_entity,
-            wandb_project,
-            wandb_mode,
-        )
-
-    def make_step_fn(
-        self,
-        loss_fn: AbstractDynamicsLoss,
-        train_loader: SegmentLoader,
-        validation_loader: SegmentLoader | None,
-        metric_fn_dict: dict[str, Callable] | None,
-    ) -> Callable:
-        loss_grad_fn = eqx.filter_value_and_grad(loss_fn, has_aux=True)
-
-        ## TODO: find better place to place this function; probably will need to
-        # refactor class hierarchy
-        if metric_fn_dict is None:
-
-            def metric_fn(model_, batch, args_) -> dict[str, Array]:
-                return dict()
-        else:
-
-            def metric_fn(model_, batch, args_) -> dict[str, Array]:
-                return {
-                    name: fn(model_, batch, args_)
-                    for name, fn in metric_fn_dict.items()
-                }
-
-        @eqx.filter_jit
-        def _step_fn(model_, args_, loader_states, opt_state):
-            train_state, valid_state = loader_states
-            # Train dataset
-            batch_train, train_state = train_loader.load_batch(train_state)
-
-            (loss, log_dict), grads = loss_grad_fn(model_, batch_train, args_)
-            updates, opt_state = self.optimizer.update(
-                grads, opt_state, eqx.filter(model_, eqx.is_inexact_array)
+        with ExitStack() as stack:
+            logger = stack.enter_context(
+                wandb.init(config=self.config_dict, **self.wandb_kwargs)
             )
-
-            metrics_train = {
-                f"{k}_train": v
-                for k, v in metric_fn(model_, batch_train, args_).items()
-            }
-            log_dict = {f"{k}_train": v for k, v in log_dict.items()}
-            log_dict = log_dict | metrics_train | {"loss_train": loss}
-            # Validation dataset
-            if validation_loader is not None:
-                batch_valid, valid_state = validation_loader.load_batch(valid_state)
-                loss_valid, log_dict_valid = loss_fn(model_, batch_valid, args_)
-                metrics_valid = {
-                    f"{k}_validation": v
-                    for k, v in metric_fn(model_, batch_valid, args_).items()
-                }
-                log_dict_valid = {
-                    f"{k}_validation": v for k, v in log_dict_valid.items()
-                }
-                log_dict_valid = (
-                    log_dict_valid | metrics_valid | {"loss_validation": loss_valid}
+            ckptr = stack.enter_context(
+                ocp.training.Checkpointer(
+                    self.checkpoint_path,
+                    preservation_policy=ocp.training.preservation_policies.BestN(
+                        get_metric_fn=lambda metrics: metrics[save_metric],
+                        reverse=True,
+                        n=1,
+                    ),
+                    custom_metadata=self.config_dict["model"],
                 )
-                log_dict = log_dict | log_dict_valid
-            model_ = eqx.apply_updates(model_, updates)
-            return loss, log_dict, model_, (train_state, valid_state), opt_state
+            )  # add preservation policy, custom_metadata
 
-        return _step_fn
+            state_prev, outputs_prev = None, None
+
+            for _ in range(num_steps):
+                try:
+                    batch = next(train_dataiter)
+                except StopIteration:
+                    break
+
+                state_next, loss, metrics = self.train_step(state, batch, loss_args)
+
+                output = {"train_loss": loss} | metrics
+
+                if (outputs_prev is not None) and (state_prev is not None):
+                    step_log = int(state_prev.step)
+                    outputs_prev = jax.tree.map(lambda x: float(x), outputs_prev)
+                    logger.log(outputs_prev, step=step_log)
+                    print(
+                        f"""Step: {step_log} | Train loss: {outputs_prev["train_loss"]}"""
+                    )
+                    weights = eqx.filter(state_prev.model, eqx.is_array)
+                    ckptr.save(step_log, weights, metrics=outputs_prev)
+
+                outputs_prev = output
+                state, state_prev = state_next, state
+
+            step_log = int(state_prev.step)
+            outputs_prev = jax.tree.map(lambda x: float(x), outputs_prev)
+            logger.log(outputs_prev, step=step_log)
+            print(f"""Step: {step_log} | Train loss: {outputs_prev["train_loss"]}""")
+            weights = eqx.filter(state_prev.model, eqx.is_array)
+            ckptr.save(step_log, weights, metrics=outputs_prev)
+            return state.model
+
+    @cached_property
+    def train_step(
+        self,
+    ) -> Callable[
+        [TrainerState[M], Batch, Batch | None, Any],
+        tuple[M, Float[Array, ""], dict[str, Array]],
+    ]:
+        return eqx.filter_jit(self._train_step)
+
+    def _train_step(
+        self, state: TrainerState[M], batch: Batch, args
+    ) -> tuple[M, Float[Array, ""], dict[str, Array]]:
+        model = eqx.nn.inference_mode(state.model, False)
+
+        loss_grad_fn = eqx.filter_value_and_grad(self.loss_fn, has_aux=True)
+        (loss, metrics), grads = loss_grad_fn(model, batch, args)
+        state_next = state.take_step(grads)
+        return state_next, loss, metrics

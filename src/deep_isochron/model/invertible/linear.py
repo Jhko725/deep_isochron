@@ -7,10 +7,10 @@ from equinox._misc import default_floating_dtype
 from equinox.nn._misc import default_init
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from .base import AbstractInvertibleTransform
+from .base import AbstractBijection
 
 
-class InvertibleLinear(AbstractInvertibleTransform):
+class InvertibleLinear(AbstractBijection):
     weight: Float[Array, "{self.dim} {self.dim}"]
     bias: Float[Array, " {self.dim}"] | None
 
@@ -43,7 +43,7 @@ class InvertibleLinear(AbstractInvertibleTransform):
         return jnp.linalg.solve(self.weight, y)
 
 
-class BiLipschitzLinear(AbstractInvertibleTransform):
+class BiLipschitzLinear(AbstractBijection):
     _U: Float[Array, "{self.dim} {self.dim}"]
     _V: Float[Array, "{self.dim} {self.dim}"]
     _s: Float[Array, " {self.dim}"]

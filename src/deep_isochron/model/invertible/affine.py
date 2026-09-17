@@ -6,10 +6,10 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..utils import zero_final_layer
-from .base import AbstractInvertibleTransform
+from .base import AbstractBijection
 
 
-class AffineCoupling(AbstractInvertibleTransform):
+class AffineCoupling(AbstractBijection):
     dim: int = eqx.field(static=True)
     affine_clamping: float | None = eqx.field(static=True)
 
@@ -109,7 +109,7 @@ class AffineCoupling(AbstractInvertibleTransform):
 
 
 class ResidualCoupling(
-    AbstractInvertibleTransform
+    AbstractBijection
 ):  # TODO: support custom s, t in AffineCouplingTransform, and make this a subclass or so.
     dim: int = eqx.field(static=True)
     split_idx: int

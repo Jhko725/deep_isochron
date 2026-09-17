@@ -8,10 +8,10 @@ from jaxtyping import Array, Float, Int, PRNGKeyArray
 
 from deep_isochron.misc import inv_softplus
 
-from .base import AbstractInvertibleTransform
+from .base import AbstractBijection
 
 
-class MonotonicRationalQuadraticSpline(AbstractInvertibleTransform):
+class MonotonicRationalQuadraticSpline(AbstractBijection):
     dim: ClassVar[int] = 1  # ty: ignore
     xs: Float[Array, " K+1"]
     ys: Float[Array, " K+1"]
@@ -83,7 +83,7 @@ class MonotonicRationalQuadraticSpline(AbstractInvertibleTransform):
         return jnp.piecewise(y, condlist, [_y_leq_y_min, _y_gt_y_max, _in_bounds])
 
 
-class MonotonicRQCoupling(AbstractInvertibleTransform):
+class MonotonicRQCoupling(AbstractBijection):
     """Monotonic rational quadratic spline coupling transform, as introduced in [1, 2].
 
     [1] C. Durkan et al. Neural Spline Flows. NeurIPS (2019).
