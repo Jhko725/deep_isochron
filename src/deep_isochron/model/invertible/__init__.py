@@ -21,6 +21,5 @@ from .radial import (
     RadialBijection as RadialBijection,
 )
 from .spline import (
-    MonotonicRationalQuadraticSpline as MonotonicRationalQuadraticSpline,
-    MonotonicRQCoupling as MonotonicRQCoupling,
+    MonotonicRQSpline as MonotonicRQSpline,
 )

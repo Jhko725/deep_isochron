@@ -26,3 +26,8 @@ def inv_squashed_exp(y, a: float = 2.0):
 def cartesian_to_polar(xy: Float[Array, " 2 *rest"]) -> Float[Array, " 2 *rest"]:
     x, y = xy
     return jnp.stack((jnp.hypot(x, y), jnp.arctan2(y, x)))
+
+
+def polar_to_cartesian(rtheta: Float[Array, " 2 *rest"]) -> Float[Array, " 2 *rest"]:
+    r, theta = rtheta
+    return jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)))

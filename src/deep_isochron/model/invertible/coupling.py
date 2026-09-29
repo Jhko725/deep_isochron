@@ -1,6 +1,7 @@
 from collections.abc import Callable
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 from einops import rearrange
 from jax.flatten_util import ravel_pytree
@@ -24,8 +25,8 @@ class BijectionFactory[B: AbstractBijection](eqx.Module):
         self.num_params = len(params_flat)
 
     def __call__(self, params: Float[Array, " params"]) -> B:
-        params = self.unflatten_fn(params)
-        return eqx.combine(params, self._bijection_static)
+        params_ = self.unflatten_fn(params)
+        return eqx.combine(params_, self._bijection_static)
 
 
 class CouplingFlow[B: AbstractBijection](AbstractBijection):
@@ -54,6 +55,7 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
         flip: bool = False,
         mlp_width: int = 10,
         mlp_depth: int = 1,
+        activation: Callable = jax.nn.gelu,
         dtype=None,
         *,
         key: PRNGKeyArray,
@@ -72,7 +74,7 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
         self.flip = flip
 
         if bijection.dim > 1:
-            raise NotImplementedError("""Support for higher dimensional bijections not 
+            raise NotImplementedError("""Support for higher dimensional bijections not
             implemented yet.""")
         self.bijection_factory = BijectionFactory(bijection)
 
@@ -81,6 +83,7 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
             out_size=self.bijection_factory.num_params * self.dim_coupled,
             width_size=mlp_width,
             depth=mlp_depth,
+            activation=activation,
             dtype=dtype,
             key=key,
         )

@@ -1,11 +1,12 @@
 import abc
-from typing import ClassVar
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from einops import rearrange
 from jaxtyping import Array, Float, PRNGKeyArray
+
+from ..systems.normal_forms import HopfNormalForm
 
 
 class AbstractLatentDynamics(eqx.Module):
@@ -152,48 +153,6 @@ class LinearLatentDynamics(AbstractLatentDynamics):
 
         y_t: Float[Array, "dim time"] = jnp.concatenate((y_t_comp, y_t_real), axis=-1)
         return y_t
-
-
-class HopfNormalForm(AbstractLatentDynamics):
-    dim: ClassVar[int] = 2
-
-    w: Float[Array, ""]
-    alpha: float = eqx.field(static=True)
-
-    def __init__(self, alpha: float = 1.0, init_period: float = 1.0):
-        self.alpha = alpha
-        self.w = jnp.asarray(2 * jnp.pi / init_period)
-
-    @property
-    def period(self) -> Float[Array, ""]:
-        return 2 * jnp.pi / self.w
-
-    def rhs(self, t, y: Float[Array, " 2"]):
-        del t
-        y1, y2 = y
-        r_sq = jnp.sum(y**2)
-        # Is multiplying by w correct?
-        dy = self.w * jnp.stack(
-            (self.alpha * y1 - y2 - y1 * r_sq, y1 + self.alpha * y2 - y2 * r_sq)
-        )
-        return dy
-
-    def __call__(
-        self, ts: Float[Array, " time"], y0: Float[Array, " 2"]
-    ) -> Float[Array, " time 2"]:
-        y01, y02 = y0
-        r0 = jnp.hypot(y01, y02)
-        theta0 = jnp.atan2(y02, y01)
-        ts_ = self.w * (ts - ts[0])
-
-        # Analytical solution in polar coordinates
-        theta_t = theta0 + ts_
-
-        exp_2at = jnp.exp(2 * self.alpha * ts_)
-        r_t = r0 * jnp.sqrt(
-            (self.alpha * exp_2at) / (self.alpha - r0**2 * (1 - exp_2at))
-        )
-        return jnp.stack((r_t * jnp.cos(theta_t), r_t * jnp.sin(theta_t)), axis=-1)
 
 
 class HopfLatentDynamics(AbstractLatentDynamics):
