@@ -1,7 +1,9 @@
 import abc
 from collections.abc import Sequence
+from typing import Self
 
 import equinox as eqx
+import jax
 from jaxtyping import Array, Float
 
 
@@ -9,10 +11,48 @@ class AbstractBijection(eqx.Module):
     dim: eqx.AbstractVar[int]
 
     @abc.abstractmethod
-    def __call__(self, x): ...
+    def __call__(
+        self, x: Float[Array, " {self.dim}"]
+    ) -> Float[Array, " {self.dim}"]: ...
 
     @abc.abstractmethod
-    def inverse(self, y): ...
+    def inverse(
+        self, y: Float[Array, " {self.dim}"]
+    ) -> Float[Array, " {self.dim}"]: ...
+
+    def jacobian(
+        self, x: Float[Array, " {self.dim}"]
+    ) -> Float[Array, " {self.dim} {self.dim}"]:
+        return eqx.filter_jacfwd(self)(x)
+
+    @property
+    def num_trainable_params(self) -> int:
+        """Total size of inexact-array leaves. Equal to the number of trainable
+        parameters."""
+        return sum(
+            leaf.size
+            for leaf in jax.tree.leaves(eqx.filter(self, eqx.is_inexact_array))
+        )
+
+
+class AbstractScalarBijection(AbstractBijection):
+    """Bijections mapping $\mathbb{R}\rightarrow\mathbb{R}$, parametrized by
+    `num_params` parameters.
+
+    The parameters can be constrained. Initialization from unconstrained parameters is
+    done by `self.from_unconstrained`..
+    """
+
+    dim = 1
+    num_params: eqx.AbstractClassVar[int]
+
+    @classmethod
+    @abc.abstractmethod
+    def from_unconstrained(cls, params_raw: Float[Array, " {cls.num_params}"]) -> Self:
+        """Instantiate the class from unconstrained parameter values.
+
+        This is typically done by first mapping the values to the constrained set, then
+        instantiating the class."""
 
 
 # class CouplingTransformBase(AbstractBijection):
