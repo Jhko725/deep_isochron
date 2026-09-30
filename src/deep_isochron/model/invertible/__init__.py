@@ -20,6 +20,7 @@ from .polar import (
     OffsetedBijection as OffsetedBijection,
     RadialBijection as RadialBijection,
 )
-from .spline import (
+from .splines import (
+    CubicBSpline as CubicBSpline,
     MonotonicRQSpline as MonotonicRQSpline,
 )
