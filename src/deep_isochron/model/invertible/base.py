@@ -1,9 +1,10 @@
 import abc
 from collections.abc import Sequence
-from typing import Self
+from typing import ClassVar, TypeVar
 
 import equinox as eqx
 import jax
+import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 
@@ -35,24 +36,43 @@ class AbstractBijection(eqx.Module):
         )
 
 
+B = TypeVar("B", bound="AbstractScalarBijection")
+
+
 class AbstractScalarBijection(AbstractBijection):
-    """Bijections mapping $\mathbb{R}\rightarrow\mathbb{R}$, parametrized by
+    r"""Bijections mapping $\mathbb{R}\rightarrow\mathbb{R}$, parametrized by
     `num_params` parameters.
 
     The parameters can be constrained. Initialization from unconstrained parameters is
     done by `self.from_unconstrained`..
     """
 
-    dim = 1
-    num_params: eqx.AbstractClassVar[int]
+    dim: ClassVar[int] = 1  # ty:ignore
+    num_params: eqx.AbstractVar[int]
 
-    @classmethod
     @abc.abstractmethod
-    def from_unconstrained(cls, params_raw: Float[Array, " {cls.num_params}"]) -> Self:
-        """Instantiate the class from unconstrained parameter values.
+    def from_unconstrained(
+        self: B, params_raw: Float[Array, " {self.num_params}"], **kwargs
+    ) -> B:
+        """Create a copy of self, with parameters set from the unconstrained parameter
+        values.
 
         This is typically done by first mapping the values to the constrained set, then
-        instantiating the class."""
+        instantiating the class.
+        The method is written so that from_unconstrained(jnp.zeros(self.num_params))
+        returns the identity.
+
+        This function is implemented as a plain method instead of a classmethod because
+        certain bijections (ex. Spline variants) have instance-dependent num_params."""
+
+    def identity_like(self: B) -> B:
+        """Create a copy of self, with parameters set so that the resulting bijection is
+        the identity.
+
+        The base implementation assumes that `from_unconstrained` is written so that
+        passing unconstrained parameters of zeros results in identity.
+        """
+        return self.from_unconstrained(jnp.zeros((self.num_params,)))
 
 
 # class CouplingTransformBase(AbstractBijection):

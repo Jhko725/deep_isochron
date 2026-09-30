@@ -16,7 +16,7 @@ from .linear import (
     BiLipschitzLinear as BiLipschitzLinear,
     InvertibleLinear as InvertibleLinear,
 )
-from .radial import (
+from .polar import (
     OffsetedBijection as OffsetedBijection,
     RadialBijection as RadialBijection,
 )

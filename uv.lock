@@ -451,6 +451,7 @@ cuda = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "beartype" },
     { name = "hypothesis" },
     { name = "ipykernel" },
     { name = "nbformat" },
@@ -479,6 +480,7 @@ provides-extras = ["cuda"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "beartype", specifier = ">=0.22.9" },
     { name = "hypothesis", specifier = ">=6.168.3" },
     { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "nbformat", specifier = ">=5.11.1" },

@@ -7,7 +7,7 @@ from jaxtyping import Array, Float, PRNGKeyArray
 
 from ...misc import cartesian_to_polar
 from ..fourier import TruncatedFourier
-from .anaytic import SinhConjugation
+from .analytic import SinhConjugation
 from .base import AbstractBijection, SequentialINN
 from .spline import MonotonicRQSpline
 
