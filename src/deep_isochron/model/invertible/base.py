@@ -1,4 +1,5 @@
 import abc
+import itertools
 from collections.abc import Sequence
 from typing import ClassVar, TypeVar
 
@@ -50,6 +51,10 @@ class AbstractScalarBijection(AbstractBijection):
     dim: ClassVar[int] = 1  # ty:ignore
     num_params: eqx.AbstractVar[int]
 
+    def jacobian(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        """Scalar bijections act on 0-d arrays, so the Jacobian is ``f'(x)``."""
+        return jax.grad(self)(x)
+
     @abc.abstractmethod
     def from_unconstrained(
         self: B, params_raw: Float[Array, " {self.num_params}"], **kwargs
@@ -95,12 +100,29 @@ class SequentialINN(AbstractBijection):
     def dim(self) -> int:
         return self.transforms[0].dim
 
-    def __call__(self, x: Float[Array, "dim"]) -> Float[Array, "dim"]:
+    # Shapes follow the members' (0-d for scalar bijections, (dim,) otherwise).
+    def __call__(self, x: Float[Array, "..."]) -> Float[Array, "..."]:
         for T in self.transforms:
             x = T(x)
         return x
 
-    def inverse(self, y: Float[Array, "dim"]) -> Float[Array, "dim"]:
+    def inverse(self, y: Float[Array, "..."]) -> Float[Array, "..."]:
         for T in self.transforms[::-1]:
             y = T.inverse(y)
         return y
+
+    # A sequence of scalar bijections is itself a scalar bijection parametrised by
+    # the concatenation of its members' unconstrained parameters, so it can serve
+    # as a coupling template.
+    @property
+    def num_params(self) -> int:
+        return sum(T.num_params for T in self.transforms)
+
+    def from_unconstrained(
+        self, params_raw: Float[Array, " {self.num_params}"], **kwargs
+    ) -> "SequentialINN":
+        sizes = [T.num_params for T in self.transforms]
+        chunks = jnp.split(params_raw, list(itertools.accumulate(sizes))[:-1])
+        return SequentialINN(
+            [T.from_unconstrained(p, **kwargs) for T, p in zip(self.transforms, chunks)]
+        )

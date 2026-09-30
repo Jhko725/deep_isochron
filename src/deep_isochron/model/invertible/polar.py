@@ -9,7 +9,7 @@ from ...misc import cartesian_to_polar
 from ..fourier import TruncatedFourier
 from .analytic import SinhConjugation
 from .base import AbstractBijection, SequentialINN
-from .spline import MonotonicRQSpline
+from .splines import MonotonicRQSpline
 
 
 class OffsetedBijection(AbstractBijection):
@@ -22,10 +22,11 @@ class OffsetedBijection(AbstractBijection):
     def dim(self) -> int:
         return self.bijection.dim
 
-    def __call__(self, x: Float[Array, " dim"]) -> Float[Array, " dim"]:
+    # Shapes follow the wrapped bijection's (0-d for scalar bijections).
+    def __call__(self, x: Float[Array, "..."]) -> Float[Array, "..."]:
         return self.bijection(x) - self.bijection(jnp.zeros_like(x))
 
-    def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
+    def inverse(self, y: Float[Array, "..."]) -> Float[Array, "..."]:
         offset = self.bijection(jnp.zeros_like(y))
         return self.bijection.inverse(y + offset)
 
@@ -133,14 +134,16 @@ class CircularMonotonicRQCoupling(AbstractBijection):
         return -jnp.pi + 2 * jnp.pi * knots
 
     def make_spline(self) -> MonotonicRQSpline:
+        # TODO: MonotonicRQSpline now fixes the boundary derivatives to 1, so the
+        # circular derivative-matching (previously `pad(..., mode="wrap")`) is lost
+        # and the map is only C^0 at theta = +-pi. Support free boundary derivatives
+        # in MonotonicRQSpline to restore it.
         xs = self._make_knots(self._dxs, self.min_rel_x_bin_width)
         ys = self._make_knots(self._dys, self.min_rel_y_bin_width)
-        ds = jnp.pad(
-            jax.nn.softplus(self._derivs) + self.min_derivative,
-            pad_width=(1, 0),
-            mode="wrap",
+        ds = jax.nn.softplus(self._derivs[:-1]) + self.min_derivative
+        return MonotonicRQSpline(
+            jnp.diff(xs), jnp.diff(ys), ds, xy_range=(-float(jnp.pi), float(jnp.pi))
         )
-        return MonotonicRQSpline(xs, ys, ds)
 
     def __call__(self, x: Float[Array, " 2"]) -> Float[Array, " 2"]:
         r, theta = cartesian_to_polar(x)

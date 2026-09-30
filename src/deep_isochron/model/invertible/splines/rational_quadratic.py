@@ -1,154 +1,126 @@
-from copy import replace
+"""Monotone rational quadratic spline of [1], implemented after [2] with the
+identity-tails convention (boundary derivatives fixed to 1) and identity at zero
+unconstrained parameters.
+
+[1] C. Durkan et al. Neural Spline Flows. NeurIPS (2019).
+[2] https://github.com/bayesiains/nflows/blob/master/nflows/transforms/splines/rational_quadratic.py
+"""
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Bool, Float, Int
+from jaxtyping import Array, Float
 
 from deep_isochron.misc import inv_softplus
 
-from ..base import AbstractScalarBijection
+from .base import AbstractSpline, check_positive, constrain_widths
 
 
-class MonotonicRQSpline(AbstractScalarBijection):
-    x_widths: Float[Array, " K-1"]
-    y_widths: Float[Array, " K-1"]
-    derivs: Float[Array, " K-2"]
+class MonotonicRQSpline(AbstractSpline):
+    """C^1 spline: in bin ``k`` the map is the rational quadratic (Gregory-Delbourgo)
+    interpolant through ``(xs[k], ys[k])``, ``(xs[k+1], ys[k+1])`` with derivatives
+    ``knot_derivs[k]``, ``knot_derivs[k+1]``. Positive bin widths, heights and
+    derivatives make it strictly increasing.
 
-    num_knots: int = eqx.field(static=True)
+    Trainable state is the constrained ``x_widths``, ``y_widths`` (``num_bins`` each) and
+    the interior knot derivatives ``derivs`` (``num_bins - 1``); the boundary
+    derivatives are 1 so the identity tails join C^1.
+    """
+
+    x_widths: Float[Array, " K"]
+    y_widths: Float[Array, " K"]
+    derivs: Float[Array, " K-1"]
+
+    num_bins: int = eqx.field(static=True)
     xy_range: tuple[float, float] = eqx.field(static=True)
-    linear_tails: bool = eqx.field(static=True)
 
     def __init__(
         self,
-        x_widths: Float[Array, " K-1"],
-        y_widths: Float[Array, " K-1"],
-        derivatives: Float[Array, " K-2"],
-        xy_range: tuple[float, float] = (-1, 1),
-        min_rel_x_bin_width: float = 1e-3,
-        min_rel_y_bin_width: float = 1e-3,
-        min_derivative: float = 1e-3,
-        linear_tails: bool = True,
+        x_widths: Float[Array, " K"],
+        y_widths: Float[Array, " K"],
+        derivs: Float[Array, " K-1"],
+        xy_range: tuple[float, float] = (-1.0, 1.0),
     ):
-        if not len(x_widths) == len(y_widths) == (len(derivatives) + 1):
+        if not len(x_widths) == len(y_widths) == len(derivs) + 1:
             raise ValueError(
-                """Lengths of x_widths, y_widths, and derivatives must equal
-                num_knots-1, num_knots-1, num_knots-2, respectively."""
+                "Lengths of x_widths, y_widths, derivs must be num_bins, num_bins, "
+                "num_bins-1, respectively."
             )
-        self._x_widths = x_widths
-        self._y_widths = y_widths
-        self._derivs = derivatives
-        self.num_knots = len(x_widths) + 1
-
+        self.x_widths = x_widths
+        self.y_widths = y_widths
+        self.derivs = derivs
+        self.num_bins = len(x_widths)
         self.xy_range = xy_range
-        self.min_rel_x_bin_width = min_rel_x_bin_width
-        self.min_rel_y_bin_width = min_rel_y_bin_width
-        self.min_derivative = min_derivative
-        self.linear_tails = linear_tails
 
     def __check_init__(self):
-        if jnp.any(self.x_widths <= 0):
-            raise ValueError("x_widths must be a positive array.")
-        if jnp.any(self.y_widths <= 0):
-            raise ValueError("y_widths must be a positive array.")
-        if jnp.any(self.derivs <= 0):
-            raise ValueError("derivs must be a positive array.")
+        check_positive("x_widths", self.x_widths)
+        check_positive("y_widths", self.y_widths)
+        check_positive("derivs", self.derivs)
 
+    @classmethod
+    def identity(
+        cls, num_bins: int, xy_range: tuple[float, float] = (-1.0, 1.0)
+    ) -> "MonotonicRQSpline":
+        """Uniform knots, unit derivatives: the identity map (a template for
+        ``from_unconstrained``)."""
+        w = jnp.full(num_bins, (xy_range[1] - xy_range[0]) / num_bins)
+        return cls(w, w, jnp.ones(num_bins - 1), xy_range)
+
+    # -------------------------------------------------------------- interface -----
+    @property
     def num_params(self) -> int:
-        return 3 * self.num_knots - 4
-
-    @property
-    def xs(self) -> Float[Array, " {self.num_knots}"]:
-        xs = jnp.cumulative_sum(self.x_widths, include_initial=True) + self.xy_range[0]
-        return jnp.clip(xs, *self.xy_range)
-
-    @property
-    def ys(self) -> Float[Array, " {self.num_knots}"]:
-        ys = jnp.cumulative_sum(self.y_widths, include_initial=True) + self.xy_range[0]
-        return jnp.clip(ys, *self.xy_range)
-
-    @property
-    def ds(self) -> Float[Array, " {self.num_knots}"]:
-        return jnp.pad(self.derivs, pad_width=1, constant_values=1)
-
-    def is_inrange(self, x: Float[Array, ""]) -> Bool[Array, ""]:
-        lo, hi = self.xy_range
-        return (x > lo) & (x < hi)
-
-    def bin_value(
-        self, v: Float[Array, ""], bin_edges: Float[Array, " edges"]
-    ) -> tuple[Int[Array, ""], Float[Array, ""]]:
-        """Given a value and an monotonically increasing array of bin edges, return the
-        bin index and the fractional part (value - lower bin_edge).
-
-        Corresponds to the `_interpret_t` function of
-        `diffrax.AbstractGlobalInterpolation`."""
-        idx = jnp.clip(
-            jnp.searchsorted(bin_edges, v, method="compare_all", side="right") - 1,
-            0,
-            len(bin_edges) - 1,
-        )
-        return idx, v - bin_edges[idx]
-
-    def __call__(self, x):
-        def _in_bounds(x):
-            s = self.y_widths / self.x_widths
-            k, x_frac = self.bin_value(x, self.xs)
-            xi = x_frac / self.x_widths[k]
-            numer = (s[k] * xi**2 + self.derivs[k] * xi * (1 - xi)) * self.y_widths[k]
-            denom = s[k] + (self.derivs[k + 1] + self.derivs[k] - 2 * s[k]) * xi * (
-                1 - xi
-            )
-            return self.ys[k] + numer / denom
-
-        return jnp.where(self.is_inrange(x), _in_bounds(x), x)
-
-    def inverse(self, y):
-        s = self.y_widths / self.x_widths
-
-        def _in_bounds(y):
-            k = jnp.clip(
-                jnp.searchsorted(self.ys, y, method="compare_all", side="right") - 1,
-                0,
-                self.num_knots - 1,
-            )
-            k, Dy = self.bin_value(y, self.ys)
-            _common = Dy * (self.derivs[k + 1] + self.derivs[k] - 2 * s[k])
-
-            a = self.y_widths[k] * (s[k] - self.derivs[k]) + _common
-            b = self.y_widths[k] * self.derivs[k] - _common
-            c = -s[k] * Dy
-
-            xi = 2 * c / (-b - jnp.sqrt(b**2 - 4 * a * c))
-            return self.xs[k] + xi * self.x_widths[k]
-
-        return jnp.where(self.is_inrange(y), _in_bounds(y), y)
+        return 3 * self.num_bins - 1
 
     def from_unconstrained(
         self,
-        params_raw,
+        params_raw: Float[Array, " {self.num_params}"],
         min_rel_x_bin_width: float = 1e-3,
         min_rel_y_bin_width: float = 1e-3,
         min_derivative: float = 1e-3,
         **kwargs,
-    ):
+    ) -> "MonotonicRQSpline":
         del kwargs
-        n_bins = self.num_knots - 1
-        x_widths, y_widths, derivs = jnp.split(params_raw, [n_bins, 2 * n_bins])
-
-        x_widths = (
-            jax.nn.softmax(x_widths) * (1 - n_bins * min_rel_x_bin_width)
-            + min_rel_x_bin_width
-        ) * (self.xy_range[1] - self.xy_range[0])
-
-        y_widths = (
-            jax.nn.softmax(y_widths) * (1 - n_bins * min_rel_y_bin_width)
-            + min_rel_y_bin_width
-        ) * (self.xy_range[1] - self.xy_range[0])
-
+        K = self.num_bins
+        x_raw, y_raw, d_raw = jnp.split(params_raw, [K, 2 * K])
+        x_widths = constrain_widths(x_raw, self.range_width, min_rel_x_bin_width)
+        y_widths = constrain_widths(y_raw, self.range_width, min_rel_y_bin_width)
+        # Shifted softplus, so that d_raw = 0 gives a derivative of exactly 1.
         derivs = (
-            jax.nn.softplus(derivs + (1 - inv_softplus(1 - min_derivative)))
-            + min_derivative
+            jax.nn.softplus(d_raw + inv_softplus(1.0 - min_derivative)) + min_derivative
         )
+        return type(self)(x_widths, y_widths, derivs, self.xy_range)
 
-        return replace(self, x_widths=x_widths, y_widths=y_widths, derivs=derivs)
+    # -------------------------------------------------------------- knot data -----
+    @property
+    def xs(self) -> Float[Array, " {self.num_bins+1}"]:
+        return self._knots_from_widths(self.x_widths, *self.xy_range)
+
+    @property
+    def ys(self) -> Float[Array, " {self.num_bins+1}"]:
+        return self._knots_from_widths(self.y_widths, *self.xy_range)
+
+    @property
+    def knot_derivs(self) -> Float[Array, " {self.num_bins+1}"]:
+        """``f'(xs)``, boundaries included (equal to 1)."""
+        return jnp.pad(self.derivs, pad_width=1, constant_values=1.0)
+
+    # ------------------------------------------------------------ interpolant -----
+    def _forward_in_range(self, x):
+        d, s = self.knot_derivs, self.y_widths / self.x_widths
+        k, dx = self.bin_value(x, self.xs)
+        xi = dx / self.x_widths[k]
+        numer = (s[k] * xi**2 + d[k] * xi * (1 - xi)) * self.y_widths[k]
+        denom = s[k] + (d[k + 1] + d[k] - 2 * s[k]) * xi * (1 - xi)
+        return self.ys[k] + numer / denom
+
+    def _inverse_in_range(self, y):
+        d, s = self.knot_derivs, self.y_widths / self.x_widths
+        k, dy = self.bin_value(y, self.ys)
+        common = dy * (d[k + 1] + d[k] - 2 * s[k])
+        a = self.y_widths[k] * (s[k] - d[k]) + common
+        b = self.y_widths[k] * d[k] - common
+        c = -s[k] * dy
+        # Root of a xi^2 + b xi + c = 0 in [0, 1], in the form that is stable for
+        # small a (nflows). The discriminant is non-negative for a monotone spline.
+        xi = 2 * c / (-b - jnp.sqrt(b**2 - 4 * a * c))
+        return self.xs[k] + xi * self.x_widths[k]

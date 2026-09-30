@@ -46,7 +46,7 @@ class InvertibleLinear(AbstractBijection):
 class BiLipschitzLinear(AbstractBijection):
     _U: Float[Array, "{self.dim} {self.dim}"]
     _V: Float[Array, "{self.dim} {self.dim}"]
-    _s: Float[Array, " {self.dim}"]
+    _s: Float[Array, ""]
     bias: Float[Array, " {self.dim}"] | None
 
     dim: int = eqx.field(static=True)
@@ -89,7 +89,7 @@ class BiLipschitzLinear(AbstractBijection):
         return jax.scipy.linalg.expm(self._V - self._V.T)
 
     @property
-    def s(self) -> Float[Array, " {self.dim}"]:
+    def s(self) -> Float[Array, ""]:
         L = self.max_lipschitz
         return jax.nn.sigmoid(self._s) * (L - 1 / L) + 1 / L
 

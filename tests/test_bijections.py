@@ -1,7 +1,7 @@
 """Laws every ``AbstractBijection`` must satisfy.
 
   1. round trip        f⁻¹(f(x)) == x  and  f(f⁻¹(y)) == y
-  2. identity at init  with_unconstrained(0) == id  /  fresh vector module == id
+  2. identity at init  from_unconstrained(0) == id  /  fresh vector module == id
   3. orientation       det Df(x) > 0 — scalar case: f'(x) > 0
   4. finiteness        f, f⁻¹ finite on the working domain
   5. jacobian          Df⁻¹(f(x)) · Df(x) == I
@@ -23,10 +23,14 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
-from deep_isochron.model.invertible import CouplingFlow, SequentialINN
+from deep_isochron.model.invertible import (
+    AbstractSpline,
+    CouplingFlow,
+    SequentialINN,
+)
 from hypothesis import example, given, strategies as st
 
-from tests.conftest import (
+from tests.helpers import (
     assert_close,
     inverse_jacobian_product,
     jacobian_dets,
@@ -40,8 +44,8 @@ from tests.registry import (
 )
 from tests.strategies import (
     any_scalar_bijection,
+    any_spline_template,
     point_batches,
-    rq_spline_templates,
     scalar_bijections,
     vector_bijections,
 )
@@ -49,7 +53,8 @@ from tests.strategies import (
 
 SCALAR_IDS = list(SCALAR_TEMPLATES)
 VECTOR_IDS = list(VECTOR_BUILDERS)
-KNOTTED = [n for n, t in SCALAR_TEMPLATES.items() if hasattr(t, "xs")]
+KNOTTED = [n for n, t in SCALAR_TEMPLATES.items() if isinstance(t, AbstractSpline)]
+KNOTTED_C1 = [n for n in KNOTTED if hasattr(SCALAR_TEMPLATES[n], "knot_derivs")]
 
 
 def _zero_instance(name):
@@ -66,7 +71,7 @@ def test_scalar_identity_at_zero(name):
         jax.vmap(f)(x),
         x,
         atol=IDENTITY_TOL.get(name, 1e-12),
-        msg=f"{name}: with_unconstrained(0) != id",
+        msg=f"{name}: from_unconstrained(0) != id",
     )
 
 
@@ -81,7 +86,7 @@ def test_scalar_num_params_matches_leaves(name):
 @given(data=st.data())
 def test_scalar_round_trip(name, data):
     f = data.draw(scalar_bijections(SCALAR_TEMPLATES[name]), label="bijection")
-    x = data.draw(point_batches(1), label="x")
+    x = data.draw(point_batches(1), label="x")[:, 0]
     y, x_rt, y_rt = roundtrip(f, x)
     assert jnp.all(jnp.isfinite(y)), f"{name}: forward not finite"
     assert_close(x_rt, x, rtol=1e-8, atol=1e-8, msg=f"{name}: f⁻¹∘f")
@@ -115,7 +120,8 @@ def test_scalar_jacobian_consistent_with_inverse(name, data):
 # ------------------------------------------------ scalar: knots and boundaries ----
 # Measure-zero sets (knots, range endpoints) that property tests hit only by luck.
 # Style: any_scalar_bijection() + @example pins, so regressions stay pinned.
-# Anything with an `xs` attribute gets these for free (the B-spline will).
+# Every AbstractSpline in the registry gets these for free; spline-specific laws
+# (regularity of the tail joins, oracles) live in test_splines.py.
 @given(f=any_scalar_bijection(KNOTTED))
 @example(f=_zero_instance(KNOTTED[0]))
 def test_knots_round_trip(f):
@@ -136,23 +142,25 @@ def test_knots_interpolated_and_monotone(f):
     assert jnp.all(jnp.diff(jax.vmap(f)(x)) > 0), "not monotone across knots"
 
 
-@given(f=any_scalar_bijection(KNOTTED))
-@example(f=_zero_instance(KNOTTED[0]))
+@given(f=any_scalar_bijection(KNOTTED_C1))
+@example(f=_zero_instance(KNOTTED_C1[0]))
 def test_knot_derivatives(f):
-    """f'(x_k) == derivs[k] at every knot, boundaries included (linear tails join C¹)
-    ."""
+    """f'(x_k) == knot_derivs[k] at every knot, boundaries included (identity tails
+    join C¹)."""
     assert_close(
         jax.vmap(jax.grad(f))(f.xs),
-        f.derivs,
+        f.knot_derivs,
         rtol=1e-9,
         atol=1e-9,
         msg="f'(x_k) != d_k",
     )
 
 
-@given(f=rq_spline_templates().flatmap(scalar_bijections), x=point_batches(1))
-def test_rq_spline_any_knot_count_round_trip(f, x):
-    """Round trip for drawn K and range (not just the registry's two configs)."""
+@given(f=any_spline_template().flatmap(scalar_bijections), x=point_batches(1))
+def test_spline_any_bin_count_round_trip(f, x):
+    """Round trip for drawn spline class, bin count and range (not just the
+    registry's configs)."""
+    x = x[:, 0]
     _, x_rt, _ = roundtrip(f, x)
     assert_close(x_rt, x, rtol=1e-8, atol=1e-8)
 

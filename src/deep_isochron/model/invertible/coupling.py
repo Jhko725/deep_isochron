@@ -4,44 +4,31 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from einops import rearrange
-from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..utils import zero_final_layer
 from .base import AbstractBijection
 
 
-class BijectionFactory[B: AbstractBijection](eqx.Module):
-    _bijection_static: B = eqx.field(static=True)
-    unflatten_fn: Callable[[Float[Array, " params"]], B] = eqx.field(static=True)
-    num_params: int = eqx.field(static=True)
-
-    def __init__(self, bijection: B):
-        params, static = eqx.partition(bijection, eqx.is_inexact_array)
-        params_flat, unflatten_fn = ravel_pytree(params)
-
-        self._bijection_static = static
-        self.unflatten_fn = unflatten_fn
-        self.num_params = len(params_flat)
-
-    def __call__(self, params: Float[Array, " params"]) -> B:
-        params_ = self.unflatten_fn(params)
-        return eqx.combine(params_, self._bijection_static)
-
-
 class CouplingFlow[B: AbstractBijection](AbstractBijection):
     """An invertible coupling flow layer, as described in [1].
 
     Inputs are split into a constant and coupling part. The constant part is passed to a
-    multilayer perceptron, and mapped into parameters of a bijection. This bijection is
-    then used to transform the coupling part. Output is obtained by concatenating the
-    two pieces.
+    multilayer perceptron whose output is mapped, through
+    ``template.from_unconstrained``, into one scalar bijection per coupled dimension.
+    Output is obtained by concatenating the two pieces.
+
+    The conditioner's final layer is zero-initialised, and ``from_unconstrained(0)`` is
+    the identity for every scalar bijection, so a fresh layer is the identity map.
 
     [1] G. Papamakarios et al. Normalizing Flows for Probabilistic Modeling and
     Inference. JMLR 22 (2021)."""
 
     mlp: eqx.nn.MLP
-    bijection_factory: BijectionFactory[B]
+    # The template's array leaves are dropped (replaced by None) so that it is a
+    # hashable static field and its values are not counted as trainable state;
+    # `from_unconstrained` only needs its static configuration (bin count, range, ...).
+    template: B = eqx.field(static=True)
 
     dim: int = eqx.field(static=True)
     split_idx: int = eqx.field(static=True)
@@ -50,7 +37,7 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
     def __init__(
         self,
         dim: int,
-        bijection: AbstractBijection,
+        bijection: B,
         split_idx: int | None = None,
         flip: bool = False,
         mlp_width: int = 10,
@@ -67,20 +54,22 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
         if split_idx is None:
             self.split_idx = dim // 2
         else:
-            if (0 < split_idx) and (split_idx < self.dim):
-                raise ValueError("split_idx must be between 0 and dim.")
+            if not (0 < split_idx < dim):
+                raise ValueError("split_idx must be strictly between 0 and dim.")
             self.split_idx = split_idx
 
         self.flip = flip
 
-        if bijection.dim > 1:
-            raise NotImplementedError("""Support for higher dimensional bijections not
-            implemented yet.""")
-        self.bijection_factory = BijectionFactory(bijection)
+        if bijection.dim != 1 or not hasattr(bijection, "from_unconstrained"):
+            raise NotImplementedError(
+                "Only scalar (dim=1) bijections with `from_unconstrained` are "
+                "supported as coupling templates."
+            )
+        self.template = eqx.partition(bijection, eqx.is_array)[1]
 
         mlp = eqx.nn.MLP(
             in_size=self.split_idx,
-            out_size=self.bijection_factory.num_params * self.dim_coupled,
+            out_size=self.template.num_params * self.dim_coupled,
             width_size=mlp_width,
             depth=mlp_depth,
             activation=activation,
@@ -95,17 +84,19 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
 
     def split(
         self, x: Float[Array, " dim"]
-    ) -> tuple[Float[Array, " dim-dim_cond"], Float[Array, " dim_cond"]]:
-        """Split the input array into two parts."""
+    ) -> tuple[Float[Array, " dim_const"], Float[Array, " dim-dim_const"]]:
+        """Split the input array into the constant and the coupled part."""
         x = jnp.flip(x) if self.flip else x
-        return jnp.split(x, [self.split_idx])
+        x_const, x_coupled = jnp.split(x, [self.split_idx])
+        return x_const, x_coupled
 
     def combine(
-        self, y_const: Float[Array, " dim-dim_cond"], y_cond: Float[Array, " dim_cond"]
-    ) -> Float[Array, " dim"]:
-        y = jnp.concatenate((y_const, y_cond))
-        y = jnp.flip(y) if self.flip else y
-        return y
+        self,
+        y_const: Float[Array, " dim_const"],
+        y_coupled: Float[Array, " dim_coupled"],
+    ) -> Float[Array, " dim_const+dim_coupled"]:
+        y = jnp.concatenate((y_const, y_coupled))
+        return jnp.flip(y) if self.flip else y
 
     def make_bijection(self, x_const: Float[Array, " dim_const"]) -> B:
         """Returns a vmapped bijection, corresponding to a dim=1 bijection for each
@@ -114,22 +105,18 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
         This vmapped bijection must be called under vmap block, as outlined in equinox
         docs (https://docs.kidger.site/equinox/tricks/; see Ensembling section.)"""
         params = rearrange(self.mlp(x_const), "(D C) -> D C", D=self.dim_coupled)
-        return eqx.filter_vmap(self.bijection_factory)(params)
+        return eqx.filter_vmap(self.template.from_unconstrained)(params)
 
     def __call__(self, x: Float[Array, " dim"]) -> Float[Array, " dim"]:
         x_const, x_coupled = self.split(x)
-        bijection: B = self.make_bijection(x_const)
-        y_const, y_coupled = (
-            x_const,
-            eqx.filter_vmap(lambda bij, x_: bij(x_))(bijection, x_coupled),
-        )
-        return self.combine(y_const, y_coupled)
+        bijection = self.make_bijection(x_const)
+        y_coupled = eqx.filter_vmap(lambda bij, x_: bij(x_))(bijection, x_coupled)
+        return self.combine(x_const, y_coupled)
 
     def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
         y_const, y_coupled = self.split(y)
-        bijection: B = self.make_bijection(y_const)
-        x_const, x_coupled = (
-            y_const,
-            eqx.filter_vmap(lambda bij, y_: bij.inverse(y_))(bijection, y_coupled),
+        bijection = self.make_bijection(y_const)
+        x_coupled = eqx.filter_vmap(lambda bij, y_: bij.inverse(y_))(
+            bijection, y_coupled
         )
-        return self.combine(x_const, x_coupled)
+        return self.combine(y_const, x_coupled)

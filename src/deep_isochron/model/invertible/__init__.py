@@ -21,6 +21,8 @@ from .polar import (
     RadialBijection as RadialBijection,
 )
 from .splines import (
+    AbstractSpline as AbstractSpline,
     CubicBSpline as CubicBSpline,
+    LinearSpline as LinearSpline,
     MonotonicRQSpline as MonotonicRQSpline,
 )

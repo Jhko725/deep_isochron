@@ -22,8 +22,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from deep_isochron.model.invertible import (
+    CubicBSpline,
     CubicConjugation,
     CubicRational,
+    LinearSpline,
     MonotonicRQSpline,
     SinhConjugation,
 )
@@ -61,7 +63,7 @@ def point_batches(dim: int, n: int = BATCH) -> st.SearchStrategy[jax.Array]:
 def scalar_bijections(draw, template):
     """A concrete scalar bijection: ``template`` with drawn raw parameters."""
     raw = draw(raw_vectors(template.num_params), label="raw params")
-    return template.with_unconstrained(raw)
+    return template.from_unconstrained(raw)
 
 
 @st.composite
@@ -74,16 +76,23 @@ def any_scalar_bijection(draw, names=None):
 
 
 @st.composite
-def rq_spline_templates(draw, min_knots=3, max_knots=12):
-    """RQ-spline templates with a *drawn* knot count and range — sizes of the
-    parameter arrays depend on ``K``, which is exactly what @composite is for.
-    ``max_knots`` is bounded so jitted checkers compile at most ~10 times."""
-    K = draw(st.integers(min_knots, max_knots), label="num_knots")
+def spline_templates(draw, cls=MonotonicRQSpline, min_bins=2, max_bins=11):
+    """Spline templates of class ``cls`` with a *drawn* bin count and range — sizes of
+    the parameter arrays depend on the bin count, which is exactly what @composite
+    is for. ``max_bins`` is bounded so jitted checkers compile at most ~10 times."""
+    min_bins = max(min_bins, MIN_BINS.get(cls, 1))
+    K = draw(st.integers(min_bins, max_bins), label="num_bins")
     lo = draw(st.floats(-5.0, -0.5, allow_nan=False), label="range lo")
     hi = draw(st.floats(0.5, 5.0, allow_nan=False), label="range hi")
-    return MonotonicRQSpline(
-        jnp.zeros(K - 1), jnp.zeros(K - 1), jnp.zeros(K - 2), xy_range=(lo, hi)
-    )
+    return cls.identity(K, xy_range=(lo, hi))
+
+
+SPLINE_CLASSES = (LinearSpline, MonotonicRQSpline, CubicBSpline)
+MIN_BINS = {CubicBSpline: 4}
+
+
+def any_spline_template():
+    return st.sampled_from(SPLINE_CLASSES).flatmap(spline_templates)
 
 
 def perturb(module, key, scale: float = 0.5):
@@ -144,6 +153,5 @@ for _cls, _n in ((CubicRational, 3), (SinhConjugation, 5), (CubicConjugation, 4)
             scalar_bijections
         ),
     )
-st.register_type_strategy(
-    MonotonicRQSpline, rq_spline_templates().flatmap(scalar_bijections)
-)
+for _cls in SPLINE_CLASSES:
+    st.register_type_strategy(_cls, spline_templates(_cls).flatmap(scalar_bijections))
