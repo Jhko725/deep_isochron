@@ -22,6 +22,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from deep_isochron.model.invertible import (
+    AbstractBijection,
     AbstractScalarBijection,
     CubicBSpline,
     CubicConjugation,
@@ -65,14 +66,16 @@ def point_batches(dim: int, n: int = BATCH) -> st.SearchStrategy[jax.Array]:
 
 # ------------------------------------------------------------- dependent draws ----
 @st.composite
-def scalar_bijections(draw, template):
+def scalar_bijections(
+    draw, template: AbstractScalarBijection
+) -> AbstractScalarBijection:
     """A concrete scalar bijection: ``template`` with drawn raw parameters."""
     raw = draw(raw_vectors(template.num_params), label="raw params")
     return template.from_unconstrained(raw)
 
 
 @st.composite
-def any_scalar_bijection(draw, names=None):
+def any_scalar_bijection(draw, names=None) -> AbstractScalarBijection:
     """Draw a template by name from the registry, then its parameters.  Use this
     (instead of ``st.data`` + parametrize) in tests that need ``@example`` pins."""
     names = list(registry.SCALAR_TEMPLATES if names is None else names)
@@ -81,7 +84,9 @@ def any_scalar_bijection(draw, names=None):
 
 
 @st.composite
-def spline_templates(draw, cls=MonotonicRQSpline, min_bins=2, max_bins=11):
+def spline_templates(
+    draw, cls=MonotonicRQSpline, min_bins: int = 2, max_bins: int = 11
+) -> AbstractScalarBijection:
     """Spline templates of class ``cls`` with a *drawn* bin count and range — sizes of
     the parameter arrays depend on the bin count, which is exactly what @composite
     is for. ``max_bins`` is bounded so jitted checkers compile at most ~10 times."""
@@ -96,11 +101,11 @@ SPLINE_CLASSES = (LinearSpline, MonotonicRQSpline, CubicBSpline)
 MIN_BINS = {CubicBSpline: 4}
 
 
-def any_spline_template():
+def any_spline_template() -> st.SearchStrategy[AbstractScalarBijection]:
     return st.sampled_from(SPLINE_CLASSES).flatmap(spline_templates)
 
 
-def perturb(module, key, scale: float = 0.5):
+def perturb[M: eqx.Module](module: M, key: jax.Array, scale: float = 0.5) -> M:
     """Gaussian noise on every floating leaf: identity-at-init modules become
     non-trivial maps so the round-trip / orientation laws test the MLP path."""
     arrays, static = eqx.partition(module, eqx.is_inexact_array)
@@ -113,7 +118,9 @@ def perturb(module, key, scale: float = 0.5):
 
 
 @st.composite
-def vector_bijections(draw, name, perturbed=True, scale=0.5):
+def vector_bijections(
+    draw, name: str, perturbed: bool = True, scale: float = 0.5
+) -> AbstractBijection:
     """A vector bijection from the registry, built from a drawn seed and (optionally)
     with drawn weight perturbations of standard deviation ``scale``."""
     seed = draw(seeds, label="init seed")

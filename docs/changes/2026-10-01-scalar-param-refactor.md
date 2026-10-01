@@ -49,9 +49,18 @@ Steps land as separate commits; this document grows with them.
 | `src/.../invertible/linear.py` | (step 4) `BiLipschitzLinear._s` is a `(dim,)` vector of unconstrained singular values (was a scalar: the layer was a similarity transform); unused key dropped |
 | `src/.../invertible/__init__.py` | (step 4) export `CircularMonotonicRQCoupling`, `PolarCouplingFlow` |
 | `tests/registry.py` | (step 4) `OffsetedBijection` templates (standalone and over a chain), two `PolarCouplingFlow` builders; `UNTESTED` down to `SequentialINN` |
-| `pyproject.toml` | (step 4) ignore Hypothesis's `random`-in-strategy deprecation (tripped by JAX's compiler during a first compile inside a draw, not by any strategy) |
+| `pyproject.toml` | (step 4) ignore Hypothesis's `random`-in-strategy deprecation (tripped by JAX's compiler during a first compile inside a draw, not by any strategy); (step 5) `quax` removed from runtime dependencies (unused) |
+| `docs/decisions/0001..0004` | **new** — ADRs for the four decisions above |
+| `CLAUDE.md` | (step 5) rules: `AbstractVar` as static `init=False` field, `raw`/`constrain` contract, ADRs in `docs/decisions/` |
+| `tests/strategies.py` | (step 5) type annotations on every strategy function |
+| `src/deep_isochron/data/generate.py` | (step 5) placeholder docstring with the intended `generate(...)` signature (was an empty file) |
+| `prototype.ipynb` | (step 5) imports and constructors updated to the new API (`MonotonicRQSpline(num_bins=9, ...)` template, `PolarCouplingFlow`, `conjugacy` module name) |
 
 ## Design
+
+Decisions are recorded as ADRs: [0001 unconstrained leaves](../decisions/0001-unconstrained-leaves.md),
+[0002 identity at zero](../decisions/0002-identity-at-zero.md), [0003 declared smoothness](../decisions/0003-declared-smoothness.md),
+[0004 AbstractVar fields](../decisions/0004-abstractvar-fields.md). The paragraphs below give the branch-level detail.
 
 **Constraint primitives are plain Python objects, not modules.** They carry only static
 configuration (`eps`, `at_zero`, bounds, `min_rel`) and are created inside `constrain`, so
@@ -171,7 +180,16 @@ Spline laws (tails, tail gradients, join regularity by class, scipy oracle, Newt
 knots) all green on the new contract; `test_spline_any_bin_count_round_trip` covers drawn bin
 counts and ranges for all three classes.
 
-Step 4: `uv run pytest -n 4` (default profile) — **274 passed, 4 skipped, 1 xfailed**.
+Step 4: `uv run pytest -n 4` (default profile) — 274 passed, 4 skipped, 1 xfailed.
+
+Final (step 5): `uv run pytest -n 4` (default profile, 50 examples) — **274 passed, 4 skipped,
+1 xfailed** in 8 min; `--hypothesis-profile=dev` in 3.7 min. `ty check
+src/deep_isochron/model/invertible` — all checks passed. Acceptance checks from the plan:
+`CouplingFlow(..., CubicBSpline).smoothness == 2`, `(..., LinearSpline) == 0`,
+`SequentialINN([bspline coupling, linear]).smoothness == 2`; `relu` with a C² template raises
+`ValueError` (accepted with a C⁰ one); `dim=`/`smoothness=` constructor arguments raise
+`TypeError`; the greps for `check_positive`, `constrain_widths`, `_identity(`,
+`from_unnormalized`, `step 3/4`, and `ty: ignore` (invertible package) are empty.
 `ty check src/deep_isochron/model/invertible` — all checks passed. The nine failures present at
 the base commit are gone (`PolarConditionalBijection`'s missing classmethod, the circular
 class's origin NaNs and spline-signature mismatch, `InvertibleLinear`'s reflection, and the
@@ -196,7 +214,11 @@ constructor validation of impossible floors / `at_zero` outside the set.
 - `# ty: ignore` remains in `systems/` and `training/trainer.py` (outside the invertible package).
 - `PolarCouplingFlow.__init__` accepts and ignores `key` so registry builders stay uniform; the
   layer is deterministic (zero-initialised). Remove the argument if that uniformity is not wanted.
-- Steps 5–6 of the plan (test housekeeping, `CLAUDE.md` rule, ADR files, notebook, `quax`) follow.
+- CI job (`pytest --hypothesis-profile=ci -n 4`) not added: no workflow file exists yet in the
+  repository; the `ci` profile is registered and runs locally.
+- The 4 skips are the `IDENTITY_AT_INIT` skips for layers that are not identity at init by
+  design (`residual_coupling`, `invertible_linear`, `bilipschitz_linear`) and the
+  perturbed-orientation skip for `invertible_linear`.
 
 ## Review notes
 

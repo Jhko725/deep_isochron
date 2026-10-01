@@ -33,3 +33,13 @@ branch, and never edits *Review notes* except when asked to.
   whitespace fixers).
 - Every concrete `AbstractBijection` must be registered in `tests/registry.py`
   (or listed in `UNTESTED` with a reason); `tests/test_registry.py` enforces it.
+- Implement an `eqx.AbstractVar` (`dim`, `smoothness`, `num_params`, ...) as
+  `eqx.field(static=True, init=False)` — with `default=` when the value is fixed
+  by the class, assigned in `__init__` when derived. Never a bare class
+  attribute, `ClassVar` or property: type checkers reject those as overrides
+  (ADR-0004). `ty check src/deep_isochron/model/invertible` must stay clean.
+- Scalar bijections hold one unconstrained leaf `raw`; constrained parameters
+  come from `constrain(raw)` (ADR-0001); `constrain(0)` is the identity
+  (ADR-0002). Templates are instances with `raw=None`.
+- Design decisions live in `docs/decisions/` as numbered ADRs; a change
+  document's *Design* section links to them.
