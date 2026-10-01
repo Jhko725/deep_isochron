@@ -40,6 +40,8 @@ branch, and never edits *Review notes* except when asked to.
   (ADR-0004). `ty check src/deep_isochron/model/invertible` must stay clean.
 - Scalar bijections hold one unconstrained leaf `raw`; constrained parameters
   come from `constrain(raw)` (ADR-0001); `constrain(0)` is the identity
-  (ADR-0002). Templates are instances with `raw=None`.
+  (ADR-0002). Templates are instances with `raw=None`. Constraint primitives are
+  plain Python objects created *inside* `constrain`, never stored as fields
+  (ADR-0005).
 - Design decisions live in `docs/decisions/` as numbered ADRs; a change
   document's *Design* section links to them.

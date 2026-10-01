@@ -33,10 +33,10 @@ class Constraint(abc.ABC):
     """
 
     @abc.abstractmethod
-    def __call__(self, raw: Float[Array, " *n"]) -> Float[Array, " *n"]: ...
+    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]: ...
 
     @abc.abstractmethod
-    def inverse(self, value: Float[Array, " *n"]) -> Float[Array, " *n"]: ...
+    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]: ...
 
 
 class Free(Constraint):
@@ -67,10 +67,10 @@ class Positive(Constraint):
         self.at_zero = at_zero
         self._shift = math.log(math.expm1(at_zero - eps))
 
-    def __call__(self, raw):
+    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]:
         return self.eps + jax.nn.softplus(raw + self._shift)
 
-    def inverse(self, value):
+    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]:
         return inv_softplus(value - self.eps) - self._shift
 
     def __repr__(self):
@@ -99,10 +99,10 @@ class BoundedPositive(Constraint):
         self.a = a
         self._shift = a * math.atanh(math.log(at_zero - eps) / a)
 
-    def __call__(self, raw):
+    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]:
         return self.eps + squashed_exp(raw + self._shift, self.a)
 
-    def inverse(self, value):
+    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]:
         return inv_squashed_exp(value - self.eps, self.a) - self._shift
 
     def __repr__(self):
@@ -133,10 +133,10 @@ class Interval(Constraint):
         q = (at_zero - lo) / (hi - lo)
         self._shift = math.log(q / (1 - q))
 
-    def __call__(self, raw):
+    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]:
         return self.lo + (self.hi - self.lo) * jax.nn.sigmoid(raw + self._shift)
 
-    def inverse(self, value):
+    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]:
         return (
             jax.scipy.special.logit((value - self.lo) / (self.hi - self.lo))
             - self._shift
@@ -189,13 +189,13 @@ class Widths(Constraint):
                 f"n * min_rel = {n * self.min_rel} must be < 1 for n = {n} widths."
             )
 
-    def __call__(self, raw):
+    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]:
         n = raw.shape[-1]
         self._check_n(n)
         rel = jax.nn.softmax(raw, axis=-1) * (1 - n * self.min_rel) + self.min_rel
         return rel * self.total
 
-    def inverse(self, value):
+    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]:
         n = value.shape[-1]
         self._check_n(n)
         rel = value / self.total

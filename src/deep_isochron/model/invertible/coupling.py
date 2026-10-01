@@ -28,7 +28,8 @@ _NON_SMOOTH_ACTIVATIONS = frozenset(
 def _as_template[B: AbstractScalarBijection](bijection: B) -> B:
     """The bijection with every ``raw`` leaf set to ``None`` (recursively, for chains):
     a hashable static configuration with zero trainable size. By contract ``raw`` is the
-    only array leaf of a scalar bijection, so dropping all array leaves is exactly that."""
+    only array leaf of a scalar bijection, so dropping all array leaves results in the
+    static template."""
     return eqx.partition(bijection, eqx.is_array)[1]
 
 
@@ -42,22 +43,22 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
     Output is obtained by concatenating the two pieces.
 
     The default conditioner is an MLP with a zero-initialised final layer; since
-    ``from_unconstrained(0)`` is the identity for every scalar bijection, a fresh layer is
-    the identity map. A custom ``conditioner`` must output zeros at init for the same to
-    hold (``PolarCouplingFlow`` uses a zero-initialised ``TruncatedFourier``).
+    ``from_unconstrained(0)`` is the identity for every scalar bijection, a fresh layer
+    is the identity map. A custom ``conditioner`` must output zeros at init for the same
+     to hold (``PolarCouplingFlow`` uses a zero-initialised ``TruncatedFourier``).
 
-    **Regularity.** The layer is jointly C^k in its input when the template is C^k and the
-    conditioner is at least C^k; ``smoothness`` reports the template's value, and the
-    constructor rejects the non-smooth ``jax.nn`` activations of the default MLP when the
-    template is C^1 or better. Any other activation, and any custom conditioner, is
-    assumed to be C^∞ (``gelu``, ``tanh``, ``softplus``, ``sin``, ... are).
+    **Regularity.** The layer is jointly C^k in its input when the template is C^k and
+    the conditioner is at least C^k; ``smoothness`` reports the template's value, and
+    the constructor rejects the non-smooth ``jax.nn`` activations of the default MLP
+    when the template is C^1 or better. Any other activation, and any custom conditioner
+    , is assumed to be C^∞ (``gelu``, ``tanh``, ``softplus``, ``sin``, ... are).
 
     [1] G. Papamakarios et al. Normalizing Flows for Probabilistic Modeling and
     Inference. JMLR 22 (2021)."""
 
     conditioner: Callable[[Float[Array, " dim_const"]], Float[Array, " raw"]]
     # A template: the bijection with `raw=None`, so that it is a hashable static field
-    # with zero trainable size; `from_unconstrained` only needs its static configuration.
+    # with zero trainable size; `from_unconstrained` only needs its static config.
     template: B = eqx.field(static=True)
 
     dim: int = eqx.field(static=True)
