@@ -53,11 +53,10 @@ class BiLipschitzLinear(AbstractBijection):
     [1]: D. A. Serino et al. Fast-slow neural networks for learning singularly perturbed
      dynamical systms. J. Comput. Phys. 537, 114090 (2025)."""
 
-    # TODO: Bug in the implementation. _s is a Float[Array, "{self.dim}"] of singular
-    # values in the range (1/L, L). Need to fix.
     _U: Float[Array, "{self.dim} {self.dim}"]
     _V: Float[Array, "{self.dim} {self.dim}"]
-    _s: Float[Array, ""]
+    _s: Float[Array, " {self.dim}"]
+    """Unconstrained singular values; ``s = sigmoid(_s) * (L - 1/L) + 1/L`` in (1/L, L)."""
     bias: Float[Array, " {self.dim}"] | None
 
     dim: int = eqx.field(static=True)
@@ -75,7 +74,7 @@ class BiLipschitzLinear(AbstractBijection):
     ):
         dtype = default_floating_dtype() if dtype is None else dtype
 
-        key_u, key_v, key_b = jax.random.split(key, 3)
+        key_u, key_v = jax.random.split(key)
         lim = 1 / math.sqrt(dim)
 
         _U = default_init(key_u, (dim, dim), dtype, lim)
@@ -86,10 +85,12 @@ class BiLipschitzLinear(AbstractBijection):
         if max_lipschitz < 1:
             raise ValueError("Maximum Lipschitz constant cannot be smaller than 1.")
         self.max_lipschitz = L = max_lipschitz
-        self._s = jax.scipy.special.logit(jnp.asarray(1 / (1 + L), dtype=dtype))
+        # s = 1 at init: sigmoid(_s) * (L - 1/L) + 1/L == 1  <=>  sigmoid(_s) = 1/(1+L)
+        self._s = jnp.full(
+            (dim,), math.log((1 / (1 + L)) / (1 - 1 / (1 + L))), dtype=dtype
+        )
 
         self.bias = jnp.zeros((dim,), dtype=dtype) if use_bias else None
-        # self.bias = default_init(key_b, (dim,), dtype, lim) if use_bias else None
         self.dim = dim
 
     @property
@@ -101,7 +102,7 @@ class BiLipschitzLinear(AbstractBijection):
         return jax.scipy.linalg.expm(self._V - self._V.T)
 
     @property
-    def s(self) -> Float[Array, ""]:
+    def s(self) -> Float[Array, " {self.dim}"]:
         L = self.max_lipschitz
         return jax.nn.sigmoid(self._s) * (L - 1 / L) + 1 / L
 

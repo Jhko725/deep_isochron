@@ -44,6 +44,12 @@ Steps land as separate commits; this document grows with them.
 | `tests/registry.py` | (step 3) splines, spline couplings, `ScalarChain([rq, cubic])` and the circular class re-registered; their `UNTESTED` entries removed |
 | `tests/strategies.py` | (step 3) `vector_bijections(..., scale=)` |
 | `tests/test_bijections.py` | (step 3) composition test draws 3 mildly perturbed layers and checks the reversed-chain identity (see Design) |
+| `src/.../invertible/coupling.py` | (step 4) pluggable `conditioner: x_const -> raw` (default: zero-final-layer MLP; `key` optional when a conditioner is given); field renamed `mlp` → `conditioner` |
+| `src/.../invertible/polar.py` | (step 4) `OffsetedBijection` is an `AbstractScalarBijection` (delegates `num_params`/`constrain`/`smoothness`; usable as template/chain member); `RadialBijection` typed and documented; **`PolarConditionalBijection` deleted, replaced by `PolarCouplingFlow`** (coupling in the `(r, θ)` chart with a zero-initialised `TruncatedFourier` conditioner); shared `_scaled_polar` |
+| `src/.../invertible/linear.py` | (step 4) `BiLipschitzLinear._s` is a `(dim,)` vector of unconstrained singular values (was a scalar: the layer was a similarity transform); unused key dropped |
+| `src/.../invertible/__init__.py` | (step 4) export `CircularMonotonicRQCoupling`, `PolarCouplingFlow` |
+| `tests/registry.py` | (step 4) `OffsetedBijection` templates (standalone and over a chain), two `PolarCouplingFlow` builders; `UNTESTED` down to `SequentialINN` |
+| `pyproject.toml` | (step 4) ignore Hypothesis's `random`-in-strategy deprecation (tripped by JAX's compiler during a first compile inside a draw, not by any strategy) |
 
 ## Design
 
@@ -106,6 +112,21 @@ inverses exactly. Every registered layer round-trips to ≤ 4e-10 on its own, bu
 aggressively perturbed layers reaches intermediate magnitudes ~1e2 and amplifies a layer's
 inverse error by its Lipschitz constant to ~1e-6 — conditioning, not composition.
 
+**`PolarCouplingFlow` (step 4).** The old `PolarConditionalBijection` rebuilt
+`SinhConjugation` instances from Fourier output on every call through a removed classmethod. It
+is structurally `CouplingFlow` in the polar chart — `(r, θ) -> (g_θ(r), θ)` with
+`g_θ = template.from_unconstrained(conditioner(θ))` — so it is now written that way: an
+`OffsetedBijection(template)` (so `g_θ(0) = 0`), a `TruncatedFourier` conditioner with zero
+coefficients at init (identity at init, like the MLP's zero final layer), and the
+`RadialBijection` radius/angle handling. *Rejected*: generalising `CouplingFlow` itself over
+charts — the polar chart's regularised radius and safe angle are specific enough that a
+separate class is clearer; the shared machinery is the template/`from_unconstrained` contract.
+
+**`OffsetedBijection` is a scalar bijection.** `g(r) = f(r) - f(0)` is itself increasing on
+`R`, identity at zero raw, with `f`'s parameters, so it satisfies the scalar contract by
+delegation and can be a chain member or a template. Its `raw` is `None` (lives in `f`), like
+`ScalarChain`.
+
 **`at_zero` validated at construction**: `Positive(eps, at_zero)` requires `at_zero > eps`,
 `Interval(lo, hi, at_zero)` requires `lo < at_zero < hi`; the shifts are computed once as
 Python floats.
@@ -120,6 +141,8 @@ Python floats.
 - `eps_*` of the analytic classes had become `from_unconstrained` kwargs, so a template could not
   carry its own epsilons and the registry's "config variants" were identical. Back as static
   fields.
+- `BiLipschitzLinear._s` was a scalar, making Σ a multiple of the identity (a similarity
+  transform, not a general bi-Lipschitz map). Now a `(dim,)` vector, initialised so `s = 1`.
 - Analytic classes stored *constrained* values as trainable leaves; one optimiser step could make
   `scale <= 0`. Not reachable from the coupling path, but `RadialBijection` holds a standalone
   instance. Fixed by construction; pinned by `test_scalar_standalone_training_keeps_validity`.
@@ -148,6 +171,12 @@ Spline laws (tails, tail gradients, join regularity by class, scipy oracle, Newt
 knots) all green on the new contract; `test_spline_any_bin_count_round_trip` covers drawn bin
 counts and ranges for all three classes.
 
+Step 4: `uv run pytest -n 4` (default profile) — **274 passed, 4 skipped, 1 xfailed**.
+`ty check src/deep_isochron/model/invertible` — all checks passed. The nine failures present at
+the base commit are gone (`PolarConditionalBijection`'s missing classmethod, the circular
+class's origin NaNs and spline-signature mismatch, `InvertibleLinear`'s reflection, and the
+composition test that failed through them).
+
 New laws: template has no trainable state and is hashable; standalone training keeps validity
 (one `optax.adam(1.0)` step on a random gradient, then round trip + monotonicity); every
 registered class declares `smoothness`; `dim`/`smoothness`/`num_params` are not constructor
@@ -161,14 +190,13 @@ constructor validation of impossible floors / `at_zero` outside the set.
 
 ## Open issues
 
-- **Parked for step 4**: `PolarConditionalBijection` still calls the removed
-  `from_unnormalized_params`; rebuilt as `PolarCouplingFlow`.
 - `CircularMonotonicRQCoupling` is C⁰ across `θ = ±π` and not differentiable at the origin
   (documented in the class). Periodic / free-boundary endpoint handling on `AbstractSpline` is
   the intended fix; not in this branch.
 - `# ty: ignore` remains in `systems/` and `training/trainer.py` (outside the invertible package).
-- Steps 4–6 of the plan (conditioner, `PolarCouplingFlow`, `BiLipschitzLinear._s`, housekeeping,
-  ADR files) follow.
+- `PolarCouplingFlow.__init__` accepts and ignores `key` so registry builders stay uniform; the
+  layer is deterministic (zero-initialised). Remove the argument if that uniformity is not wanted.
+- Steps 5–6 of the plan (test housekeeping, `CLAUDE.md` rule, ADR files, notebook, `quax`) follow.
 
 ## Review notes
 

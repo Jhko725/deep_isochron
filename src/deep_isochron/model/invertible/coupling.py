@@ -36,23 +36,26 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
     """An invertible coupling flow layer, as described in [1].
 
     Inputs are split into a constant and coupling part. The constant part is passed to a
-    multilayer perceptron whose output is mapped, through
+    *conditioner* — any module ``x_const -> raw`` with ``raw`` of length
+    ``template.num_params * dim_coupled`` — whose output is mapped, through
     ``template.from_unconstrained``, into one scalar bijection per coupled dimension.
     Output is obtained by concatenating the two pieces.
 
-    The conditioner's final layer is zero-initialised, and ``from_unconstrained(0)`` is
-    the identity for every scalar bijection, so a fresh layer is the identity map.
+    The default conditioner is an MLP with a zero-initialised final layer; since
+    ``from_unconstrained(0)`` is the identity for every scalar bijection, a fresh layer is
+    the identity map. A custom ``conditioner`` must output zeros at init for the same to
+    hold (``PolarCouplingFlow`` uses a zero-initialised ``TruncatedFourier``).
 
     **Regularity.** The layer is jointly C^k in its input when the template is C^k and the
     conditioner is at least C^k; ``smoothness`` reports the template's value, and the
-    constructor rejects the non-smooth ``jax.nn`` activations when the template is C^1
-    or better. Any other activation is assumed to be C^∞ (``gelu``, ``tanh``,
-    ``softplus``, ``sin``, ... are).
+    constructor rejects the non-smooth ``jax.nn`` activations of the default MLP when the
+    template is C^1 or better. Any other activation, and any custom conditioner, is
+    assumed to be C^∞ (``gelu``, ``tanh``, ``softplus``, ``sin``, ... are).
 
     [1] G. Papamakarios et al. Normalizing Flows for Probabilistic Modeling and
     Inference. JMLR 22 (2021)."""
 
-    mlp: eqx.nn.MLP
+    conditioner: Callable[[Float[Array, " dim_const"]], Float[Array, " raw"]]
     # A template: the bijection with `raw=None`, so that it is a hashable static field
     # with zero trainable size; `from_unconstrained` only needs its static configuration.
     template: B = eqx.field(static=True)
@@ -72,9 +75,20 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
         mlp_depth: int = 1,
         activation: Callable = jax.nn.gelu,
         dtype=None,
+        conditioner: Callable[[Array], Array] | None = None,
         *,
-        key: PRNGKeyArray,
+        key: PRNGKeyArray | None = None,
     ):
+        """**Arguments:**
+
+        - ``dim``: input/output dimension (``>= 2``).
+        - ``bijection``: scalar template; its ``raw`` leaves are dropped.
+        - ``split_idx``: size of the constant part (default ``dim // 2``).
+        - ``flip``: reverse the input before splitting (swaps the roles of the halves).
+        - ``mlp_width``, ``mlp_depth``, ``activation``, ``dtype``, ``key``: the default
+          MLP conditioner; ``key`` is required unless ``conditioner`` is given.
+        - ``conditioner``: custom module ``x_const -> raw``; overrides the MLP options.
+        """
         if dim < 2:
             raise ValueError("Dimension of a coupling flow cannot be less than 2.")
         self.dim = dim
@@ -93,24 +107,31 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
                 "Coupling templates must be AbstractScalarBijection instances; got "
                 f"{type(bijection).__name__}."
             )
-        if activation in _NON_SMOOTH_ACTIVATIONS and bijection.smoothness != 0:
-            raise ValueError(
-                f"{getattr(activation, '__name__', activation)} is not C^1, but the "
-                f"template is C^{bijection.smoothness if bijection.smoothness is not None else chr(0x221E)}; use a smooth activation."
-            )
         self.template = _as_template(bijection)
         self.smoothness = bijection.smoothness
 
-        mlp = eqx.nn.MLP(
-            in_size=self.split_idx,
-            out_size=self.template.num_params * self.dim_coupled,
-            width_size=mlp_width,
-            depth=mlp_depth,
-            activation=activation,
-            dtype=dtype,
-            key=key,
-        )
-        self.mlp = zero_final_layer(mlp)
+        if conditioner is not None:
+            self.conditioner = conditioner
+        else:
+            if key is None:
+                raise ValueError("`key` is required for the default MLP conditioner.")
+            if activation in _NON_SMOOTH_ACTIVATIONS and bijection.smoothness != 0:
+                k = bijection.smoothness
+                raise ValueError(
+                    f"{getattr(activation, '__name__', activation)} is not C^1, but "
+                    f"the template is C^{'∞' if k is None else k}; use a smooth "
+                    "activation."
+                )
+            mlp = eqx.nn.MLP(
+                in_size=self.split_idx,
+                out_size=self.template.num_params * self.dim_coupled,
+                width_size=mlp_width,
+                depth=mlp_depth,
+                activation=activation,
+                dtype=dtype,
+                key=key,
+            )
+            self.conditioner = zero_final_layer(mlp)
 
     @property
     def dim_coupled(self) -> int:
@@ -138,7 +159,8 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
 
         This vmapped bijection must be called under vmap block, as outlined in equinox
         docs (https://docs.kidger.site/equinox/tricks/; see Ensembling section.)"""
-        params = rearrange(self.mlp(x_const), "(D C) -> D C", D=self.dim_coupled)
+        raw = self.conditioner(x_const)
+        params = rearrange(raw, "(D C) -> D C", D=self.dim_coupled)
         return eqx.filter_vmap(self.template.from_unconstrained)(params)
 
     def __call__(self, x: Float[Array, " dim"]) -> Float[Array, " dim"]:

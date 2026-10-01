@@ -62,7 +62,12 @@ dev = [
 testpaths = ["tests"]
 addopts = "-ra --import-mode=importlib --strict-markers"
 markers = ["slow: full-pipeline tests; deselect with -m 'not slow'"]
-filterwarnings = ["error::DeprecationWarning:deep_isochron.*"]
+filterwarnings = [
+    "error::DeprecationWarning:deep_isochron.*",
+    # JAX's compiler uses Python's `random` internally; a draw that triggers a first
+    # compilation trips Hypothesis's detector although no strategy uses `random`.
+    "ignore:Do not use the `random` module inside strategies:hypothesis.errors.HypothesisDeprecationWarning",
+]
 xfail_strict = true
 
 [tool.hypothesis]

@@ -6,42 +6,84 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..fourier import TruncatedFourier
-from .analytic import SinhConjugation
-from .base import AbstractBijection, SequentialINN
+from .base import AbstractBijection, AbstractScalarBijection
 from .splines import MonotonicRQSpline
 
 
-class OffsetedBijection(AbstractBijection):
-    bijection: AbstractBijection
-    dim: int = eqx.field(static=True, init=False)
+class OffsetedBijection(AbstractScalarBijection[tuple]):
+    """``g(r) = f(r) - f(0)`` for a scalar bijection ``f``: the increasing map that fixes
+    the origin, so it sends ``R_+`` onto ``R_+`` and can act on a radius.
+
+    A scalar bijection in its own right (``R -> R``), delegating ``num_params``,
+    ``constrain`` and ``smoothness`` to ``f``; usable standalone, as a chain member, or
+    as a coupling template. ``raw`` lives in the wrapped bijection.
+    """
+
+    bijection: AbstractScalarBijection
+    raw: None = eqx.field(static=True, default=None, init=False)
     smoothness: int | None = eqx.field(static=True, init=False)
 
-    def __init__(self, bijection: AbstractBijection):
+    def __init__(self, bijection: AbstractScalarBijection):
+        if not isinstance(bijection, AbstractScalarBijection):
+            raise TypeError("OffsetedBijection wraps an AbstractScalarBijection.")
         self.bijection = bijection
-        self.dim = bijection.dim
         self.smoothness = bijection.smoothness
 
-    # Shapes follow the wrapped bijection's (0-d for scalar bijections).
-    def __call__(self, x: Float[Array, "..."]) -> Float[Array, "..."]:
+    @property
+    def num_params(self) -> int:
+        return self.bijection.num_params
+
+    def constrain(self, raw):
+        return self.bijection.constrain(raw)
+
+    @property
+    def params(self):
+        return self.bijection.params
+
+    def from_unconstrained(self, params_raw):
+        return eqx.tree_at(
+            lambda m: m.bijection, self, self.bijection.from_unconstrained(params_raw)
+        )
+
+    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
         return self.bijection(x) - self.bijection(jnp.zeros_like(x))
 
-    def inverse(self, y: Float[Array, "..."]) -> Float[Array, "..."]:
+    def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
         offset = self.bijection(jnp.zeros_like(y))
         return self.bijection.inverse(y + offset)
 
 
+def _scaled_polar(
+    xy: Float[Array, " 2"], center, scale, eps_r: float
+) -> tuple[Float[Array, " 2"], Float[Array, ""]]:
+    """``(x - center) * scale`` and its regularised radius ``sqrt(|.|² + eps_r²)``."""
+    xy_s = (xy - center) * scale
+    return xy_s, jnp.sqrt(jnp.sum(xy_s**2) + eps_r**2)
+
+
 class RadialBijection(AbstractBijection):
+    """``x -> center + (g(r) / r) (x - center)`` in the metric ``scale``: a radial
+    rescaling by the origin-fixing scalar bijection ``g = OffsetedBijection(f)``.
+
+    The radius is regularised as ``r = sqrt(|x_s|² + eps_r²)`` only *inside* ``g`` and
+    the ratio ``g(r) / r``, so the origin maps to the origin exactly and the Jacobian
+    there is finite. ``f`` is a standalone trainable scalar bijection.
+    """
+
+    center: Float[Array, " 2"]
+    log_scale: Float[Array, " 2"]
+    radial_bijection: OffsetedBijection
     dim: int = eqx.field(static=True, default=2, init=False)
     smoothness: int | None = eqx.field(static=True, init=False)
-
-    center: Float[Array, " dim"]
-    log_scale: Float[Array, " dim"]
-
-    radial_bijection: OffsetedBijection
-
     eps_r: float = eqx.field(static=True)
 
-    def __init__(self, bijection, center, log_scale, eps_r: float = 1e-7):
+    def __init__(
+        self,
+        bijection: AbstractScalarBijection,
+        center: Float[Array, " 2"],
+        log_scale: Float[Array, " 2"],
+        eps_r: float = 1e-7,
+    ):
         self.center = center
         self.log_scale = log_scale
         self.radial_bijection = OffsetedBijection(bijection)
@@ -49,24 +91,18 @@ class RadialBijection(AbstractBijection):
         self.smoothness = bijection.smoothness
 
     @property
-    def scale(self) -> Float[Array, " dim"]:
+    def scale(self) -> Float[Array, " 2"]:
         return jnp.exp(self.log_scale)
 
     def __call__(self, x: Float[Array, " 2"]) -> Float[Array, " 2"]:
-        x_scaled = (x - self.center) * self.scale
-        r_in = jnp.sqrt(jnp.sum(x_scaled**2) + self.eps_r**2)
+        x_s, r_in = _scaled_polar(x, self.center, self.scale, self.eps_r)
         r_out = self.radial_bijection(r_in)
-
-        y_scaled = (r_out / r_in) * x_scaled
-        return (y_scaled / self.scale) + self.center
+        return (r_out / r_in) * x_s / self.scale + self.center
 
     def inverse(self, y: Float[Array, " 2"]) -> Float[Array, " 2"]:
-        y_scaled = (y - self.center) * self.scale
-        r_out = jnp.sqrt(jnp.sum(y_scaled**2) + self.eps_r**2)
+        y_s, r_out = _scaled_polar(y, self.center, self.scale, self.eps_r)
         r_in = self.radial_bijection.inverse(r_out)
-
-        x_scaled = (r_in / r_out) * y_scaled
-        return (x_scaled / self.scale) + self.center
+        return (r_in / r_out) * y_s / self.scale + self.center
 
 
 class CircularMonotonicRQCoupling(AbstractBijection):
@@ -146,71 +182,91 @@ class CircularMonotonicRQCoupling(AbstractBijection):
         return self._rotate(y, self.spline.inverse(theta) - theta)
 
 
-class PolarConditionalBijection(AbstractBijection):
+class PolarCouplingFlow(AbstractBijection):
+    """A coupling layer in polar coordinates: the radius is transformed by a scalar
+    bijection whose parameters are a function of the angle,
+    ``(r, θ) -> (g_θ(r), θ)`` with ``g_θ = template.from_unconstrained(conditioner(θ))``.
+
+    This is ``CouplingFlow`` with the chart ``(r, θ)`` in place of ``(x_coupled, x_const)``
+    and a ``TruncatedFourier`` conditioner in place of the MLP (the angle is periodic, so
+    a Fourier series is the natural conditioner). The template is wrapped in
+    ``OffsetedBijection`` so that ``g_θ(0) = 0`` and ``R_+ -> R_+``. The Fourier
+    coefficients are zero-initialised, so the layer is the identity at init.
+
+    ``center`` and ``log_scale`` set the chart's origin and metric; the radius is
+    regularised as in ``RadialBijection``. The angle is read through a ``where``-safe
+    ``arctan2`` (fill ``0`` inside the ``eps_r`` disc), so the origin is a fixed point.
+
+    **Regularity.** ``smoothness`` is the template's: the Fourier conditioner is C^∞ and
+    the composition in ``(r, θ)`` is as smooth as ``g``; at the origin the map is
+    continuous (the angular dependence of ``g_θ`` is not differentiable there), as for
+    any angle-conditioned map.
+    """
+
+    conditioner: TruncatedFourier
+    center: Float[Array, " 2"]
+    log_scale: Float[Array, " 2"]
+    template: AbstractScalarBijection = eqx.field(static=True)
     dim: int = eqx.field(static=True, default=2, init=False)
-    smoothness: int | None = eqx.field(static=True, default=None, init=False)
-
-    center: Float[Array, " dim"]
-    log_scale: Float[Array, " dim"]
-
-    fourier: TruncatedFourier
-
+    smoothness: int | None = eqx.field(static=True, init=False)
     eps_r: float = eqx.field(static=True)
 
     def __init__(
         self,
-        n_radial_blocks: int,
+        bijection: AbstractScalarBijection,
         fourier_order: int = 3,
-        init_scale: float = 0.01,
-        eps_r: float = 1e-7,
         *,
-        key: PRNGKeyArray,
+        center: Float[Array, " 2"] | None = None,
+        log_scale: Float[Array, " 2"] | None = None,
+        eps_r: float = 1e-7,
+        key: PRNGKeyArray | None = None,
     ):
-        key_c, key_s, key_f = jax.random.split(key, 3)
-        self.center = jax.random.normal(key_c, (2,)) * init_scale
-        self.log_scale = jax.random.normal(key_s, (2,)) * init_scale
-        self.fourier = TruncatedFourier(
-            dim=n_radial_blocks * 5,
+        """**Arguments:**
+
+        - ``bijection``: scalar template (``R -> R``); wrapped in ``OffsetedBijection``.
+        - ``fourier_order``: highest harmonic of the angular conditioner.
+        - ``center``, ``log_scale``: chart origin and log-metric (default: 0).
+        - ``eps_r``: radius regularisation.
+        - ``key``: unused (kept for builder compatibility; the layer is zero-initialised).
+        """
+        del key
+        if not isinstance(bijection, AbstractScalarBijection):
+            raise TypeError(
+                "PolarCouplingFlow needs an AbstractScalarBijection template."
+            )
+        template = OffsetedBijection(bijection)
+        self.template = eqx.partition(template, eqx.is_array)[1]
+        self.smoothness = template.smoothness
+        self.conditioner = TruncatedFourier(
+            dim=template.num_params,
             order=fourier_order,
-            init_scale=init_scale,
-            key=key_f,
+            init_scale=0.0,
+            key=jax.random.key(0),
         )
+        self.center = jnp.zeros(2) if center is None else center
+        self.log_scale = jnp.zeros(2) if log_scale is None else log_scale
         self.eps_r = eps_r
 
     @property
-    def scale(self) -> Float[Array, " dim"]:
+    def scale(self) -> Float[Array, " 2"]:
         return jnp.exp(self.log_scale)
 
-    def __call__(self, x: Float[Array, " 2"]) -> Float[Array, " 2"]:
-        x_scaled = (x - self.center) * self.scale
-        r_in = jnp.sqrt(jnp.sum(x_scaled**2) + self.eps_r**2)
-
-        theta = jnp.arctan2(x_scaled[1], x_scaled[0])
-        params = jnp.reshape(self.fourier(theta), (-1, 5))
-        radial_bijection = OffsetedBijection(
-            SequentialINN(
-                [SinhConjugation.from_unnormalized_params(*p) for p in params]
-            )
+    def _angle(self, xy_s: Float[Array, " 2"]) -> Float[Array, ""]:
+        x, y = xy_s
+        small = x**2 + y**2 < self.eps_r**2
+        return jnp.where(
+            small, 0.0, jnp.arctan2(jnp.where(small, 0.0, y), jnp.where(small, 1.0, x))
         )
 
-        r_out = radial_bijection(r_in)
+    def radial_bijection(self, theta: Float[Array, ""]) -> AbstractScalarBijection:
+        return self.template.from_unconstrained(self.conditioner(theta))
 
-        y_scaled = (r_out / r_in) * x_scaled
-        return (y_scaled / self.scale) + self.center
+    def __call__(self, x: Float[Array, " 2"]) -> Float[Array, " 2"]:
+        x_s, r_in = _scaled_polar(x, self.center, self.scale, self.eps_r)
+        r_out = self.radial_bijection(self._angle(x_s))(r_in)
+        return (r_out / r_in) * x_s / self.scale + self.center
 
     def inverse(self, y: Float[Array, " 2"]) -> Float[Array, " 2"]:
-        y_scaled = (y - self.center) * self.scale
-        r_out = jnp.sqrt(jnp.sum(y_scaled**2) + self.eps_r**2)
-
-        theta = jnp.arctan2(y_scaled[1], y_scaled[0])
-        params = jnp.reshape(self.fourier(theta), (-1, 5))
-        radial_bijection = OffsetedBijection(
-            SequentialINN(
-                [SinhConjugation.from_unnormalized_params(*p) for p in params]
-            )
-        )
-
-        r_in = radial_bijection.inverse(r_out)
-
-        x_scaled = (r_in / r_out) * y_scaled
-        return (x_scaled / self.scale) + self.center
+        y_s, r_out = _scaled_polar(y, self.center, self.scale, self.eps_r)
+        r_in = self.radial_bijection(self._angle(y_s)).inverse(r_out)
+        return (r_in / r_out) * y_s / self.scale + self.center

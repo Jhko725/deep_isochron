@@ -229,7 +229,8 @@ def test_coupling_does_not_count_generated_params(key):
     t = next(iter(SCALAR_TEMPLATES.values()))
     cf = CouplingFlow(dim=2, bijection=t, mlp_width=8, mlp_depth=1, key=key)
     mlp_size = sum(
-        l.size for l in jax.tree.leaves(eqx.filter(cf.mlp, eqx.is_inexact_array))
+        l.size
+        for l in jax.tree.leaves(eqx.filter(cf.conditioner, eqx.is_inexact_array))
     )
     assert cf.num_trainable_params == mlp_size
 

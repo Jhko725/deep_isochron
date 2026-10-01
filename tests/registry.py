@@ -32,7 +32,7 @@ from deep_isochron.model.invertible import (
 )
 from deep_isochron.model.invertible.polar import (
     CircularMonotonicRQCoupling,
-    PolarConditionalBijection,
+    PolarCouplingFlow,
     RadialBijection,
 )
 
@@ -53,6 +53,8 @@ SCALAR_TEMPLATES = {
     "bspline (K=4)": CubicBSpline(4),
     "bspline (K=10, range 4)": CubicBSpline(10, xy_range=(-4.0, 4.0)),
     "chain (rq_spline, cubic)": ScalarChain([MonotonicRQSpline(4), CubicConjugation()]),
+    "offset (sinh)": OffsetedBijection(SinhConjugation()),
+    "offset (chain sinh x2)": OffsetedBijection(ScalarChain([SinhConjugation()] * 2)),
 }
 """``K`` is the number of bins (``num_bins``)."""
 
@@ -82,6 +84,12 @@ VECTOR_BUILDERS = {
         SinhConjugation(), jnp.zeros(2), jnp.zeros(2)
     ),
     "circular_rq (K=8)": lambda k: CircularMonotonicRQCoupling(num_bins=8),
+    "polar_coupling (sinh x2, order 3)": lambda k: PolarCouplingFlow(
+        ScalarChain([SinhConjugation()] * 2), fourier_order=3
+    ),
+    "polar_coupling (rq_spline, order 2)": lambda k: PolarCouplingFlow(
+        MonotonicRQSpline(5, xy_range=(-3.0, 3.0)), fourier_order=2
+    ),
 }
 IDENTITY_AT_INIT = {
     "coupling (cubic_conjugation x3)",
@@ -92,6 +100,8 @@ IDENTITY_AT_INIT = {
     "affine_coupling",
     "radial (sinh)",
     "circular_rq (K=8)",
+    "polar_coupling (sinh x2, order 3)",
+    "polar_coupling (rq_spline, order 2)",
 }
 
 # Bijections whose parametrisation does not *guarantee* orientation preservation away
@@ -101,7 +111,5 @@ IDENTITY_AT_INIT = {
 ORIENTATION_NOT_GUARANTEED = {"invertible_linear"}
 
 UNTESTED = {
-    OffsetedBijection: "wrapper; exercised through RadialBijection",
     SequentialINN: "container; exercised by test_sequential_inn_composes_inverse",
-    PolarConditionalBijection: "rebuilt as PolarCouplingFlow in step 4",
 }
