@@ -22,8 +22,8 @@ class MonotonicRQSpline(AbstractSpline):
     ``knot_derivs[k]``, ``knot_derivs[k+1]``. Positive bin widths, heights and
     derivatives make it strictly increasing.
 
-    Trainable state is the constrained ``x_widths``, ``y_widths`` (``num_bins`` each) and
-    the interior knot derivatives ``derivs`` (``num_bins - 1``); the boundary
+    Trainable state is the constrained ``x_widths``, ``y_widths`` (``num_bins`` each)
+    and the interior knot derivatives ``derivs`` (``num_bins - 1``); the boundary
     derivatives are 1 so the identity tails join C^1.
     """
 
@@ -107,7 +107,7 @@ class MonotonicRQSpline(AbstractSpline):
     # ------------------------------------------------------------ interpolant -----
     def _forward_in_range(self, x):
         d, s = self.knot_derivs, self.y_widths / self.x_widths
-        k, dx = self.bin_value(x, self.xs)
+        k, dx = self.get_bin_and_offset(x, self.xs)
         xi = dx / self.x_widths[k]
         numer = (s[k] * xi**2 + d[k] * xi * (1 - xi)) * self.y_widths[k]
         denom = s[k] + (d[k + 1] + d[k] - 2 * s[k]) * xi * (1 - xi)
@@ -115,7 +115,7 @@ class MonotonicRQSpline(AbstractSpline):
 
     def _inverse_in_range(self, y):
         d, s = self.knot_derivs, self.y_widths / self.x_widths
-        k, dy = self.bin_value(y, self.ys)
+        k, dy = self.get_bin_and_offset(y, self.ys)
         common = dy * (d[k + 1] + d[k] - 2 * s[k])
         a = self.y_widths[k] * (s[k] - d[k]) + common
         b = self.y_widths[k] * d[k] - common

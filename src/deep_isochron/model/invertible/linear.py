@@ -44,6 +44,13 @@ class InvertibleLinear(AbstractBijection):
 
 
 class BiLipschitzLinear(AbstractBijection):
+    """BiLipschitz linear layer, as introduced in [1].
+
+    [1]: D. A. Serino et al. Fast-slow neural networks for learning singularly perturbed
+     dynamical systms. J. Comput. Phys. 537, 114090 (2025)."""
+
+    # TODO: Bug in the implementation. _s is a Float[Array, "{self.dim}"] of singular
+    # values in the range (1/L, L). Need to fix.
     _U: Float[Array, "{self.dim} {self.dim}"]
     _V: Float[Array, "{self.dim} {self.dim}"]
     _s: Float[Array, ""]

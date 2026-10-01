@@ -19,7 +19,8 @@ derivatives, ...) as its trainable leaves and implements
 * ``xs`` / ``ys``               knot positions and values,
 * ``_forward_in_range``        the interpolant, called only with x in [a, b],
 * ``_inverse_in_range``        its inverse, called only with y in [a, b],
-* ``num_params`` and ``from_unconstrained``   (the ``AbstractScalarBijection`` interface).
+* ``num_params`` and ``from_unconstrained``   (the ``AbstractScalarBijection``
+    interface).
 
 ``knot_derivs`` (``f'(xs)``) is provided by the splines that are at least C^1; tests use
 it to check the C^1 join.
@@ -62,14 +63,6 @@ def check_positive(name: str, values: Float[Array, " n"]) -> None:
         return
     if jnp.any(values <= 0):
         raise ValueError(f"{name} must be positive.")
-
-
-def bin_index(edges: Float[Array, " n"], v: Float[Array, ""]) -> Int[Array, ""]:
-    """Index ``k`` with ``edges[k] <= v < edges[k+1]``, clipped to the ``n - 1`` bins
-    (so ``v == edges[-1]`` lands in the last bin, out-of-range values in the nearest)
-    ."""
-    k = jnp.searchsorted(edges, v, side="right", method="compare_all") - 1
-    return jnp.clip(k, 0, edges.shape[0] - 2)
 
 
 class AbstractSpline(AbstractScalarBijection):
@@ -127,12 +120,17 @@ class AbstractSpline(AbstractScalarBijection):
         return jnp.where(self.is_inrange(y), x_in, y)
 
     # ------------------------------------------------------------- helpers -------
-    def bin_value(
+    def get_bin_and_offset(
         self, v: Float[Array, ""], edges: Float[Array, " {self.num_bins+1}"]
     ) -> tuple[Int[Array, ""], Float[Array, ""]]:
         """Bin index of ``v`` and its offset ``v - edges[k]`` from the bin's left edge
-        (cf. ``_interpret_t`` in ``diffrax.AbstractGlobalInterpolation``)."""
-        k = bin_index(edges, v)
+        (cf. ``_interpret_t`` in ``diffrax.AbstractGlobalInterpolation``).
+
+        Index ``k`` is computed to satisfy ``edges[k] <= v < edges[k+1]``, clipped to
+        the ``n - 1`` bins (so ``v == edges[-1]`` lands in the last bin, out-of-range
+        values land in the first or last bin)."""
+        k = jnp.searchsorted(edges, v, side="right", method="compare_all") - 1
+        k = jnp.clip(k, 0, edges.shape[0] - 2)
         return k, v - edges[k]
 
     @staticmethod

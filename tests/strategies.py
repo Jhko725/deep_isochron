@@ -39,9 +39,13 @@ BATCH = 16  # fixed batch -> one compile per test function
 
 # ------------------------------------------------------------- scalar elements ----
 # "Typical regime" bounds; extreme regimes get their own explicitly named tests.
-raw_params = st.floats(-3.0, 3.0, allow_nan=False, allow_infinity=False)
-domain_points = st.floats(-5.0, 5.0, allow_nan=False, allow_infinity=False)
-seeds = st.integers(0, 2**31 - 1)
+raw_params: st.SearchStrategy[float] = st.floats(
+    -3.0, 3.0, allow_nan=False, allow_infinity=False
+)
+domain_points: st.SearchStrategy[float] = st.floats(
+    -5.0, 5.0, allow_nan=False, allow_infinity=False
+)
+seeds: st.SearchStrategy[int] = st.integers(0, 2**31 - 1)
 
 
 # --------------------------------------------------------------- pure transforms --

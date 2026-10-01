@@ -1,4 +1,5 @@
-"""Monotone piecewise linear spline (C^0), the simplest instance of ``AbstractSpline``."""
+"""Monotone piecewise linear spline (C^0). This is the simplest implementation of an
+``AbstractSpline``."""
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -68,9 +69,9 @@ class LinearSpline(AbstractSpline):
         return self._knots_from_widths(self.y_widths, *self.xy_range)
 
     def _forward_in_range(self, x):
-        k, dx = self.bin_value(x, self.xs)
+        k, dx = self.get_bin_and_offset(x, self.xs)
         return self.ys[k] + dx * self.y_widths[k] / self.x_widths[k]
 
     def _inverse_in_range(self, y):
-        k, dy = self.bin_value(y, self.ys)
+        k, dy = self.get_bin_and_offset(y, self.ys)
         return self.xs[k] + dy * self.x_widths[k] / self.y_widths[k]

@@ -80,11 +80,6 @@ class AbstractScalarBijection(AbstractBijection):
         return self.from_unconstrained(jnp.zeros((self.num_params,)))
 
 
-# class CouplingTransformBase(AbstractBijection):
-
-# TODO: could create a CouplingTransformBase class
-
-
 class SequentialINN(AbstractBijection):
     transforms: tuple[AbstractBijection, ...]
 

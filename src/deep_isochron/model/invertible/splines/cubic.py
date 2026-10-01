@@ -173,7 +173,8 @@ class CubicBSpline(AbstractSpline):
 
     @property
     def coeffs(self) -> Float[Array, " {self.num_bins+3}"]:
-        """Strictly increasing B-spline coefficients ``alpha_{-3}, ..., alpha_{K-1}``."""
+        """Strictly increasing B-spline coefficients: ``alpha_{-3}, ..., alpha_{K-1}``
+        ."""
         K = self.num_bins
         greville = self._greville(self.knots)
         interior = greville[2] + jnp.cumsum(self.coeff_incrs)[:-1]
@@ -215,10 +216,10 @@ class CubicBSpline(AbstractSpline):
 
     # ------------------------------------------------------------ interpolant -----
     def _forward_in_range(self, x):
-        k, dx = self.bin_value(x, self.xs)
+        k, dx = self.get_bin_and_offset(x, self.xs)
         return _cubic(self.pieces[k], dx / jnp.diff(self.xs)[k])
 
     def _inverse_in_range(self, y):
-        k = self.bin_value(y, self.ys)[0]
+        k = self.get_bin_and_offset(y, self.ys)[0]
         u = monotone_cubic_root(self.newton_iters, self.pieces[k], y)
         return self.xs[k] + u * jnp.diff(self.xs)[k]
