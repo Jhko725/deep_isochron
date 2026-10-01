@@ -11,6 +11,7 @@ from .base import AbstractBijection
 
 class AffineCoupling(AbstractBijection):
     dim: int = eqx.field(static=True)
+    smoothness: int | None = eqx.field(static=True, default=None, init=False)
     affine_clamping: float | None = eqx.field(static=True)
 
     split_idx: int
@@ -112,6 +113,7 @@ class ResidualCoupling(
     AbstractBijection
 ):  # TODO: support custom s, t in AffineCouplingTransform, and make this a subclass or so.
     dim: int = eqx.field(static=True)
+    smoothness: int | None = eqx.field(static=True, default=None, init=False)
     split_idx: int
     flip: bool
 

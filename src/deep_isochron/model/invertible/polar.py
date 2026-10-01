@@ -1,5 +1,3 @@
-from typing import ClassVar
-
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -14,13 +12,13 @@ from .splines import MonotonicRQSpline
 
 class OffsetedBijection(AbstractBijection):
     bijection: AbstractBijection
+    dim: int = eqx.field(static=True, init=False)
+    smoothness: int | None = eqx.field(static=True, init=False)
 
     def __init__(self, bijection: AbstractBijection):
         self.bijection = bijection
-
-    @property
-    def dim(self) -> int:
-        return self.bijection.dim
+        self.dim = bijection.dim
+        self.smoothness = bijection.smoothness
 
     # Shapes follow the wrapped bijection's (0-d for scalar bijections).
     def __call__(self, x: Float[Array, "..."]) -> Float[Array, "..."]:
@@ -32,7 +30,8 @@ class OffsetedBijection(AbstractBijection):
 
 
 class RadialBijection(AbstractBijection):
-    dim: ClassVar[int] = 2  # ty: ignore
+    dim: int = eqx.field(static=True, default=2, init=False)
+    smoothness: int | None = eqx.field(static=True, init=False)
 
     center: Float[Array, " dim"]
     log_scale: Float[Array, " dim"]
@@ -46,6 +45,7 @@ class RadialBijection(AbstractBijection):
         self.log_scale = log_scale
         self.radial_bijection = OffsetedBijection(bijection)
         self.eps_r = eps_r
+        self.smoothness = bijection.smoothness
 
     @property
     def scale(self) -> Float[Array, " dim"]:
@@ -81,7 +81,10 @@ class CircularMonotonicRQCoupling(AbstractBijection):
     _dys: Float[Array, " knots-1"]
     _derivs: Float[Array, " knots-1"]
 
-    dim: ClassVar[int] = 2  # ty: ignore
+    dim: int = eqx.field(static=True, default=2, init=False)
+    # C^0: the spline's boundary derivatives are pinned to 1, so the map is only
+    # continuous across theta = +-pi (see the TODO in make_spline).
+    smoothness: int | None = eqx.field(static=True, default=0, init=False)
     num_knots: int = eqx.field(static=True)
     min_derivative: float = eqx.field(static=True)
     min_rel_x_bin_width: float = eqx.field(static=True)
@@ -170,7 +173,8 @@ class CircularMonotonicRQCoupling(AbstractBijection):
 
 
 class PolarConditionalBijection(AbstractBijection):
-    dim: ClassVar[int] = 2
+    dim: int = eqx.field(static=True, default=2, init=False)
+    smoothness: int | None = eqx.field(static=True, default=None, init=False)
 
     center: Float[Array, " dim"]
     log_scale: Float[Array, " dim"]

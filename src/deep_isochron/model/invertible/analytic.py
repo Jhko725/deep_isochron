@@ -7,18 +7,14 @@ normalizing flows. ICML (2026).
 [2] https://github.com/mathisgerdes/bijx/blob/master/src/bijx/bijections/analytic.py.
 """
 
-from typing import ClassVar, TypeVar
+from typing import NamedTuple
 
-import jax
+import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
-from deep_isochron.misc import inv_softplus, inv_squashed_exp, squashed_exp
-
 from .base import AbstractScalarBijection
-
-
-B = TypeVar("B", bound=AbstractScalarBijection)
+from .constraints import Arcsinh, BoundedPositive, Free, Interval, Positive
 
 
 def solve_cubic(
@@ -47,51 +43,69 @@ def solve_cubic(
     return -(b + c + d0 / c) / (3 * a)
 
 
-class CubicRational(AbstractScalarBijection):
-    """Modified rational transform with learnable parameters.
-
-    Type: [-∞, ∞] → [-∞, ∞]
-    Transform: x + α*x/(1 + β*x²) with constrained α ∈ [-1,8], β > 0.
-    """
-
-    num_params: ClassVar[int] = 3  # ty: ignore
-
+class CubicRationalParams(NamedTuple):
     alpha: Float[Array, ""]
     beta: Float[Array, ""]
     loc: Float[Array, ""]
 
-    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
-        x_ = x - self.loc
-        return x + self.alpha * x_ / (1 + self.beta * x_**2)
 
-    def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
-        y = y - self.loc
-        x = solve_cubic(
-            self.beta,
-            -self.beta * y,
-            self.alpha + 1,
-            -y,
-        )
-        return x + self.loc
+class CubicRational(AbstractScalarBijection[CubicRationalParams]):
+    """Modified rational transform with learnable parameters.
 
-    def from_unconstrained(
-        self: B,
-        params_raw: Float[Array, " {self.num_params}"],
+    Type: [-∞, ∞] → [-∞, ∞]
+    Transform: x + α*x_/(1 + β*x_²), x_ = x - loc, with constrained α ∈ (-1, 8), β > eps.
+
+    Raw parameters: ``(alpha, beta, loc)``; ``raw = 0`` is the identity (α = 0, β = 1).
+    """
+
+    raw: Float[Array, " 3"] | None
+    eps_alpha: float = eqx.field(static=True)
+    eps_beta: float = eqx.field(static=True)
+    num_params: int = eqx.field(static=True, default=3, init=False)
+    smoothness: int | None = eqx.field(static=True, default=None, init=False)
+
+    def __init__(
+        self,
+        *,
+        raw: Float[Array, " 3"] | None = None,
         eps_alpha: float = 1e-3,
         eps_beta: float = 1e-1,
-        **kwargs,
-    ) -> B:
-        """Instantiate the transform using unconstrained parameters."""
-        del kwargs
-        alpha, beta, loc = params_raw
+    ):
+        self.eps_alpha = eps_alpha
+        self.eps_beta = eps_beta
+        self.raw = self._init_raw(jnp.zeros(3) if raw is None else raw)
 
-        alpha_low, alpha_high = -1 + eps_alpha, 8 - eps_alpha
-        alpha = alpha_low + (alpha_high - alpha_low) * jax.nn.sigmoid(
-            alpha + jax.scipy.special.logit(-alpha_low / (alpha_high - alpha_low))
+    def constrain(self, raw) -> CubicRationalParams:
+        alpha, beta, loc = raw
+        return CubicRationalParams(
+            alpha=Interval(-1 + self.eps_alpha, 8 - self.eps_alpha, at_zero=0.0)(alpha),
+            beta=Positive(self.eps_beta, at_zero=1.0)(beta),
+            loc=Free()(loc),
         )
 
-        beta = eps_beta + jax.nn.softplus(beta + inv_softplus(1.0 - eps_beta))
-        return type(self)(alpha, beta, loc)
+    @classmethod
+    def from_constrained(
+        cls, alpha, beta, loc, *, eps_alpha: float = 1e-3, eps_beta: float = 1e-1
+    ) -> "CubicRational":
+        raw = jnp.stack(
+            [
+                Interval(-1 + eps_alpha, 8 - eps_alpha, at_zero=0.0).inverse(alpha),
+                Positive(eps_beta, at_zero=1.0).inverse(beta),
+                jnp.asarray(loc),
+            ]
+        )
+        return cls(raw=raw, eps_alpha=eps_alpha, eps_beta=eps_beta)
+
+    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        p = self.params
+        x_ = x - p.loc
+        return x + p.alpha * x_ / (1 + p.beta * x_**2)
+
+    def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
+        p = self.params
+        y = y - p.loc
+        x = solve_cubic(p.beta, -p.beta * y, p.alpha + 1, -y)
+        return x + p.loc
 
 
 def pow_overflow_log_arg(dtype, power):
@@ -197,57 +211,70 @@ def sinh_conj_nonlinearity(x: Float[Array, ""], beta=0.0, mu=0.0, nu=0.0):
     return jnp.where(big, asymp, direct)
 
 
-class SinhConjugation(AbstractScalarBijection):
-    """Sinh-based bijection using conjugation with arcsinh.
-
-    Type: [-∞, ∞] → [-∞, ∞]
-    Transform: arcsinh(exp(mu) * (exp(nu) * sinh((x-loc)/alpha) + beta)) * alpha + loc
-
-    Parameters:
-        loc: Location parameter (shift)
-        scale: Scale parameter (must be positive)
-        beta: Offset parameter in sinh space
-        mu: Log-scale parameter for outer stretch
-        nu: Log-scale parameter for inner stretch
-    """
-
-    num_params: ClassVar[int] = 5  # ty: ignore
-
+class SinhConjugationParams(NamedTuple):
     loc: Float[Array, ""]
     scale: Float[Array, ""]
     beta: Float[Array, ""]
     mu: Float[Array, ""]
     nu: Float[Array, ""]
 
-    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
-        x_norm = (x - self.loc) / self.scale
-        return (
-            sinh_conj_nonlinearity(x_norm, self.beta, self.mu, self.nu) * self.scale
-            + self.loc
+
+class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
+    """Sinh-based bijection using conjugation with arcsinh.
+
+    Type: [-∞, ∞] → [-∞, ∞]
+    Transform: arcsinh(exp(mu) * (exp(nu) * sinh((x-loc)/scale) + beta)) * scale + loc
+
+    Raw parameters: ``(loc, scale, beta, mu, nu)``; ``scale`` is constrained to
+    ``(eps_scale, inf)``, ``mu``/``nu`` are passed through ``arcsinh``. ``raw = 0`` is the
+    identity. The inverse is the same map with ``(beta, mu, nu) -> (-beta, -nu, -mu)``.
+    """
+
+    raw: Float[Array, " 5"] | None
+    eps_scale: float = eqx.field(static=True)
+    num_params: int = eqx.field(static=True, default=5, init=False)
+    smoothness: int | None = eqx.field(static=True, default=None, init=False)
+
+    def __init__(
+        self, *, raw: Float[Array, " 5"] | None = None, eps_scale: float = 0.1
+    ):
+        self.eps_scale = eps_scale
+        self.raw = self._init_raw(jnp.zeros(5) if raw is None else raw)
+
+    def constrain(self, raw) -> SinhConjugationParams:
+        loc, scale, beta, mu, nu = raw
+        return SinhConjugationParams(
+            loc=Free()(loc),
+            scale=Positive(self.eps_scale, at_zero=1.0)(scale),
+            beta=Free()(beta),
+            mu=Arcsinh()(mu),
+            nu=Arcsinh()(nu),
         )
+
+    @classmethod
+    def from_constrained(
+        cls, loc, scale, beta, mu, nu, *, eps_scale: float = 0.1
+    ) -> "SinhConjugation":
+        raw = jnp.stack(
+            [
+                jnp.asarray(loc),
+                Positive(eps_scale, at_zero=1.0).inverse(scale),
+                jnp.asarray(beta),
+                Arcsinh().inverse(mu),
+                Arcsinh().inverse(nu),
+            ]
+        )
+        return cls(raw=raw, eps_scale=eps_scale)
+
+    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        p = self.params
+        x_norm = (x - p.loc) / p.scale
+        return sinh_conj_nonlinearity(x_norm, p.beta, p.mu, p.nu) * p.scale + p.loc
 
     def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
-        y_norm = (y - self.loc) / self.scale
-        return (
-            sinh_conj_nonlinearity(y_norm, -self.beta, -self.nu, -self.mu) * self.scale
-            + self.loc
-        )
-
-    def from_unconstrained(
-        self: B,
-        params_raw: Float[Array, " {self.num_params}"],
-        eps_scale: float = 0.1,
-        **kwargs,
-    ) -> B:
-        """Instantiate the transform using unconstrained parameters."""
-        del kwargs
-        loc, scale, beta, mu, nu = params_raw
-
-        scale = eps_scale + jax.nn.softplus(scale + inv_softplus(1.0 - eps_scale))
-        mu = jnp.arcsinh(mu)
-        nu = jnp.arcsinh(nu)
-
-        return type(self)(loc, scale, beta, mu, nu)
+        p = self.params
+        y_norm = (y - p.loc) / p.scale
+        return sinh_conj_nonlinearity(y_norm, -p.beta, -p.nu, -p.mu) * p.scale + p.loc
 
 
 def _cubic_forward(x, a, b):
@@ -262,48 +289,69 @@ def cubic_conj_nonlinearity(x, a=1, b=1, beta=0):
     return _cubic_reverse(_cubic_forward(x, a, b) + beta, a, b)
 
 
-class CubicConjugation(AbstractScalarBijection):
-    """Cubic polynomial-based bijection.
-
-    Type: [-∞, ∞] → [-∞, ∞]
-    Transform: Based on cubic polynomial a*x + b*x³ with conjugation offset
-
-    Parameters:
-        loc: Location parameter (shift)
-        beta: Offset parameter for conjugation
-        a: Linear coefficient (must be positive)
-        b: Cubic coefficient (must be positive)
-    """
-
-    num_params: ClassVar[int] = 4  # ty: ignore
-
+class CubicConjugationParams(NamedTuple):
     loc: Float[Array, ""]
     beta: Float[Array, ""]
     a: Float[Array, ""]
     b: Float[Array, ""]
 
-    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
-        return (
-            cubic_conj_nonlinearity(x - self.loc, self.a, self.b, self.beta) + self.loc
+
+class CubicConjugation(AbstractScalarBijection[CubicConjugationParams]):
+    """Cubic polynomial-based bijection.
+
+    Type: [-∞, ∞] → [-∞, ∞]
+    Transform: g^{-1}(g(x - loc) + beta) + loc with g(x) = a x + b x³.
+
+    Raw parameters: ``(loc, beta, a, b)``. ``a`` and ``b`` are bounded positive
+    (``BoundedPositive``: ``eps + squashed_exp``), so a large conditioner output cannot
+    drive them to infinity. ``raw = 0`` gives ``a = 1``, ``b = 0.3``, ``beta = 0``: the
+    identity.
+    """
+
+    raw: Float[Array, " 4"] | None
+    eps_a: float = eqx.field(static=True)
+    eps_b: float = eqx.field(static=True)
+    num_params: int = eqx.field(static=True, default=4, init=False)
+    smoothness: int | None = eqx.field(static=True, default=None, init=False)
+
+    def __init__(
+        self,
+        *,
+        raw: Float[Array, " 4"] | None = None,
+        eps_a: float = 1e-2,
+        eps_b: float = 1e-2,
+    ):
+        self.eps_a = eps_a
+        self.eps_b = eps_b
+        self.raw = self._init_raw(jnp.zeros(4) if raw is None else raw)
+
+    def constrain(self, raw) -> CubicConjugationParams:
+        loc, beta, a, b = raw
+        return CubicConjugationParams(
+            loc=Free()(loc),
+            beta=Free()(beta),
+            a=BoundedPositive(self.eps_a, at_zero=1.0)(a),
+            b=BoundedPositive(self.eps_b, at_zero=0.3)(b),
         )
+
+    @classmethod
+    def from_constrained(
+        cls, loc, beta, a, b, *, eps_a: float = 1e-2, eps_b: float = 1e-2
+    ) -> "CubicConjugation":
+        raw = jnp.stack(
+            [
+                jnp.asarray(loc),
+                jnp.asarray(beta),
+                BoundedPositive(eps_a, at_zero=1.0).inverse(a),
+                BoundedPositive(eps_b, at_zero=0.3).inverse(b),
+            ]
+        )
+        return cls(raw=raw, eps_a=eps_a, eps_b=eps_b)
+
+    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        p = self.params
+        return cubic_conj_nonlinearity(x - p.loc, p.a, p.b, p.beta) + p.loc
 
     def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
-        return (
-            cubic_conj_nonlinearity(y - self.loc, self.a, self.b, -self.beta) + self.loc
-        )
-
-    def from_unconstrained(
-        self: B,
-        params_raw: Float[Array, " {self.num_params}"],
-        eps_a: float = 1e-2,
-        eps_b=1e-2,
-        **kwargs,
-    ) -> B:
-        """Instantiate the transform using unconstrained parameters."""
-        del kwargs
-        loc, beta, a, b = params_raw
-
-        a = eps_a + squashed_exp(a + inv_squashed_exp(1.0 - eps_a))
-        b = eps_b + squashed_exp(b + inv_squashed_exp(0.3 - eps_b))
-
-        return type(self)(loc, beta, a, b)
+        p = self.params
+        return cubic_conj_nonlinearity(y - p.loc, p.a, p.b, -p.beta) + p.loc

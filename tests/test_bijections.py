@@ -6,6 +6,8 @@
   4. finiteness        f, f⁻¹ finite on the working domain
   5. jacobian          Df⁻¹(f(x)) · Df(x) == I
   6. pytree hygiene    partition/combine round trip; num_trainable_params
+  7. trainability      one aggressive optimiser step keeps every law (raw leaves are
+                       unconstrained, so no step can leave the constrained set)
 
 What gets tested is declared in ``tests/registry.py``; how instances are drawn is
 in ``tests/strategies.py``.  Two test styles are used deliberately:
@@ -15,20 +17,22 @@ in ``tests/strategies.py``.  Two test styles are used deliberately:
   decoration time while ``name`` only exists at collection time (same shape as
   TFP's ``testBijector``).
 * ``@given(f=any_scalar_bijection())`` + ``@example(...)`` — for laws on
-  measure-zero sets (knots, range endpoints) where pinned regression inputs matter
-  more than per-bijection IDs; ``st.data`` tests cannot take ``@example``.
+  measure-zero sets where pinned regression inputs matter more than per-bijection
+  IDs; ``st.data`` tests cannot take ``@example``. Used in ``test_splines.py``.
+
+Spline-specific laws (knots, tails, join regularity) live in ``test_splines.py``.
 """
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import optax
 import pytest
 from deep_isochron.model.invertible import (
-    AbstractSpline,
     CouplingFlow,
     SequentialINN,
 )
-from hypothesis import example, given, strategies as st
+from hypothesis import given, strategies as st
 
 from tests.helpers import (
     assert_close,
@@ -39,33 +43,26 @@ from tests.helpers import (
 from tests.registry import (
     IDENTITY_AT_INIT,
     IDENTITY_TOL,
+    ORIENTATION_NOT_GUARANTEED,
     SCALAR_TEMPLATES,
     VECTOR_BUILDERS,
 )
 from tests.strategies import (
-    any_scalar_bijection,
-    any_spline_template,
     point_batches,
     scalar_bijections,
+    seeds,
     vector_bijections,
 )
 
 
 SCALAR_IDS = list(SCALAR_TEMPLATES)
 VECTOR_IDS = list(VECTOR_BUILDERS)
-KNOTTED = [n for n, t in SCALAR_TEMPLATES.items() if isinstance(t, AbstractSpline)]
-KNOTTED_C1 = [n for n in KNOTTED if hasattr(SCALAR_TEMPLATES[n], "knot_derivs")]
-
-
-def _zero_instance(name):
-    t = SCALAR_TEMPLATES[name]
-    return t.from_unconstrained(jnp.zeros(t.num_params))
 
 
 # ---------------------------------------------------------------- scalar laws -----
 @pytest.mark.parametrize("name", SCALAR_IDS)
 def test_scalar_identity_at_zero(name):
-    f = _zero_instance(name)
+    f = SCALAR_TEMPLATES[name].identity_like()
     x = jnp.linspace(-4, 4, 41)
     assert_close(
         jax.vmap(f)(x),
@@ -80,6 +77,17 @@ def test_scalar_num_params_matches_leaves(name):
     """A standalone scalar bijection's raw vector is exactly its trainable state."""
     t = SCALAR_TEMPLATES[name]
     assert t.num_trainable_params == t.num_params
+    if t.raw is not None:  # a ScalarChain's raw lives in its members
+        assert t.raw.shape == (t.num_params,)
+
+
+@pytest.mark.parametrize("name", SCALAR_IDS)
+def test_scalar_template_has_no_trainable_state(name):
+    """A template (raw=None) is hashable and contributes nothing to training."""
+    t = eqx.partition(SCALAR_TEMPLATES[name], eqx.is_array)[1]
+    assert t.num_trainable_params == 0
+    hash(t)
+    assert t.identity_like().num_params == SCALAR_TEMPLATES[name].num_params
 
 
 @pytest.mark.parametrize("name", SCALAR_IDS)
@@ -117,54 +125,6 @@ def test_scalar_jacobian_consistent_with_inverse(name, data):
     )
 
 
-# ------------------------------------------------ scalar: knots and boundaries ----
-# Measure-zero sets (knots, range endpoints) that property tests hit only by luck.
-# Style: any_scalar_bijection() + @example pins, so regressions stay pinned.
-# Every AbstractSpline in the registry gets these for free; spline-specific laws
-# (regularity of the tail joins, oracles) live in test_splines.py.
-@given(f=any_scalar_bijection(KNOTTED))
-@example(f=_zero_instance(KNOTTED[0]))
-def test_knots_round_trip(f):
-    xk = f.xs  # includes both range endpoints
-    _, x_rt, _ = roundtrip(f, xk)
-    assert_close(x_rt, xk, atol=1e-10, msg="round trip at knots")
-
-
-@given(f=any_scalar_bijection(KNOTTED))
-@example(f=_zero_instance(KNOTTED[0]))
-def test_knots_interpolated_and_monotone(f):
-    assert_close(jax.vmap(f)(f.xs), f.ys, atol=1e-10, msg="f(x_k) != y_k")
-    lo, hi = float(f.xs[0]), float(f.xs[-1])
-    x = jnp.sort(jnp.concatenate([jnp.linspace(lo - 1, hi + 1, 2001), f.xs]))
-    x = x[
-        jnp.concatenate([jnp.array([True]), jnp.diff(x) > 1e-9])
-    ]  # drop near-duplicate grid/knot points
-    assert jnp.all(jnp.diff(jax.vmap(f)(x)) > 0), "not monotone across knots"
-
-
-@given(f=any_scalar_bijection(KNOTTED_C1))
-@example(f=_zero_instance(KNOTTED_C1[0]))
-def test_knot_derivatives(f):
-    """f'(x_k) == knot_derivs[k] at every knot, boundaries included (identity tails
-    join C¹)."""
-    assert_close(
-        jax.vmap(jax.grad(f))(f.xs),
-        f.knot_derivs,
-        rtol=1e-9,
-        atol=1e-9,
-        msg="f'(x_k) != d_k",
-    )
-
-
-@given(f=any_spline_template().flatmap(scalar_bijections), x=point_batches(1))
-def test_spline_any_bin_count_round_trip(f, x):
-    """Round trip for drawn spline class, bin count and range (not just the
-    registry's configs)."""
-    x = x[:, 0]
-    _, x_rt, _ = roundtrip(f, x)
-    assert_close(x_rt, x, rtol=1e-8, atol=1e-8)
-
-
 # ---------------------------------------------------------------- vector laws -----
 @pytest.mark.parametrize("name", VECTOR_IDS)
 def test_vector_identity_at_init(name, key):
@@ -191,6 +151,10 @@ def test_vector_round_trip_random_weights(name, data):
 @pytest.mark.parametrize("name", VECTOR_IDS)
 @given(data=st.data())
 def test_vector_orientation_preserving(name, data):
+    if name in ORIENTATION_NOT_GUARANTEED:
+        pytest.skip(
+            "unconstrained parametrisation; see registry.ORIENTATION_NOT_GUARANTEED"
+        )
     f = data.draw(vector_bijections(name), label="bijection")
     x = data.draw(point_batches(f.dim), label="x")
     dets = jacobian_dets(f, x)
@@ -253,3 +217,45 @@ def test_coupling_does_not_count_generated_params(key):
         l.size for l in jax.tree.leaves(eqx.filter(cf.mlp, eqx.is_inexact_array))
     )
     assert cf.num_trainable_params == mlp_size
+
+
+# -------------------------------------------------------------- trainability ------
+def _adam_step(module, key, lr=1.0):
+    """One optimiser step along a random 'gradient' of the trainable leaves."""
+    params, static = eqx.partition(module, eqx.is_inexact_array)
+    leaves, treedef = jax.tree.flatten(params)
+    grads = jax.tree.unflatten(
+        treedef,
+        [
+            jax.random.normal(k, l.shape, l.dtype)
+            for k, l in zip(jax.random.split(key, len(leaves)), leaves)
+        ],
+    )
+    opt = optax.adam(lr)
+    updates, _ = opt.update(grads, opt.init(params), params)
+    return eqx.combine(eqx.apply_updates(params, updates), static)
+
+
+@pytest.mark.parametrize("name", SCALAR_IDS)
+@given(seed=seeds, x=point_batches(1))
+def test_scalar_standalone_training_keeps_validity(name, seed, x):
+    """An aggressive Adam step on a standalone scalar bijection cannot leave the
+    constrained set: round trip and monotonicity still hold afterwards."""
+    f = _adam_step(SCALAR_TEMPLATES[name], jax.random.key(seed))
+    x = x[:, 0]
+    y, x_rt, _ = roundtrip(f, x)
+    assert jnp.all(jnp.isfinite(y)), f"{name}: forward not finite after a step"
+    assert_close(x_rt, x, rtol=1e-8, atol=1e-8, msg=f"{name}: round trip after a step")
+    assert jnp.all(jax.vmap(jax.grad(f))(x) > 0), f"{name}: not increasing after a step"
+
+
+@pytest.mark.parametrize("name", VECTOR_IDS)
+@given(seed=seeds, x=point_batches(2))
+def test_vector_standalone_training_keeps_validity(name, seed, x):
+    f = _adam_step(
+        VECTOR_BUILDERS[name](jax.random.key(seed)), jax.random.key(seed + 1), lr=0.1
+    )
+    x = x[:, : f.dim] if f.dim <= 2 else jnp.pad(x, ((0, 0), (0, f.dim - 2)))
+    y, x_rt, _ = roundtrip(f, x)
+    assert jnp.all(jnp.isfinite(y)), f"{name}: forward not finite after a step"
+    assert_close(x_rt, x, rtol=1e-7, atol=1e-7, msg=f"{name}: round trip after a step")

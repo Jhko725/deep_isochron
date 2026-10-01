@@ -54,3 +54,26 @@ def test_untested_reasons_are_stale(key):
     }
     stale = set(UNTESTED) & covered
     assert not stale, f"remove from UNTESTED: {sorted(c.__name__ for c in stale)}"
+
+
+def test_smoothness_declared(key):
+    """Every registered bijection declares its regularity (an int, or None for C^∞)."""
+    instances = list(SCALAR_TEMPLATES.values()) + [
+        b(key) for b in VECTOR_BUILDERS.values()
+    ]
+    for f in instances:
+        assert f.smoothness is None or isinstance(f.smoothness, int), type(f).__name__
+
+
+def test_abstractvars_are_not_init_args(key):
+    """`dim`, `smoothness`, `num_params` are declared properties of a class, never
+    constructor arguments (ADR-0004)."""
+    import pytest
+
+    for f in list(SCALAR_TEMPLATES.values()) + [
+        b(key) for b in VECTOR_BUILDERS.values()
+    ]:
+        for name in ("dim", "smoothness", "num_params"):
+            if name in type(f).__dataclass_fields__:
+                with pytest.raises(TypeError):
+                    type(f)(**{name: 1})

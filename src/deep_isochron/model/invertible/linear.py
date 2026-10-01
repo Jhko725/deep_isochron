@@ -15,20 +15,24 @@ class InvertibleLinear(AbstractBijection):
     bias: Float[Array, " {self.dim}"] | None
 
     dim: int = eqx.field(static=True)
+    smoothness: int | None = eqx.field(static=True, default=None, init=False)
 
-    # TODO: implement orthogonal initialization (or identity initialization?)
     def __init__(
         self, dim: int, dtype=None, use_bias: bool = True, *, key: PRNGKeyArray
     ):
+        """Initialised as a random *rotation* (Haar-distributed on SO(dim)) with zero
+        bias. The QR factor of a Gaussian matrix is only orthogonal: Householder QR
+        returns a reflection (det = -1) essentially always, so the signs of R's diagonal
+        are folded into Q and the last column is flipped if det is still negative; an
+        INN should start orientation-preserving unless asked otherwise."""
         dtype = default_floating_dtype() if dtype is None else dtype
 
-        key_w, key_b = jax.random.split(key)
         lim = 1 / math.sqrt(dim)
-
-        weight = default_init(key_w, (dim, dim), dtype, lim)
-        self.weight = jnp.linalg.qr(weight)[0]
+        q, r = jnp.linalg.qr(default_init(key, (dim, dim), dtype, lim))
+        q = q * jnp.sign(jnp.diag(r))  # Haar-distributed on O(dim)
+        q = q.at[:, -1].multiply(jnp.sign(jnp.linalg.det(q)))  # ... and on SO(dim)
+        self.weight = q
         self.bias = jnp.zeros((dim,), dtype=dtype) if use_bias else None
-        # self.bias = default_init(key_b, (dim,), dtype, lim) if use_bias else None
         self.dim = dim
 
     def __call__(self, x: Float[Array, " {self.dim}"]) -> Float[Array, " {self.dim}"]:
@@ -57,6 +61,7 @@ class BiLipschitzLinear(AbstractBijection):
     bias: Float[Array, " {self.dim}"] | None
 
     dim: int = eqx.field(static=True)
+    smoothness: int | None = eqx.field(static=True, default=None, init=False)
     max_lipschitz: float = eqx.field(static=True)
 
     def __init__(

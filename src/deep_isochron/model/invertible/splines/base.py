@@ -60,7 +60,7 @@ def check_positive(name: str, values: Float[Array, " n"]) -> None:
         raise ValueError(f"{name} must be positive.")
 
 
-class AbstractSpline(AbstractScalarBijection):
+class AbstractSpline[P: tuple](AbstractScalarBijection[P]):
     xy_range: eqx.AbstractVar[tuple[float, float]]
     num_bins: eqx.AbstractVar[int]
 

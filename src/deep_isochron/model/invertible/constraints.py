@@ -16,12 +16,13 @@ conditioner (``CouplingFlow``) the identity.
 """
 
 import abc
+import math
 
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from ...misc import inv_softplus
+from ...misc import inv_softplus, inv_squashed_exp, squashed_exp
 
 
 class Constraint(abc.ABC):
@@ -64,7 +65,7 @@ class Positive(Constraint):
             raise ValueError("at_zero must be greater than eps.")
         self.eps = eps
         self.at_zero = at_zero
-        self._shift = float(inv_softplus(at_zero - eps))
+        self._shift = math.log(math.expm1(at_zero - eps))
 
     def __call__(self, raw):
         return self.eps + jax.nn.softplus(raw + self._shift)
@@ -74,6 +75,38 @@ class Positive(Constraint):
 
     def __repr__(self):
         return f"Positive(eps={self.eps}, at_zero={self.at_zero})"
+
+
+class BoundedPositive(Constraint):
+    r"""``(eps + exp(-a), eps + exp(a))`` via a shifted ``squashed_exp``:
+    ``eps + exp(a * tanh((raw + c) / a))`` with ``c`` chosen so that ``raw = 0`` maps to
+    ``at_zero``. Unlike ``Positive`` the image is bounded above, so a large conditioner
+    output cannot drive the value to infinity (used for the cubic generator's ``a, b``).
+
+    **Arguments:**
+
+    - ``eps``: lower offset. Default ``0``.
+    - ``at_zero``: image of ``raw = 0``; ``at_zero - eps`` must lie in
+      ``(exp(-a), exp(a))``. Default ``1``.
+    - ``a``: squashing scale. Default ``2``.
+    """
+
+    def __init__(self, eps: float = 0.0, at_zero: float = 1.0, a: float = 2.0):
+        if not math.exp(-a) < at_zero - eps < math.exp(a):
+            raise ValueError("at_zero - eps must lie in (exp(-a), exp(a)).")
+        self.eps = eps
+        self.at_zero = at_zero
+        self.a = a
+        self._shift = a * math.atanh(math.log(at_zero - eps) / a)
+
+    def __call__(self, raw):
+        return self.eps + squashed_exp(raw + self._shift, self.a)
+
+    def inverse(self, value):
+        return inv_squashed_exp(value - self.eps, self.a) - self._shift
+
+    def __repr__(self):
+        return f"BoundedPositive(eps={self.eps}, at_zero={self.at_zero}, a={self.a})"
 
 
 class Interval(Constraint):
@@ -97,7 +130,8 @@ class Interval(Constraint):
         self.lo = lo
         self.hi = hi
         self.at_zero = at_zero
-        self._shift = float(jax.scipy.special.logit((at_zero - lo) / (hi - lo)))
+        q = (at_zero - lo) / (hi - lo)
+        self._shift = math.log(q / (1 - q))
 
     def __call__(self, raw):
         return self.lo + (self.hi - self.lo) * jax.nn.sigmoid(raw + self._shift)

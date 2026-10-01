@@ -9,7 +9,18 @@ from .analytic import (
 )
 from .base import (
     AbstractBijection as AbstractBijection,
+    AbstractScalarBijection as AbstractScalarBijection,
+    ScalarChain as ScalarChain,
     SequentialINN as SequentialINN,
+)
+from .constraints import (
+    Arcsinh as Arcsinh,
+    BoundedPositive as BoundedPositive,
+    Constraint as Constraint,
+    Free as Free,
+    Interval as Interval,
+    Positive as Positive,
+    Widths as Widths,
 )
 from .coupling import CouplingFlow as CouplingFlow
 from .linear import (

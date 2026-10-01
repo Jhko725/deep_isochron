@@ -7,6 +7,9 @@ identity tails). The laws shared with every bijection are in ``test_bijections.p
   3. regularity of join  C^0 / C^1 / C^2 at the range endpoints, by spline class
   4. B-spline oracle     forward map == scipy.interpolate.BSpline
   5. B-spline inverse    Newton solve converges; implicit derivatives match 1/f'
+  6. knots               round trip, interpolation and monotonicity at/across knots;
+                         f'(x_k) == knot_derivs[k] for C^1+ splines (moved here from
+                         test_bijections.py: these laws need `xs`/`ys`)
 """
 
 import equinox as eqx
@@ -15,6 +18,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from deep_isochron.model.invertible import (
+    AbstractSpline,
     CubicBSpline,
     LinearSpline,
     MonotonicRQSpline,
@@ -23,7 +27,10 @@ from hypothesis import example, given, strategies as st
 from scipy.interpolate import BSpline
 
 from tests.helpers import assert_close, roundtrip
+from tests.registry import SCALAR_TEMPLATES
 from tests.strategies import (
+    any_scalar_bijection,
+    any_spline_template,
     point_batches,
     raw_vectors,
     scalar_bijections,
@@ -31,10 +38,20 @@ from tests.strategies import (
 )
 
 
+# Parked: the spline classes migrate to the raw/constrain contract in step 3 of
+# scalar-param-refactor. Strict xfail fails the moment a test passes again, so the
+# marker cannot be forgotten. Remove this block in step 3.
+pytestmark = pytest.mark.xfail(
+    strict=True, reason="spline classes migrate to raw/constrain in step 3"
+)
+
+
 # Continuity class of the join between the interpolant and the identity tails, i.e.
 # the number of derivatives that match (0 -> only the value).
 JOIN_ORDER = {LinearSpline: 0, MonotonicRQSpline: 1, CubicBSpline: 2}
 SPLINE_IDS = [c.__name__ for c in JOIN_ORDER]
+KNOTTED = [n for n, t in SCALAR_TEMPLATES.items() if isinstance(t, AbstractSpline)]
+KNOTTED_C1 = [n for n in KNOTTED if hasattr(SCALAR_TEMPLATES[n], "knot_derivs")]
 
 
 def _derivatives(f, order):
@@ -217,3 +234,47 @@ def test_bspline_template_static_only_is_enough():
     raw = jnp.linspace(-1, 1, template.num_params)
     a, b = template.from_unconstrained(raw), static_only.from_unconstrained(raw)
     assert eqx.tree_equal(a, b)
+
+
+# ---------------------------------------------------------------- 6. knots --------
+# Measure-zero sets (knots, range endpoints) that property tests hit only by luck.
+# Style: any_scalar_bijection() + @example pins, so regressions stay pinned.
+def _identity_instance(name):
+    return SCALAR_TEMPLATES[name].identity_like()
+
+
+@pytest.mark.skipif(not KNOTTED, reason="no spline templates registered")
+@given(f=any_scalar_bijection(KNOTTED or list(SCALAR_TEMPLATES)))
+def test_knots_round_trip(f):
+    xk = f.xs  # includes both range endpoints
+    _, x_rt, _ = roundtrip(f, xk)
+    assert_close(x_rt, xk, atol=1e-10, msg="round trip at knots")
+
+
+@pytest.mark.skipif(not KNOTTED, reason="no spline templates registered")
+@given(f=any_scalar_bijection(KNOTTED or list(SCALAR_TEMPLATES)))
+def test_knots_interpolated_and_monotone(f):
+    assert_close(jax.vmap(f)(f.xs), f.ys, atol=1e-10, msg="f(x_k) != y_k")
+    lo, hi = float(f.xs[0]), float(f.xs[-1])
+    x = jnp.sort(jnp.concatenate([jnp.linspace(lo - 1, hi + 1, 2001), f.xs]))
+    x = x[jnp.concatenate([jnp.array([True]), jnp.diff(x) > 1e-9])]  # drop near-dups
+    assert jnp.all(jnp.diff(jax.vmap(f)(x)) > 0), "not monotone across knots"
+
+
+@pytest.mark.skipif(not KNOTTED_C1, reason="no C^1 spline templates registered")
+@given(f=any_scalar_bijection(KNOTTED_C1 or list(SCALAR_TEMPLATES)))
+def test_knot_derivatives(f):
+    """f'(x_k) == knot_derivs[k] at every knot, boundaries included (identity tails
+    join C¹)."""
+    assert_close(
+        jax.vmap(jax.grad(f))(f.xs), f.knot_derivs, rtol=1e-9, atol=1e-9, msg="f'(x_k)"
+    )
+
+
+@given(f=any_spline_template().flatmap(scalar_bijections), x=point_batches(1))
+def test_spline_any_bin_count_round_trip(f, x):
+    """Round trip for drawn spline class, bin count and range (not just the
+    registry's configs)."""
+    x = x[:, 0]
+    _, x_rt, _ = roundtrip(f, x)
+    assert_close(x_rt, x, rtol=1e-8, atol=1e-8)

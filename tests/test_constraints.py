@@ -17,6 +17,7 @@ import pytest
 from deep_isochron.misc import inv_squashed_exp, squashed_exp
 from deep_isochron.model.invertible.constraints import (
     Arcsinh,
+    BoundedPositive,
     Free,
     Interval,
     Positive,
@@ -47,6 +48,11 @@ ELEMENTWISE = {
     ),
     "interval (0.2, 0.3)": (Interval(0.2, 0.3), lambda v: (v > 0.2) & (v < 0.3)),
     "arcsinh": (Arcsinh(), lambda v: jnp.isfinite(v)),
+    "bounded_positive": (BoundedPositive(), lambda v: (v > 0) & (v < jnp.exp(2.0))),
+    "bounded_positive (eps=0.01, at_zero=0.3)": (
+        BoundedPositive(0.01, 0.3),
+        lambda v: (v > 0.01) & (v < 0.01 + jnp.exp(2.0)),
+    ),
 }
 AT_ZERO = {
     "free": 0.0,
@@ -55,6 +61,8 @@ AT_ZERO = {
     "interval (-1, 8)": 0.0,
     "interval (0.2, 0.3)": 0.25,
     "arcsinh": 0.0,
+    "bounded_positive": 1.0,
+    "bounded_positive (eps=0.01, at_zero=0.3)": 0.3,
 }
 
 

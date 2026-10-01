@@ -7,10 +7,32 @@ from einops import rearrange
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..utils import zero_final_layer
-from .base import AbstractBijection
+from .base import AbstractBijection, AbstractScalarBijection
 
 
-class CouplingFlow[B: AbstractBijection](AbstractBijection):
+# jax.nn activations that are not C^1. A coupling layer is only as smooth as its
+# conditioner, so these are rejected when the template is C^1 or better.
+_NON_SMOOTH_ACTIVATIONS = frozenset(
+    {
+        jax.nn.relu,
+        jax.nn.relu6,
+        jax.nn.leaky_relu,
+        jax.nn.hard_tanh,
+        jax.nn.hard_sigmoid,
+        jax.nn.hard_swish,
+        jax.nn.hard_silu,
+    }
+)
+
+
+def _as_template[B: AbstractScalarBijection](bijection: B) -> B:
+    """The bijection with every ``raw`` leaf set to ``None`` (recursively, for chains):
+    a hashable static configuration with zero trainable size. By contract ``raw`` is the
+    only array leaf of a scalar bijection, so dropping all array leaves is exactly that."""
+    return eqx.partition(bijection, eqx.is_array)[1]
+
+
+class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
     """An invertible coupling flow layer, as described in [1].
 
     Inputs are split into a constant and coupling part. The constant part is passed to a
@@ -21,16 +43,22 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
     The conditioner's final layer is zero-initialised, and ``from_unconstrained(0)`` is
     the identity for every scalar bijection, so a fresh layer is the identity map.
 
+    **Regularity.** The layer is jointly C^k in its input when the template is C^k and the
+    conditioner is at least C^k; ``smoothness`` reports the template's value, and the
+    constructor rejects the non-smooth ``jax.nn`` activations when the template is C^1
+    or better. Any other activation is assumed to be C^∞ (``gelu``, ``tanh``,
+    ``softplus``, ``sin``, ... are).
+
     [1] G. Papamakarios et al. Normalizing Flows for Probabilistic Modeling and
     Inference. JMLR 22 (2021)."""
 
     mlp: eqx.nn.MLP
-    # The template's array leaves are dropped (replaced by None) so that it is a
-    # hashable static field and its values are not counted as trainable state;
-    # `from_unconstrained` only needs its static configuration (bin count, range, ...).
+    # A template: the bijection with `raw=None`, so that it is a hashable static field
+    # with zero trainable size; `from_unconstrained` only needs its static configuration.
     template: B = eqx.field(static=True)
 
     dim: int = eqx.field(static=True)
+    smoothness: int | None = eqx.field(static=True, init=False)
     split_idx: int = eqx.field(static=True)
     flip: bool = eqx.field(static=True)
 
@@ -60,12 +88,18 @@ class CouplingFlow[B: AbstractBijection](AbstractBijection):
 
         self.flip = flip
 
-        if bijection.dim != 1 or not hasattr(bijection, "from_unconstrained"):
-            raise NotImplementedError(
-                "Only scalar (dim=1) bijections with `from_unconstrained` are "
-                "supported as coupling templates."
+        if not isinstance(bijection, AbstractScalarBijection):
+            raise TypeError(
+                "Coupling templates must be AbstractScalarBijection instances; got "
+                f"{type(bijection).__name__}."
             )
-        self.template = eqx.partition(bijection, eqx.is_array)[1]
+        if activation in _NON_SMOOTH_ACTIVATIONS and bijection.smoothness != 0:
+            raise ValueError(
+                f"{getattr(activation, '__name__', activation)} is not C^1, but the "
+                f"template is C^{bijection.smoothness if bijection.smoothness is not None else chr(0x221E)}; use a smooth activation."
+            )
+        self.template = _as_template(bijection)
+        self.smoothness = bijection.smoothness
 
         mlp = eqx.nn.MLP(
             in_size=self.split_idx,

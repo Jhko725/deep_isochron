@@ -25,6 +25,19 @@ Steps land as separate commits; this document grows with them.
 | `src/.../invertible/splines/base.py` | `constrain_widths` now delegates to `Widths` (temporary alias, removed in step 3) |
 | `src/deep_isochron/misc.py` | `squashed_exp(x, a)` honours `a` (was hard-coded to 2) |
 | `tests/test_constraints.py` | **new** — laws of the primitives; `squashed_exp`/`inv_squashed_exp` inverse law |
+| `src/.../invertible/constraints.py` | (step 2) `BoundedPositive` added (the `squashed_exp` family, for `CubicConjugation`); shifts computed with `math`, not `jax` |
+| `src/.../invertible/base.py` | **rewritten** — `smoothness` on `AbstractBijection`; `AbstractScalarBijection[P]` with `raw` leaf, `constrain(raw) -> P`, `params`, final `from_unconstrained`/`identity_like`, `_init_raw`; `ScalarChain`; `SequentialINN` vector-only with `dim`/`smoothness` fields; `min_smoothness` |
+| `src/.../invertible/analytic.py` | `CubicRational`, `SinhConjugation`, `CubicConjugation` on the new contract: `*Params` NamedTuples, `eps_*` static fields, `constrain` from primitives, `from_constrained` classmethods |
+| `src/.../invertible/coupling.py` | template via `eqx.partition(...)[1]` (documented as exactly "all `raw` leaves dropped"); `isinstance(AbstractScalarBijection)` check; non-smooth-activation guard; `smoothness` |
+| `src/.../invertible/linear.py` | `InvertibleLinear` init is a rotation (sign-corrected QR + det fix); `smoothness` fields |
+| `src/.../invertible/affine.py`, `polar.py` | `smoothness` fields; `dim` as static `init=False` fields instead of `ClassVar`/property; `OffsetedBijection`/`RadialBijection` derive `smoothness` from the wrapped bijection |
+| `src/.../invertible/__init__.py` | export `AbstractScalarBijection`, `ScalarChain`, the constraint primitives |
+| `tests/registry.py` | templates are `cls(config)`; config variants real again; `ScalarChain` template; `split_idx=1 of 3` coupling; `ORIENTATION_NOT_GUARANTEED`; spline classes, circular and polar-conditional parked in `UNTESTED` with the step that unparks them |
+| `tests/strategies.py` | `analytic_templates` via `st.builds` over static config; `spline_templates` uses `cls(K, xy_range)` |
+| `tests/test_bijections.py` | knot tests moved out; template-has-no-trainable-state law; standalone-training laws (`optax.adam` step then round trip / monotonicity) |
+| `tests/test_registry.py` | `test_smoothness_declared`, `test_abstractvars_are_not_init_args` |
+| `tests/test_analytic.py` | **new** — Sinh inverse symmetry, asymptotics, extreme-regime finiteness, `from_constrained` round trips, pinned underflow xfail |
+| `tests/test_splines.py` | parked (module-level strict xfail) until step 3; knot/boundary tests moved in from `test_bijections.py` |
 
 ## Design
 
@@ -38,6 +51,38 @@ bijection for no benefit.
 up to a constant. The inverse returns mean-zero raw values, which is also the gauge in which
 equal widths map back to `raw = 0`. Tests state the law as `inverse(c(r_centred)) == r_centred`.
 
+**Unconstrained leaves (ADR-0001).** `raw` is the only trainable leaf of a scalar bijection;
+`constrain(raw)` is the single conversion site, used by `params` (read path) and, through the
+constructor, by `from_unconstrained` (`tree_at` on `raw`). A standalone bijection can be optimised
+directly: no step can leave the constrained set, because the set is the image of the map.
+*Rejected*: constrained leaves (previous branch) — unsafe under training, needed `_identity`
+helpers and `check_positive`. *Rejected*: per-parameter wrappers (paramax `Parameterize`, bijx
+`TransformedParameter`) — cannot express the B-spline's knot-dependent coefficient constraint.
+
+**Templates are instances with `raw=None`.** `cls(config)` is the identity instance; dropping
+`raw` yields a hashable template with zero trainable size, which is what `CouplingFlow` stores.
+`eqx.partition(b, eqx.is_array)[1]` is exactly this because `raw` is by contract the only array
+leaf (for a `ScalarChain`, the members' `raw` leaves). *Rejected*: a separate `Template` type.
+
+**`AbstractVar`s as static `init=False` fields (ADR-0004).** `dim`, `smoothness`, `num_params`
+are implemented as `eqx.field(static=True, init=False)` with a default (fixed by the class) or
+assigned in `__init__` (derived). Type checkers reject a bare attribute, a `ClassVar` or a
+property as overrides of an `AbstractVar`; the field passes `ty` and pyright and is runtime
+equivalent. All `# ty: ignore` on these names are gone; `ty check` is clean on `base.py`,
+`analytic.py`, `coupling.py`, `constraints.py`.
+
+**`AbstractScalarBijection[P]` is generic over its params NamedTuple**, so `self.params.alpha`
+type-checks. `ScalarChain` is `AbstractScalarBijection[tuple]` (its params are the members').
+
+**Regularity is declared (ADR-0003).** `smoothness: int | None` (C^k; `None` = C^∞); leaves fix
+it, containers take the minimum. `CouplingFlow` reports its template's value and rejects the
+non-smooth `jax.nn` activations (`relu`, `relu6`, `leaky_relu`, `hard_*`) when the template is
+C^1 or better. *Rejected*: tracking the activation's smoothness in a field or table.
+
+**`ScalarChain` vs `SequentialINN`.** Scalar composition is its own class so that the
+`num_params`/`from_unconstrained` contract is checkable by `isinstance`; `SequentialINN` is
+vector-only again. May be merged later if the overlap proves too large.
+
 **`at_zero` validated at construction**: `Positive(eps, at_zero)` requires `at_zero > eps`,
 `Interval(lo, hi, at_zero)` requires `lo < at_zero < hi`; the shifts are computed once as
 Python floats.
@@ -46,12 +91,40 @@ Python floats.
 
 - `misc.squashed_exp(x, a)` ignored `a` (body hard-coded `2.0`), so `inv_squashed_exp(..., a)`
   was not its inverse for `a != 2`. Symptom: silent mismatch for any non-default `a`.
+- `InvertibleLinear` initialised as a *reflection*: Householder QR gives `det Q = -1` for
+  essentially every key, so every linear layer (and any INN with an odd number of them) started
+  orientation-reversing. Now a Haar rotation (`Q * sign(diag R)`, last column flipped if needed).
+- `eps_*` of the analytic classes had become `from_unconstrained` kwargs, so a template could not
+  carry its own epsilons and the registry's "config variants" were identical. Back as static
+  fields.
+- Analytic classes stored *constrained* values as trainable leaves; one optimiser step could make
+  `scale <= 0`. Not reachable from the coupling path, but `RadialBijection` holds a standalone
+  instance. Fixed by construction; pinned by `test_scalar_standalone_training_keeps_validity`.
+
+## Findings recorded, not fixed
+
+- `InvertibleLinear` is an unconstrained matrix: `det W` can change sign under training, so the
+  perturbed-weights orientation law is skipped for it (`registry.ORIENTATION_NOT_GUARANTEED`,
+  with reason). `BiLipschitzLinear` is the constrained alternative. Worth a decision: an INN that
+  must stay orientation-preserving should not use `InvertibleLinear`.
+- `sinh_conj_nonlinearity`'s second derivative underflows to NaN for `0 < |x - loc| < ~1e-20`
+  (`x = 0` exactly is fine). Pinned as a strict xfail in `test_analytic.py`; the extreme-regime
+  strategies keep magnitudes `>= 1e-12` / `>= 1e-6` or exactly zero.
 
 ## Tests
 
-`uv run pytest tests/test_constraints.py --hypothesis-profile=dev` — 26 passed (step 1).
-Spline tests unchanged and green with `constrain_widths` delegating to `Widths`
-(`tests/test_splines.py`: 16 passed).
+Step 1: `uv run pytest tests/test_constraints.py --hypothesis-profile=dev` — 26 passed.
+
+Step 2: `uv run pytest -n 4` (default profile, 50 examples) —
+**155 passed, 7 skipped, 18 xfailed** (the xfails are the parked `test_splines.py` plus the
+pinned sinh underflow). `ty check` clean on the four migrated modules.
+
+New laws: template has no trainable state and is hashable; standalone training keeps validity
+(one `optax.adam(1.0)` step on a random gradient, then round trip + monotonicity); every
+registered class declares `smoothness`; `dim`/`smoothness`/`num_params` are not constructor
+arguments; Sinh inverse = parameter swap; CubicRational asymptotic bound `|alpha|/(beta|x_|)`;
+Sinh asymptotically linear; `grad..grad^3` finite on the extreme regime; `from_constrained`
+round trips.
 
 Pinned: inverse∘forward for every primitive; `c(0) == at_zero` (equal widths for `Widths`);
 image in the constrained set and finite gradients for `|raw| <= 30`; `Widths` sum and floor;
@@ -59,8 +132,14 @@ constructor validation of impossible floors / `at_zero` outside the set.
 
 ## Open issues
 
-- Steps 2–6 of the plan (base contract, analytic and spline migration, conditioner,
-  polar classes, housekeeping) follow in later commits on this branch.
+- **Parked for step 3** (strict xfail / `UNTESTED`, self-enforcing): `LinearSpline`,
+  `MonotonicRQSpline`, `CubicBSpline` are not yet on the `raw`/`constrain` contract and cannot be
+  instantiated; `CircularMonotonicRQCoupling` depends on them. `constrain_widths` and
+  `check_positive` are deleted in step 3.
+- **Parked for step 4**: `PolarConditionalBijection` still calls the removed
+  `from_unnormalized_params`; rebuilt as `PolarCouplingFlow`.
+- Steps 4–6 of the plan (conditioner, polar classes, `BiLipschitzLinear._s`, housekeeping, ADR
+  files) follow.
 
 ## Review notes
 

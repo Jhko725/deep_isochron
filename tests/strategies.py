@@ -22,6 +22,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from deep_isochron.model.invertible import (
+    AbstractScalarBijection,
     CubicBSpline,
     CubicConjugation,
     CubicRational,
@@ -88,7 +89,7 @@ def spline_templates(draw, cls=MonotonicRQSpline, min_bins=2, max_bins=11):
     K = draw(st.integers(min_bins, max_bins), label="num_bins")
     lo = draw(st.floats(-5.0, -0.5, allow_nan=False), label="range lo")
     hi = draw(st.floats(0.5, 5.0, allow_nan=False), label="range hi")
-    return cls.identity(K, xy_range=(lo, hi))
+    return cls(K, xy_range=(lo, hi))
 
 
 SPLINE_CLASSES = (LinearSpline, MonotonicRQSpline, CubicBSpline)
@@ -124,33 +125,16 @@ def vector_bijections(draw, name, perturbed=True):
 
 
 # ---------------------------------------------------- constructors via builds ----
-_zero = st.just(jnp.zeros(()))
-
-analytic_templates = st.one_of(
-    st.builds(CubicRational, _zero, _zero, _zero, eps_beta=st.sampled_from([0.1, 0.5])),
-    st.builds(
-        SinhConjugation,
-        _zero,
-        _zero,
-        _zero,
-        _zero,
-        _zero,
-        eps_scale=st.sampled_from([0.1, 0.3]),
-    ),
-    st.builds(
-        CubicConjugation,
-        _zero,
-        _zero,
-        _zero,
-        _zero,
-        eps_a=st.sampled_from([1e-2, 1e-1]),
-    ),
+analytic_templates: st.SearchStrategy[AbstractScalarBijection] = st.one_of(
+    st.builds(CubicRational, eps_beta=st.sampled_from([0.1, 0.5])),
+    st.builds(SinhConjugation, eps_scale=st.sampled_from([0.1, 0.3])),
+    st.builds(CubicConjugation, eps_a=st.sampled_from([1e-2, 1e-1])),
 )
 """Analytic templates with drawn static config, for tests of config-independence."""
 
 
 # ----------------------------------------------------------- type registration ----
-for _cls, _n in ((CubicRational, 3), (SinhConjugation, 5), (CubicConjugation, 4)):
+for _cls in (CubicRational, SinhConjugation, CubicConjugation):
     st.register_type_strategy(
         _cls,
         analytic_templates.filter(lambda t, c=_cls: isinstance(t, c)).flatmap(
