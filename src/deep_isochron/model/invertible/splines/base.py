@@ -38,21 +38,16 @@ import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Bool, Float, Int
 
 from ..base import AbstractScalarBijection
+from ..constraints import Widths
 
 
 def constrain_widths(
     raw: Float[Array, " n"], total: Float[ArrayLike, ""], min_rel_width: float
 ) -> Float[Array, " n"]:
     """Map ``n`` unconstrained values to ``n`` positive widths summing to ``total``,
-    each at least ``min_rel_width * total`` (softmax with a floor, as in [1]).
-    Zeros map to equal widths."""
-    n = raw.shape[0]
-    if min_rel_width * n >= 1:
-        raise ValueError(
-            f"min_rel_width * num_widths = {min_rel_width * n} must be < 1."
-        )
-    rel = jax.nn.softmax(raw) * (1 - n * min_rel_width) + min_rel_width
-    return rel * total
+    each at least ``min_rel_width * total``. Thin alias of ``constraints.Widths``; to be
+    removed when the splines move to the ``raw``/``constrain`` contract."""
+    return Widths(total, min_rel_width)(raw)
 
 
 def check_positive(name: str, values: Float[Array, " n"]) -> None:

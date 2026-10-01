@@ -15,7 +15,7 @@ def squashed_exp(x, a: float = 2.0):
     scale to infinity, which removes the overflow/NaN mechanism for the cubic
     generator's ``a, b`` coefficients.
     """
-    return jnp.exp(2.0 * jnp.tanh(x / 2.0))
+    return jnp.exp(a * jnp.tanh(x / a))
 
 
 def inv_squashed_exp(y, a: float = 2.0):
