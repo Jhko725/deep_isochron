@@ -50,7 +50,7 @@ Steps land as separate commits; this document grows with them.
 | `src/.../invertible/__init__.py` | (step 4) export `CircularMonotonicRQCoupling`, `PolarCouplingFlow` |
 | `tests/registry.py` | (step 4) `OffsetedBijection` templates (standalone and over a chain), two `PolarCouplingFlow` builders; `UNTESTED` down to `SequentialINN` |
 | `pyproject.toml` | (step 4) ignore Hypothesis's `random`-in-strategy deprecation (tripped by JAX's compiler during a first compile inside a draw, not by any strategy); (step 5) `quax` removed from runtime dependencies (unused) |
-| `docs/decisions/0001..0004` | **new** — ADRs for the four decisions above |
+| `docs/decisions/0001..0005` | **new** — ADRs for the decisions above; 0005 covers why the constraint primitives are plain Python objects created inside `constrain` and why that is sound under `jit`/`vmap`/`grad` |
 | `CLAUDE.md` | (step 5) rules: `AbstractVar` as static `init=False` field, `raw`/`constrain` contract, ADRs in `docs/decisions/` |
 | `tests/strategies.py` | (step 5) type annotations on every strategy function |
 | `src/deep_isochron/data/generate.py` | (step 5) placeholder docstring with the intended `generate(...)` signature (was an empty file) |
@@ -60,13 +60,11 @@ Steps land as separate commits; this document grows with them.
 
 Decisions are recorded as ADRs: [0001 unconstrained leaves](../decisions/0001-unconstrained-leaves.md),
 [0002 identity at zero](../decisions/0002-identity-at-zero.md), [0003 declared smoothness](../decisions/0003-declared-smoothness.md),
-[0004 AbstractVar fields](../decisions/0004-abstractvar-fields.md). The paragraphs below give the branch-level detail.
+[0004 AbstractVar fields](../decisions/0004-abstractvar-fields.md), [0005 constraint primitives](../decisions/0005-constraint-primitives.md). The paragraphs below give the branch-level detail.
 
-**Constraint primitives are plain Python objects, not modules.** They carry only static
-configuration (`eps`, `at_zero`, bounds, `min_rel`) and are created inside `constrain`, so
-there is nothing to register as a pytree and nothing the optimiser can see.
-*Rejected*: `eqx.Module` primitives stored as fields — would add static leaves to every
-bijection for no benefit.
+**Constraint primitives are plain Python objects, not modules** (ADR-0005). They carry only
+static configuration and are created inside `constrain`, where they never cross a `jit`/`vmap`
+boundary; the forward map and its inverse live together in one class.
 
 **`Widths.inverse` gauge.** The floored softmax is shift-invariant, so its inverse is defined
 up to a constant. The inverse returns mean-zero raw values, which is also the gauge in which
