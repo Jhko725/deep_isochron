@@ -6,13 +6,15 @@ join C^2.
 """
 
 from functools import partial
+from typing import NamedTuple
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from .base import AbstractSpline, check_positive, constrain_widths
+from ..constraints import Widths
+from .base import AbstractSpline
 
 
 def _cubic(c: Float[Array, " 4"], u: Float[Array, ""]) -> Float[Array, ""]:
@@ -63,7 +65,15 @@ def _monotone_cubic_root_jvp(iters, primals, tangents):
     return u, du
 
 
-class CubicBSpline(AbstractSpline):
+class BSplineParams(NamedTuple):
+    knot_widths: Float[Array, " M"]
+    """``num_bins + 4`` positive knot spacings ``t_{i+1} - t_i``; the interior
+    ``num_bins`` sum to the range width."""
+    coeff_incrs: Float[Array, " M-6"]
+    """``num_bins - 2`` positive increments between the non-pinned coefficients."""
+
+
+class CubicBSpline(AbstractSpline[BSplineParams]):
     r"""C^2 spline: on ``xy_range`` the map is a non-uniform cubic B-spline
     $f(x) = \sum_j \alpha_j B_{j,4}(x)$ with strictly increasing coefficients.
 
@@ -75,82 +85,65 @@ class CubicBSpline(AbstractSpline):
     reproduces the identity (Marsden's identity), so ``f = id``, ``f' = 1``, ``f'' = 0``
     at both ends of the range and the identity tails join C^2.
 
-    Trainable state is the constrained ``knot_widths`` (``num_bins + 4`` positive; the
-    interior ``num_bins`` sum to the range width) and ``coeff_incrs`` (``num_bins - 2``
-    positive increments between the pinned coefficients).
+    Raw parameters: ``num_bins + 4`` knot widths then ``num_bins - 2`` coefficient
+    increments, each block through a floored softmax (``Widths``). The knot block is
+    normalised so that the ``num_bins`` *interior* widths span the range (the four
+    exterior widths scale along; this differs from Algorithm 1, which normalises all);
+    the coefficient block sums to the Greville span between the pinned ends. ``raw = 0``
+    gives uniform knots and Greville coefficients: the identity.
 
     Index conventions for ``K = num_bins``:
         knots[i]  = t_{i-2},      i = 0..K+4   (t_0 = a, t_K = b)
         coeffs[i] = alpha_{i-3},  i = 0..K+2
+
+    The inverse is a bisection-safeguarded Newton solve with ``newton_iters`` fixed
+    iterations (bracket halves at worst, so the inverse is exact to ``2^-newton_iters``
+    of a bin in the pathological case and to round-off in practice).
     """
 
-    knot_widths: Float[Array, " M"]  # M = num_bins + 4
-    coeff_incrs: Float[Array, " M-6"]  # = num_bins - 2
-
+    raw: Float[Array, " {self.num_params}"] | None
     num_bins: int = eqx.field(static=True)
     xy_range: tuple[float, float] = eqx.field(static=True)
+    min_rel_knot_width: float = eqx.field(static=True)
+    min_rel_coeff_incr: float = eqx.field(static=True)
     newton_iters: int = eqx.field(static=True)
+    smoothness: int | None = eqx.field(static=True, default=2, init=False)
 
     def __init__(
         self,
-        knot_widths: Float[Array, " M"],
-        coeff_incrs: Float[Array, " M-6"],
+        num_bins: int,
         xy_range: tuple[float, float] = (-1.0, 1.0),
+        *,
+        raw: Float[Array, " {self.num_params}"] | None = None,
+        min_rel_knot_width: float = 1e-3,
+        min_rel_coeff_incr: float = 1e-3,
         newton_iters: int = 20,
     ):
-        num_bins = len(knot_widths) - 4
         if num_bins < 4:
             raise ValueError("A cubic B-spline needs at least 4 bins.")
-        if len(coeff_incrs) != num_bins - 2:
-            raise ValueError(
-                "Lengths of knot_widths and coeff_incrs must be num_bins+4 and "
-                "num_bins-2, respectively."
-            )
-        self.knot_widths = knot_widths
-        self.coeff_incrs = coeff_incrs
         self.num_bins = num_bins
-        self.xy_range = xy_range
+        self.xy_range = self._check_range(xy_range)
+        self.min_rel_knot_width = min_rel_knot_width
+        self.min_rel_coeff_incr = min_rel_coeff_incr
         self.newton_iters = newton_iters
-
-    def __check_init__(self):
-        check_positive("knot_widths", self.knot_widths)
-        check_positive("coeff_incrs", self.coeff_incrs)
-
-    @classmethod
-    def identity(
-        cls, num_bins: int, xy_range: tuple[float, float] = (-1.0, 1.0), **kwargs
-    ) -> "CubicBSpline":
-        """Uniform knots with coefficients at their Greville abscissae: the identity
-        map (a template for ``from_unconstrained``)."""
-        h = (xy_range[1] - xy_range[0]) / num_bins
-        return cls(
-            jnp.full(num_bins + 4, h), jnp.full(num_bins - 2, h), xy_range, **kwargs
-        )
+        self.raw = self._init_raw(jnp.zeros(self.num_params) if raw is None else raw)
 
     # -------------------------------------------------------------- interface -----
     @property
     def num_params(self) -> int:
         return 2 * self.num_bins + 2
 
-    def from_unconstrained(
-        self,
-        params_raw: Float[Array, " {self.num_params}"],
-        min_rel_knot_width: float = 1e-3,
-        min_rel_coeff_incr: float = 1e-3,
-        **kwargs,
-    ) -> "CubicBSpline":
-        del kwargs
+    def constrain(self, raw) -> BSplineParams:
         K = self.num_bins
-        t_raw, a_raw = jnp.split(params_raw, [K + 4])
+        t_raw, a_raw = jnp.split(raw, [K + 4])
         # Algorithm 1, lines 1-3 of [1]: floored softmax, then normalised so that the
-        # K interior widths span the range (the 4 exterior ones are left as they are).
-        w = constrain_widths(t_raw, 1.0, min_rel_knot_width)
+        # K interior widths span the range (the 4 exterior ones scale along).
+        w = Widths(1.0, self.min_rel_knot_width)(t_raw)
         knot_widths = w / jnp.sum(w[2 : K + 2]) * self.range_width
-        knots = self._knots(knot_widths)
-        greville = self._greville(knots)
+        greville = self._greville(self._knots(knot_widths))
         span = greville[K] - greville[2]
-        coeff_incrs = constrain_widths(a_raw, span, min_rel_coeff_incr)
-        return type(self)(knot_widths, coeff_incrs, self.xy_range, self.newton_iters)
+        coeff_incrs = Widths(span, self.min_rel_coeff_incr)(a_raw)
+        return BSplineParams(knot_widths, coeff_incrs)
 
     # -------------------------------------------------------------- knot data -----
     def _knots(
@@ -169,15 +162,14 @@ class CubicBSpline(AbstractSpline):
     def knots(self) -> Float[Array, " {self.num_bins+5}"]:
         """Full knot sequence ``t_{-2} < ... < t_{K+2}`` (two knots beyond each end of
         the range, as the cubic pieces at the boundary need them)."""
-        return self._knots(self.knot_widths)
+        return self._knots(self.params.knot_widths)
 
     @property
     def coeffs(self) -> Float[Array, " {self.num_bins+3}"]:
-        """Strictly increasing B-spline coefficients: ``alpha_{-3}, ..., alpha_{K-1}``
-        ."""
+        """Strictly increasing B-spline coefficients ``alpha_{-3}, ..., alpha_{K-1}``."""
         K = self.num_bins
         greville = self._greville(self.knots)
-        interior = greville[2] + jnp.cumsum(self.coeff_incrs)[:-1]
+        interior = greville[2] + jnp.cumsum(self.params.coeff_incrs)[:-1]
         return jnp.concatenate([greville[:3], interior, greville[K:]])
 
     @property

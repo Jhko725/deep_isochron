@@ -1,9 +1,10 @@
+import math
+
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from ...misc import cartesian_to_polar
 from ..fourier import TruncatedFourier
 from .analytic import SinhConjugation
 from .base import AbstractBijection, SequentialINN
@@ -69,107 +70,80 @@ class RadialBijection(AbstractBijection):
 
 
 class CircularMonotonicRQCoupling(AbstractBijection):
-    """Circular variant of monotonic rational quadratic spline coupling transform, as
-    introduced in [1, 2].
+    """Angular rational-quadratic spline in polar coordinates: ``(r, θ) -> (r, s(θ))``
+    with ``s`` a ``MonotonicRQSpline`` on ``(-π, π)``, after [1, 2].
+
+    The spline is held as a standalone trainable bijection (its ``raw`` leaf is
+    unconstrained, so training cannot break monotonicity).
+
+    **Implementation.** The map is applied as a rotation of the input by
+    ``Δ(θ) = s(θ) - θ``, which preserves ``|x|`` exactly and is exactly invertible
+    (rotate back by ``s⁻¹(θ') - θ'``). The angle is read through a ``where``-safe
+    ``arctan2`` that inside the disc ``|x| < eps_r`` returns a fixed fill angle: ``0``
+    for the forward map and ``s(0)`` for the inverse. The origin then maps to itself,
+    the Jacobians there are the finite rotations ``R(s(0))`` and ``R(-s(0))`` (mutually
+    inverse, ``det = 1``), and away from the origin ``det J = s'(θ) > 0``.
+
+    **Regularity.** As a map of the punctured plane it is as smooth as ``s``; at the
+    origin it is continuous but not differentiable (a θ-dependent rotation), and across
+    ``θ = ±π`` it is only C^0 because the spline's boundary derivatives are pinned to 1.
+    Hence ``smoothness = 0``. Restoring circular derivative matching needs an
+    endpoint-handling option on ``AbstractSpline`` (periodic / free boundary
+    derivatives); deliberately deferred.
 
     [1] C. Durkan et al. Neural Spline Flows. NeurIPS (2019).
     [2] https://github.com/bayesiains/nflows/blob/master/nflows/transforms/splines/rational_quadratic.py
     """
 
-    theta_offset: Float[Array, ""]
-    _dxs: Float[Array, " knots-1"]
-    _dys: Float[Array, " knots-1"]
-    _derivs: Float[Array, " knots-1"]
-
+    spline: MonotonicRQSpline
     dim: int = eqx.field(static=True, default=2, init=False)
-    # C^0: the spline's boundary derivatives are pinned to 1, so the map is only
-    # continuous across theta = +-pi (see the TODO in make_spline).
     smoothness: int | None = eqx.field(static=True, default=0, init=False)
-    num_knots: int = eqx.field(static=True)
-    min_derivative: float = eqx.field(static=True)
-    min_rel_x_bin_width: float = eqx.field(static=True)
-    min_rel_y_bin_width: float = eqx.field(static=True)
+    eps_r: float = eqx.field(static=True)
 
     def __init__(
         self,
-        num_knots: int = 10,
-        min_rel_x_bin_width: float = 1e-3,
-        min_rel_y_bin_width: float = 1e-3,
-        min_derivative: float = 1e-3,
-        dtype=None,
+        num_bins: int = 10,
         *,
-        key: PRNGKeyArray,
+        raw: Float[Array, " num_params"] | None = None,
+        min_rel_width: float = 1e-3,
+        min_derivative: float = 1e-3,
+        eps_r: float = 1e-12,
     ):
-        """**Arguments:**
-
-        - `dim`: Dimension of the inputs/outputs of the coupling transform.
-        - `min_derivative`: Minimum value of the derivative at the knot points.
-
-
-        """
-        key_x, key_y, key_d = jax.random.split(key, 3)
-        self._dxs = jnp.ones(
-            (num_knots - 1,)
-        )  # jax.random.normal(key_x, (num_knots-1,))
-        self._dys = jnp.ones(
-            (num_knots - 1,)
-        )  # jax.random.normal(key_y, (num_knots-1,))
-        self._derivs = jnp.ones(
-            (num_knots - 1,)
-        )  # jax.random.normal(key_d, (num_knots-1,))
-        self.theta_offset = jnp.zeros(())
-        self.num_knots = num_knots
-        self.min_rel_x_bin_width = min_rel_x_bin_width
-        self.min_rel_y_bin_width = min_rel_y_bin_width
-        self.min_derivative = min_derivative
-
-    def _make_knots(
-        self,
-        unnormalized_bin_widths: Float[Array, " {self.num_knots}-1"],
-        min_bin_width: float,
-    ) -> Float[Array, " {self.num_knots}"]:
-        bin_widths = (
-            jax.nn.softmax(unnormalized_bin_widths)
-            * (1 - self.num_knots * min_bin_width)
-            + min_bin_width
+        self.spline = MonotonicRQSpline(
+            num_bins,
+            xy_range=(-math.pi, math.pi),
+            raw=raw,
+            min_rel_width=min_rel_width,
+            min_derivative=min_derivative,
         )
-        knots = jnp.pad(jnp.cumsum(bin_widths), pad_width=(1, 0))
-        return -jnp.pi + 2 * jnp.pi * knots
+        self.eps_r = eps_r
 
-    def make_spline(self) -> MonotonicRQSpline:
-        # TODO: MonotonicRQSpline now fixes the boundary derivatives to 1, so the
-        # circular derivative-matching (previously `pad(..., mode="wrap")`) is lost
-        # and the map is only C^0 at theta = +-pi. Support free boundary derivatives
-        # in MonotonicRQSpline to restore it.
-        xs = self._make_knots(self._dxs, self.min_rel_x_bin_width)
-        ys = self._make_knots(self._dys, self.min_rel_y_bin_width)
-        ds = jax.nn.softplus(self._derivs[:-1]) + self.min_derivative
-        return MonotonicRQSpline(
-            jnp.diff(xs), jnp.diff(ys), ds, xy_range=(-float(jnp.pi), float(jnp.pi))
-        )
+    def _safe_angle(
+        self, xy: Float[Array, " 2"], fill: Float[Array, ""]
+    ) -> Float[Array, ""]:
+        """``arctan2`` with a double-``where`` guard: inputs inside the ``eps_r`` disc
+        are replaced by ``(1, 0)`` *before* ``arctan2`` so neither branch produces NaN
+        gradients (jax FAQ, "gradients contain NaN where using where"); the angle
+        returned there is ``fill``."""
+        x, y = xy
+        small = x**2 + y**2 < self.eps_r**2
+        x_s = jnp.where(small, 1.0, x)
+        y_s = jnp.where(small, 0.0, y)
+        return jnp.where(small, fill, jnp.arctan2(y_s, x_s))
+
+    @staticmethod
+    def _rotate(xy: Float[Array, " 2"], delta: Float[Array, ""]) -> Float[Array, " 2"]:
+        c, s = jnp.cos(delta), jnp.sin(delta)
+        x, y = xy
+        return jnp.stack([c * x - s * y, s * x + c * y])
 
     def __call__(self, x: Float[Array, " 2"]) -> Float[Array, " 2"]:
-        r, theta = cartesian_to_polar(x)
-        # theta = jnp.mod(theta-self.theta_offset, 2*jnp.pi)-jnp.pi
-        spl = self.make_spline()
-        theta_out = jnp.piecewise(
-            theta,
-            [theta < -jnp.pi, theta > jnp.pi],
-            [lambda x: x, lambda x: x, lambda x: spl(x)],
-        )
-        return jnp.stack([r * jnp.cos(theta_out), r * jnp.sin(theta_out)])
+        theta = self._safe_angle(x, jnp.zeros(()))
+        return self._rotate(x, self.spline(theta) - theta)
 
-    def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
-        r, theta = cartesian_to_polar(y)
-        # theta = jnp.mod(theta, 2*jnp.pi)-jnp.pi
-        spl = self.make_spline()
-        theta_in = jnp.piecewise(
-            theta,
-            [theta < -jnp.pi, theta > jnp.pi],
-            [lambda x: x, lambda x: x, lambda x: spl.inverse(x)],
-        )
-        # theta_in = theta_in+self.theta_offset
-        return jnp.stack([r * jnp.cos(theta_in), r * jnp.sin(theta_in)])
+    def inverse(self, y: Float[Array, " 2"]) -> Float[Array, " 2"]:
+        theta = self._safe_angle(y, self.spline(jnp.zeros(())))
+        return self._rotate(y, self.spline.inverse(theta) - theta)
 
 
 class PolarConditionalBijection(AbstractBijection):

@@ -47,7 +47,14 @@ SCALAR_TEMPLATES = {
     "chain (rational, sinh, cubic)": ScalarChain(
         [CubicRational(), SinhConjugation(), CubicConjugation()]
     ),
+    "linear_spline (K=5)": LinearSpline(5),
+    "rq_spline (K=4)": MonotonicRQSpline(4),
+    "rq_spline (K=9, range 4)": MonotonicRQSpline(9, xy_range=(-4.0, 4.0)),
+    "bspline (K=4)": CubicBSpline(4),
+    "bspline (K=10, range 4)": CubicBSpline(10, xy_range=(-4.0, 4.0)),
+    "chain (rq_spline, cubic)": ScalarChain([MonotonicRQSpline(4), CubicConjugation()]),
 }
+"""``K`` is the number of bins (``num_bins``)."""
 
 IDENTITY_TOL: dict[str, float] = {}
 """Per-entry identity-at-init tolerance overrides (default 1e-12)."""
@@ -62,6 +69,8 @@ def _coupling(template, **kw):
 VECTOR_BUILDERS = {
     "coupling (cubic_conjugation x3)": _coupling(ScalarChain([CubicConjugation()] * 3)),
     "coupling (sinh, flip)": _coupling(SinhConjugation(), flip=True),
+    "coupling (rq_spline)": _coupling(SCALAR_TEMPLATES["rq_spline (K=9, range 4)"]),
+    "coupling (bspline)": _coupling(SCALAR_TEMPLATES["bspline (K=10, range 4)"]),
     "coupling (rational, split_idx=1 of 3)": lambda key: CouplingFlow(
         dim=3, bijection=CubicRational(), split_idx=1, mlp_width=16, key=key
     ),
@@ -72,13 +81,17 @@ VECTOR_BUILDERS = {
     "radial (sinh)": lambda k: RadialBijection(
         SinhConjugation(), jnp.zeros(2), jnp.zeros(2)
     ),
+    "circular_rq (K=8)": lambda k: CircularMonotonicRQCoupling(num_bins=8),
 }
 IDENTITY_AT_INIT = {
     "coupling (cubic_conjugation x3)",
     "coupling (sinh, flip)",
     "coupling (rational, split_idx=1 of 3)",
+    "coupling (rq_spline)",
+    "coupling (bspline)",
     "affine_coupling",
     "radial (sinh)",
+    "circular_rq (K=8)",
 }
 
 # Bijections whose parametrisation does not *guarantee* orientation preservation away
@@ -90,9 +103,5 @@ ORIENTATION_NOT_GUARANTEED = {"invertible_linear"}
 UNTESTED = {
     OffsetedBijection: "wrapper; exercised through RadialBijection",
     SequentialINN: "container; exercised by test_sequential_inn_composes_inverse",
-    LinearSpline: "migrating to the raw/constrain contract in step 3",
-    MonotonicRQSpline: "migrating to the raw/constrain contract in step 3",
-    CubicBSpline: "migrating to the raw/constrain contract in step 3",
-    CircularMonotonicRQCoupling: "depends on MonotonicRQSpline; re-registered in step 3",
     PolarConditionalBijection: "rebuilt as PolarCouplingFlow in step 4",
 }

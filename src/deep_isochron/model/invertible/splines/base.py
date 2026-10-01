@@ -13,14 +13,17 @@ of the join with the tails:
 * rational quadratic [1]    -> C^1 (boundary derivatives pinned to 1)
 * cubic B-spline [2]        -> C^2 (boundary B-spline coefficients pinned to Greville)
 
-A concrete spline stores its *constrained* parameters (positive widths, positive
-derivatives, ...) as its trainable leaves and implements
+A concrete spline follows the ``AbstractScalarBijection`` contract — one unconstrained
+leaf ``raw``, constrained parameters (positive widths, derivatives, ...) computed on read
+by ``constrain(raw)`` — and implements
 
-* ``xs`` / ``ys``               knot positions and values,
+* ``xs`` / ``ys``               knot positions and values (from ``self.params``),
 * ``_forward_in_range``        the interpolant, called only with x in [a, b],
 * ``_inverse_in_range``        its inverse, called only with y in [a, b],
-* ``num_params`` and ``from_unconstrained``   (the ``AbstractScalarBijection``
-    interface).
+* ``num_params`` (a property of the static configuration) and ``constrain``.
+
+The constructor takes ``num_bins`` and ``xy_range`` (plus floors), and ``raw`` as an
+optional keyword; omitted, the spline is the identity.
 
 ``knot_derivs`` (``f'(xs)``) is provided by the splines that are at least C^1; tests use
 it to check the C^1 join.
@@ -33,36 +36,22 @@ it to check the C^1 join.
 import abc
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Bool, Float, Int
+from jaxtyping import Array, Bool, Float, Int
 
 from ..base import AbstractScalarBijection
-from ..constraints import Widths
-
-
-def constrain_widths(
-    raw: Float[Array, " n"], total: Float[ArrayLike, ""], min_rel_width: float
-) -> Float[Array, " n"]:
-    """Map ``n`` unconstrained values to ``n`` positive widths summing to ``total``,
-    each at least ``min_rel_width * total``. Thin alias of ``constraints.Widths``; to be
-    removed when the splines move to the ``raw``/``constrain`` contract."""
-    return Widths(total, min_rel_width)(raw)
-
-
-def check_positive(name: str, values: Float[Array, " n"]) -> None:
-    """Raise if any entry is non-positive. Skipped under tracing (``jit``/``vmap``,
-    e.g. inside a coupling layer), where ``from_unconstrained`` guarantees
-    positivity anyway; the check is for direct construction with concrete arrays."""
-    if isinstance(values, jax.core.Tracer):
-        return
-    if jnp.any(values <= 0):
-        raise ValueError(f"{name} must be positive.")
 
 
 class AbstractSpline[P: tuple](AbstractScalarBijection[P]):
     xy_range: eqx.AbstractVar[tuple[float, float]]
     num_bins: eqx.AbstractVar[int]
+
+    @staticmethod
+    def _check_range(xy_range: tuple[float, float]) -> tuple[float, float]:
+        lo, hi = float(xy_range[0]), float(xy_range[1])
+        if not lo < hi:
+            raise ValueError("xy_range must satisfy lo < hi.")
+        return (lo, hi)
 
     # ------------------------------------------------------------ knot data -------
     @property

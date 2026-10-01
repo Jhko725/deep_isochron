@@ -38,17 +38,12 @@ from tests.strategies import (
 )
 
 
-# Parked: the spline classes migrate to the raw/constrain contract in step 3 of
-# scalar-param-refactor. Strict xfail fails the moment a test passes again, so the
-# marker cannot be forgotten. Remove this block in step 3.
-pytestmark = pytest.mark.xfail(
-    strict=True, reason="spline classes migrate to raw/constrain in step 3"
-)
-
-
 # Continuity class of the join between the interpolant and the identity tails, i.e.
-# the number of derivatives that match (0 -> only the value).
-JOIN_ORDER = {LinearSpline: 0, MonotonicRQSpline: 1, CubicBSpline: 2}
+# the number of derivatives that match (0 -> only the value). Declared by each class.
+SPLINE_CLASSES = (LinearSpline, MonotonicRQSpline, CubicBSpline)
+JOIN_ORDER = {
+    cls: cls.__dataclass_fields__["smoothness"].default for cls in SPLINE_CLASSES
+}
 SPLINE_IDS = [c.__name__ for c in JOIN_ORDER]
 KNOTTED = [n for n, t in SCALAR_TEMPLATES.items() if isinstance(t, AbstractSpline)]
 KNOTTED_C1 = [n for n in KNOTTED if hasattr(SCALAR_TEMPLATES[n], "knot_derivs")]
@@ -137,7 +132,7 @@ def test_join_regularity(cls, data):
 
 def test_bspline_identity_join_regularity():
     """Pinned example: the zero-parameter B-spline on an asymmetric range."""
-    _check_join(CubicBSpline.identity(6, xy_range=(-2.0, 3.0)), 2)
+    _check_join(CubicBSpline(6, xy_range=(-2.0, 3.0)), 2)
 
 
 @given(data=st.data())
@@ -169,7 +164,7 @@ def test_bspline_matches_scipy(data):
     """The forward map equals scipy's evaluation of the same non-uniform cubic
     B-spline (knots, coefficients), which pins the basis and index conventions."""
     if data is None:
-        f = CubicBSpline.identity(5, xy_range=(-2.0, 3.0))
+        f = CubicBSpline(5, xy_range=(-2.0, 3.0))
     else:
         f = data.draw(
             spline_templates(CubicBSpline).flatmap(scalar_bijections), label="spline"
@@ -229,7 +224,7 @@ def test_bspline_inverse_second_derivative(data):
 def test_bspline_template_static_only_is_enough():
     """A coupling layer keeps the template with its array leaves dropped;
     ``from_unconstrained`` must not depend on them."""
-    template = CubicBSpline.identity(6)
+    template = CubicBSpline(6)
     static_only = eqx.partition(template, eqx.is_array)[1]
     raw = jnp.linspace(-1, 1, template.num_params)
     a, b = template.from_unconstrained(raw), static_only.from_unconstrained(raw)
@@ -243,16 +238,17 @@ def _identity_instance(name):
     return SCALAR_TEMPLATES[name].identity_like()
 
 
-@pytest.mark.skipif(not KNOTTED, reason="no spline templates registered")
-@given(f=any_scalar_bijection(KNOTTED or list(SCALAR_TEMPLATES)))
+@given(f=any_scalar_bijection(KNOTTED))
+@example(f=MonotonicRQSpline(5, xy_range=(-4.0, 4.0)))
+@example(f=CubicBSpline(6))
 def test_knots_round_trip(f):
     xk = f.xs  # includes both range endpoints
     _, x_rt, _ = roundtrip(f, xk)
     assert_close(x_rt, xk, atol=1e-10, msg="round trip at knots")
 
 
-@pytest.mark.skipif(not KNOTTED, reason="no spline templates registered")
-@given(f=any_scalar_bijection(KNOTTED or list(SCALAR_TEMPLATES)))
+@given(f=any_scalar_bijection(KNOTTED))
+@example(f=LinearSpline(3))
 def test_knots_interpolated_and_monotone(f):
     assert_close(jax.vmap(f)(f.xs), f.ys, atol=1e-10, msg="f(x_k) != y_k")
     lo, hi = float(f.xs[0]), float(f.xs[-1])
@@ -261,8 +257,7 @@ def test_knots_interpolated_and_monotone(f):
     assert jnp.all(jnp.diff(jax.vmap(f)(x)) > 0), "not monotone across knots"
 
 
-@pytest.mark.skipif(not KNOTTED_C1, reason="no C^1 spline templates registered")
-@given(f=any_scalar_bijection(KNOTTED_C1 or list(SCALAR_TEMPLATES)))
+@given(f=any_scalar_bijection(KNOTTED_C1))
 def test_knot_derivatives(f):
     """f'(x_k) == knot_derivs[k] at every knot, boundaries included (identity tails
     join C¹)."""

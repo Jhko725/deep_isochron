@@ -188,11 +188,26 @@ def test_vector_jacobian_consistent_with_inverse(name, data):
 
 @given(data=st.data())
 def test_sequential_inn_composes_inverse(data):
-    layers = [data.draw(vector_bijections(n), label=n) for n in VECTOR_IDS]
-    f = SequentialINN([l for l in layers if l.dim == 2])
+    """Composition semantics: inverse applies the members' inverses in reverse order.
+    Three mildly perturbed dim-2 layers — every layer alone round-trips to ~1e-10, but a
+    deep chain of aggressively perturbed layers amplifies that by its Lipschitz constant
+    (intermediate values reach ~1e2), which is conditioning, not composition."""
+    names = [n for n in VECTOR_IDS if VECTOR_BUILDERS[n](jax.random.key(0)).dim == 2]
+    chosen = data.draw(
+        st.lists(st.sampled_from(names), min_size=3, max_size=3, unique=True),
+        label="layers",
+    )
+    layers = [data.draw(vector_bijections(n, scale=0.1), label=n) for n in chosen]
+    f = SequentialINN(layers)
     x = data.draw(point_batches(2), label="x")
     _, x_rt, _ = roundtrip(f, x)
     assert_close(x_rt, x, rtol=1e-7, atol=1e-7)
+    # order: f⁻¹ really is the reversed chain of member inverses
+    y = jax.vmap(f)(x)
+    z = y
+    for l in layers[::-1]:
+        z = jax.vmap(l.inverse)(z)
+    assert_close(jax.vmap(f.inverse)(y), z, rtol=0, atol=0)
 
 
 # ------------------------------------------------------------- pytree hygiene -----

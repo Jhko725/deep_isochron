@@ -113,14 +113,14 @@ def perturb(module, key, scale: float = 0.5):
 
 
 @st.composite
-def vector_bijections(draw, name, perturbed=True):
+def vector_bijections(draw, name, perturbed=True, scale=0.5):
     """A vector bijection from the registry, built from a drawn seed and (optionally)
-    with drawn weight perturbations."""
+    with drawn weight perturbations of standard deviation ``scale``."""
     seed = draw(seeds, label="init seed")
     f = registry.VECTOR_BUILDERS[name](jax.random.key(seed))
     if perturbed:
         pseed = draw(seeds, label="perturbation seed")
-        f = perturb(f, jax.random.key(pseed))
+        f = perturb(f, jax.random.key(pseed), scale=scale)
     return f
 
 

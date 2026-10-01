@@ -37,7 +37,13 @@ Steps land as separate commits; this document grows with them.
 | `tests/test_bijections.py` | knot tests moved out; template-has-no-trainable-state law; standalone-training laws (`optax.adam` step then round trip / monotonicity) |
 | `tests/test_registry.py` | `test_smoothness_declared`, `test_abstractvars_are_not_init_args` |
 | `tests/test_analytic.py` | **new** — Sinh inverse symmetry, asymptotics, extreme-regime finiteness, `from_constrained` round trips, pinned underflow xfail |
-| `tests/test_splines.py` | parked (module-level strict xfail) until step 3; knot/boundary tests moved in from `test_bijections.py` |
+| `tests/test_splines.py` | (step 2) parked; (step 3) unparked, `JOIN_ORDER` derived from `smoothness`, constructors `cls(K, xy_range)`, knot/boundary tests with `@example` pins |
+| `src/.../invertible/splines/base.py` | (step 3) `constrain_widths`/`check_positive` deleted; `_check_range`; docstring on the `raw`/`constrain` contract; generic `AbstractSpline[P]` |
+| `src/.../invertible/splines/linear.py`, `rational_quadratic.py`, `cubic.py` | (step 3) on the contract: `*Params` NamedTuples, `raw` leaf, `constrain`, `smoothness` 0/1/2, floors as static fields, `identity` classmethods removed; B-spline docstring notes exterior-width normalisation and the Newton accuracy bound |
+| `src/.../invertible/polar.py` | (step 3) `CircularMonotonicRQCoupling` rewritten: holds a standalone `MonotonicRQSpline` on `(-π, π)`; exact rotation form with a `where`-safe angle (origin fixed, Jacobians there mutually inverse rotations); duplicated softmax code removed |
+| `tests/registry.py` | (step 3) splines, spline couplings, `ScalarChain([rq, cubic])` and the circular class re-registered; their `UNTESTED` entries removed |
+| `tests/strategies.py` | (step 3) `vector_bijections(..., scale=)` |
+| `tests/test_bijections.py` | (step 3) composition test draws 3 mildly perturbed layers and checks the reversed-chain identity (see Design) |
 
 ## Design
 
@@ -83,6 +89,23 @@ C^1 or better. *Rejected*: tracking the activation's smoothness in a field or ta
 `num_params`/`from_unconstrained` contract is checkable by `isinstance`; `SequentialINN` is
 vector-only again. May be merged later if the overlap proves too large.
 
+**Angular spline as a rotation (step 3).** `CircularMonotonicRQCoupling` applies
+`x -> R(s(θ) - θ) x`: `|x|` is preserved exactly and the inverse is `R(s⁻¹(θ') - θ')`. The angle
+comes from a double-`where` `arctan2` that returns a *fill angle* inside `|x| < eps_r` — `0` for
+the forward map, `s(0)` for the inverse — so the origin is a fixed point and the two Jacobians
+there, `R(s(0))` and `R(-s(0))`, compose to the identity. *Rejected*: `sqrt(r² + eps²)` as the
+radius (changes `|x|`, so `f(0) ≠ 0` and the map is no longer exactly invertible — the
+`RadialBijection` form only works because it applies the regularised radius as a ratio).
+*Rejected*: a smooth window on the angular warp near the origin (makes the inverse implicit).
+The map is a diffeomorphism of the punctured plane; at the origin it is continuous only, and
+`smoothness = 0` also reflects the C⁰ join at `θ = ±π`. Periodic endpoint handling deferred.
+
+**Composition test scope (step 3).** `test_sequential_inn_composes_inverse` composes three
+mildly perturbed layers and additionally checks that `f⁻¹` equals the reversed chain of member
+inverses exactly. Every registered layer round-trips to ≤ 4e-10 on its own, but a chain of ten
+aggressively perturbed layers reaches intermediate magnitudes ~1e2 and amplifies a layer's
+inverse error by its Lipschitz constant to ~1e-6 — conditioning, not composition.
+
 **`at_zero` validated at construction**: `Positive(eps, at_zero)` requires `at_zero > eps`,
 `Interval(lo, hi, at_zero)` requires `lo < at_zero < hi`; the shifts are computed once as
 Python floats.
@@ -116,8 +139,14 @@ Python floats.
 Step 1: `uv run pytest tests/test_constraints.py --hypothesis-profile=dev` — 26 passed.
 
 Step 2: `uv run pytest -n 4` (default profile, 50 examples) —
-**155 passed, 7 skipped, 18 xfailed** (the xfails are the parked `test_splines.py` plus the
-pinned sinh underflow). `ty check` clean on the four migrated modules.
+155 passed, 7 skipped, 18 xfailed (the parked `test_splines.py` plus the pinned sinh underflow).
+
+Step 3: `uv run pytest -n 4` (default profile) — **244 passed, 4 skipped, 1 xfailed** (the
+pinned sinh underflow). `ty check src/deep_isochron/model/invertible` reports only the two
+pre-existing `from_unnormalized_params` references in `PolarConditionalBijection` (step 4).
+Spline laws (tails, tail gradients, join regularity by class, scipy oracle, Newton inverse,
+knots) all green on the new contract; `test_spline_any_bin_count_round_trip` covers drawn bin
+counts and ranges for all three classes.
 
 New laws: template has no trainable state and is hashable; standalone training keeps validity
 (one `optax.adam(1.0)` step on a random gradient, then round trip + monotonicity); every
@@ -132,14 +161,14 @@ constructor validation of impossible floors / `at_zero` outside the set.
 
 ## Open issues
 
-- **Parked for step 3** (strict xfail / `UNTESTED`, self-enforcing): `LinearSpline`,
-  `MonotonicRQSpline`, `CubicBSpline` are not yet on the `raw`/`constrain` contract and cannot be
-  instantiated; `CircularMonotonicRQCoupling` depends on them. `constrain_widths` and
-  `check_positive` are deleted in step 3.
 - **Parked for step 4**: `PolarConditionalBijection` still calls the removed
   `from_unnormalized_params`; rebuilt as `PolarCouplingFlow`.
-- Steps 4–6 of the plan (conditioner, polar classes, `BiLipschitzLinear._s`, housekeeping, ADR
-  files) follow.
+- `CircularMonotonicRQCoupling` is C⁰ across `θ = ±π` and not differentiable at the origin
+  (documented in the class). Periodic / free-boundary endpoint handling on `AbstractSpline` is
+  the intended fix; not in this branch.
+- `# ty: ignore` remains in `systems/` and `training/trainer.py` (outside the invertible package).
+- Steps 4–6 of the plan (conditioner, `PolarCouplingFlow`, `BiLipschitzLinear._s`, housekeeping,
+  ADR files) follow.
 
 ## Review notes
 
