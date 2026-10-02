@@ -14,7 +14,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
 from .base import AbstractScalarBijection
-from .constraints import Arcsinh, BoundedPositive, Free, Interval, Positive
+from .constraints import arcsinh, BoundedPositive, free, Interval, Positive
 
 
 def solve_cubic(
@@ -53,7 +53,8 @@ class CubicRational(AbstractScalarBijection[CubicRationalParams]):
     """Modified rational transform with learnable parameters.
 
     Type: [-∞, ∞] → [-∞, ∞]
-    Transform: x + α*x_/(1 + β*x_²), x_ = x - loc, with constrained α ∈ (-1, 8), β > eps.
+    Transform: x + α*x_/(1 + β*x_²), x_ = x - loc, with constrained α ∈ (-1, 8), β >
+    eps.
 
     Raw parameters: ``(alpha, beta, loc)``; ``raw = 0`` is the identity (α = 0, β = 1).
     """
@@ -80,7 +81,7 @@ class CubicRational(AbstractScalarBijection[CubicRationalParams]):
         return CubicRationalParams(
             alpha=Interval(-1 + self.eps_alpha, 8 - self.eps_alpha, at_zero=0.0)(alpha),
             beta=Positive(self.eps_beta, at_zero=1.0)(beta),
-            loc=Free()(loc),
+            loc=free(loc),
         )
 
     @classmethod
@@ -226,8 +227,9 @@ class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
     Transform: arcsinh(exp(mu) * (exp(nu) * sinh((x-loc)/scale) + beta)) * scale + loc
 
     Raw parameters: ``(loc, scale, beta, mu, nu)``; ``scale`` is constrained to
-    ``(eps_scale, inf)``, ``mu``/``nu`` are passed through ``arcsinh``. ``raw = 0`` is the
-    identity. The inverse is the same map with ``(beta, mu, nu) -> (-beta, -nu, -mu)``.
+    ``(eps_scale, inf)``, ``mu``/``nu`` are passed through ``arcsinh``. ``raw = 0`` is
+    the identity. The inverse is the same map with ``(beta, mu, nu) -> (-beta, -nu,
+    -mu)``.
     """
 
     raw: Float[Array, " 5"] | None
@@ -244,11 +246,11 @@ class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
     def constrain(self, raw) -> SinhConjugationParams:
         loc, scale, beta, mu, nu = raw
         return SinhConjugationParams(
-            loc=Free()(loc),
+            loc=free(loc),
             scale=Positive(self.eps_scale, at_zero=1.0)(scale),
-            beta=Free()(beta),
-            mu=Arcsinh()(mu),
-            nu=Arcsinh()(nu),
+            beta=free(beta),
+            mu=arcsinh(mu),
+            nu=arcsinh(nu),
         )
 
     @classmethod
@@ -260,8 +262,8 @@ class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
                 jnp.asarray(loc),
                 Positive(eps_scale, at_zero=1.0).inverse(scale),
                 jnp.asarray(beta),
-                Arcsinh().inverse(mu),
-                Arcsinh().inverse(nu),
+                arcsinh.inverse(mu),
+                arcsinh.inverse(nu),
             ]
         )
         return cls(raw=raw, eps_scale=eps_scale)
@@ -328,8 +330,8 @@ class CubicConjugation(AbstractScalarBijection[CubicConjugationParams]):
     def constrain(self, raw) -> CubicConjugationParams:
         loc, beta, a, b = raw
         return CubicConjugationParams(
-            loc=Free()(loc),
-            beta=Free()(beta),
+            loc=free(loc),
+            beta=free(beta),
             a=BoundedPositive(self.eps_a, at_zero=1.0)(a),
             b=BoundedPositive(self.eps_b, at_zero=0.3)(b),
         )

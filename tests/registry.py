@@ -106,8 +106,8 @@ IDENTITY_AT_INIT = {
 
 # Bijections whose parametrisation does not *guarantee* orientation preservation away
 # from init: InvertibleLinear is an unconstrained matrix, so det W can change sign under
-# training. The at-init law still applies; the perturbed-weights law is skipped with this
-# as the stated reason. (BiLipschitzLinear is the constrained alternative.)
+# training. The at-init law still applies; the perturbed-weights law is skipped with
+# this as the stated reason. (BiLipschitzLinear is the constrained alternative.)
 ORIENTATION_NOT_GUARANTEED = {"invertible_linear"}
 
 UNTESTED = {

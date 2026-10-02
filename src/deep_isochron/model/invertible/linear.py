@@ -21,10 +21,14 @@ class InvertibleLinear(AbstractBijection):
         self, dim: int, dtype=None, use_bias: bool = True, *, key: PRNGKeyArray
     ):
         """Initialised as a random *rotation* (Haar-distributed on SO(dim)) with zero
-        bias. The QR factor of a Gaussian matrix is only orthogonal: Householder QR
-        returns a reflection (det = -1) essentially always, so the signs of R's diagonal
-        are folded into Q and the last column is flipped if det is still negative; an
-        INN should start orientation-preserving unless asked otherwise."""
+        bias. The raw QR factor of a Gaussian matrix is not Haar-distributed on O(dim)
+        and, with Householder QR, is a reflection (det = -1) essentially always; folding
+        the signs of R's diagonal into Q gives the Haar measure on O(dim) [1], and
+        flipping the last column when det < 0 restricts to SO(dim). An INN should start
+        orientation-preserving unless asked otherwise.
+
+        [1] F. Mezzadri. How to generate random matrices from the classical compact
+            groups. Notices of the AMS 54(5), 592-604 (2007)."""
         dtype = default_floating_dtype() if dtype is None else dtype
 
         lim = 1 / math.sqrt(dim)
@@ -56,7 +60,8 @@ class BiLipschitzLinear(AbstractBijection):
     _U: Float[Array, "{self.dim} {self.dim}"]
     _V: Float[Array, "{self.dim} {self.dim}"]
     _s: Float[Array, " {self.dim}"]
-    """Unconstrained singular values; ``s = sigmoid(_s) * (L - 1/L) + 1/L`` in (1/L, L)."""
+    """Unconstrained singular values; ``s = sigmoid(_s) * (L - 1/L) + 1/L`` in
+    ``(1/L, L)``."""
     bias: Float[Array, " {self.dim}"] | None
 
     dim: int = eqx.field(static=True)

@@ -1,58 +1,116 @@
 r"""Constraint primitives: maps from unconstrained reals onto a constrained set.
 
 A scalar bijection stores a single unconstrained vector ``raw`` as its trainable leaf
-and
-computes its constrained parameters on read through ``constrain(raw)``, built from the
-primitives in this module (see ``docs/decisions/0001-unconstrained-leaves.md``). Each
-primitive is a bijection in its own right, with ``__call__`` (raw -> constrained) and
-``inverse`` (constrained -> raw) so that bijections can also be built from constrained
-values (``from_constrained``).
+and computes its constrained parameters on read through ``constrain(raw)``, built from
+the primitives in this module (``docs/decisions/0001-unconstrained-leaves.md``,
+``0005-constraint-primitives.md``). Each primitive is a bijection ``R^n -> S`` in its
+own right, with ``__call__`` (raw -> constrained), ``inverse`` (constrained -> raw) and
+``is_constrained`` (membership in ``S``), so that bijections can also be built from
+constrained values (``from_constrained``) and tests can check the image generically.
 
 Identity-at-zero convention (``docs/decisions/0002-identity-at-zero.md``): every
-primitive
-with an ``at_zero`` argument maps ``raw = 0`` to ``at_zero``. This puts the shift into
-the *map* rather than into the initialisation, which is what makes a zero-initialised
-conditioner (``CouplingFlow``) the identity.
+primitive with an ``at_zero`` argument maps ``raw = 0`` to ``at_zero``. This puts the
+shift into the *map* rather than into the initialisation, which is what makes a
+zero-initialised conditioner (``CouplingFlow``) the identity. Shifted primitives
+implement the unshifted map pair ``_forward``/``_inverse`` once; the shift is
+``_inverse(at_zero)``, evaluated under ``jax.ensure_compile_time_eval`` so that it is a
+concrete float even when the primitive is constructed inside a ``jit``/``vmap`` trace.
+
+The stateless primitives are also available as module-level singletons ``free`` and
+``arcsinh`` (``arcsinh(mu)`` reads better than ``Arcsinh()(mu)``).
 """
 
 import abc
-import math
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from jaxtyping import Array, Bool, Float
 
 from ...misc import inv_softplus, inv_squashed_exp, squashed_exp
 
 
 class Constraint(abc.ABC):
-    """Map ``R^n -> S`` for a constrained set ``S``, with inverse ``S -> R^n``.
+    """Map from unconstrained reals onto a constrained set ``S``, with inverse.
 
-    Instances are plain, hashable Python objects (not modules); they hold only static
-    configuration and are created inside ``constrain``.
+    Elementwise primitives act on arrays of any shape (``" *n"``: a 0-d parameter such
+    as ``loc`` or a block of a raw vector alike); ``Widths`` is intrinsically a vector
+    map (``" n"``) and narrows the annotation. Instances are plain, hashable Python
+    objects (not modules); they hold only static configuration and are created inside
+    ``constrain`` (ADR-0005).
     """
 
     @abc.abstractmethod
-    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]: ...
+    def __call__(self, raw: Float[Array, " *n"]) -> Float[Array, " *n"]: ...
 
     @abc.abstractmethod
-    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]: ...
+    def inverse(self, value: Float[Array, " *n"]) -> Float[Array, " *n"]: ...
+
+    @abc.abstractmethod
+    def is_constrained(self, value: Float[Array, " *n"]) -> Bool[Array, ""]:
+        """Whether every element of ``value`` lies in ``S``."""
+
+
+class _Shifted(Constraint):
+    """Elementwise primitive ``value = _forward(raw + shift)`` with ``shift`` chosen so
+    that ``raw = 0`` maps to ``at_zero``. Subclasses implement the *unshifted* pair
+    ``_forward``/``_inverse`` and ``is_constrained``;
+    ``__call__``/``inverse``/``_shift``
+    derive from them."""
+
+    at_zero: float
+
+    def _init_shift(self, at_zero: float) -> None:
+        self.at_zero = at_zero
+        # Concrete even inside a trace: constructing a primitive under jit/vmap must not
+        # stage this computation (a traced float() would raise ConcretizationTypeError).
+        # Requires _inverse to be plain jnp (no jit-decorated helpers; see Interval).
+        with jax.ensure_compile_time_eval():
+            self._shift = float(self._inverse(jnp.asarray(at_zero)))
+
+    @abc.abstractmethod
+    def _forward(self, raw: Float[Array, " *n"]) -> Float[Array, " *n"]: ...
+
+    @abc.abstractmethod
+    def _inverse(self, value: Float[Array, " *n"]) -> Float[Array, " *n"]: ...
+
+    def __call__(self, raw: Float[Array, " *n"]) -> Float[Array, " *n"]:
+        return self._forward(raw + self._shift)
+
+    def inverse(self, value: Float[Array, " *n"]) -> Float[Array, " *n"]:
+        return self._inverse(value) - self._shift
 
 
 class Free(Constraint):
-    """The identity: no constraint."""
+    """The identity: no constraint. ``raw = 0`` maps to ``0``."""
 
-    def __call__(self, raw):
+    def __call__(self, raw: Float[Array, " *n"]) -> Float[Array, " *n"]:
         return raw
 
-    def inverse(self, value):
+    def inverse(self, value: Float[Array, " *n"]) -> Float[Array, " *n"]:
         return value
 
+    def is_constrained(self, value: Float[Array, " *n"]) -> Bool[Array, ""]:
+        return jnp.all(jnp.isfinite(value))
 
-class Positive(Constraint):
+
+class Arcsinh(Constraint):
+    """``R -> R`` via ``arcsinh``: a soft, symmetric compression of large raw values
+    (used for the log-scale parameters of ``SinhConjugation``). ``raw = 0`` maps to
+    ``0``."""
+
+    def __call__(self, raw: Float[Array, " *n"]) -> Float[Array, " *n"]:
+        return jnp.arcsinh(raw)
+
+    def inverse(self, value: Float[Array, " *n"]) -> Float[Array, " *n"]:
+        return jnp.sinh(value)
+
+    def is_constrained(self, value: Float[Array, " *n"]) -> Bool[Array, ""]:
+        return jnp.all(jnp.isfinite(value))
+
+
+class Positive(_Shifted):
     r"""``(eps, inf)`` via a shifted softplus: ``eps + softplus(raw + c)`` with ``c``
-    chosen
-    so that ``raw = 0`` maps to ``at_zero``.
+    chosen so that ``raw = 0`` maps to ``at_zero``.
 
     **Arguments:**
 
@@ -64,20 +122,22 @@ class Positive(Constraint):
         if not at_zero > eps:
             raise ValueError("at_zero must be greater than eps.")
         self.eps = eps
-        self.at_zero = at_zero
-        self._shift = math.log(math.expm1(at_zero - eps))
+        self._init_shift(at_zero)
 
-    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]:
-        return self.eps + jax.nn.softplus(raw + self._shift)
+    def _forward(self, raw):
+        return self.eps + jax.nn.softplus(raw)
 
-    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]:
-        return inv_softplus(value - self.eps) - self._shift
+    def _inverse(self, value):
+        return inv_softplus(value - self.eps)
+
+    def is_constrained(self, value: Float[Array, " *n"]) -> Bool[Array, ""]:
+        return jnp.all(value > self.eps)
 
     def __repr__(self):
         return f"Positive(eps={self.eps}, at_zero={self.at_zero})"
 
 
-class BoundedPositive(Constraint):
+class BoundedPositive(_Shifted):
     r"""``(eps + exp(-a), eps + exp(a))`` via a shifted ``squashed_exp``:
     ``eps + exp(a * tanh((raw + c) / a))`` with ``c`` chosen so that ``raw = 0`` maps to
     ``at_zero``. Unlike ``Positive`` the image is bounded above, so a large conditioner
@@ -92,27 +152,31 @@ class BoundedPositive(Constraint):
     """
 
     def __init__(self, eps: float = 0.0, at_zero: float = 1.0, a: float = 2.0):
+        import math
+
         if not math.exp(-a) < at_zero - eps < math.exp(a):
             raise ValueError("at_zero - eps must lie in (exp(-a), exp(a)).")
         self.eps = eps
-        self.at_zero = at_zero
         self.a = a
-        self._shift = a * math.atanh(math.log(at_zero - eps) / a)
+        self._init_shift(at_zero)
 
-    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]:
-        return self.eps + squashed_exp(raw + self._shift, self.a)
+    def _forward(self, raw):
+        return self.eps + squashed_exp(raw, self.a)
 
-    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]:
-        return inv_squashed_exp(value - self.eps, self.a) - self._shift
+    def _inverse(self, value):
+        return inv_squashed_exp(value - self.eps, self.a)
+
+    def is_constrained(self, value: Float[Array, " *n"]) -> Bool[Array, ""]:
+        lo, hi = self.eps + jnp.exp(-self.a), self.eps + jnp.exp(self.a)
+        return jnp.all((value > lo) & (value < hi))
 
     def __repr__(self):
         return f"BoundedPositive(eps={self.eps}, at_zero={self.at_zero}, a={self.a})"
 
 
-class Interval(Constraint):
+class Interval(_Shifted):
     r"""``(lo, hi)`` via a shifted sigmoid: ``lo + (hi - lo) * sigmoid(raw + c)`` with
-    ``c``
-    chosen so that ``raw = 0`` maps to ``at_zero``.
+    ``c`` chosen so that ``raw = 0`` maps to ``at_zero``.
 
     **Arguments:**
 
@@ -129,33 +193,23 @@ class Interval(Constraint):
             raise ValueError("at_zero must lie strictly inside (lo, hi).")
         self.lo = lo
         self.hi = hi
-        self.at_zero = at_zero
-        q = (at_zero - lo) / (hi - lo)
-        self._shift = math.log(q / (1 - q))
+        self._init_shift(at_zero)
 
-    def __call__(self, raw: Float[Array, " n"]) -> Float[Array, " n"]:
-        return self.lo + (self.hi - self.lo) * jax.nn.sigmoid(raw + self._shift)
+    def _forward(self, raw):
+        return self.lo + (self.hi - self.lo) * jax.nn.sigmoid(raw)
 
-    def inverse(self, value: Float[Array, " n"]) -> Float[Array, " n"]:
-        return (
-            jax.scipy.special.logit((value - self.lo) / (self.hi - self.lo))
-            - self._shift
-        )
+    def _inverse(self, value):
+        # Plain jnp rather than jax.scipy.special.logit: that function is jit-decorated,
+        # and a jitted call inside a vmap trace returns a tracer even for a concrete
+        # argument, which would defeat ensure_compile_time_eval in _init_shift.
+        q = (value - self.lo) / (self.hi - self.lo)
+        return jnp.log(q) - jnp.log1p(-q)
+
+    def is_constrained(self, value: Float[Array, " *n"]) -> Bool[Array, ""]:
+        return jnp.all((value > self.lo) & (value < self.hi))
 
     def __repr__(self):
         return f"Interval(lo={self.lo}, hi={self.hi}, at_zero={self.at_zero})"
-
-
-class Arcsinh(Constraint):
-    """``R -> R`` via ``arcsinh``: a soft, symmetric compression of large raw values
-    (used for the log-scale parameters of ``SinhConjugation``). ``raw = 0`` maps to
-    ``0``."""
-
-    def __call__(self, raw):
-        return jnp.arcsinh(raw)
-
-    def inverse(self, value):
-        return jnp.sinh(value)
 
 
 class Widths(Constraint):
@@ -164,10 +218,8 @@ class Widths(Constraint):
     Durkan et al. 2019). ``raw = 0`` maps to equal widths.
 
     The softmax is shift-invariant, so the inverse is defined up to a constant; the
-    gauge
-    chosen here is **mean-zero raw** (``raw = log(rel - min_rel)`` centred), which is
-    also
-    the gauge in which equal widths map back to ``raw = 0``.
+    gauge chosen here is **mean-zero raw** (``raw = log(rel - min_rel)`` centred), which
+    is also the gauge in which equal widths map back to ``raw = 0``.
 
     **Arguments:**
 
@@ -202,5 +254,15 @@ class Widths(Constraint):
         raw = jnp.log((rel - self.min_rel) / (1 - n * self.min_rel))
         return raw - jnp.mean(raw, axis=-1, keepdims=True)
 
+    def is_constrained(self, value: Float[Array, " n"]) -> Bool[Array, ""]:
+        floor = self.min_rel * self.total
+        return jnp.all(value >= floor * (1 - 1e-12)) & jnp.isclose(
+            jnp.sum(value), self.total, rtol=1e-12, atol=1e-12
+        )
+
     def __repr__(self):
         return f"Widths(total={self.total}, min_rel={self.min_rel})"
+
+
+free = Free()
+arcsinh = Arcsinh()

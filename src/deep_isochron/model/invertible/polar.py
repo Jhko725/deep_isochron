@@ -11,8 +11,8 @@ from .splines import MonotonicRQSpline
 
 
 class OffsetedBijection(AbstractScalarBijection[tuple]):
-    """``g(r) = f(r) - f(0)`` for a scalar bijection ``f``: the increasing map that fixes
-    the origin, so it sends ``R_+`` onto ``R_+`` and can act on a radius.
+    """``g(r) = f(r) - f(0)`` for a scalar bijection ``f``: the increasing map that
+    fixes the origin, so it sends ``R_+`` onto ``R_+`` and can act on a radius.
 
     A scalar bijection in its own right (``R -> R``), delegating ``num_params``,
     ``constrain`` and ``smoothness`` to ``f``; usable standalone, as a chain member, or
@@ -185,12 +185,13 @@ class CircularMonotonicRQCoupling(AbstractBijection):
 class PolarCouplingFlow(AbstractBijection):
     """A coupling layer in polar coordinates: the radius is transformed by a scalar
     bijection whose parameters are a function of the angle,
-    ``(r, θ) -> (g_θ(r), θ)`` with ``g_θ = template.from_unconstrained(conditioner(θ))``.
+    ``(r, θ) -> (g_θ(r), θ)`` with ``g_θ =
+    template.from_unconstrained(conditioner(θ))``.
 
-    This is ``CouplingFlow`` with the chart ``(r, θ)`` in place of ``(x_coupled, x_const)``
-    and a ``TruncatedFourier`` conditioner in place of the MLP (the angle is periodic, so
-    a Fourier series is the natural conditioner). The template is wrapped in
-    ``OffsetedBijection`` so that ``g_θ(0) = 0`` and ``R_+ -> R_+``. The Fourier
+    This is ``CouplingFlow`` with the chart ``(r, θ)`` in place of ``(x_coupled,
+    x_const)`` and a ``TruncatedFourier`` conditioner in place of the MLP (the angle is
+    periodic, so a Fourier series is the natural conditioner). The template is wrapped
+    in ``OffsetedBijection`` so that ``g_θ(0) = 0`` and ``R_+ -> R_+``. The Fourier
     coefficients are zero-initialised, so the layer is the identity at init.
 
     ``center`` and ``log_scale`` set the chart's origin and metric; the radius is
@@ -227,7 +228,8 @@ class PolarCouplingFlow(AbstractBijection):
         - ``fourier_order``: highest harmonic of the angular conditioner.
         - ``center``, ``log_scale``: chart origin and log-metric (default: 0).
         - ``eps_r``: radius regularisation.
-        - ``key``: unused (kept for builder compatibility; the layer is zero-initialised).
+        - ``key``: unused (kept for builder compatibility; the layer is
+        zero-initialised).
         """
         del key
         if not isinstance(bijection, AbstractScalarBijection):

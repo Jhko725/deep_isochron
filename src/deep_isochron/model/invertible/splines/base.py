@@ -14,8 +14,8 @@ of the join with the tails:
 * cubic B-spline [2]        -> C^2 (boundary B-spline coefficients pinned to Greville)
 
 A concrete spline follows the ``AbstractScalarBijection`` contract — one unconstrained
-leaf ``raw``, constrained parameters (positive widths, derivatives, ...) computed on read
-by ``constrain(raw)`` — and implements
+leaf ``raw``, constrained parameters (positive widths, derivatives, ...) computed on
+read by ``constrain(raw)`` — and implements
 
 * ``xs`` / ``ys``               knot positions and values (from ``self.params``),
 * ``_forward_in_range``        the interpolant, called only with x in [a, b],

@@ -1,124 +1,119 @@
-"""Laws of the constraint primitives (``invertible/constraints.py``).
+"""Laws of the constraint primitives (``invertible/constraints.py``), generic over every
+primitive in ``PRIMITIVES``:
 
   1. inverse       c.inverse(c(raw)) == raw         (Widths: in the mean-zero gauge)
   2. at_zero       c(0) == at_zero                  (Widths: equal widths)
-  3. image         c(raw) lies in the constrained set
-  4. finiteness    c and its gradient are finite for |raw| <= 30
+  3. image         c.is_constrained(c(raw)) for raw in the extreme regime
+  4. finiteness    c and its gradient are finite for |raw| <= EXTREME_RAW_BOUND
+
+``is_constrained`` is part of the ``Constraint`` contract, so adding a primitive means
+adding one line to ``PRIMITIVES`` and nothing else here.
 
 Also pins ``misc.squashed_exp`` / ``inv_squashed_exp`` as mutual inverses for every
-``a``
-(the ``a`` argument used to be ignored).
+``a`` (the ``a`` argument used to be ignored).
 """
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 from deep_isochron.misc import inv_squashed_exp, squashed_exp
 from deep_isochron.model.invertible.constraints import (
-    Arcsinh,
+    arcsinh,
     BoundedPositive,
-    Free,
+    free,
     Interval,
     Positive,
     Widths,
 )
 from hypothesis import given, strategies as st
-from hypothesis.extra import numpy as hnp
 
-from tests.helpers import assert_close
-
-
-raw = st.floats(-3.0, 3.0, allow_nan=False, allow_infinity=False)
-raw_extreme = st.floats(-30.0, 30.0, allow_nan=False, allow_infinity=False)
+from tests.helpers import assert_close, TOL
+from tests.strategies import EXTREME_RAW_BOUND, magnitudes, raw_vectors
 
 
-def raw_vectors(n, elements=raw):
-    return hnp.arrays(np.float64, (n,), elements=elements).map(jnp.asarray)
-
-
-# Elementwise primitives: name -> (constraint, membership predicate)
-ELEMENTWISE = {
-    "free": (Free(), lambda v: jnp.isfinite(v)),
-    "positive": (Positive(), lambda v: v > 0),
-    "positive (eps=0.1, at_zero=0.9)": (Positive(0.1, 0.9), lambda v: v > 0.1),
-    "interval (-1, 8)": (
-        Interval(-1.0, 8.0, at_zero=0.0),
-        lambda v: (v > -1) & (v < 8),
-    ),
-    "interval (0.2, 0.3)": (Interval(0.2, 0.3), lambda v: (v > 0.2) & (v < 0.3)),
-    "arcsinh": (Arcsinh(), lambda v: jnp.isfinite(v)),
-    "bounded_positive": (BoundedPositive(), lambda v: (v > 0) & (v < jnp.exp(2.0))),
-    "bounded_positive (eps=0.01, at_zero=0.3)": (
-        BoundedPositive(0.01, 0.3),
-        lambda v: (v > 0.01) & (v < 0.01 + jnp.exp(2.0)),
-    ),
+# name -> primitive. Elementwise ones also appear in AT_ZERO with their neutral value.
+PRIMITIVES = {
+    "free": free,
+    "arcsinh": arcsinh,
+    "positive": Positive(),
+    "positive (eps=0.1, at_zero=0.9)": Positive(0.1, 0.9),
+    "bounded_positive": BoundedPositive(),
+    "bounded_positive (eps=0.01, at_zero=0.3)": BoundedPositive(0.01, 0.3),
+    "interval (-1, 8)": Interval(-1.0, 8.0, at_zero=0.0),
+    "interval (0.2, 0.3)": Interval(0.2, 0.3),
+    "widths (total=2)": Widths(2.0, 1e-3),
+    "widths (total=0.5, min_rel=0.05)": Widths(0.5, 0.05),
 }
 AT_ZERO = {
     "free": 0.0,
+    "arcsinh": 0.0,
     "positive": 1.0,
     "positive (eps=0.1, at_zero=0.9)": 0.9,
-    "interval (-1, 8)": 0.0,
-    "interval (0.2, 0.3)": 0.25,
-    "arcsinh": 0.0,
     "bounded_positive": 1.0,
     "bounded_positive (eps=0.01, at_zero=0.3)": 0.3,
+    "interval (-1, 8)": 0.0,
+    "interval (0.2, 0.3)": 0.25,
 }
+WIDTHS = [n for n in PRIMITIVES if n.startswith("widths")]
+ELEMENTWISE = [n for n in PRIMITIVES if n not in WIDTHS]
+
+extreme_raw = magnitudes(1e-6, EXTREME_RAW_BOUND)
 
 
 @pytest.mark.parametrize("name", ELEMENTWISE)
 @given(r=raw_vectors(8))
-def test_elementwise_inverse(name, r):
-    c, _ = ELEMENTWISE[name]
+def test_inverse(name, r):
+    c = PRIMITIVES[name]
     assert_close(
         c.inverse(c(r)), r, rtol=1e-9, atol=1e-9, msg=f"{name}: inverse∘forward"
     )
 
 
-@pytest.mark.parametrize("name", ELEMENTWISE)
-def test_elementwise_at_zero(name):
-    c, _ = ELEMENTWISE[name]
-    assert_close(
-        c(jnp.zeros(4)), jnp.full(4, AT_ZERO[name]), atol=1e-12, msg=f"{name}: c(0)"
-    )
-
-
-@pytest.mark.parametrize("name", ELEMENTWISE)
-@given(r=raw_vectors(8, raw_extreme))
-def test_elementwise_image_and_finiteness(name, r):
-    c, member = ELEMENTWISE[name]
-    v = c(r)
-    assert jnp.all(jnp.isfinite(v)), f"{name}: non-finite image"
-    assert jnp.all(member(v)), f"{name}: image outside the constrained set"
-    g = jax.vmap(jax.grad(lambda t: c(t[None])[0]))(r)
-    assert jnp.all(jnp.isfinite(g)), f"{name}: non-finite gradient"
-
-
-# ----------------------------------------------------------------- Widths ---------
-@given(
-    r=raw_vectors(6),
-    total=st.floats(0.1, 10.0, allow_nan=False),
-    min_rel=st.sampled_from([0.0, 1e-3, 0.05]),
-)
-def test_widths_image(r, total, min_rel):
-    w = Widths(total, min_rel)(r)
-    assert jnp.all(w >= min_rel * total - 1e-12)
-    assert_close(jnp.sum(w), total, rtol=1e-12, atol=1e-12)
-
-
-@given(total=st.floats(0.1, 10.0, allow_nan=False), n=st.integers(1, 12))
-def test_widths_at_zero_is_equal(total, n):
-    w = Widths(total, 1e-3)(jnp.zeros(n))
-    assert_close(w, jnp.full(n, total / n), rtol=1e-12, atol=1e-12)
-
-
-@given(r=raw_vectors(6), total=st.floats(0.1, 10.0, allow_nan=False))
-def test_widths_inverse_in_mean_zero_gauge(r, total):
-    c = Widths(total, 1e-3)
+@pytest.mark.parametrize("name", WIDTHS)
+@given(r=raw_vectors(6))
+def test_widths_inverse_in_mean_zero_gauge(name, r):
+    c = PRIMITIVES[name]
     r_centred = r - jnp.mean(r)
     assert_close(c.inverse(c(r_centred)), r_centred, rtol=1e-8, atol=1e-8)
     # gauge consistency: forward is invariant to the constant that inverse drops
     assert_close(c(r), c(r_centred), rtol=1e-12, atol=1e-12)
+
+
+@pytest.mark.parametrize("name", ELEMENTWISE)
+def test_at_zero(name):
+    c = PRIMITIVES[name]
+    assert_close(c(jnp.zeros(4)), jnp.full(4, AT_ZERO[name]), atol=TOL["identity"])
+    assert c.is_constrained(c(jnp.zeros(4)))
+
+
+@pytest.mark.parametrize("name", WIDTHS)
+@given(n=st.integers(1, 12))
+def test_widths_at_zero_is_equal(name, n):
+    c = PRIMITIVES[name]
+    w = c(jnp.zeros(n))
+    assert_close(w, jnp.full(n, c.total / n), rtol=1e-12, atol=1e-12)
+    assert c.is_constrained(w)
+
+
+@pytest.mark.parametrize("name", PRIMITIVES)
+@given(r=raw_vectors(6, extreme_raw))
+def test_image_and_finiteness(name, r):
+    c = PRIMITIVES[name]
+    v = c(r)
+    assert jnp.all(jnp.isfinite(v)), f"{name}: non-finite image"
+    assert c.is_constrained(v), f"{name}: image outside the constrained set"
+    g = jax.jacfwd(c)(r)
+    assert jnp.all(jnp.isfinite(g)), f"{name}: non-finite Jacobian"
+
+
+@pytest.mark.parametrize("name", PRIMITIVES)
+def test_is_constrained_rejects_outsiders(name):
+    """``is_constrained`` is not vacuous: something outside the set is rejected (Free
+    and
+    Arcsinh have no outside apart from non-finite values)."""
+    c = PRIMITIVES[name]
+    bad = jnp.full(4, jnp.nan) if name in ("free", "arcsinh") else jnp.full(4, -1e3)
+    assert not c.is_constrained(bad)
 
 
 def test_widths_rejects_impossible_floor():
@@ -126,11 +121,21 @@ def test_widths_rejects_impossible_floor():
         Widths(1.0, 0.3)(jnp.zeros(4))  # 4 * 0.3 >= 1
 
 
-def test_positive_and_interval_validate_at_zero():
+def test_shifted_primitives_validate_at_zero():
     with pytest.raises(ValueError):
         Positive(eps=1.0, at_zero=0.5)
     with pytest.raises(ValueError):
         Interval(0.0, 1.0, at_zero=1.0)
+    with pytest.raises(ValueError):
+        BoundedPositive(at_zero=100.0)
+
+
+def test_primitive_construction_is_traceable():
+    """The shift is computed under ``ensure_compile_time_eval``, so a primitive may be
+    constructed inside a jitted/vmapped function (as ``constrain`` does)."""
+    f = lambda r: Interval(-1.0, 8.0, at_zero=0.0)(r) + Positive(0.1)(r)  # noqa: E731
+    r = jnp.linspace(-1, 1, 5)
+    assert_close(jax.jit(jax.vmap(f))(r), jax.vmap(f)(r), rtol=1e-14, atol=1e-14)
 
 
 # ------------------------------------------------------------ misc.squashed_exp ---

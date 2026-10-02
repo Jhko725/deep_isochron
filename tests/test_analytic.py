@@ -2,8 +2,8 @@
 bijx's ``test_bijections_analytic.py`` where applicable. Shared laws are in
 ``test_bijections.py``.
 
-  1. inverse symmetry   SinhConjugation⁻¹ is SinhConjugation with (β, μ, ν) -> (-β, -ν, -μ)
-  2. asymptotics        CubicRational -> identity as |x| -> ∞; SinhConjugation is
+  1. inverse symmetry   SinhConjugation⁻¹ is SinhConjugation with (β, μ, ν) -> (-β, -ν,
+  -μ) 2. asymptotics        CubicRational -> identity as |x| -> ∞; SinhConjugation is
                         asymptotically linear
   3. extreme regime     f, f⁻¹ and grad..grad³ stay finite for |raw| <= 30, |x| <= 1e3
                         (the overflow-safe branches of the sinh helpers)
@@ -12,7 +12,6 @@ bijx's ``test_bijections_analytic.py`` where applicable. Shared laws are in
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 from deep_isochron.model.invertible import (
     CubicConjugation,
@@ -20,10 +19,9 @@ from deep_isochron.model.invertible import (
     SinhConjugation,
 )
 from hypothesis import given, strategies as st
-from hypothesis.extra import numpy as hnp
 
 from tests.helpers import assert_close, roundtrip
-from tests.strategies import raw_vectors
+from tests.strategies import EXTREME_RAW_BOUND, magnitudes, raw_vectors
 
 
 ANALYTIC = {
@@ -34,20 +32,8 @@ ANALYTIC = {
 # Magnitudes in [1e-6, 30] / [1e-12, 1e3] or exactly 0: the sinh helpers' second
 # derivative underflows to NaN when 0 < |x - loc| < ~1e-20 (pinned below as a strict
 # xfail), a float corner rather than the overflow regime these tests are about.
-extreme_raw = st.one_of(
-    st.just(0.0),
-    st.floats(1e-6, 30.0, allow_nan=False),
-    st.floats(-30.0, -1e-6, allow_nan=False),
-)
-extreme_x = st.one_of(
-    st.just(0.0),
-    st.floats(1e-12, 1e3, allow_nan=False),
-    st.floats(-1e3, -1e-12, allow_nan=False),
-)
-
-
-def _extreme_raw_vectors(n):
-    return hnp.arrays(np.float64, (n,), elements=extreme_raw).map(jnp.asarray)
+extreme_raw = magnitudes(1e-6, EXTREME_RAW_BOUND)
+extreme_x = magnitudes(1e-12, 1e3)
 
 
 # ---------------------------------------------------------- 1. inverse symmetry ---
@@ -62,7 +48,7 @@ def test_sinh_inverse_is_parameter_swap(raw, x):
 # --------------------------------------------------------------- 2. asymptotics ---
 @given(raw=raw_vectors(3))
 def test_cubic_rational_asymptotic_identity(raw):
-    """f(x) - x = alpha x_ / (1 + beta x_^2), so |f(x) - x| <= |alpha| / (beta |x_|) -> 0."""
+    """f(x) - x = alpha x_ / (1 + beta x_^2), so |f(x) - x| <= |alpha| / (beta |x_|)."""
     f = CubicRational().from_unconstrained(raw)
     p = f.params
     x = jnp.array([-1e4, -1e3, 1e3, 1e4])
@@ -84,10 +70,10 @@ def test_sinh_asymptotically_linear(raw):
 @given(data=st.data())
 def test_extreme_regime_is_finite(name, data):
     t = ANALYTIC[name]
-    f = t.from_unconstrained(data.draw(_extreme_raw_vectors(t.num_params), label="raw"))
-    x = data.draw(
-        hnp.arrays(np.float64, (8,), elements=extreme_x).map(jnp.asarray), label="x"
+    f = t.from_unconstrained(
+        data.draw(raw_vectors(t.num_params, extreme_raw), label="raw")
     )
+    x = data.draw(raw_vectors(8, extreme_x), label="x")
     y, x_rt, _ = roundtrip(f, x)
     assert jnp.all(jnp.isfinite(y)), f"{name}: forward"
     assert jnp.all(jnp.isfinite(x_rt)), f"{name}: inverse"

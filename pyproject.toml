@@ -33,6 +33,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.ruff]
+line-length = 88  # ruff's default; pinned so editors with other profiles agree
 extend-include = ["*.ipynb"]
 src = []
 fix = true

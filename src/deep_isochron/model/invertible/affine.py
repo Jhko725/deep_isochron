@@ -109,9 +109,9 @@ class AffineCoupling(AbstractBijection):
         return jnp.concatenate((x_up, x_down))
 
 
-class ResidualCoupling(
-    AbstractBijection
-):  # TODO: support custom s, t in AffineCouplingTransform, and make this a subclass or so.
+# TODO: ResidualCoupling (and AffineCoupling) are special cases of CouplingFlow with a
+# Shift / Affine scalar template; replace both once those templates exist.
+class ResidualCoupling(AbstractBijection):
     dim: int = eqx.field(static=True)
     smoothness: int | None = eqx.field(static=True, default=None, init=False)
     split_idx: int

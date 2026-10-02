@@ -14,6 +14,7 @@ Intended entry point::
     ) -> TimeSeriesDataSource: ...
 
 returning a ``TimeSeriesDataSource`` carrying ``DatasetMetadata`` (system class and
-parameters, solver and tolerances, time grid, IC sampler and seed, dtype, git SHA) so that a
-saved dataset is self-describing. See the data-generation step of the project plan.
+parameters, solver and tolerances, time grid, IC sampler and seed, dtype, git SHA) so
+that a saved dataset is self-describing. See the data-generation step of the project
+plan.
 """

@@ -1,25 +1,25 @@
 r"""Bijection interfaces.
 
 ``AbstractBijection``
-    A diffeomorphism of $\mathbb{R}^{\text{dim}}$: ``__call__``, ``inverse``, ``jacobian``,
-    plus two declared properties — ``dim`` and ``smoothness`` (the map is $C^k$;
-    ``None`` means $C^\infty$).
+    A diffeomorphism of $\mathbb{R}^{\text{dim}}$: ``__call__``, ``inverse``,
+    ``jacobian``, plus two declared properties — ``dim`` and ``smoothness`` (the map is
+    $C^k$; ``None`` means $C^\infty$).
 
 ``AbstractScalarBijection``
-    $\mathbb{R}\to\mathbb{R}$ maps parametrised by a single *unconstrained* vector ``raw``,
-    which is the only trainable leaf. Constrained parameters are computed on read by
-    ``constrain(raw)`` (see ``params``); ``constrain(0)`` is the identity map. This is what
-    makes a standalone scalar bijection safe to optimise and what lets ``CouplingFlow``
-    write a conditioner's output straight into ``raw``.
+    $\mathbb{R}\to\mathbb{R}$ maps parametrised by a single *unconstrained* vector
+    ``raw``, which is the only trainable leaf. Constrained parameters are computed on
+    read by ``constrain(raw)`` (see ``params``); ``constrain(0)`` is the identity map.
+    This is what makes a standalone scalar bijection safe to optimise and what lets
+    ``CouplingFlow`` write a conditioner's output straight into ``raw``.
 
 ``ScalarChain`` / ``SequentialINN``
     Compositions of scalar / vector bijections.
 
-Implementing an ``eqx.AbstractVar`` (``dim``, ``smoothness``, ``num_params``, ``raw``): use a
-static ``init=False`` field — ``eqx.field(static=True, default=..., init=False)`` when the
-value is fixed by the class, assigned in ``__init__`` when it is derived. A bare class
-attribute or a ``ClassVar`` is rejected by type checkers as an incompatible override; a
-property is too. See ``docs/decisions/0004-abstractvar-fields.md``.
+Implementing an ``eqx.AbstractVar`` (``dim``, ``smoothness``, ``num_params``, ``raw``):
+use a static ``init=False`` field — ``eqx.field(static=True, default=..., init=False)``
+when the value is fixed by the class, assigned in ``__init__`` when it is derived. A
+bare class attribute or a ``ClassVar`` is rejected by type checkers as an incompatible
+override; a property is too. See ``docs/decisions/0004-abstractvar-fields.md``.
 """
 
 import abc
@@ -87,8 +87,8 @@ class AbstractScalarBijection[P: tuple](AbstractBijection):
       (derived from static configuration).
     - ``constrain(raw)``: the single place where unconstrained values are mapped to the
       constrained set, returning the ``NamedTuple`` type ``P`` the class is generic over
-      (``class CubicRational(AbstractScalarBijection[CubicRationalParams])``). Must satisfy
-      ``constrain(zeros)`` == parameters of the identity map. Built from
+      (``class CubicRational(AbstractScalarBijection[CubicRationalParams])``). Must
+      satisfy ``constrain(zeros)`` == parameters of the identity map. Built from
       ``constraints.*`` primitives, which carry the identity-at-zero shift.
 
     ``__call__``/``inverse`` read ``self.params``. ``from_unconstrained`` and
@@ -149,8 +149,8 @@ class ScalarChain(AbstractScalarBijection[tuple]):
     valid coupling template.
 
     The chain's ``raw`` is ``None`` by construction; members hold their own ``raw``
-    (``None`` for a template chain). ``from_unconstrained`` distributes the chunks to the
-    members, so ``params`` is the tuple of member ``params``.
+    (``None`` for a template chain). ``from_unconstrained`` distributes the chunks to
+    the members, so ``params`` is the tuple of member ``params``.
     """
 
     members: tuple[AbstractScalarBijection, ...]

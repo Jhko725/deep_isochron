@@ -41,20 +41,34 @@ BATCH = 16  # fixed batch -> one compile per test function
 
 # ------------------------------------------------------------- scalar elements ----
 # "Typical regime" bounds; extreme regimes get their own explicitly named tests.
-raw_params: st.SearchStrategy[float] = st.floats(
-    -3.0, 3.0, allow_nan=False, allow_infinity=False
-)
-domain_points: st.SearchStrategy[float] = st.floats(
-    -5.0, 5.0, allow_nan=False, allow_infinity=False
-)
+RAW_BOUND = 3.0
+"""Default magnitude bound for raw parameters (typical conditioner-output regime)."""
+EXTREME_RAW_BOUND = 30.0
+"""Bound for the extreme-regime tests (overflow-safe branches of the analytic maps)."""
+
+
+def floats_in(lo: float, hi: float) -> st.SearchStrategy[float]:
+    return st.floats(lo, hi, allow_nan=False, allow_infinity=False)
+
+
+def magnitudes(lo: float, hi: float) -> st.SearchStrategy[float]:
+    """Exactly ``0`` or a float with ``lo <= |x| <= hi``: skips the denormal band where
+    some second derivatives underflow (see ``test_analytic.py``)."""
+    return st.one_of(st.just(0.0), floats_in(lo, hi), floats_in(-hi, -lo))
+
+
+raw_params: st.SearchStrategy[float] = floats_in(-RAW_BOUND, RAW_BOUND)
+domain_points: st.SearchStrategy[float] = floats_in(-5.0, 5.0)
 seeds: st.SearchStrategy[int] = st.integers(0, 2**31 - 1)
 
 
 # --------------------------------------------------------------- pure transforms --
-def raw_vectors(n: int) -> st.SearchStrategy[jax.Array]:
-    """Unconstrained parameter vector of length ``n``, as a conditioner would emit it
-    ."""
-    return hnp.arrays(np.float64, (n,), elements=raw_params).map(jnp.asarray)
+def raw_vectors(
+    n: int, elements: st.SearchStrategy[float] = raw_params
+) -> st.SearchStrategy[jax.Array]:
+    """Unconstrained parameter vector of length ``n``, as a conditioner would emit it.
+    Pass ``elements=magnitudes(1e-6, EXTREME_RAW_BOUND)`` for the extreme regime."""
+    return hnp.arrays(np.float64, (n,), elements=elements).map(jnp.asarray)
 
 
 def point_batches(dim: int, n: int = BATCH) -> st.SearchStrategy[jax.Array]:

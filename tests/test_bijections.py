@@ -26,7 +26,6 @@ Spline-specific laws (knots, tails, join regularity) live in ``test_splines.py``
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import optax
 import pytest
 from deep_isochron.model.invertible import (
     CouplingFlow,
@@ -35,10 +34,12 @@ from deep_isochron.model.invertible import (
 from hypothesis import given, strategies as st
 
 from tests.helpers import (
+    adam_step,
     assert_close,
     inverse_jacobian_product,
     jacobian_dets,
     roundtrip,
+    TOL,
 )
 from tests.registry import (
     IDENTITY_AT_INIT,
@@ -67,7 +68,7 @@ def test_scalar_identity_at_zero(name):
     assert_close(
         jax.vmap(f)(x),
         x,
-        atol=IDENTITY_TOL.get(name, 1e-12),
+        atol=IDENTITY_TOL.get(name, TOL["identity"]),
         msg=f"{name}: from_unconstrained(0) != id",
     )
 
@@ -97,8 +98,20 @@ def test_scalar_round_trip(name, data):
     x = data.draw(point_batches(1), label="x")[:, 0]
     y, x_rt, y_rt = roundtrip(f, x)
     assert jnp.all(jnp.isfinite(y)), f"{name}: forward not finite"
-    assert_close(x_rt, x, rtol=1e-8, atol=1e-8, msg=f"{name}: f⁻¹∘f")
-    assert_close(y_rt, x, rtol=1e-8, atol=1e-8, msg=f"{name}: f∘f⁻¹")
+    assert_close(
+        x_rt,
+        x,
+        rtol=TOL["scalar_roundtrip"],
+        atol=TOL["scalar_roundtrip"],
+        msg=f"{name}: f⁻¹∘f",
+    )
+    assert_close(
+        y_rt,
+        x,
+        rtol=TOL["scalar_roundtrip"],
+        atol=TOL["scalar_roundtrip"],
+        msg=f"{name}: f∘f⁻¹",
+    )
 
 
 @pytest.mark.parametrize("name", SCALAR_IDS)
@@ -119,8 +132,8 @@ def test_scalar_jacobian_consistent_with_inverse(name, data):
     assert_close(
         dfdx * dinv_dy,
         jnp.ones_like(x),
-        rtol=1e-7,
-        atol=1e-7,
+        rtol=TOL["jacobian"],
+        atol=TOL["jacobian"],
         msg=f"{name}: f'·(f⁻¹)' != 1",
     )
 
@@ -133,7 +146,10 @@ def test_vector_identity_at_init(name, key):
     f = VECTOR_BUILDERS[name](key)
     x = jax.random.normal(jax.random.key(1), (32, f.dim))
     assert_close(
-        jax.vmap(f)(x), x, atol=IDENTITY_TOL.get(name, 1e-12), msg=f"{name}: init"
+        jax.vmap(f)(x),
+        x,
+        atol=IDENTITY_TOL.get(name, TOL["identity"]),
+        msg=f"{name}: init",
     )
 
 
@@ -144,8 +160,20 @@ def test_vector_round_trip_random_weights(name, data):
     x = data.draw(point_batches(f.dim), label="x")
     y, x_rt, y_rt = roundtrip(f, x)
     assert jnp.all(jnp.isfinite(y)), f"{name}: forward not finite"
-    assert_close(x_rt, x, rtol=1e-7, atol=1e-7, msg=f"{name}: f⁻¹∘f")
-    assert_close(y_rt, x, rtol=1e-7, atol=1e-7, msg=f"{name}: f∘f⁻¹")
+    assert_close(
+        x_rt,
+        x,
+        rtol=TOL["vector_roundtrip"],
+        atol=TOL["vector_roundtrip"],
+        msg=f"{name}: f⁻¹∘f",
+    )
+    assert_close(
+        y_rt,
+        x,
+        rtol=TOL["vector_roundtrip"],
+        atol=TOL["vector_roundtrip"],
+        msg=f"{name}: f∘f⁻¹",
+    )
 
 
 @pytest.mark.parametrize("name", VECTOR_IDS)
@@ -180,8 +208,8 @@ def test_vector_jacobian_consistent_with_inverse(name, data):
     assert_close(
         P,
         jnp.broadcast_to(jnp.eye(f.dim), P.shape),
-        rtol=1e-6,
-        atol=1e-6,
+        rtol=TOL["jacobian"],
+        atol=TOL["jacobian"],
         msg=f"{name}: Df⁻¹·Df != I",
     )
 
@@ -201,7 +229,7 @@ def test_sequential_inn_composes_inverse(data):
     f = SequentialINN(layers)
     x = data.draw(point_batches(2), label="x")
     _, x_rt, _ = roundtrip(f, x)
-    assert_close(x_rt, x, rtol=1e-7, atol=1e-7)
+    assert_close(x_rt, x, rtol=TOL["vector_roundtrip"], atol=TOL["vector_roundtrip"])
     # order: f⁻¹ really is the reversed chain of member inverses
     y = jax.vmap(f)(x)
     z = y
@@ -236,42 +264,67 @@ def test_coupling_does_not_count_generated_params(key):
 
 
 # -------------------------------------------------------------- trainability ------
-def _adam_step(module, key, lr=1.0):
-    """One optimiser step along a random 'gradient' of the trainable leaves."""
-    params, static = eqx.partition(module, eqx.is_inexact_array)
-    leaves, treedef = jax.tree.flatten(params)
-    grads = jax.tree.unflatten(
-        treedef,
-        [
-            jax.random.normal(k, l.shape, l.dtype)
-            for k, l in zip(jax.random.split(key, len(leaves)), leaves)
-        ],
-    )
-    opt = optax.adam(lr)
-    updates, _ = opt.update(grads, opt.init(params), params)
-    return eqx.combine(eqx.apply_updates(params, updates), static)
-
-
 @pytest.mark.parametrize("name", SCALAR_IDS)
 @given(seed=seeds, x=point_batches(1))
 def test_scalar_standalone_training_keeps_validity(name, seed, x):
     """An aggressive Adam step on a standalone scalar bijection cannot leave the
     constrained set: round trip and monotonicity still hold afterwards."""
-    f = _adam_step(SCALAR_TEMPLATES[name], jax.random.key(seed))
+    f = adam_step(SCALAR_TEMPLATES[name], jax.random.key(seed))
     x = x[:, 0]
     y, x_rt, _ = roundtrip(f, x)
     assert jnp.all(jnp.isfinite(y)), f"{name}: forward not finite after a step"
-    assert_close(x_rt, x, rtol=1e-8, atol=1e-8, msg=f"{name}: round trip after a step")
+    assert_close(
+        x_rt,
+        x,
+        rtol=TOL["scalar_roundtrip"],
+        atol=TOL["scalar_roundtrip"],
+        msg=f"{name}: round trip after a step",
+    )
     assert jnp.all(jax.vmap(jax.grad(f))(x) > 0), f"{name}: not increasing after a step"
 
 
 @pytest.mark.parametrize("name", VECTOR_IDS)
 @given(seed=seeds, x=point_batches(2))
 def test_vector_standalone_training_keeps_validity(name, seed, x):
-    f = _adam_step(
+    f = adam_step(
         VECTOR_BUILDERS[name](jax.random.key(seed)), jax.random.key(seed + 1), lr=0.1
     )
     x = x[:, : f.dim] if f.dim <= 2 else jnp.pad(x, ((0, 0), (0, f.dim - 2)))
     y, x_rt, _ = roundtrip(f, x)
     assert jnp.all(jnp.isfinite(y)), f"{name}: forward not finite after a step"
-    assert_close(x_rt, x, rtol=1e-7, atol=1e-7, msg=f"{name}: round trip after a step")
+    assert_close(
+        x_rt,
+        x,
+        rtol=TOL["vector_roundtrip"],
+        atol=TOL["vector_roundtrip"],
+        msg=f"{name}: round trip after a step",
+    )
+
+
+@pytest.mark.parametrize("name", SCALAR_IDS)
+def test_true_gradient_step_decreases_loss(name):
+    """Plumbing check complementing the random-direction law: gradients flow through
+    ``constrain`` to ``raw``, and a true gradient step on a fit-to-target loss lowers
+    it."""
+    import optax
+
+    f = SCALAR_TEMPLATES[name].from_unconstrained(
+        0.3 * jax.random.normal(jax.random.key(0), (SCALAR_TEMPLATES[name].num_params,))
+    )
+    x = jnp.linspace(-1.5, 1.5, 16)
+    target = 1.3 * x + 0.2  # a map the templates can approach but not represent exactly
+
+    def loss(m):
+        return jnp.mean((jax.vmap(m)(x) - target) ** 2)
+
+    params, static = eqx.partition(f, eqx.is_inexact_array)
+    grads = eqx.filter_grad(loss)(f)
+    assert all(jnp.all(jnp.isfinite(g)) for g in jax.tree.leaves(grads)), (
+        "non-finite grad"
+    )
+    opt = optax.sgd(1e-2)
+    updates, _ = opt.update(
+        eqx.filter(grads, eqx.is_inexact_array), opt.init(params), params
+    )
+    g = eqx.combine(eqx.apply_updates(params, updates), static)
+    assert loss(g) < loss(f), f"{name}: a small gradient step did not decrease the loss"

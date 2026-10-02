@@ -14,9 +14,12 @@ the reviewer's map of the change, not a changelog:
 - **Bugs fixed**: pre-existing bugs found on the way, with the symptom.
 - **Tests**: what the new tests pin down, and how to run them.
 - **Open issues**: things deliberately left alone, with the reason.
-- **Review notes**: empty when Claude writes the document. Joon fills it in
-  while vetting; Claude reads it at the start of the next session on that
-  branch and treats it as the current state of the review.
+- **Review notes**: a table with columns *Change* | *Thoughts* | *Modifications*.
+  Claude pre-populates one row per file touched, with *Change* = the file name
+  plus a one-line summary of what changed there, and leaves *Thoughts* and
+  *Modifications* blank. Joon fills those in while vetting; Claude reads them
+  at the start of the next session on that branch and treats them as the
+  current state of the review.
 
 Claude updates the document in the same commit as any later change on the
 branch, and never edits *Review notes* except when asked to.

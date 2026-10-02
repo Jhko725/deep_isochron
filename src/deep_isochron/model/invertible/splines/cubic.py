@@ -166,7 +166,8 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
 
     @property
     def coeffs(self) -> Float[Array, " {self.num_bins+3}"]:
-        """Strictly increasing B-spline coefficients ``alpha_{-3}, ..., alpha_{K-1}``."""
+        """Strictly increasing B-spline coefficients ``alpha_{-3}, ..., alpha_{K-1}``
+        ."""
         K = self.num_bins
         greville = self._greville(self.knots)
         interior = greville[2] + jnp.cumsum(self.params.coeff_incrs)[:-1]

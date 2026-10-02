@@ -54,10 +54,13 @@ trace the same way.
    `CubicBSpline.constrain` builds `Widths(total=span)` with a traced `span` (the Greville
    span, which depends on `raw`); fine, because the object is consumed in the same trace.
    Returning or caching such an object would leak a tracer — the standard JAX rule.
-3. **Shift constants are computed with `math`, not `jax`.** `__init__` runs inside the trace,
-   where any `jnp` operation is staged; `float(jax.scipy.special.logit(...))` raised
-   `ConcretizationTypeError` under `vmap` during the migration. `math.log`, `math.expm1`,
-   `math.atanh` on Python floats are concrete and free.
+3. **Shift constants are computed under `jax.ensure_compile_time_eval()`.** A shifted
+   primitive implements the *unshifted* map pair `_forward`/`_inverse` once; the shift is
+   `float(_inverse(at_zero))`, evaluated in that context so it is a concrete Python float even
+   when the primitive is constructed inside a `jit`/`vmap` trace (verified eagerly, under
+   `jit`, `vmap`, `jit(vmap)` and `filter_vmap`). Without it, `float()` of a staged `jnp` op
+   raised `ConcretizationTypeError` under `vmap` during the migration. The earlier workaround
+   — re-deriving each shift with `math` — duplicated the inverse formula and is gone.
 4. **Validation happens at construction**: `Positive` requires `at_zero > eps`, `Interval`
    requires `lo < at_zero < hi`, `BoundedPositive` requires `at_zero - eps` in
    `(exp(-a), exp(a))`, `Widths` requires `n * min_rel < 1` (checked per call, since `n` is
@@ -83,9 +86,13 @@ trace the same way.
 - `Widths.inverse` is defined up to a constant (softmax is shift-invariant); the chosen gauge
   is mean-zero raw, which is also the gauge in which equal widths map back to `raw = 0`.
   Tests state the law as `inverse(c(r_centred)) == r_centred`.
-- Laws pinned in `tests/test_constraints.py`: `inverse∘forward`, `c(0) == at_zero` (equal
-  widths for `Widths`), image in the constrained set, finite value and gradient for
-  `|raw| <= 30`, `Widths` sum/floor, constructor validation.
+- `is_constrained(value)` is part of the contract: the primitive that claims a set also
+  decides membership, so tests can check the image generically over every primitive without
+  a hand-maintained predicate table.
+- Laws pinned in `tests/test_constraints.py`, generic over `PRIMITIVES`: `inverse∘forward`,
+  `c(0) == at_zero` (equal widths for `Widths`), `is_constrained(c(raw))` and finite
+  Jacobian for `|raw| <= 30`, non-vacuity of `is_constrained`, constructor validation,
+  construction inside `jit(vmap)`.
 - Cost per call: one softplus/sigmoid per scalar parameter and one softmax over `K` widths per
   spline — the same work the coupling path already did, now also on the standalone path.
 

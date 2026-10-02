@@ -55,6 +55,18 @@ Steps land as separate commits; this document grows with them.
 | `tests/strategies.py` | (step 5) type annotations on every strategy function |
 | `src/deep_isochron/data/generate.py` | (step 5) placeholder docstring with the intended `generate(...)` signature (was an empty file) |
 | `prototype.ipynb` | (step 5) imports and constructors updated to the new API (`MonotonicRQSpline(num_bins=9, ...)` template, `PolarCouplingFlow`, `conjugacy` module name) |
+| `src/.../invertible/constraints.py` | (review follow-up) `is_constrained` added to the contract; `_Shifted` base implements the unshifted pair once and derives the shift under `ensure_compile_time_eval` (no `math` duplication); `free`/`arcsinh` singletons |
+| `src/.../invertible/analytic.py` | (review follow-up) uses the `free`/`arcsinh` singletons |
+| `src/.../invertible/coupling.py` | (review follow-up) docstring reflow artefacts fixed |
+| `src/.../invertible/linear.py` | (review follow-up) Mezzadri (2007) reference for the Haar sign correction |
+| `tests/helpers.py` | (review follow-up) `TOL` table (identity / scalar round trip / vector round trip / jacobian, each justified); `adam_step` moved here with the random-direction rationale |
+| `tests/strategies.py` | (review follow-up) `floats_in`, `magnitudes(lo, hi)`, `RAW_BOUND`/`EXTREME_RAW_BOUND`; `raw_vectors(n, elements=...)` parameterised, so the extreme regime is a bound, not a second strategy |
+| `tests/test_constraints.py` | (review follow-up) generic over `PRIMITIVES` via `is_constrained`; non-vacuity and traceability tests; local strategies removed |
+| `tests/test_analytic.py` | (review follow-up) strategies from `strategies.py` |
+| `tests/test_bijections.py` | (review follow-up) tolerances from `TOL`; `adam_step` from helpers; `test_true_gradient_step_decreases_loss` (plumbing check complementing the random-direction law) |
+| `pyproject.toml` | (review follow-up) `line-length = 88` pinned under `[tool.ruff]` |
+| `CLAUDE.md` | (review follow-up) review-notes table convention: one pre-populated row per file |
+| `docs/decisions/0004`, `0005` | (review follow-up) 0004 cites equinox #1256; 0005 rule 3 is now `ensure_compile_time_eval`, and records `is_constrained` |
 
 ## Design
 
@@ -134,6 +146,19 @@ separate class is clearer; the shared machinery is the template/`from_unconstrai
 delegation and can be a chain member or a template. Its `raw` is `None` (lives in `f`), like
 `ScalarChain`.
 
+**Review follow-up — annotations on the primitives.** The review set `" n"` (vector) on all
+primitives; the analytic classes apply the elementwise ones to 0-d parameters (`free(loc)`
+after `alpha, beta, loc = raw`), which the import hook then rejected. Elementwise primitives
+are therefore annotated `" *n"` (any shape) and only `Widths`, which is intrinsically a vector
+map, narrows to `" n"`; the `Constraint` docstring states the split.
+
+**Review follow-up — shift without duplication.** `_Shifted` implements the unshifted
+`_forward`/`_inverse` once and derives `_shift = _inverse(at_zero)` under
+`jax.ensure_compile_time_eval()`, so construction inside a trace stays concrete. One trap found
+on the way: `jax.scipy.special.logit` is jit-decorated, and a jitted call inside a `vmap` trace
+returns a tracer even on a concrete argument, so `Interval._inverse` uses plain `jnp`
+(`log(q) - log1p(-q)`). ADR-0005 rule 3 updated accordingly.
+
 **`at_zero` validated at construction**: `Positive(eps, at_zero)` requires `at_zero > eps`,
 `Interval(lo, hi, at_zero)` requires `lo < at_zero < hi`; the shifts are computed once as
 Python floats.
@@ -180,8 +205,14 @@ counts and ranges for all three classes.
 
 Step 4: `uv run pytest -n 4` (default profile) — 274 passed, 4 skipped, 1 xfailed.
 
-Final (step 5): `uv run pytest -n 4` (default profile, 50 examples) — **274 passed, 4 skipped,
-1 xfailed** in 8 min; `--hypothesis-profile=dev` in 3.7 min. `ty check
+Review follow-up (2026-10-02): `uv run pytest -n 4 --hypothesis-profile=dev` — **303 passed,
+4 skipped, 1 xfailed**; default profile: **303 passed, 4 skipped, 1 xfailed** (9 min). `ty check` clean.
+New laws: `is_constrained(c(raw))` and non-vacuity for every primitive; primitive construction
+inside `jit(vmap)`; true-gradient step decreases a fit loss (plumbing complement to the
+random-direction law).
+
+Final (step 5): `uv run pytest -n 4` (default profile, 50 examples) — 274 passed, 4 skipped,
+1 xfailed in 8 min; `--hypothesis-profile=dev` in 3.7 min. `ty check
 src/deep_isochron/model/invertible` — all checks passed. Acceptance checks from the plan:
 `CouplingFlow(..., CubicBSpline).smoothness == 2`, `(..., LinearSpline) == 0`,
 `SequentialINN([bspline coupling, linear]).smoothness == 2`; `relu` with a C² template raises
@@ -242,3 +273,23 @@ constructor validation of impossible floors / `at_zero` outside the set.
 | Design docs: `docs/decisions/0001..0005` | Happy with the design docs convention. 005 was added by Claude at my request. | None |
 | Changes in `CLAUDE.md` | Looks good. As the codebase grows, do we need to move architecture plans to a dedicated document auch as Archtecture.md? | None |
 | This document | Happy overall. Will be useful to pre-populate the Change column of the Review notes section. There should be one row per one unique file changed (I may change that later as I write the reviews, but this should be a decent preset), and the Change item should have the name of the affected file +  a short description summarizing the changes. Look at this manually crafted document as a rough example. Leave the thoughts and modifications columns blank.
+
+### Review follow-up commit (2026-10-02)
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `src/.../invertible/constraints.py`: `is_constrained` in the contract; `_Shifted` base with unshifted `_forward`/`_inverse` and shift via `ensure_compile_time_eval`; `free`/`arcsinh` singletons; elementwise `" *n"` vs `Widths` `" n"`; plain-`jnp` logit | | |
+| `src/.../invertible/analytic.py`: uses the `free`/`arcsinh` singletons | | |
+| `src/.../invertible/coupling.py`: docstring reflow artefacts fixed | | |
+| `src/.../invertible/linear.py`: Mezzadri (2007) reference for the Haar sign correction | | |
+| `src/.../invertible/affine.py`: `ResidualCoupling` TODO rewritten (special case of `CouplingFlow` with a `Shift` template) | | |
+| `tests/helpers.py`: `TOL` table with per-law justification; `adam_step` moved here with the random-direction rationale | | |
+| `tests/strategies.py`: `floats_in`, `magnitudes(lo, hi)`, `RAW_BOUND`/`EXTREME_RAW_BOUND`; `raw_vectors(n, elements=...)` | | |
+| `tests/test_constraints.py`: generic over `PRIMITIVES` via `is_constrained`; non-vacuity and traceability tests; local strategies removed | | |
+| `tests/test_analytic.py`: strategies from `strategies.py` | | |
+| `tests/test_bijections.py`: tolerances from `TOL`; `adam_step` from helpers; `test_true_gradient_step_decreases_loss` | | |
+| `pyproject.toml`: `line-length = 88` pinned under `[tool.ruff]` | | |
+| `CLAUDE.md`: review-notes table convention (one pre-populated row per file) | | |
+| `docs/decisions/0004`: cites equinox #1256 | | |
+| `docs/decisions/0005`: rule 3 → `ensure_compile_time_eval`; `is_constrained` recorded | | |
+| docstrings/comments across `src` and `tests`: reflowed to 88 columns | | |

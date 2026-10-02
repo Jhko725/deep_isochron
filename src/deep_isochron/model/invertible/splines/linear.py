@@ -21,8 +21,8 @@ class LinearSpline(AbstractSpline[LinearSplineParams]):
     outside. The join with the tails is only continuous.
 
     Raw parameters: ``num_bins`` x-widths then ``num_bins`` y-widths, each block mapped
-    by a floored softmax (``Widths``) onto widths summing to the range; ``raw = 0`` gives
-    uniform knots on both axes, i.e. the identity.
+    by a floored softmax (``Widths``) onto widths summing to the range; ``raw = 0``
+    gives uniform knots on both axes, i.e. the identity.
     """
 
     raw: Float[Array, " {self.num_params}"] | None

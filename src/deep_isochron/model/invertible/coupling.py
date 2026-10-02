@@ -45,13 +45,13 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
     The default conditioner is an MLP with a zero-initialised final layer; since
     ``from_unconstrained(0)`` is the identity for every scalar bijection, a fresh layer
     is the identity map. A custom ``conditioner`` must output zeros at init for the same
-     to hold (``PolarCouplingFlow`` uses a zero-initialised ``TruncatedFourier``).
+    to hold (``PolarCouplingFlow`` uses a zero-initialised ``TruncatedFourier``).
 
     **Regularity.** The layer is jointly C^k in its input when the template is C^k and
     the conditioner is at least C^k; ``smoothness`` reports the template's value, and
     the constructor rejects the non-smooth ``jax.nn`` activations of the default MLP
-    when the template is C^1 or better. Any other activation, and any custom conditioner
-    , is assumed to be C^∞ (``gelu``, ``tanh``, ``softplus``, ``sin``, ... are).
+    when the template is C^1 or better. Any other activation, and any custom
+    conditioner, is assumed to be C^∞ (``gelu``, ``tanh``, ``softplus``, ``sin``, ...).
 
     [1] G. Papamakarios et al. Normalizing Flows for Probabilistic Modeling and
     Inference. JMLR 22 (2021)."""

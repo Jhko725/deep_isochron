@@ -15,9 +15,11 @@ from .base import (
 )
 from .constraints import (
     Arcsinh as Arcsinh,
+    arcsinh as arcsinh,
     BoundedPositive as BoundedPositive,
     Constraint as Constraint,
     Free as Free,
+    free as free,
     Interval as Interval,
     Positive as Positive,
     Widths as Widths,
