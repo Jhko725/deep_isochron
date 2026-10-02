@@ -22,8 +22,11 @@ pre-populated review rows. Phase B starts once the review is merged.
 ## Phase B — `data-generation`
 
 - B1 Unify the ODE interface: `AbstractODE.flow(ts, u0, *, solver, rtol, atol, max_steps)`
-  (diffrax default; `BautinNormalForm` overrides with the r² trick); delete the duplicate
-  `latent_dynamics.HopfNormalForm`; `solve` stops swallowing `**kwargs`; explicit polar chart
+  (diffrax default; `BautinNormalForm` overrides with the r² trick); make
+  `AbstractLatentDynamics` a subclass of `AbstractODE` (the ODEs that additionally carry
+  analytic phase/amplitude-response helpers) or retire it with `autoencoder.py`; delete the
+  duplicate `latent_dynamics.HopfNormalForm` path; `solve` stops swallowing `**kwargs`;
+  explicit polar chart
   on the normal forms (`to_chart`/`from_chart`) so `ConjugateLatentDynamics` is chart-agnostic
   and the `r = 0` singularity lives in one place.
 - B2 `generate(system, ic_sampler, ts, *, solver, rtol, atol, key) -> TimeSeriesDataSource`,
@@ -77,6 +80,14 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 `CircularMonotonicRQCoupling`). As `LossConfig`/`INNConfig` entries once Phase D is in.
 
 ## Parked (with reason)
+
+- Reinstating `InvertibleLinear` — only if `BiLipschitzLinear` stays too slow after trying
+  parametrisations of `SO(dim)` other than the matrix exponential (Cayley transform,
+  Householder products). It was markedly cheaper to evaluate, and `det W` crossing zero was
+  never observed in practice; the price would be one test-exception group
+  (`ORIENTATION_NOT_GUARANTEED`) coming back.
+- Grouping the scalar bijections (`affine.py`, `analytic.py`, `splines/`, `OffsetedBijection`)
+  under one subpackage — cosmetic; when the vocabulary stops growing.
 
 - Initialisation-strategy enum on `AbstractBijection` — only if training dynamics call for it
   (identity-at-init is universal; `BiLipschitzLinear.init="rotation"` is the one opt-in).
