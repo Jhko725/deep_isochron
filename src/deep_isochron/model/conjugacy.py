@@ -1,22 +1,33 @@
-import diffrax as dfx
 import equinox as eqx
 import jax
 from jaxtyping import Array, Float
 
-from ..misc import cartesian_to_polar, polar_to_cartesian
-from ..systems.base import AbstractODE
+from ..systems.base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
 from .invertible import AbstractBijection
 
 
 class ConjugateLatentDynamics(eqx.Module):
-    """A bijection and a latent ODE (in the polar chart) whose flow it conjugates."""
+    """A bijection ``Φ`` and a latent ODE whose flow it conjugates:
+    ``x(t) = Φ⁻¹(φ_t(Φ(x0)))``.
+
+    The latent ODE is integrated through its own ``flow`` in its own (cartesian)
+    coordinates; chart choices are the ODE's business (``AbstractNormalForm``
+    strategies), not this class's. Solver settings live in ``solver_config`` (static).
+    """
 
     latent_dynamics: AbstractODE
     bijection: AbstractBijection
+    solver_config: SolverConfig = eqx.field(static=True)
 
-    def __init__(self, latent_dynamics: AbstractODE, bijection: AbstractBijection):
+    def __init__(
+        self,
+        latent_dynamics: AbstractODE,
+        bijection: AbstractBijection,
+        solver_config: SolverConfig = DEFAULT_SOLVER_CONFIG,
+    ):
         self.latent_dynamics = latent_dynamics
         self.bijection = bijection
+        self.solver_config = solver_config
 
     @property
     def dim(self) -> int:
@@ -29,14 +40,8 @@ class ConjugateLatentDynamics(eqx.Module):
         return_latent_trajectory: bool = True,
     ) -> tuple[Float[Array, "time obs_dim"], Float[Array, "time latent_dim"] | None]:
         y0: Float[Array, " latent_dim"] = self.bijection(x0)
-        y0_polar = cartesian_to_polar(y0)
-        yt_polar: Float[Array, "time latent_dim"] = self.latent_dynamics.solve(
-            ts, y0_polar, max_steps=8192, atol=1e-6, rtol=1e-4, solver=dfx.Kvaerno5()
+        yt: Float[Array, "time latent_dim"] = self.latent_dynamics.flow(
+            ts, y0, config=self.solver_config
         )
-        yt = jax.vmap(polar_to_cartesian)(yt_polar)
-        xt: Float[Array, "time obs_dim"] = eqx.filter_vmap(self.bijection.inverse)(yt)
-
-        if return_latent_trajectory:
-            return xt, yt
-        else:
-            return xt, None
+        xt: Float[Array, "time obs_dim"] = jax.vmap(self.bijection.inverse)(yt)
+        return (xt, yt) if return_latent_trajectory else (xt, None)

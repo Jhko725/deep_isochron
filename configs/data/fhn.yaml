@@ -1,0 +1,30 @@
+# FitzHugh–Nagumo trajectories: 256 initial conditions in a box, 50 time units.
+# Run:  uv run python scripts/generate_data.py --config-name fhn  [key=value overrides]
+name: fhn
+out_dir: data
+seed: 0
+n_trajectories: 256
+window_size: null
+
+system:
+  _target_: deep_isochron.systems.FitzhughNagumo
+
+ic_sampler:
+  _target_: deep_isochron.data.UniformBox
+  lo: [-3.0, -3.0]
+  hi: [3.0, 3.0]
+
+time:
+  t0: 0.0
+  t1: 50.0
+  n: 501
+
+solver:
+  _target_: deep_isochron.systems.SolverConfig
+  solver:
+    _target_: diffrax.Tsit5
+  rtol: 1.0e-8
+  atol: 1.0e-10
+  max_steps: 65536
+
+strategy: null  # AbstractNormalForm systems only: cartesian | polar | r_squared

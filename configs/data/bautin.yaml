@@ -1,0 +1,33 @@
+# Bautin normal-form trajectories (a sanity-check dataset: the conjugacy is the identity).
+name: bautin
+out_dir: data
+seed: 0
+n_trajectories: 256
+window_size: null
+
+system:
+  _target_: deep_isochron.systems.BautinNormalForm
+  a: 1.0
+  b: 0.5
+  w: 0.6283185307179586   # 2 pi / 10
+  w0: 1.2566370614359172  # 2 pi / 5
+
+ic_sampler:
+  _target_: deep_isochron.data.UniformAnnulus
+  r_min: 0.2
+  r_max: 2.5
+
+time:
+  t0: 0.0
+  t1: 50.0
+  n: 501
+
+solver:
+  _target_: deep_isochron.systems.SolverConfig
+  solver:
+    _target_: diffrax.Tsit5
+  rtol: 1.0e-8
+  atol: 1.0e-10
+  max_steps: 65536
+
+strategy: r_squared

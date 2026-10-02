@@ -12,43 +12,30 @@ Hydra/wandb/Orbax → science.
 
 ---
 
-## Phase A — `invertible-cleanup` (complete, awaiting review)
+## Phase A — `invertible-cleanup` (merged 2026-10-02)
 
-All items A1–A9 are in the Done ledger. Acceptance met on the branch: `pytest -n 4` 360
-passed / 1 xfailed (the pinned sinh underflow) / 0 skipped; `ty check src` clean with no
-`ty: ignore` in `src`; change document `docs/changes/2026-10-02-invertible-cleanup.md` with
-pre-populated review rows. Phase B starts once the review is merged.
+All items in the Done ledger; see `docs/changes/2026-10-02-invertible-cleanup.md`.
 
-## Phase B — `data-generation`
+## Phase B — `data-generation` (current)
 
-- B1 Unify the ODE interface: `AbstractODE.flow(ts, u0, *, solver, rtol, atol, max_steps)`
-  (diffrax default; `BautinNormalForm` overrides with the r² trick); make
-  `AbstractLatentDynamics` a subclass of `AbstractODE` (the ODEs that additionally carry
-  analytic phase/amplitude-response helpers) or retire it with `autoencoder.py`; delete the
-  duplicate `latent_dynamics.HopfNormalForm` path; `solve` stops swallowing `**kwargs`;
-  explicit polar chart
-  on the normal forms (`to_chart`/`from_chart`) so `ConjugateLatentDynamics` is chart-agnostic
-  and the `r = 0` singularity lives in one place.
-- B2 `generate(system, ic_sampler, ts, *, solver, rtol, atol, key) -> TimeSeriesDataSource`,
-  vmapped over initial conditions (replaces the notebook cells).
-- B3 `DatasetMetadata`: system class + params, solver + tolerances, time grid, IC sampler +
-  seed, `n_trajectories`, dtype, created, git SHA/dirty, package version.
-- B4 On-disk format `data/<name>-<cfghash8>/arrays.npz` (`ts`, `ys`, `u0`) + `metadata.json`;
-  `TimeSeriesDataSource.save/load`; loud failure on dtype mismatch.
-- B5 `split_time(idx)` (documented transient oversampling) + `split_trajectories(frac, seed)`
-  for held-out validation.
-- B6 `scripts/generate_data.py` as a Hydra entry point from `configs/data/*.yaml`.
-- B7 Tests: `test_systems.py` (Bautin r² trick vs direct integration; Floquet exponent vs
-  numerical monodromy; FHN fixed-point eigenvalues `0.1339 ± 0.9163i`; HH gating in `[0, 1]`),
-  `test_latent_dynamics.py`, `test_data.py` (windows, splits, save/load incl. metadata, grain).
+Decisions taken 2026-10-02 (ADR-0007, ADR-0008): `AbstractODE` / `AbstractNormalForm`
+two-layer hierarchy with the rule "a class carries only what is analytically available,
+everything numerical is a function over `AbstractODE`"; `SolverConfig`; flow strategies as
+objects; one netCDF4 file per dataset via xarray; weighted-window sampling kept alongside
+`mix`. B1–B7 landed in `docs/changes/2026-10-02-data-generation.md`.
+
+| # | Item | Why | Done when |
+|---|---|---|---|
+| B8 | `deep_isochron/analysis/`: numerical counterparts of `AbstractNormalForm`'s closed forms for any `AbstractODE` — `find_limit_cycle` (Poincaré/shooting), `monodromy` → Floquet exponents, `asymptotic_phase` by long integration against the located cycle, later `isochrons` by the continuation method of Langfield, Krauskopf & Osinga (2014) | ground truth for the learned FHN isochrons; `t_settle` for sampling weights | functions + tests that recover Bautin's closed forms numerically |
+| B9 | `t_settle` per trajectory stored in the dataset (from `amplitude` for normal forms, from B8 for observed systems); `transient_weights` optionally keyed on it | a physical basis for oversampling rather than wall-clock start time | variable in the file; sampler option |
 
 ## Phase C — `trainer`
 
 - C1 `Trainer(optimizer, loss_fn)` + `train(model, loader, *, logger, checkpointer, num_steps,
   eval_every, eval_loader)`; `NullLogger`/`NullCheckpointer` for tests; document the
   one-step-delayed logging overlap.
-- C2 Solver settings out of `ConjugateLatentDynamics.__call__` into a `SolverConfig` field;
-  explicit loss weights in `ConjugacyTrajectoryLoss`.
+- C2 Explicit loss weights in `ConjugacyTrajectoryLoss` (the `SolverConfig` field on
+  `ConjugateLatentDynamics` landed with Phase B).
 - C3 Held-out evaluation; physics scalars every `eval_every`: base-system `a, b, w`, implied
   period and Floquet exponent, max round-trip error, min/max per-layer Jacobian singular values
   on a fixed grid.
@@ -86,6 +73,9 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
   Householder products). It was markedly cheaper to evaluate, and `det W` crossing zero was
   never observed in practice; the price would be one test-exception group
   (`ORIENTATION_NOT_GUARANTEED`) coming back.
+- `AbstractLatentDynamics` / `PhaseAmplitudeAutoencoder` (non-invertible baseline) stay as
+  they are until the baseline is needed in the paper; they consume an `AbstractNormalForm`
+  through `flow` if ever adapted.
 - Grouping the scalar bijections (`affine.py`, `analytic.py`, `splines/`, `OffsetedBijection`)
   under one subpackage — cosmetic; when the vocabulary stops growing.
 
@@ -105,6 +95,7 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-09-30 | `splines-refactor` | `AbstractSpline`; `CubicBSpline` ported; `LinearSpline`; RQ-spline bug fixes; `BijectionFactory` removed; first Hypothesis suite; change-document convention | `docs/changes/2026-09-30-splines-refactor.md` |
 | 2026-10-01 | `scalar-param-refactor` | `raw`/`constrain` contract (ADR-0001/0002); declared `smoothness` (ADR-0003); `AbstractVar` as static `init=False` fields (ADR-0004); constraint primitives (ADR-0005); `ScalarChain`; `CouplingFlow` with pluggable conditioner; `PolarCouplingFlow`; circular spline as exact rotation; `InvertibleLinear` rotation init; `BiLipschitzLinear._s` vector; 303-test suite; `ty` clean on the invertible package | `docs/changes/2026-10-01-scalar-param-refactor.md`, ADRs 0001–0005 |
 | 2026-10-02 | `invertible-cleanup` | A1: `Shift`/`Affine` scalar templates; `AffineCoupling`/`ResidualCoupling` as `CouplingFlow` factories (the latter now identity at init) | `docs/changes/2026-10-02-invertible-cleanup.md` |
+| 2026-10-02 | `data-generation` | B1–B7: `AbstractODE.flow` + `SolverConfig`; `AbstractNormalForm` (closed-form phase, isostable, isochrons, chart); flow strategies (cartesian / polar / `r²`); Hopf/Bautin rewritten on two rates with constrained leaves; `HopfLatentDynamics` deleted; xarray/netCDF `TimeSeriesDataSource` + `DatasetMetadata`; `generate` with loud failures and `config_hash`; `split_time`/`split_trajectories`; `weighted_windows` + `mixed_split`; `scripts/generate_data.py` + configs; `test_systems.py`, `test_data.py` | `docs/changes/2026-10-02-data-generation.md`, ADR-0007/0008 |
 | 2026-10-02 | `invertible-cleanup` | A8–A9: `systems/` on ADR-0004; all `ty: ignore`s gone (`cast`s at the optax/orbax boundaries); `training` import bug, empty-loader crash and `HopfLatentDynamics` call fixed; `matplotlib` → dev group | `docs/changes/2026-10-02-invertible-cleanup.md` |
 | 2026-10-02 | `invertible-cleanup` | A5–A7: `AbstractScalarBijection` implementation checklist; ADR-0006 + `docs/design/cubic-bspline.md` (corrects the inverse error-bound claim); `docs/architecture.md` | `docs/changes/2026-10-02-invertible-cleanup.md` |
 | 2026-10-02 | `invertible-cleanup` | A2–A4: `BiLipschitzLinear` identity at init (`init="rotation"` opt-in), raw leaves + `LinearParams`; `InvertibleLinear` removed — identity-at-init and orientation are universal laws, `IDENTITY_AT_INIT`/`ORIENTATION_NOT_GUARANTEED` deleted | `docs/changes/2026-10-02-invertible-cleanup.md` |

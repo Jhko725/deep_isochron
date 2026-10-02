@@ -6,12 +6,12 @@ import jax.numpy as jnp
 from einops import rearrange
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from ..systems.normal_forms import HopfNormalForm
-
 
 class AbstractLatentDynamics(eqx.Module):
-    """Abstract base class for latent dynamics objects to be used in
-    deep_isochron.model.autoencoder.PhaseAmplitudeAutoencoder."""
+    """Latent dynamics of the non-invertible autoencoder baseline
+    (``PhaseAmplitudeAutoencoder``): a closed-form flow ``(ts, y0) -> y[t]`` with no
+    vector field. Distinct from ``systems.AbstractNormalForm``, which is an ODE with
+    closed-form phase–amplitude structure and is what the conjugacy models use."""
 
     dim: eqx.AbstractVar[int]
 
@@ -153,56 +153,3 @@ class LinearLatentDynamics(AbstractLatentDynamics):
 
         y_t: Float[Array, "dim time"] = jnp.concatenate((y_t_comp, y_t_real), axis=-1)
         return y_t
-
-
-class HopfLatentDynamics(AbstractLatentDynamics):
-    hopf: HopfNormalForm
-    linear: LinearLatentDynamics
-
-    dim: int = eqx.field(static=True)
-    num_eig_comp: int = eqx.field(static=True)
-    positive_real_eigs_allowed: bool = eqx.field(static=True)
-
-    def __init__(
-        self,
-        dim: int,
-        num_eig_comp: int = 0,
-        positive_real_eigs_allowed: bool = False,
-        *,
-        key: PRNGKeyArray,
-    ):
-        r"""
-        **Arguments:**
-
-        - dim: Dimension of the latent dynamics: i.e., $\dim(z)$.
-        - num_eig_comp: Number of complex eigenvalue
-        """
-        self.dim = dim
-        self.num_eig_comp = num_eig_comp
-        self.positive_real_eigs_allowed = positive_real_eigs_allowed
-
-        self.hopf = HopfNormalForm()
-        self.linear = LinearLatentDynamics(
-            dim=dim - 2,
-            num_eig_imag=0,
-            num_eig_comp=num_eig_comp,
-            positive_real_eigs_allowed=positive_real_eigs_allowed,
-            key=key,
-        )
-
-    def __call__(
-        self,
-        ts: Float[Array, " time"],
-        y0: Float[Array, " dim"],
-    ) -> Float[Array, "time dim"]:
-        y0_hopf, y0_linear = jnp.split(y0, [2])
-        y_t_hopf: Float[Array, "time 2"] = self.hopf.solve(ts, y0_hopf)
-        y_t_linear: Float[Array, "time dim-2"] = self.linear(ts, y0_linear)
-        return jnp.concatenate((y_t_hopf, y_t_linear), axis=-1)
-
-    def eigenvalues_linear(
-        self,
-    ) -> tuple[
-        Float[Array, "num_eig_imag+num_eig_comp 2"], Float[Array, " num_eig_real"]
-    ]:
-        return self.linear.eigenvalues

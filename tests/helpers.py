@@ -29,6 +29,9 @@ TOL = {
     "join": 1e-7,
     # products of forward-mode Jacobians, 2x2; second derivatives of inverses
     "jacobian": 1e-6,
+    # two numerical integrations of the same ODE at tight tolerance (rtol 1e-10), or an
+    # integrated closed-form identity (phase, isostable) against the integrator's error
+    "flow": 1e-6,
 }
 
 
