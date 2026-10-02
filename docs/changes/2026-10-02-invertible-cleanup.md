@@ -33,6 +33,18 @@ removes the remaining `ty: ignore`s and moves `matplotlib` to the dev group (A8,
   removed; identity-at-init and orientation are universal laws.
 - `prototype.ipynb` — `AffineCoupling(width_hidden=..., affine_clamping=...)` →
   `(mlp_width=..., clamp=...)`; `InvertibleLinear` cells → `BiLipschitzLinear`.
+- `src/deep_isochron/model/invertible/base.py` — `AbstractScalarBijection` docstring is
+  now the six-step implementation checklist (A5).
+- `src/deep_isochron/model/invertible/splines/base.py` — module docstring points at the
+  checklist.
+- `src/deep_isochron/model/invertible/splines/cubic.py` — docstring: corrected inverse
+  error-bound claim; links to ADR-0006 and the design note.
+- `docs/decisions/0006-cubic-bspline-boundary-and-inverse.md` — new ADR (A6).
+- `docs/design/cubic-bspline.md` — new math note: index conventions, parametrisation,
+  `C²` boundary argument, pieces, inverse guarantees (A6).
+- `docs/architecture.md` — new: module map, invertible-package overview, systems/chart,
+  training-step data flow, tests, ADR index (A7).
+- `CLAUDE.md` — points at `docs/architecture.md`.
 - `docs/roadmap.md` — Phase A items moved to the Done ledger as they land.
 - `docs/changes/2026-10-02-invertible-cleanup.md` — this document.
 
@@ -88,9 +100,23 @@ removes the remaining `ty: ignore`s and moves `matplotlib` to the dev group (A8,
   accepted it and produced a constant `s = 1`, a degenerate rotation-only layer nobody
   used.
 
+- **A6 — the `2^-newton_iters` claim was wrong and is corrected, not implemented.**
+  The `CubicBSpline` docstring said the inverse is exact to `2^-newton_iters` of a bin in
+  the worst case. That bound holds for pure bisection; an accepted Newton step may shrink
+  the bracket by less than half, so the mixed scheme has no uniform bound (it does have
+  the invariants that matter — bracketed root, in-bin iterate, hence always finite — and
+  it converges). Forcing a bisection every other iteration would restore a `2^-n/2`
+  bound at the cost of typical speed; not done, since the suite shows round-off accuracy
+  at 20 iterations. Recorded in ADR-0006 and §5 of the design note.
+- **A7 — one page, prose plus one tree and one flow diagram.** A fuller document (per-class
+  API tables) would duplicate docstrings and go stale; the page says what each module is
+  *for* and where the decisions are, which is what a new session needs first.
+
 ADRs: [0001](../decisions/0001-unconstrained-leaves.md),
 [0002](../decisions/0002-identity-at-zero.md),
-[0005](../decisions/0005-constraint-primitives.md).
+[0005](../decisions/0005-constraint-primitives.md),
+[0006](../decisions/0006-cubic-bspline-boundary-and-inverse.md) (new);
+design note [`docs/design/cubic-bspline.md`](../design/cubic-bspline.md).
 
 ## Bugs fixed
 
@@ -130,4 +156,11 @@ registry entry with no skips.
 | `tests/test_linear.py`: parameter-space guarantees, params/weight, inits, validation | | |
 | `tests/test_bijections.py`: identity-at-init and orientation laws without skips | | |
 | `prototype.ipynb`: `AffineCoupling` keyword rename; `InvertibleLinear` → `BiLipschitzLinear` | | |
+| `src/.../invertible/base.py`: `AbstractScalarBijection` implementation checklist docstring | | |
+| `src/.../invertible/splines/base.py`: cross-link to the checklist | | |
+| `src/.../invertible/splines/cubic.py`: corrected inverse-bound claim; doc links | | |
+| `docs/decisions/0006-cubic-bspline-boundary-and-inverse.md`: Greville pinning; bracketed Newton inverse | | |
+| `docs/design/cubic-bspline.md`: indices, parametrisation, `C²` argument, inverse guarantees | | |
+| `docs/architecture.md`: module map and data flow | | |
+| `CLAUDE.md`: architecture pointer | | |
 | `docs/roadmap.md`: Phase A ledger updates | | |

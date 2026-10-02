@@ -76,23 +76,41 @@ class AbstractScalarBijection[P: tuple](AbstractBijection):
     r"""Bijections $\mathbb{R}\rightarrow\mathbb{R}$ acting on 0-d arrays, parametrised
     by ``num_params`` unconstrained reals.
 
-    Contract for subclasses:
+    **Implementation checklist.** A subclass is complete when it has exactly these
+    parts, in this order (``Affine`` in ``affine.py`` is the minimal worked example;
+    ``CubicBSpline`` the largest):
 
-    - ``raw``: the only trainable leaf, ``Float[Array, " num_params"]`` or ``None``. An
-      instance with ``raw=None`` is a *template*: it carries static configuration only,
-      is hashable, has zero trainable size, and is what ``CouplingFlow`` stores. The
-      constructor takes static configuration first and ``raw`` as an optional keyword;
-      with ``raw`` omitted the instance is the identity map.
-    - ``num_params``: a static ``init=False`` field (fixed by the class) or a property
-      (derived from static configuration).
-    - ``constrain(raw)``: the single place where unconstrained values are mapped to the
-      constrained set, returning the ``NamedTuple`` type ``P`` the class is generic over
-      (``class CubicRational(AbstractScalarBijection[CubicRationalParams])``). Must
-      satisfy ``constrain(zeros)`` == parameters of the identity map. Built from
-      ``constraints.*`` primitives, which carry the identity-at-zero shift.
+    1. ``class FooParams(NamedTuple)`` of the *constrained* parameters, and
+       ``class Foo(AbstractScalarBijection[FooParams])``.
+    2. Fields: ``raw: Float[Array, " n"] | None`` — the **only** array leaf — then
+       static configuration as ``eqx.field(static=True)``, then ``num_params`` and
+       ``smoothness`` as ``eqx.field(static=True, default=..., init=False)`` (or
+       ``num_params`` as a property when it depends on the configuration, as the
+       splines do). Nothing else is an array: no cached constrained values, no
+       constraint objects (ADR-0005).
+    3. ``__init__(self, <static config>, *, raw=None, ...)``: validate and store the
+       configuration, then ``self.raw = self._init_raw(jnp.zeros(n) if raw is None
+       else raw)``. So ``Foo(config)`` is the identity map and ``Foo(config,
+       raw=...)`` is any other member of the family; templates (``raw=None``) are
+       produced by ``CouplingFlow``, not by the constructor.
+    4. ``constrain(self, raw) -> FooParams``: the single place where unconstrained
+       values become constrained ones, built from ``constraints.*`` primitives so that
+       ``constrain(zeros)`` is the identity map's parameters (ADR-0001, ADR-0002).
+    5. ``__call__``/``inverse``: ``p = self.params`` and compute from ``p`` only.
+    6. Optionally ``@classmethod from_constrained(cls, <params>, *, <config>)``,
+       inverting the same primitives, for construction from constrained values.
 
-    ``__call__``/``inverse`` read ``self.params``. ``from_unconstrained`` and
-    ``identity_like`` are final.
+    Everything else is final and inherited: ``params`` (``constrain(raw)``, raising on a
+    template), ``jacobian`` (``jax.grad``), ``from_unconstrained`` (``tree_at`` on
+    ``raw``), ``identity_like``. Register the class in ``tests/registry.py`` as
+    ``"foo": Foo(config)``; every law in ``tests/test_bijections.py`` then applies with
+    no per-class test code, and ``tests/test_registry.py`` fails until the entry exists.
+
+    Why the shape: ``raw`` being the only leaf is what makes a conditioner's output
+    writable straight into the bijection (``from_unconstrained`` is one ``tree_at``) and
+    what makes any optimiser step safe (no step can leave the constrained set). An
+    instance with ``raw=None`` is a *template*: static configuration only, hashable,
+    zero trainable size — what ``CouplingFlow`` stores.
     """
 
     dim: int = eqx.field(static=True, default=1, init=False)

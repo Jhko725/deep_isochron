@@ -47,7 +47,9 @@ branch, and never edits *Review notes* except when asked to.
   plain Python objects created *inside* `constrain`, never stored as fields
   (ADR-0005).
 - Design decisions live in `docs/decisions/` as numbered ADRs; a change
-  document's *Design* section links to them.
+  document's *Design* section links to them. `docs/architecture.md` is the
+  module map and data flow — read it first in a new session, and update it in
+  the same commit as a change that moves or renames a module.
 - `docs/roadmap.md` is the single, current plan. Finished items move to its
   *Done* ledger (not deleted); it is updated in the same commit as the work
   that changes it, never on its own; history is `git log -p docs/roadmap.md`.

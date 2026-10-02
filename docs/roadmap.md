@@ -19,14 +19,11 @@ together they close the design before the data/trainer work builds on it.
 
 | # | Item | Why | Done when |
 |---|---|---|---|
-| A5 | Implementation checklist in the `AbstractScalarBijection` docstring (fields → `num_params` → `constrain` → read `self.params`; nothing else is an array), cross-linked from `AbstractSpline` | the rule is enforced by tests but not visible from a class body | docstring present |
-| A6 | `CubicBSpline` design: ADR-0006 (Greville pinning vs Hong & Chun Alg. 1 lines 13–17; Newton-bisection + implicit JVP vs closed-form root) and a math note `docs/design/cubic-bspline.md` (knot/coefficient indexing, exterior-width normalisation, `2^-newton_iters` bound) | the two decisions the splines branch left undocumented; required before the B-spline becomes the production architecture | both files exist; linked from the change document |
-| A7 | `docs/architecture.md`: module map (systems → bijections → `ConjugateLatentDynamics` → losses → trainer), data flow, links to ADRs | the ADRs record decisions; nothing records the shape of the package | one page; `CLAUDE.md` points to it |
 | A8 | `systems/` on ADR-0004 (`dim: ClassVar  # ty: ignore` → static `init=False` field, 4 classes); revisit the three `ty: ignore`s in `trainer.py` | `ty` cleanliness package-wide | `grep "ty: ignore" src` empty; `ty check src` clean |
 | A9 | `matplotlib` → `dev` dependency group | runtime deps = what `src` imports | `uv sync` without `dev` has no plotting |
 
 **Acceptance**: `uv run pytest -n 4` 0 failed with the pinned sinh-underflow xfail as the only
-non-pass; `ty check src` clean; A6/A7 documents exist; change document with pre-populated review rows.
+non-pass; `ty check src` clean; change document with pre-populated review rows.
 
 ## Phase B — `data-generation`
 
@@ -103,4 +100,5 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-09-30 | `splines-refactor` | `AbstractSpline`; `CubicBSpline` ported; `LinearSpline`; RQ-spline bug fixes; `BijectionFactory` removed; first Hypothesis suite; change-document convention | `docs/changes/2026-09-30-splines-refactor.md` |
 | 2026-10-01 | `scalar-param-refactor` | `raw`/`constrain` contract (ADR-0001/0002); declared `smoothness` (ADR-0003); `AbstractVar` as static `init=False` fields (ADR-0004); constraint primitives (ADR-0005); `ScalarChain`; `CouplingFlow` with pluggable conditioner; `PolarCouplingFlow`; circular spline as exact rotation; `InvertibleLinear` rotation init; `BiLipschitzLinear._s` vector; 303-test suite; `ty` clean on the invertible package | `docs/changes/2026-10-01-scalar-param-refactor.md`, ADRs 0001–0005 |
 | 2026-10-02 | `invertible-cleanup` | A1: `Shift`/`Affine` scalar templates; `AffineCoupling`/`ResidualCoupling` as `CouplingFlow` factories (the latter now identity at init) | `docs/changes/2026-10-02-invertible-cleanup.md` |
+| 2026-10-02 | `invertible-cleanup` | A5–A7: `AbstractScalarBijection` implementation checklist; ADR-0006 + `docs/design/cubic-bspline.md` (corrects the inverse error-bound claim); `docs/architecture.md` | `docs/changes/2026-10-02-invertible-cleanup.md` |
 | 2026-10-02 | `invertible-cleanup` | A2–A4: `BiLipschitzLinear` identity at init (`init="rotation"` opt-in), raw leaves + `LinearParams`; `InvertibleLinear` removed — identity-at-init and orientation are universal laws, `IDENTITY_AT_INIT`/`ORIENTATION_NOT_GUARANTEED` deleted | `docs/changes/2026-10-02-invertible-cleanup.md` |

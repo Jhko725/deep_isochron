@@ -97,8 +97,13 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
         coeffs[i] = alpha_{i-3},  i = 0..K+2
 
     The inverse is a bisection-safeguarded Newton solve with ``newton_iters`` fixed
-    iterations (bracket halves at worst, so the inverse is exact to ``2^-newton_iters``
-    of a bin in the pathological case and to round-off in practice).
+    iterations: the root stays bracketed and the iterate stays in the bin, so the
+    inverse is finite for every parameter value; it reaches round-off in practice. (The
+    ``2^-newton_iters`` bound applies to the bisection fall-back alone, not to the mixed
+    iteration; see ``docs/design/cubic-bspline.md`` §5.)
+
+    Design rationale: ``docs/decisions/0006-cubic-bspline-boundary-and-inverse.md``;
+    mathematics and index conventions: ``docs/design/cubic-bspline.md``.
     """
 
     raw: Float[Array, " {self.num_params}"] | None
