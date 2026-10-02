@@ -23,13 +23,13 @@ Constraint primitives (`Free`, `Positive`, `Interval`, `BoundedPositive`, `Arcsi
 `Widths` in `invertible/constraints.py`) are plain Python classes (`abc.ABC`, not
 `eqx.Module`) with `__call__` (raw → constrained) and `inverse` (constrained → raw). They
 hold only static configuration — `eps`, `at_zero`, bounds, `min_rel`, and the shift constant
-computed once in `__init__` with `math`. They are **instantiated inside `constrain`**,
+computed once in `__init__` under `jax.ensure_compile_time_eval()`. They are **instantiated inside `constrain`**,
 called once, and dropped:
 
 ```python
-def constrain(self, raw):                                    # traced
-    widths = Widths(self.range_width, self.min_rel_width)    # lives inside the trace
-    return RQSplineParams(widths(x_raw), widths(y_raw), ...) # only arrays leave
+def constrain(self, raw):  # traced
+    widths = Widths(self.range_width, self.min_rel_width)  # lives inside the trace
+    return RQSplineParams(widths(x_raw), widths(y_raw), ...)  # only arrays leave
 ```
 
 ### Why this is correct under `jit`/`vmap`/`grad`

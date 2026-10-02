@@ -278,18 +278,18 @@ constructor validation of impossible floors / `at_zero` outside the set.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/.../invertible/constraints.py`: `is_constrained` in the contract; `_Shifted` base with unshifted `_forward`/`_inverse` and shift via `ensure_compile_time_eval`; `free`/`arcsinh` singletons; elementwise `" *n"` vs `Widths` `" n"`; plain-`jnp` logit | | |
-| `src/.../invertible/analytic.py`: uses the `free`/`arcsinh` singletons | | |
-| `src/.../invertible/coupling.py`: docstring reflow artefacts fixed | | |
-| `src/.../invertible/linear.py`: Mezzadri (2007) reference for the Haar sign correction | | |
-| `src/.../invertible/affine.py`: `ResidualCoupling` TODO rewritten (special case of `CouplingFlow` with a `Shift` template) | | |
-| `tests/helpers.py`: `TOL` table with per-law justification; `adam_step` moved here with the random-direction rationale | | |
-| `tests/strategies.py`: `floats_in`, `magnitudes(lo, hi)`, `RAW_BOUND`/`EXTREME_RAW_BOUND`; `raw_vectors(n, elements=...)` | | |
-| `tests/test_constraints.py`: generic over `PRIMITIVES` via `is_constrained`; non-vacuity and traceability tests; local strategies removed | | |
-| `tests/test_analytic.py`: strategies from `strategies.py` | | |
-| `tests/test_bijections.py`: tolerances from `TOL`; `adam_step` from helpers; `test_true_gradient_step_decreases_loss` | | |
-| `pyproject.toml`: `line-length = 88` pinned under `[tool.ruff]` | | |
-| `CLAUDE.md`: review-notes table convention (one pre-populated row per file) | | |
-| `docs/decisions/0004`: cites equinox #1256 | | |
-| `docs/decisions/0005`: rule 3 → `ensure_compile_time_eval`; `is_constrained` recorded | | |
-| docstrings/comments across `src` and `tests`: reflowed to 88 columns | | |
+| `src/.../invertible/constraints.py`: `is_constrained` in the contract; `_Shifted` base with unshifted `_forward`/`_inverse` and shift via `ensure_compile_time_eval`; `free`/`arcsinh` singletons; elementwise `" *n"` vs `Widths` `" n"`; plain-`jnp` logit | Looks good overall. Wondering adding an additional `_Shift` into the class hierarchy could be avoided, but since shifting affects both the `__call__` and `inverse`, this might be difficult to avoid. In any case, not worth dedicating more effort to this at this point. | None |
+| `src/.../invertible/analytic.py`: uses the `free`/`arcsinh` singletons | Looks good. | None |
+| `src/.../invertible/coupling.py`: docstring reflow artefacts fixed | Trivial change. Good. | None |
+| `src/.../invertible/linear.py`: Mezzadri (2007) reference for the Haar sign correction | Read the paper and confirmed it is relevant. | None |
+| `src/.../invertible/affine.py`: `ResidualCoupling` TODO rewritten (special case of `CouplingFlow` with a `Shift` template) | Trivial changes. | None |
+| `tests/helpers.py`: `TOL` table with per-law justification; `adam_step` moved here with the random-direction rationale | Looks good. | None |
+| `tests/strategies.py`: `floats_in`, `magnitudes(lo, hi)`, `RAW_BOUND`/`EXTREME_RAW_BOUND`; `raw_vectors(n, elements=...)` | Looks good. | None |
+| `tests/test_constraints.py`: generic over `PRIMITIVES` via `is_constrained`; non-vacuity and traceability tests; local strategies removed | Looks good. | None |
+| `tests/test_analytic.py`: strategies from `strategies.py` | Looks good. | None |
+| `tests/test_bijections.py`: tolerances from `TOL`; `adam_step` from helpers; `test_true_gradient_step_decreases_loss` | Looks good. | None |
+| `pyproject.toml`: `line-length = 88` pinned under `[tool.ruff]` | Trivial fix. | None |
+| `CLAUDE.md`: review-notes table convention (one pre-populated row per file) | Read through, the created review notes does contain the table in proper format. | None |
+| `docs/decisions/0004`: cites equinox #1256 | Looks good. Link to the issue renders properly. | None |
+| `docs/decisions/0005`: rule 3 → `ensure_compile_time_eval`; `is_constrained` recorded | Decision part was incorrectly referring the the shift constant being computed using `math`, which is a dropped design decision. | Revised the offending sentence. |
+| docstrings/comments across `src` and `tests`: reflowed to 88 columns | Looks good. | None |
