@@ -200,25 +200,25 @@ skipped; `ty check src` clean (`--python` pointing at a venv with `wandb` instal
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/.../invertible/affine.py`: `Shift`/`Affine` templates; coupling classes → factories over `CouplingFlow` | | |
-| `src/.../invertible/__init__.py`: export `Shift`, `Affine` | | |
-| `tests/registry.py`: new scalar templates and builders; `invertible_linear`, `IDENTITY_AT_INIT`, `ORIENTATION_NOT_GUARANTEED` deleted | | |
-| `src/.../invertible/linear.py`: `InvertibleLinear` removed; `BiLipschitzLinear` raw leaves + `LinearParams`, identity init, `init="rotation"` opt-in | | |
-| `tests/test_linear.py`: parameter-space guarantees, params/weight, inits, validation | | |
-| `tests/test_bijections.py`: identity-at-init and orientation laws without skips | | |
-| `prototype.ipynb`: `AffineCoupling` keyword rename; `InvertibleLinear` → `BiLipschitzLinear` | | |
-| `src/.../invertible/base.py`: `AbstractScalarBijection` implementation checklist docstring | | |
-| `src/.../invertible/splines/base.py`: cross-link to the checklist | | |
-| `src/.../invertible/splines/cubic.py`: corrected inverse-bound claim; doc links | | |
-| `docs/decisions/0006-cubic-bspline-boundary-and-inverse.md`: Greville pinning; bracketed Newton inverse | | |
-| `docs/design/cubic-bspline.md`: indices, parametrisation, `C²` argument, inverse guarantees | | |
-| `docs/architecture.md`: module map and data flow | | |
-| `CLAUDE.md`: architecture pointer | | |
-| `src/deep_isochron/systems/*.py`: `dim` as static `init=False` field; `t: ArrayLike` in `rhs` | | |
-| `src/deep_isochron/training/trainer.py`: casts at optax/orbax boundaries; return types; guarded flush | | |
-| `src/deep_isochron/training/__init__.py`, `data/__init__.py`: fixed `TimeSeriesDataSource` re-export | | |
-| `src/deep_isochron/data/dataset.py`: `split` returns a typed pair | | |
-| `src/deep_isochron/model/conjugacy.py`: `latent_dynamics: AbstractODE` | | |
-| `src/deep_isochron/model/latent_dynamics.py`: `HopfLatentDynamics` uses `.solve` | | |
-| `pyproject.toml`: `matplotlib` → dev group | | |
-| `docs/roadmap.md`: Phase A ledger updates | | |
+| `src/.../invertible/affine.py`: `Shift`/`Affine` templates; coupling classes → factories over `CouplingFlow` | Looks good. Maybe later, it might be useful to group the scalar bijections together instead of having them scattered about. But not a concern for now. | None. |
+| `src/.../invertible/__init__.py`: export `Shift`, `Affine` | Trivial change. | None |
+| `tests/registry.py`: new scalar templates and builders; `invertible_linear`, `IDENTITY_AT_INIT`, `ORIENTATION_NOT_GUARANTEED` deleted | Looks good. | None |
+| `src/.../invertible/linear.py`: `InvertibleLinear` removed; `BiLipschitzLinear` raw leaves + `LinearParams`, identity init, `init="rotation"` opt-in | Will leave as is for now. `InvertibleLinear` may be brought back in the future - mathematically the determinant sign can cross zero, but in practice, did not find that to happen. Furthermore, `InvertibleLinear` was much cheaper to evaluate than `BiLipschitzLinear`. In the future, will try different parametrization (than the matrix exponential) for the class. If the result proves to still be too slow, `InvertibleLinear` will be brought back, as having one test exception group is worth the price. | None |
+| `tests/test_linear.py`: parameter-space guarantees, params/weight, inits, validation | The properties being tested look okay, but seeing tolerance values in the test functions that should be named and included in the `TOL` dictionary of `helpers.py`. Speaking of tolerances, is the `IDENTITY_TOL` dict in `registry.py` still relevant? | Deferred to Claude for further changes. |
+| `tests/test_bijections.py`: identity-at-init and orientation laws without skips | Looks good. | None |
+| `prototype.ipynb`: `AffineCoupling` keyword rename; `InvertibleLinear` → `BiLipschitzLinear` | Confirmed. | None |
+| `src/.../invertible/base.py`: `AbstractScalarBijection` implementation checklist docstring | Docstring does make this design element harder to miss. Good. | None |
+| `src/.../invertible/splines/base.py`: cross-link to the checklist | Confirmed. | None |
+| `src/.../invertible/splines/cubic.py`: corrected inverse-bound claim; doc links | Doc links are  good. No need to mention bisection bounds in the doc string (its not the actual bound, so is superfluous). | Doc string changed to refer to the design docs for discussions on convergence. |
+| `docs/decisions/0006-cubic-bspline-boundary-and-inverse.md`: Greville pinning; bracketed Newton inverse | Read through. Looks good. | None |
+| `docs/design/cubic-bspline.md`: indices, parametrisation, `C²` argument, inverse guarantees | Had a cursory look for now. Will revisit in the future for in-depth scrutiny when I start heavily using `CubicBSpline` for the learned bijections. | None |
+| `docs/architecture.md`: module map and data flow | On a high level, good. The specifics  will change with time, but so will the document. | None |
+| `CLAUDE.md`: architecture pointer | Read through the file. Good. | None |
+| `src/deep_isochron/systems/*.py`: `dim` as static `init=False` field; `t: ArrayLike` in `rhs` | Looks good. | None |
+| `src/deep_isochron/training/trainer.py`: casts at optax/orbax boundaries; return types; guarded flush | Trivial change. | None |
+| `src/deep_isochron/training/__init__.py`, `data/__init__.py`: fixed `TimeSeriesDataSource` re-export | Trivial change. | None |
+| `src/deep_isochron/data/dataset.py`: `split` returns a typed pair | Simple fix. Good. | None |
+| `src/deep_isochron/model/conjugacy.py`: `latent_dynamics: AbstractODE` | Fair. The original issue stemmed from the fact the `AbstractODE` and `AbstractLatentDynamics` were designed at different times + Proper design refinement was not performed (`AbstractLatentDynamics` should have been a subclass of `AbstractODE`; The intention was `AbstractODE` are all ODE systems used in the study - normal forms, data generation; not necessarily need to carry helper methods required to analytically compute phase/amplitude response curves, etc., whereas `AbstractLatentDynamics` are the subsets carrying that info). For now, this revised type hint suffices, and the design refinement will be done in Phase B. | None |
+| `src/deep_isochron/model/latent_dynamics.py`: `HopfLatentDynamics` uses `.solve` | Good. The latent_dynamics code here is legacy, and not planned to be used in experiments for the immediate future. So keeping them type correct is sufficient. | None |
+| `pyproject.toml`: `matplotlib` → dev group | Trivial changes. | Ran uv sync on the local repo. |
+| `docs/roadmap.md`: Phase A ledger updates | Read through. Looks good. | None |
