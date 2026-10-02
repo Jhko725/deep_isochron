@@ -29,7 +29,7 @@ from .constraints import (
 from .coupling import CouplingFlow as CouplingFlow
 from .linear import (
     BiLipschitzLinear as BiLipschitzLinear,
-    InvertibleLinear as InvertibleLinear,
+    LinearParams as LinearParams,
 )
 from .polar import (
     CircularMonotonicRQCoupling as CircularMonotonicRQCoupling,

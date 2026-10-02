@@ -19,9 +19,6 @@ together they close the design before the data/trainer work builds on it.
 
 | # | Item | Why | Done when |
 |---|---|---|---|
-| A2 | Identity-at-init as a universal law: `InvertibleLinear`/`BiLipschitzLinear` initialise to `I` (Haar rotation as opt-in `init="rotation"`) | after A1 only the linear layers are not identity at init; the law then holds for every bijection and the registry set disappears | `test_vector_identity_at_init` has no skips; `IDENTITY_AT_INIT` deleted |
-| A3 | `BiLipschitzLinear` in the `raw`/`constrain` shape: `LinearParams(U, V, s)`, `Interval(1/L, L, at_zero=1)` for the singular values | consistency with ADR-0001 (already follows its principle; only the shape differs) | `params` property; tests unchanged |
-| A4 | Decide `InvertibleLinear`'s orientation: drop it from the INN vocabulary (document `BiLipschitzLinear` as *the* linear layer) or parametrise on SO(dim) (`expm` of a skew matrix, as `BiLipschitzLinear.U/V` do) | an INN that must stay orientation-preserving cannot contain a layer whose `det` can flip | `ORIENTATION_NOT_GUARANTEED` deleted (or the class removed) |
 | A5 | Implementation checklist in the `AbstractScalarBijection` docstring (fields → `num_params` → `constrain` → read `self.params`; nothing else is an array), cross-linked from `AbstractSpline` | the rule is enforced by tests but not visible from a class body | docstring present |
 | A6 | `CubicBSpline` design: ADR-0006 (Greville pinning vs Hong & Chun Alg. 1 lines 13–17; Newton-bisection + implicit JVP vs closed-form root) and a math note `docs/design/cubic-bspline.md` (knot/coefficient indexing, exterior-width normalisation, `2^-newton_iters` bound) | the two decisions the splines branch left undocumented; required before the B-spline becomes the production architecture | both files exist; linked from the change document |
 | A7 | `docs/architecture.md`: module map (systems → bijections → `ConjugateLatentDynamics` → losses → trainer), data flow, links to ADRs | the ADRs record decisions; nothing records the shape of the package | one page; `CLAUDE.md` points to it |
@@ -29,8 +26,7 @@ together they close the design before the data/trainer work builds on it.
 | A9 | `matplotlib` → `dev` dependency group | runtime deps = what `src` imports | `uv sync` without `dev` has no plotting |
 
 **Acceptance**: `uv run pytest -n 4` 0 failed with the pinned sinh-underflow xfail as the only
-non-pass; `IDENTITY_AT_INIT`/`ORIENTATION_NOT_GUARANTEED` gone from `tests/registry.py`;
-`ty check src` clean; A6/A7 documents exist; change document with pre-populated review rows.
+non-pass; `ty check src` clean; A6/A7 documents exist; change document with pre-populated review rows.
 
 ## Phase B — `data-generation`
 
@@ -92,7 +88,7 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 ## Parked (with reason)
 
 - Initialisation-strategy enum on `AbstractBijection` — only if training dynamics call for it
-  (A2 makes identity-at-init universal, which removes the current need).
+  (identity-at-init is universal; `BiLipschitzLinear.init="rotation"` is the one opt-in).
 - Merging `ScalarChain` back into `SequentialINN` — only if the overlap grows.
 - `_Shifted` as a mixin rather than a base — not worth the effort now.
 - `at_zero` as a declared attribute on `Constraint` — not uniform (`Widths` maps 0 to a vector;
@@ -107,3 +103,4 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-09-30 | `splines-refactor` | `AbstractSpline`; `CubicBSpline` ported; `LinearSpline`; RQ-spline bug fixes; `BijectionFactory` removed; first Hypothesis suite; change-document convention | `docs/changes/2026-09-30-splines-refactor.md` |
 | 2026-10-01 | `scalar-param-refactor` | `raw`/`constrain` contract (ADR-0001/0002); declared `smoothness` (ADR-0003); `AbstractVar` as static `init=False` fields (ADR-0004); constraint primitives (ADR-0005); `ScalarChain`; `CouplingFlow` with pluggable conditioner; `PolarCouplingFlow`; circular spline as exact rotation; `InvertibleLinear` rotation init; `BiLipschitzLinear._s` vector; 303-test suite; `ty` clean on the invertible package | `docs/changes/2026-10-01-scalar-param-refactor.md`, ADRs 0001–0005 |
 | 2026-10-02 | `invertible-cleanup` | A1: `Shift`/`Affine` scalar templates; `AffineCoupling`/`ResidualCoupling` as `CouplingFlow` factories (the latter now identity at init) | `docs/changes/2026-10-02-invertible-cleanup.md` |
+| 2026-10-02 | `invertible-cleanup` | A2–A4: `BiLipschitzLinear` identity at init (`init="rotation"` opt-in), raw leaves + `LinearParams`; `InvertibleLinear` removed — identity-at-init and orientation are universal laws, `IDENTITY_AT_INIT`/`ORIENTATION_NOT_GUARANTEED` deleted | `docs/changes/2026-10-02-invertible-cleanup.md` |

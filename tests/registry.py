@@ -5,8 +5,9 @@ SCALAR_TEMPLATES: name -> AbstractScalarBijection instance built from static con
     only (``cls(config)``, i.e. the identity).  Tests draw raw vectors of length
     ``t.num_params`` and call ``t.from_unconstrained(raw)``.  Add config variants as
     extra lines; they must differ in static configuration, not just in name.
-VECTOR_BUILDERS:  name -> key -> AbstractBijection.  Identity-at-init classes are
-    listed in IDENTITY_AT_INIT; the tests perturb weights for the other laws.
+VECTOR_BUILDERS:  name -> key -> AbstractBijection.  Every entry is the identity map
+    at init (a universal law since A2 of ``docs/roadmap.md``); the other laws run on
+    perturbed weights.
 UNTESTED:         class -> reason.  Wrappers/containers exercised indirectly, or classes
     parked for a later step of the current branch (the reason names the step; the
     registry test fails as soon as the class is covered again, so the entry cannot be
@@ -22,7 +23,6 @@ from deep_isochron.model.invertible import (
     CubicBSpline,
     CubicConjugation,
     CubicRational,
-    InvertibleLinear,
     LinearSpline,
     MonotonicRQSpline,
     OffsetedBijection,
@@ -87,8 +87,10 @@ VECTOR_BUILDERS = {
         dim=3, split_idx=1, flip=True, mlp_width=16, key=k
     ),
     "residual_coupling": lambda k: ResidualCoupling(dim=2, mlp_width=16, key=k),
-    "invertible_linear": lambda k: InvertibleLinear(dim=2, key=k),
     "bilipschitz_linear": lambda k: BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=k),
+    "bilipschitz_linear (dim 3, L=5)": lambda k: BiLipschitzLinear(
+        dim=3, max_lipschitz=5.0, key=k
+    ),
     "radial (sinh)": lambda k: RadialBijection(
         SinhConjugation(), jnp.zeros(2), jnp.zeros(2)
     ),
@@ -100,26 +102,6 @@ VECTOR_BUILDERS = {
         MonotonicRQSpline(5, xy_range=(-3.0, 3.0)), fourier_order=2
     ),
 }
-IDENTITY_AT_INIT = {
-    "coupling (cubic_conjugation x3)",
-    "coupling (sinh, flip)",
-    "coupling (rational, split_idx=1 of 3)",
-    "coupling (rq_spline)",
-    "coupling (bspline)",
-    "affine_coupling",
-    "affine_coupling (flip, 1 of 3)",
-    "residual_coupling",
-    "radial (sinh)",
-    "circular_rq (K=8)",
-    "polar_coupling (sinh x2, order 3)",
-    "polar_coupling (rq_spline, order 2)",
-}
-
-# Bijections whose parametrisation does not *guarantee* orientation preservation away
-# from init: InvertibleLinear is an unconstrained matrix, so det W can change sign under
-# training. The at-init law still applies; the perturbed-weights law is skipped with
-# this as the stated reason. (BiLipschitzLinear is the constrained alternative.)
-ORIENTATION_NOT_GUARANTEED = {"invertible_linear"}
 
 UNTESTED = {
     SequentialINN: "container; exercised by test_sequential_inn_composes_inverse",

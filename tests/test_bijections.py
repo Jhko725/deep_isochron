@@ -41,13 +41,7 @@ from tests.helpers import (
     roundtrip,
     TOL,
 )
-from tests.registry import (
-    IDENTITY_AT_INIT,
-    IDENTITY_TOL,
-    ORIENTATION_NOT_GUARANTEED,
-    SCALAR_TEMPLATES,
-    VECTOR_BUILDERS,
-)
+from tests.registry import IDENTITY_TOL, SCALAR_TEMPLATES, VECTOR_BUILDERS
 from tests.strategies import (
     point_batches,
     scalar_bijections,
@@ -141,8 +135,7 @@ def test_scalar_jacobian_consistent_with_inverse(name, data):
 # ---------------------------------------------------------------- vector laws -----
 @pytest.mark.parametrize("name", VECTOR_IDS)
 def test_vector_identity_at_init(name, key):
-    if name not in IDENTITY_AT_INIT:
-        pytest.skip("not identity-at-init by design")
+    """Universal: every vector bijection is the identity map when freshly built."""
     f = VECTOR_BUILDERS[name](key)
     x = jax.random.normal(jax.random.key(1), (32, f.dim))
     assert_close(
@@ -179,10 +172,9 @@ def test_vector_round_trip_random_weights(name, data):
 @pytest.mark.parametrize("name", VECTOR_IDS)
 @given(data=st.data())
 def test_vector_orientation_preserving(name, data):
-    if name in ORIENTATION_NOT_GUARANTEED:
-        pytest.skip(
-            "unconstrained parametrisation; see registry.ORIENTATION_NOT_GUARANTEED"
-        )
+    """Every vector bijection is orientation-preserving at every point of its parameter
+    space (the former ``InvertibleLinear``, an unconstrained matrix, was the one
+    exception and was removed for that reason)."""
     f = data.draw(vector_bijections(name), label="bijection")
     x = data.draw(point_batches(f.dim), label="x")
     dets = jacobian_dets(f, x)
@@ -192,8 +184,7 @@ def test_vector_orientation_preserving(name, data):
 @pytest.mark.parametrize("name", VECTOR_IDS)
 @given(data=st.data())
 def test_vector_orientation_preserving_at_init(name, data):
-    """Regression: QR-based init of InvertibleLinear returned a reflection (det = -1)
-    ."""
+    """Regression: a QR-based rotation init once returned a reflection (det = -1)."""
     f = data.draw(vector_bijections(name, perturbed=False), label="bijection")
     x = jax.random.normal(jax.random.key(2), (8, f.dim))
     assert jnp.all(jacobian_dets(f, x) > 0), f"{name}: orientation-reversing at init"
