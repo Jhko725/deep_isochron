@@ -48,3 +48,6 @@ branch, and never edits *Review notes* except when asked to.
   (ADR-0005).
 - Design decisions live in `docs/decisions/` as numbered ADRs; a change
   document's *Design* section links to them.
+- `docs/roadmap.md` is the single, current plan. Finished items move to its
+  *Done* ledger (not deleted); it is updated in the same commit as the work
+  that changes it, never on its own; history is `git log -p docs/roadmap.md`.
