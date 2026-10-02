@@ -1,13 +1,12 @@
-from typing import ClassVar
-
+import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from jaxtyping import Array, ArrayLike, Float
 
 from .base import AbstractODE
 
 
 class HodgekinHuxley(AbstractODE):
-    dim: ClassVar[int] = 4  # ty: ignore
+    dim: int = eqx.field(static=True, default=4, init=False)
 
     I: float = 30.0
     C: float = 1.0
@@ -39,7 +38,7 @@ class HodgekinHuxley(AbstractODE):
         return 0.125 * jnp.exp(-(V + 65) / 80.0)
 
     def rhs(
-        self, t: Float[Array, ""], u: Float[Array, " dim"], args=None
+        self, t: Float[ArrayLike, ""], u: Float[Array, " dim"], args=None
     ) -> Float[Array, " dim"]:
         del t, args
         V, m, h, n = u

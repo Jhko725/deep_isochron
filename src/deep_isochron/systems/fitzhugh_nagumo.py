@@ -1,13 +1,12 @@
-from typing import ClassVar
-
+import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from jaxtyping import Array, ArrayLike, Float
 
 from .base import AbstractODE
 
 
 class FitzhughNagumo(AbstractODE):
-    dim: ClassVar[int] = 2  # ty: ignore
+    dim: int = eqx.field(static=True, default=2, init=False)
 
     a: float = 0.7
     b: float = 0.8
@@ -15,7 +14,7 @@ class FitzhughNagumo(AbstractODE):
     z: float = -0.4
 
     def rhs(
-        self, t: Float[Array, ""], u: Float[Array, " dim"], args=None
+        self, t: Float[ArrayLike, ""], u: Float[Array, " dim"], args=None
     ) -> Float[Array, " dim"]:
         del t, args
         x, y = u

@@ -50,8 +50,10 @@ class TimeSeriesDataSource:
         return self.ts[sel], self.ys[idx_traj, sel]
 
     def split(self, idx: int) -> tuple[Self, Self]:
-        ds = [
-            TimeSeriesDataSource(t, y, window_size=self.window_size)
-            for t, y in zip(np.split(self.ts, [idx]), np.split(self.ys, [idx], axis=1))
-        ]
-        return tuple(ds)
+        """Cut in time at index ``idx``: ``(before, after)``, each with this window
+        size."""
+        (t0, t1), (y0, y1) = np.split(self.ts, [idx]), np.split(self.ys, [idx], axis=1)
+        cls = type(self)
+        return cls(t0, y0, window_size=self.window_size), cls(
+            t1, y1, window_size=self.window_size
+        )

@@ -45,6 +45,24 @@ removes the remaining `ty: ignore`s and moves `matplotlib` to the dev group (A8,
 - `docs/architecture.md` — new: module map, invertible-package overview, systems/chart,
   training-step data flow, tests, ADR index (A7).
 - `CLAUDE.md` — points at `docs/architecture.md`.
+- `src/deep_isochron/systems/{base,fitzhugh_nagumo,hodgekin_huxley,normal_forms}.py` —
+  `dim: ClassVar[int] = … # ty: ignore` → `eqx.field(static=True, default=…, init=False)`
+  (ADR-0004); `rhs(t: Float[ArrayLike, ""], …)` to match diffrax's `ODETerm` (no
+  `ty: ignore` on `ODETerm(self.rhs)`); unused ignore removed (A8).
+- `src/deep_isochron/training/trainer.py` — all `ty: ignore`s removed: `cast(optax.Params,
+  …)` at the optax boundary, `cast(PreservationPolicy, BestN(…))` and `str(path)` at the
+  orbax boundary, correct `train_step`/`_train_step` return types, `state_prev` typed
+  and the post-loop flush guarded; E501 fixed (A8).
+- `src/deep_isochron/training/__init__.py` — re-exports `TimeSeriesDataSource` from
+  `..data` (was `from .dataset`, a module that does not exist in `training/`).
+- `src/deep_isochron/data/__init__.py` — new: exports `TimeSeriesDataSource`.
+- `src/deep_isochron/data/dataset.py` — `split` returns an explicit `(before, after)` pair
+  built with `type(self)` (matches its `tuple[Self, Self]` annotation).
+- `src/deep_isochron/model/conjugacy.py` — `latent_dynamics: AbstractODE` (only `.solve`
+  is used; the `AbstractLatentDynamics` half of the union had no `solve`).
+- `src/deep_isochron/model/latent_dynamics.py` — `HopfLatentDynamics` calls
+  `self.hopf.solve(…)` (`HopfNormalForm` is not callable; legacy path, see Open issues).
+- `pyproject.toml` — `matplotlib` moved from `dependencies` to the `dev` group (A9).
 - `docs/roadmap.md` — Phase A items moved to the Done ledger as they land.
 - `docs/changes/2026-10-02-invertible-cleanup.md` — this document.
 
@@ -108,6 +126,21 @@ removes the remaining `ty: ignore`s and moves `matplotlib` to the dev group (A8,
   it converges). Forcing a bisection every other iteration would restore a `2^-n/2`
   bound at the cost of typical speed; not done, since the suite shows round-off accuracy
   at 20 iterations. Recorded in ADR-0006 and §5 of the design note.
+- **A8 — the two remaining type mismatches are upstream, so they are `cast`s, not
+  ignores.** optax types `update`'s arguments as `Params = ArrayTree`, a recursive union
+  of arrays and `Iterable`/`Mapping` containers; an Equinox module is a pytree but not an
+  `Iterable`, so the type checker cannot know it is valid. orbax's `BestN` does not
+  satisfy orbax's own `PreservationPolicy` protocol as typed (its `should_preserve`
+  parameter type differs). A `typing.cast` names the type being asserted and is checked
+  for plausibility, where `# ty: ignore` silences everything on the line; both casts
+  carry a comment saying they are type-level only. `rhs`'s `t` becomes
+  `Float[ArrayLike, ""]` because diffrax's `ODETerm` may pass a Python float — the
+  annotation was narrower than the call site, which is a real (if harmless) mismatch
+  rather than a checker limitation.
+- **A9 — `uv.lock` deliberately not regenerated here.** Running `uv lock` with the
+  container's `uv 0.8` rewrote the lockfile's revision (1 → 3, `upload-time` fields on
+  every entry; ~2900 lines) with only five actual version changes. That noise belongs to
+  the reviewer's own `uv`: `uv sync --group dev` will refresh the lock for the group move.
 - **A7 — one page, prose plus one tree and one flow diagram.** A fuller document (per-class
   API tables) would duplicate docstrings and go stale; the page says what each module is
   *for* and where the decisions are, which is what a new session needs first.
@@ -123,6 +156,14 @@ design note [`docs/design/cubic-bspline.md`](../design/cubic-bspline.md).
 - `ResidualCoupling` was not the identity at init (no zeroed final layer); see Design.
 - `BiLipschitzLinear(max_lipschitz=1.0)` was accepted and silently produced a constant
   `s = 1`; now rejected.
+- `from deep_isochron.training import TimeSeriesDataSource, Trainer` (the notebook's
+  import) raised `ModuleNotFoundError`: `training/__init__.py` imported `.dataset`, which
+  lives in `data/`. Fixed by re-exporting from `..data` (and giving `data/` an
+  `__init__.py`).
+- `Trainer.train` crashed with `AttributeError` on `None` when the dataloader was empty or
+  `num_steps == 0` (post-loop flush of `state_prev`); now guarded.
+- `HopfLatentDynamics.__call__` called `HopfNormalForm` as a function (it has `solve`, no
+  `__call__`); would have raised `TypeError`. Now `.solve`.
 
 ## Tests
 
@@ -140,10 +181,20 @@ errors. With `IDENTITY_AT_INIT`/`ORIENTATION_NOT_GUARANTEED` gone,
 `test_vector_identity_at_init` and `test_vector_orientation_preserving` run on every
 registry entry with no skips.
 
+Final state on the branch: `pytest -n 4` (default profile) 360 passed, 1 xfailed, 0
+skipped; `ty check src` clean (`--python` pointing at a venv with `wandb` installed);
+`grep -rn "ty: ignore" src` empty; `ruff check src tests` clean.
+
 ## Open issues
 
 - Periodic / free-boundary endpoint handling on `AbstractSpline` stays in Phase E
   (roadmap).
+- `latent_dynamics.py` / `autoencoder.py` (the non-invertible autoencoder path) are
+  legacy: `HopfLatentDynamics` is only made type-correct here, not re-validated. Phase B
+  decides what of them survives (`docs/architecture.md`, *Systems and the latent chart*).
+- `ty check src` is clean only with `wandb` and `orbax-checkpoint` importable; in a bare
+  checkout without `uv sync` the two imports are reported as unresolved.
+- `uv.lock` to be refreshed by `uv sync` on the reviewer's machine (see Design, A9).
 
 ## Review notes
 
@@ -163,4 +214,11 @@ registry entry with no skips.
 | `docs/design/cubic-bspline.md`: indices, parametrisation, `C²` argument, inverse guarantees | | |
 | `docs/architecture.md`: module map and data flow | | |
 | `CLAUDE.md`: architecture pointer | | |
+| `src/deep_isochron/systems/*.py`: `dim` as static `init=False` field; `t: ArrayLike` in `rhs` | | |
+| `src/deep_isochron/training/trainer.py`: casts at optax/orbax boundaries; return types; guarded flush | | |
+| `src/deep_isochron/training/__init__.py`, `data/__init__.py`: fixed `TimeSeriesDataSource` re-export | | |
+| `src/deep_isochron/data/dataset.py`: `split` returns a typed pair | | |
+| `src/deep_isochron/model/conjugacy.py`: `latent_dynamics: AbstractODE` | | |
+| `src/deep_isochron/model/latent_dynamics.py`: `HopfLatentDynamics` uses `.solve` | | |
+| `pyproject.toml`: `matplotlib` → dev group | | |
 | `docs/roadmap.md`: Phase A ledger updates | | |

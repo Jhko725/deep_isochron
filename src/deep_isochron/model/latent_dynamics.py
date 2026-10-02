@@ -196,7 +196,7 @@ class HopfLatentDynamics(AbstractLatentDynamics):
         y0: Float[Array, " dim"],
     ) -> Float[Array, "time dim"]:
         y0_hopf, y0_linear = jnp.split(y0, [2])
-        y_t_hopf: Float[Array, "time 2"] = self.hopf(ts, y0_hopf)
+        y_t_hopf: Float[Array, "time 2"] = self.hopf.solve(ts, y0_hopf)
         y_t_linear: Float[Array, "time dim-2"] = self.linear(ts, y0_linear)
         return jnp.concatenate((y_t_hopf, y_t_linear), axis=-1)
 

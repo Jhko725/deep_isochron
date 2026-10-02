@@ -4,7 +4,7 @@ from contextlib import ExitStack
 from dataclasses import replace
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Self, TypeVar
+from typing import Any, cast, Self, TypeVar
 
 import equinox as eqx
 import jax
@@ -38,9 +38,7 @@ class TrainerState[M: eqx.Module](eqx.Module):
         key: PRNGKeyArray,
     ):
         # Making this as the __init__ will clash with the use of replace()
-        opt_state = optimizer.init(
-            eqx.filter(model, is_trainable)  # ty: ignore[invalid-argument-type]
-        )
+        opt_state = optimizer.init(eqx.filter(model, is_trainable))
 
         return cls(
             step=jnp.asarray(0, dtype=int),
@@ -57,11 +55,13 @@ class TrainerState[M: eqx.Module](eqx.Module):
     ) -> Self:
         """Given a pytree of model gradients, update model parameters using the
         appropriate optimizer update function."""
+        # Equinox modules are pytrees, but optax's ``Params`` alias (a recursive
+        # ArrayTree union) does not know that; the casts are type-level only.
         grads = self.filter_trainable(grads)
         updates, opt_state_next = self.optimizer.update(
-            grads,  # ty: ignore[invalid-argument-type]
+            cast(optax.Params, grads),
             self.opt_state,
-            self.filter_trainable(self.model),  # ty: ignore[invalid-argument-type]
+            cast(optax.Params, self.filter_trainable(self.model)),
         )
         model_next = eqx.apply_updates(self.model, updates)
         return replace(
@@ -144,19 +144,24 @@ class Trainer:
             logger = stack.enter_context(
                 wandb.init(config=self.config_dict, **self.wandb_kwargs)
             )
+            # ``BestN`` does not satisfy orbax's own ``PreservationPolicy`` protocol
+            # as typed (its ``should_preserve`` signature differs); the cast is
+            # type-level only.
+            best_n = ocp.training.preservation_policies.BestN(
+                get_metric_fn=lambda metrics: metrics[save_metric], reverse=True, n=1
+            )
             ckptr = stack.enter_context(
                 ocp.training.Checkpointer(
-                    self.checkpoint_path,
-                    preservation_policy=ocp.training.preservation_policies.BestN(
-                        get_metric_fn=lambda metrics: metrics[save_metric],
-                        reverse=True,
-                        n=1,
+                    str(self.checkpoint_path),
+                    preservation_policy=cast(
+                        ocp.training.preservation_policies.PreservationPolicy, best_n
                     ),
                     custom_metadata=self.config_dict["model"],
                 )
-            )  # add preservation policy, custom_metadata
+            )
 
-            state_prev, outputs_prev = None, None
+            state_prev: TrainerState[M] | None = None
+            outputs_prev: dict[str, Any] | None = None
 
             for _ in range(num_steps):
                 try:
@@ -172,35 +177,39 @@ class Trainer:
                     step_log = int(state_prev.step)
                     outputs_prev = jax.tree.map(lambda x: float(x), outputs_prev)
                     logger.log(outputs_prev, step=step_log)
-                    print(
-                        f"""Step: {step_log} | Train loss: {outputs_prev["train_loss"]}"""
-                    )
+                    loss_prev = outputs_prev["train_loss"]
+                    print(f"Step: {step_log} | Train loss: {loss_prev}")
                     weights = eqx.filter(state_prev.model, eqx.is_array)
                     ckptr.save(step_log, weights, metrics=outputs_prev)
 
                 outputs_prev = output
                 state, state_prev = state_next, state
 
-            step_log = int(state_prev.step)
-            outputs_prev = jax.tree.map(lambda x: float(x), outputs_prev)
-            logger.log(outputs_prev, step=step_log)
-            print(f"""Step: {step_log} | Train loss: {outputs_prev["train_loss"]}""")
-            weights = eqx.filter(state_prev.model, eqx.is_array)
-            ckptr.save(step_log, weights, metrics=outputs_prev)
+            # Flush the last step (the loop logs one step behind so that logging
+            # overlaps with the next step's computation). Nothing to flush if the
+            # loader was empty or ``num_steps == 0``.
+            if state_prev is not None and outputs_prev is not None:
+                step_log = int(state_prev.step)
+                outputs_prev = jax.tree.map(lambda x: float(x), outputs_prev)
+                logger.log(outputs_prev, step=step_log)
+                loss_prev = outputs_prev["train_loss"]
+                print(f"Step: {step_log} | Train loss: {loss_prev}")
+                weights = eqx.filter(state_prev.model, eqx.is_array)
+                ckptr.save(step_log, weights, metrics=outputs_prev)
             return state.model
 
     @cached_property
     def train_step(
         self,
     ) -> Callable[
-        [TrainerState[M], Batch, Batch | None, Any],
-        tuple[M, Float[Array, ""], dict[str, Array]],
+        [TrainerState[M], Batch, Any],
+        tuple[TrainerState[M], Float[Array, ""], dict[str, Array]],
     ]:
         return eqx.filter_jit(self._train_step)
 
     def _train_step(
-        self, state: TrainerState[M], batch: Batch, args
-    ) -> tuple[M, Float[Array, ""], dict[str, Array]]:
+        self, state: TrainerState[M], batch: Batch, args: Any
+    ) -> tuple[TrainerState[M], Float[Array, ""], dict[str, Array]]:
         model = eqx.nn.inference_mode(state.model, False)
 
         loss_grad_fn = eqx.filter_value_and_grad(self.loss_fn, has_aux=True)

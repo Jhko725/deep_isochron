@@ -5,23 +5,16 @@ from jaxtyping import Array, Float
 
 from ..misc import cartesian_to_polar, polar_to_cartesian
 from ..systems.base import AbstractODE
-from .invertible import (
-    AbstractBijection,
-)
-from .latent_dynamics import (
-    AbstractLatentDynamics,
-)
+from .invertible import AbstractBijection
 
 
 class ConjugateLatentDynamics(eqx.Module):
-    latent_dynamics: AbstractLatentDynamics | AbstractODE
+    """A bijection and a latent ODE (in the polar chart) whose flow it conjugates."""
+
+    latent_dynamics: AbstractODE
     bijection: AbstractBijection
 
-    def __init__(
-        self,
-        latent_dynamics: AbstractLatentDynamics | AbstractODE,
-        bijection: AbstractBijection,
-    ):
+    def __init__(self, latent_dynamics: AbstractODE, bijection: AbstractBijection):
         self.latent_dynamics = latent_dynamics
         self.bijection = bijection
 

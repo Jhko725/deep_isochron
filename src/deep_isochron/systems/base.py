@@ -3,7 +3,7 @@ from typing import Any
 
 import diffrax as dfx
 import equinox as eqx
-from jaxtyping import Array, Float
+from jaxtyping import Array, ArrayLike, Float
 
 
 class AbstractODE(eqx.Module):
@@ -16,14 +16,16 @@ class AbstractODE(eqx.Module):
     """
 
     dim: eqx.AbstractVar[int]
+    """Implemented as ``eqx.field(static=True, default=..., init=False)`` (ADR-0004)."""
 
     @abc.abstractmethod
     def rhs(
-        self, t: Float[Array, ""], u: Float[Array, " {self.dim}"], args=None
+        self, t: Float[ArrayLike, ""], u: Float[Array, " {self.dim}"], args=None
     ) -> Float[Array, " {self.dim}"]:
         """Describes the right hand side of the differential equation.
 
-        The method signature is chosen to match the requirements for diffrax.
+        The method signature is chosen to match the requirements for diffrax; ``t`` is
+        ``ArrayLike`` because diffrax may pass a Python float.
         """
         ...
 
@@ -45,7 +47,7 @@ class AbstractODE(eqx.Module):
         **kwargs,
     ) -> Float[Array, "time {self.dim}"]:
         sol = dfx.diffeqsolve(
-            dfx.ODETerm(self.rhs),  # ty: ignore
+            dfx.ODETerm(self.rhs),
             solver=solver,
             t0=ts[0],
             t1=ts[-1],

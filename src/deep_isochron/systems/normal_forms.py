@@ -1,16 +1,17 @@
-from typing import Any, ClassVar
+from typing import Any
 
 import diffrax as dfx
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Complex, Float
+from jaxtyping import Array, ArrayLike, Complex, Float
 
 from ..misc import inv_softplus
 from .base import AbstractODE
 
 
 class HopfNormalForm(AbstractODE):
-    dim: ClassVar[int] = 2  # ty: ignore
+    dim: int = eqx.field(static=True, default=2, init=False)
 
     _a: Float[Array, ""]
     w: Float[Array, ""]
@@ -29,7 +30,7 @@ class HopfNormalForm(AbstractODE):
         return jax.nn.softplus(self._a)
 
     def rhs(
-        self, t: Float[Array, ""], u: Float[Array, " {self.dim}"], args=None
+        self, t: Float[ArrayLike, ""], u: Float[Array, " {self.dim}"], args=None
     ) -> Float[Array, " {self.dim}"]:
         del t
         r, _ = u
@@ -56,7 +57,7 @@ class HopfNormalForm(AbstractODE):
 
 
 class BautinNormalForm(AbstractODE):
-    dim: ClassVar[int] = 2  # ty: ignore
+    dim: int = eqx.field(static=True, default=2, init=False)
 
     _a: Float[Array, ""]
     _b: Float[Array, ""]
@@ -90,7 +91,7 @@ class BautinNormalForm(AbstractODE):
         return jnp.exp(self._b)
 
     def rhs(
-        self, t: Float[Array, ""], u: Float[Array, " {self.dim}"], args=None
+        self, t: Float[ArrayLike, ""], u: Float[Array, " {self.dim}"], args=None
     ) -> Float[Array, " {self.dim}"]:
         del t
         r, _ = u
@@ -134,7 +135,7 @@ class BautinNormalForm(AbstractODE):
 
         r_sq0, theta0 = u0[0] ** 2, u0[1]
         sol = dfx.diffeqsolve(
-            dfx.ODETerm(_ode_r_squared),  # ty: ignore
+            dfx.ODETerm(_ode_r_squared),
             solver=solver,
             t0=ts[0],
             t1=ts[-1],
