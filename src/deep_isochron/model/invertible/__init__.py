@@ -1,6 +1,8 @@
 from .affine import (
+    Affine as Affine,
     AffineCoupling as AffineCoupling,
     ResidualCoupling as ResidualCoupling,
+    Shift as Shift,
 )
 from .analytic import (
     CubicConjugation as CubicConjugation,

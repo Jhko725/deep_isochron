@@ -15,6 +15,7 @@ UNTESTED:         class -> reason.  Wrappers/containers exercised indirectly, or
 
 import jax.numpy as jnp
 from deep_isochron.model.invertible import (
+    Affine,
     AffineCoupling,
     BiLipschitzLinear,
     CouplingFlow,
@@ -28,6 +29,7 @@ from deep_isochron.model.invertible import (
     ResidualCoupling,
     ScalarChain,
     SequentialINN,
+    Shift,
     SinhConjugation,
 )
 from deep_isochron.model.invertible.polar import (
@@ -38,6 +40,10 @@ from deep_isochron.model.invertible.polar import (
 
 
 SCALAR_TEMPLATES = {
+    "shift": Shift(),
+    "affine": Affine(),
+    "affine (clamp=0.5)": Affine(clamp=0.5),
+    "chain (affine, shift)": ScalarChain([Affine(), Shift()]),
     "cubic_rational": CubicRational(),
     "cubic_rational (eps_beta=0.5)": CubicRational(eps_beta=0.5),
     "sinh_conjugation": SinhConjugation(),
@@ -76,8 +82,11 @@ VECTOR_BUILDERS = {
     "coupling (rational, split_idx=1 of 3)": lambda key: CouplingFlow(
         dim=3, bijection=CubicRational(), split_idx=1, mlp_width=16, key=key
     ),
-    "affine_coupling": lambda k: AffineCoupling(dim=2, width_hidden=16, key=k),
-    "residual_coupling": lambda k: ResidualCoupling(dim=2, width_hidden=16, key=k),
+    "affine_coupling": lambda k: AffineCoupling(dim=2, mlp_width=16, key=k),
+    "affine_coupling (flip, 1 of 3)": lambda k: AffineCoupling(
+        dim=3, split_idx=1, flip=True, mlp_width=16, key=k
+    ),
+    "residual_coupling": lambda k: ResidualCoupling(dim=2, mlp_width=16, key=k),
     "invertible_linear": lambda k: InvertibleLinear(dim=2, key=k),
     "bilipschitz_linear": lambda k: BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=k),
     "radial (sinh)": lambda k: RadialBijection(
@@ -98,6 +107,8 @@ IDENTITY_AT_INIT = {
     "coupling (rq_spline)",
     "coupling (bspline)",
     "affine_coupling",
+    "affine_coupling (flip, 1 of 3)",
+    "residual_coupling",
     "radial (sinh)",
     "circular_rq (K=8)",
     "polar_coupling (sinh x2, order 3)",

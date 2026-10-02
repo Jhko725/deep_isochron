@@ -1,178 +1,172 @@
+r"""Affine scalar bijections and the coupling layers built from them.
+
+``Shift`` and ``Affine`` are the two simplest scalar bijections in the ``raw`` /
+``constrain`` shape (ADR-0001). Used as ``CouplingFlow`` templates they give the classic
+additive (NICE, [1]) and affine (RealNVP, [2]) coupling layers; ``ResidualCoupling`` and
+``AffineCoupling`` below are thin constructors for exactly that, replacing the former
+standalone classes that duplicated ``CouplingFlow``'s split/flip/MLP logic.
+
+Because ``constrain(0)`` is the identity (ADR-0002) and the default conditioner is
+zero-initialised, both coupling layers are the identity map at init. (The former
+``ResidualCoupling`` was not: its MLP had no zeroed final layer.)
+
+[1] L. Dinh, D. Krueger, Y. Bengio. NICE: Non-linear Independent Components Estimation.
+    ICLR workshop (2015).
+[2] L. Dinh, J. Sohl-Dickstein, S. Bengio. Density estimation using Real NVP. ICLR
+    (2017).
+"""
+
 from collections.abc import Callable
+from typing import NamedTuple
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, PRNGKeyArray
 
-from ..utils import zero_final_layer
-from .base import AbstractBijection
+from .base import AbstractScalarBijection
+from .constraints import BoundedPositive, free
+from .coupling import CouplingFlow
 
 
-class AffineCoupling(AbstractBijection):
-    dim: int = eqx.field(static=True)
+class ShiftParams(NamedTuple):
+    loc: Float[Array, ""]
+
+
+class Shift(AbstractScalarBijection[ShiftParams]):
+    """Translation ``x -> x + loc``.
+
+    Raw parameters: ``(loc,)``, unconstrained; ``raw = 0`` is the identity.
+    """
+
+    raw: Float[Array, " 1"] | None
+    num_params: int = eqx.field(static=True, default=1, init=False)
     smoothness: int | None = eqx.field(static=True, default=None, init=False)
-    affine_clamping: float | None = eqx.field(static=True)
 
-    split_idx: int
-    flip: bool
+    def __init__(self, *, raw: Float[Array, " 1"] | None = None):
+        self.raw = self._init_raw(jnp.zeros(1) if raw is None else raw)
 
-    s: eqx.nn.MLP
-    t: eqx.nn.MLP
+    def constrain(self, raw) -> ShiftParams:
+        (loc,) = raw
+        return ShiftParams(loc=free(loc))
 
-    def __init__(
-        self,
-        dim: int,
-        split_idx: int | None = None,
-        width_hidden: int = 10,
-        depth: int = 1,
-        flip: bool = False,
-        affine_clamping: float | None = 2.0,
-        activation: Callable = jax.nn.gelu,
-        dtype=None,
-        *,
-        key: PRNGKeyArray,
-    ):
-        self.dim = dim
-        self.split_idx = dim // 2 if split_idx is None else split_idx
-        self.flip = flip
-        self.affine_clamping = affine_clamping
+    @classmethod
+    def from_constrained(cls, loc) -> "Shift":
+        return cls(raw=jnp.stack([jnp.asarray(loc)]))
 
-        in_size, out_size = (
-            self.split_sizes if not self.flip else self.split_sizes[::-1]
-        )
-        key_s, key_t = jax.random.split(key)
-        s = eqx.nn.MLP(
-            in_size=in_size,
-            out_size=out_size,
-            width_size=width_hidden,
-            depth=depth,
-            activation=activation,
-            dtype=dtype,
-            key=key_s,
-        )
-        self.s = zero_final_layer(s)
+    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        return x + self.params.loc
 
-        t = eqx.nn.MLP(
-            in_size=in_size,
-            out_size=out_size,
-            width_size=width_hidden,
-            depth=depth,
-            activation=activation,
-            dtype=dtype,
-            key=key_t,
-        )
-        self.t = zero_final_layer(t)
-
-    @property
-    def split_sizes(self) -> tuple[int, int]:
-        out_sizes = self.split_idx, self.dim - self.split_idx
-        return out_sizes
-
-    def __call__(self, x: Float[Array, " dim"]) -> Float[Array, " dim"]:
-        x_up, x_down = jnp.split(x, [self.split_idx])
-
-        if not self.flip:
-            y_up = x_up
-            if self.affine_clamping is None:
-                scale = jnp.exp(self.s(x_up))
-            else:
-                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(x_up)))
-            y_down = x_down * scale + self.t(x_up)
-        else:
-            if self.affine_clamping is None:
-                scale = jnp.exp(self.s(x_down))
-            else:
-                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(x_down)))
-            y_up = x_up * scale + self.t(x_down)
-            y_down = x_down
-        return jnp.concatenate((y_up, y_down))
-
-    def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
-        y_up, y_down = jnp.split(y, [self.split_idx])
-
-        if not self.flip:
-            x_up = y_up
-            if self.affine_clamping is None:
-                scale = jnp.exp(self.s(y_up))
-            else:
-                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(y_up)))
-            x_down = (y_down - self.t(y_up)) / scale
-        else:
-            if self.affine_clamping is None:
-                scale = jnp.exp(self.s(y_down))
-            else:
-                scale = jnp.exp(self.affine_clamping * jnp.tanh(self.s(y_down)))
-            x_up = (y_up - self.t(y_down)) / scale
-            x_down = y_down
-
-        return jnp.concatenate((x_up, x_down))
+    def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
+        return y - self.params.loc
 
 
-# TODO: ResidualCoupling (and AffineCoupling) are special cases of CouplingFlow with a
-# Shift / Affine scalar template; replace both once those templates exist.
-class ResidualCoupling(AbstractBijection):
-    dim: int = eqx.field(static=True)
+class AffineParams(NamedTuple):
+    loc: Float[Array, ""]
+    scale: Float[Array, ""]
+
+
+class Affine(AbstractScalarBijection[AffineParams]):
+    r"""Affine map ``x -> scale * x + loc`` with a bounded positive scale.
+
+    Raw parameters: ``(loc, log_scale)``. The scale is ``exp(clamp * tanh(log_scale /
+    clamp))`` (``BoundedPositive`` with ``a = clamp``), so it lies in ``(exp(-clamp),
+    exp(clamp))``: the soft clamping of RealNVP-style flows, which stops a large
+    conditioner output from driving the scale to ``0`` or infinity. ``raw = 0`` is the
+    identity (``loc = 0``, ``scale = 1``).
+
+    **Arguments:**
+
+    - ``clamp``: log-scale bound ``a``; the scale is bounded by ``exp(±a)``. Default
+      ``2`` (scale in ``(0.135, 7.39)``).
+    """
+
+    raw: Float[Array, " 2"] | None
+    clamp: float = eqx.field(static=True)
+    num_params: int = eqx.field(static=True, default=2, init=False)
     smoothness: int | None = eqx.field(static=True, default=None, init=False)
-    split_idx: int
-    flip: bool
 
-    t: eqx.nn.MLP
+    def __init__(self, *, raw: Float[Array, " 2"] | None = None, clamp: float = 2.0):
+        if not clamp > 0:
+            raise ValueError("clamp must be positive.")
+        self.clamp = clamp
+        self.raw = self._init_raw(jnp.zeros(2) if raw is None else raw)
 
-    def __init__(
-        self,
-        dim: int,
-        split_idx: int | None = None,
-        width_hidden: int = 10,
-        depth: int = 1,
-        flip: bool = False,
-        activation: Callable = jax.nn.gelu,
-        dtype=None,
-        *,
-        key: PRNGKeyArray,
-    ):
-        self.dim = dim
-        self.split_idx = dim // 2 if split_idx is None else split_idx
-        self.flip = flip
+    def _scale(self) -> BoundedPositive:
+        return BoundedPositive(0.0, at_zero=1.0, a=self.clamp)
 
-        in_size, out_size = (
-            self.split_sizes if not self.flip else self.split_sizes[::-1]
+    def constrain(self, raw) -> AffineParams:
+        loc, log_scale = raw
+        return AffineParams(loc=free(loc), scale=self._scale()(log_scale))
+
+    @classmethod
+    def from_constrained(cls, loc, scale, *, clamp: float = 2.0) -> "Affine":
+        raw = jnp.stack(
+            [
+                jnp.asarray(loc),
+                BoundedPositive(0.0, at_zero=1.0, a=clamp).inverse(scale),
+            ]
         )
-        self.t = eqx.nn.MLP(
-            in_size=in_size,
-            out_size=out_size,
-            width_size=width_hidden,
-            depth=depth,
-            activation=activation,
-            dtype=dtype,
-            key=key,
-        )
+        return cls(raw=raw, clamp=clamp)
 
-    @property
-    def split_sizes(self) -> tuple[int, int]:
-        out_sizes = self.split_idx, self.dim - self.split_idx
-        return out_sizes
+    def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        p = self.params
+        return p.scale * x + p.loc
 
-    def __call__(self, x: Float[Array, " dim"]) -> Float[Array, " dim"]:
-        x_up, x_down = jnp.split(x, [self.split_idx])
+    def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
+        p = self.params
+        return (y - p.loc) / p.scale
 
-        if not self.flip:
-            y_up = x_up
-            y_down = x_down + self.t(x_up)
-        else:
-            y_up = x_up + self.t(x_down)
-            y_down = x_down
 
-        return jnp.concatenate((y_up, y_down))
+def ResidualCoupling(  # noqa: N802 — constructor-like factory, keeps the class name
+    dim: int,
+    split_idx: int | None = None,
+    flip: bool = False,
+    mlp_width: int = 10,
+    mlp_depth: int = 1,
+    activation: Callable = jax.nn.gelu,
+    dtype=None,
+    *,
+    key: PRNGKeyArray,
+) -> CouplingFlow[Shift]:
+    """Additive coupling layer ``y_coupled = x_coupled + t(x_const)`` (NICE):
+    ``CouplingFlow`` with a ``Shift`` template. Identity at init."""
+    return CouplingFlow(
+        dim,
+        Shift(),
+        split_idx=split_idx,
+        flip=flip,
+        mlp_width=mlp_width,
+        mlp_depth=mlp_depth,
+        activation=activation,
+        dtype=dtype,
+        key=key,
+    )
 
-    def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
-        y_up, y_down = jnp.split(y, [self.split_idx])
 
-        if not self.flip:
-            x_up = y_up
-            x_down = y_down - self.t(y_up)
-        else:
-            x_up = y_up - self.t(y_down)
-            x_down = y_down
-
-        return jnp.concatenate((x_up, x_down))
+def AffineCoupling(  # noqa: N802 — constructor-like factory, keeps the class name
+    dim: int,
+    split_idx: int | None = None,
+    flip: bool = False,
+    clamp: float = 2.0,
+    mlp_width: int = 10,
+    mlp_depth: int = 1,
+    activation: Callable = jax.nn.gelu,
+    dtype=None,
+    *,
+    key: PRNGKeyArray,
+) -> CouplingFlow[Affine]:
+    """Affine coupling layer ``y_coupled = s(x_const) * x_coupled + t(x_const)``
+    (RealNVP, with soft-clamped ``log s``): ``CouplingFlow`` with an ``Affine(clamp)``
+    template. Identity at init."""
+    return CouplingFlow(
+        dim,
+        Affine(clamp=clamp),
+        split_idx=split_idx,
+        flip=flip,
+        mlp_width=mlp_width,
+        mlp_depth=mlp_depth,
+        activation=activation,
+        dtype=dtype,
+        key=key,
+    )
