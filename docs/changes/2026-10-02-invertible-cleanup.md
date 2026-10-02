@@ -261,7 +261,7 @@ skipped; `ty check src` clean (`--python` pointing at a venv with `wandb` instal
 | `src/deep_isochron/model/conjugacy.py`: `latent_dynamics: AbstractODE` | Fair. The original issue stemmed from the fact the `AbstractODE` and `AbstractLatentDynamics` were designed at different times + Proper design refinement was not performed (`AbstractLatentDynamics` should have been a subclass of `AbstractODE`; The intention was `AbstractODE` are all ODE systems used in the study - normal forms, data generation; not necessarily need to carry helper methods required to analytically compute phase/amplitude response curves, etc., whereas `AbstractLatentDynamics` are the subsets carrying that info). For now, this revised type hint suffices, and the design refinement will be done in Phase B. | None |
 | `src/deep_isochron/model/latent_dynamics.py`: `HopfLatentDynamics` uses `.solve` | Good. The latent_dynamics code here is legacy, and not planned to be used in experiments for the immediate future. So keeping them type correct is sufficient. | None |
 | `pyproject.toml`: `matplotlib` → dev group | Trivial changes. | Ran uv sync on the local repo. |
-| `tests/helpers.py`: `TOL` extended and documented; `assert_close` default named | | |
-| `tests/{test_linear,test_analytic,test_constraints,test_splines,test_bijections}.py`: inline tolerances → `TOL` | | |
-| `tests/registry.py`: `IDENTITY_TOL` deleted | | |
+| `tests/helpers.py`: `TOL` extended and documented; `assert_close` default named | Like the explicit names and rationales for the tolerances used. Very good. | None |
+| `tests/{test_linear,test_analytic,test_constraints,test_splines,test_bijections}.py`: inline tolerances → `TOL` | Had a quick lookthrough. Looks good. | None |
+| `tests/registry.py`: `IDENTITY_TOL` deleted | Trivial change. | None |
 | `docs/roadmap.md`: Phase A ledger updates | Read through. Looks good. | None |
