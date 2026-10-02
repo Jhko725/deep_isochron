@@ -41,7 +41,7 @@ from tests.helpers import (
     roundtrip,
     TOL,
 )
-from tests.registry import IDENTITY_TOL, SCALAR_TEMPLATES, VECTOR_BUILDERS
+from tests.registry import SCALAR_TEMPLATES, VECTOR_BUILDERS
 from tests.strategies import (
     point_batches,
     scalar_bijections,
@@ -62,7 +62,7 @@ def test_scalar_identity_at_zero(name):
     assert_close(
         jax.vmap(f)(x),
         x,
-        atol=IDENTITY_TOL.get(name, TOL["identity"]),
+        atol=TOL["identity"],
         msg=f"{name}: from_unconstrained(0) != id",
     )
 
@@ -141,7 +141,7 @@ def test_vector_identity_at_init(name, key):
     assert_close(
         jax.vmap(f)(x),
         x,
-        atol=IDENTITY_TOL.get(name, TOL["identity"]),
+        atol=TOL["identity"],
         msg=f"{name}: init",
     )
 

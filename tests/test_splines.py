@@ -26,7 +26,7 @@ from deep_isochron.model.invertible import (
 from hypothesis import example, given, strategies as st
 from scipy.interpolate import BSpline
 
-from tests.helpers import assert_close, roundtrip
+from tests.helpers import assert_close, roundtrip, TOL
 from tests.registry import SCALAR_TEMPLATES
 from tests.strategies import (
     any_scalar_bijection,
@@ -105,17 +105,17 @@ def test_tail_gradients_are_finite(cls, data):
 def _check_join(f, order):
     lo, hi = f.xy_range
     # One-sided limits: the mismatch is ~ h * f^(order+1), which is bounded by
-    # ~1e4 for the drawn parameter ranges, hence the 1e-7 tolerance.
+    # ~1e4 for the drawn parameter ranges, hence TOL["join"] = 1e-7 at this step h.
     h = 1e-12 * (hi - lo)
     fs = _derivatives(f, order)
     for x0, x_in in ((lo, jnp.asarray(lo + h)), (hi, jnp.asarray(hi - h))):
-        assert_close(fs[0](x_in), x0, atol=1e-7, msg=f"f discontinuous at {x0}")
+        assert_close(fs[0](x_in), x0, atol=TOL["join"], msg=f"f discontinuous at {x0}")
         for order, d in enumerate(fs[1:], start=1):
             expected = 1.0 if order == 1 else 0.0
             assert_close(
                 d(x_in),
                 expected,
-                atol=1e-7,
+                atol=TOL["join"],
                 msg=f"f^({order}) at {x0} inside != tail value {expected}",
             )
 
@@ -151,7 +151,7 @@ def test_bspline_is_c2_at_interior_knots(data):
             jnp.abs(jax.vmap(fs[order + 1])(knots - h)),
             jnp.abs(jax.vmap(fs[order + 1])(knots + h)),
         )
-        gap, allowed = jnp.abs(right - left), 4 * h * slope + 1e-9
+        gap, allowed = jnp.abs(right - left), 4 * h * slope + TOL["closed_form"]
         assert jnp.all(gap <= allowed), (
             f"f^({order}) jumps at a knot: {gap} > {allowed}"
         )
@@ -176,7 +176,8 @@ def test_bspline_matches_scipy(data):
     t_pad = np.concatenate([[t[0] - 1.0], t, [t[-1] + 1.0]])
     ref = BSpline(t_pad, a, 3)
     x = np.linspace(lo, hi, 257)
-    assert_close(jax.vmap(f)(jnp.asarray(x)), ref(x), atol=1e-12, rtol=1e-12)
+    tol = TOL["identity"]
+    assert_close(jax.vmap(f)(jnp.asarray(x)), ref(x), atol=tol, rtol=tol)
 
 
 @given(data=st.data())
@@ -203,7 +204,7 @@ def test_bspline_inverse_converges_for_extreme_params(data):
     lo, hi = f.xy_range
     x = jnp.linspace(lo, hi, 129)
     _, x_rt, _ = roundtrip(f, x)
-    assert_close(x_rt, x, atol=1e-11, rtol=1e-11)
+    assert_close(x_rt, x, atol=TOL["bspline_inverse"], rtol=TOL["bspline_inverse"])
 
 
 @given(data=st.data())
@@ -218,7 +219,7 @@ def test_bspline_inverse_second_derivative(data):
     y = jax.vmap(f)(x)
     f1, f2 = jax.vmap(jax.grad(f))(x), jax.vmap(jax.grad(jax.grad(f)))(x)
     g2 = jax.vmap(jax.grad(jax.grad(f.inverse)))(y)
-    assert_close(g2, -f2 / f1**3, rtol=1e-6, atol=1e-8)
+    assert_close(g2, -f2 / f1**3, rtol=TOL["jacobian"], atol=TOL["jacobian"])
 
 
 def test_bspline_template_static_only_is_enough():
@@ -244,13 +245,13 @@ def _identity_instance(name):
 def test_knots_round_trip(f):
     xk = f.xs  # includes both range endpoints
     _, x_rt, _ = roundtrip(f, xk)
-    assert_close(x_rt, xk, atol=1e-10, msg="round trip at knots")
+    assert_close(x_rt, xk, atol=TOL["closed_form"], msg="round trip at knots")
 
 
 @given(f=any_scalar_bijection(KNOTTED))
 @example(f=LinearSpline(3))
 def test_knots_interpolated_and_monotone(f):
-    assert_close(jax.vmap(f)(f.xs), f.ys, atol=1e-10, msg="f(x_k) != y_k")
+    assert_close(jax.vmap(f)(f.xs), f.ys, atol=TOL["closed_form"], msg="f(x_k) != y_k")
     lo, hi = float(f.xs[0]), float(f.xs[-1])
     x = jnp.sort(jnp.concatenate([jnp.linspace(lo - 1, hi + 1, 2001), f.xs]))
     x = x[jnp.concatenate([jnp.array([True]), jnp.diff(x) > 1e-9])]  # drop near-dups
@@ -261,8 +262,9 @@ def test_knots_interpolated_and_monotone(f):
 def test_knot_derivatives(f):
     """f'(x_k) == knot_derivs[k] at every knot, boundaries included (identity tails
     join C¹)."""
+    tol = TOL["closed_form"]
     assert_close(
-        jax.vmap(jax.grad(f))(f.xs), f.knot_derivs, rtol=1e-9, atol=1e-9, msg="f'(x_k)"
+        jax.vmap(jax.grad(f))(f.xs), f.knot_derivs, rtol=tol, atol=tol, msg="f'(x_k)"
     )
 
 
@@ -272,4 +274,4 @@ def test_spline_any_bin_count_round_trip(f, x):
     registry's configs)."""
     x = x[:, 0]
     _, x_rt, _ = roundtrip(f, x)
-    assert_close(x_rt, x, rtol=1e-8, atol=1e-8)
+    assert_close(x_rt, x, rtol=TOL["scalar_roundtrip"], atol=TOL["scalar_roundtrip"])

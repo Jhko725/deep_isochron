@@ -63,10 +63,8 @@ extreme_raw = magnitudes(1e-6, EXTREME_RAW_BOUND)
 @pytest.mark.parametrize("name", ELEMENTWISE)
 @given(r=raw_vectors(8))
 def test_inverse(name, r):
-    c = PRIMITIVES[name]
-    assert_close(
-        c.inverse(c(r)), r, rtol=1e-9, atol=1e-9, msg=f"{name}: inverse∘forward"
-    )
+    c, tol = PRIMITIVES[name], TOL["closed_form"]
+    assert_close(c.inverse(c(r)), r, rtol=tol, atol=tol, msg=f"{name}: inverse∘forward")
 
 
 @pytest.mark.parametrize("name", WIDTHS)
@@ -74,9 +72,11 @@ def test_inverse(name, r):
 def test_widths_inverse_in_mean_zero_gauge(name, r):
     c = PRIMITIVES[name]
     r_centred = r - jnp.mean(r)
-    assert_close(c.inverse(c(r_centred)), r_centred, rtol=1e-8, atol=1e-8)
+    tol = TOL["closed_form"]
+    assert_close(c.inverse(c(r_centred)), r_centred, rtol=tol, atol=tol)
     # gauge consistency: forward is invariant to the constant that inverse drops
-    assert_close(c(r), c(r_centred), rtol=1e-12, atol=1e-12)
+    tol = TOL["identity"]
+    assert_close(c(r), c(r_centred), rtol=tol, atol=tol)
 
 
 @pytest.mark.parametrize("name", ELEMENTWISE)
@@ -90,8 +90,8 @@ def test_at_zero(name):
 @given(n=st.integers(1, 12))
 def test_widths_at_zero_is_equal(name, n):
     c = PRIMITIVES[name]
-    w = c(jnp.zeros(n))
-    assert_close(w, jnp.full(n, c.total / n), rtol=1e-12, atol=1e-12)
+    w, tol = c(jnp.zeros(n)), TOL["identity"]
+    assert_close(w, jnp.full(n, c.total / n), rtol=tol, atol=tol)
     assert c.is_constrained(w)
 
 
@@ -134,8 +134,8 @@ def test_primitive_construction_is_traceable():
     """The shift is computed under ``ensure_compile_time_eval``, so a primitive may be
     constructed inside a jitted/vmapped function (as ``constrain`` does)."""
     f = lambda r: Interval(-1.0, 8.0, at_zero=0.0)(r) + Positive(0.1)(r)  # noqa: E731
-    r = jnp.linspace(-1, 1, 5)
-    assert_close(jax.jit(jax.vmap(f))(r), jax.vmap(f)(r), rtol=1e-14, atol=1e-14)
+    r, tol = jnp.linspace(-1, 1, 5), TOL["jit_eager"]
+    assert_close(jax.jit(jax.vmap(f))(r), jax.vmap(f)(r), rtol=tol, atol=tol)
 
 
 # ------------------------------------------------------------ misc.squashed_exp ---
@@ -144,4 +144,5 @@ def test_primitive_construction_is_traceable():
 def test_squashed_exp_inverse(a, x):
     y = squashed_exp(x, a)
     assert jnp.all((y > jnp.exp(-a)) & (y < jnp.exp(a)))
-    assert_close(inv_squashed_exp(y, a), x, rtol=1e-9, atol=1e-9, msg=f"a={a}")
+    tol = TOL["closed_form"]
+    assert_close(inv_squashed_exp(y, a), x, rtol=tol, atol=tol, msg=f"a={a}")

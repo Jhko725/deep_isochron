@@ -15,7 +15,7 @@ import pytest
 from deep_isochron.model.invertible import BiLipschitzLinear
 from hypothesis import given, strategies as st
 
-from tests.helpers import assert_close
+from tests.helpers import assert_close, TOL
 from tests.strategies import EXTREME_RAW_BOUND, magnitudes, raw_vectors
 
 
@@ -41,28 +41,31 @@ def test_parameter_space_guarantees(f):
     L = f.max_lipschitz
     p = f.params
     eye = jnp.eye(f.dim)
-    assert_close(p.U @ p.U.T, eye, rtol=1e-10, atol=1e-10, msg="U not orthogonal")
-    assert_close(p.V @ p.V.T, eye, rtol=1e-10, atol=1e-10, msg="V not orthogonal")
+    tol = TOL["closed_form"]
+    assert_close(p.U @ p.U.T, eye, rtol=tol, atol=tol, msg="U not orthogonal")
+    assert_close(p.V @ p.V.T, eye, rtol=tol, atol=tol, msg="V not orthogonal")
     assert jnp.linalg.det(p.U) > 0 and jnp.linalg.det(p.V) > 0, "not in SO(dim)"
     assert jnp.all((p.s > 1 / L) & (p.s < L)), "singular values outside (1/L, L)"
     sigma = jnp.linalg.svd(f.weight, compute_uv=False)
-    assert jnp.all((sigma > 1 / L - 1e-9) & (sigma < L + 1e-9))
+    assert jnp.all((sigma > 1 / L - tol) & (sigma < L + tol))
     assert jnp.linalg.det(f.weight) > 0
 
 
 @given(f=layers())
 def test_weight_is_built_from_params(f):
     p = f.params
-    assert_close(f.weight, (p.U * p.s) @ p.V.T, rtol=1e-12, atol=1e-12)
+    tol = TOL["identity"]
+    assert_close(f.weight, (p.U * p.s) @ p.V.T, rtol=tol, atol=tol)
     sigma = jnp.sort(jnp.linalg.svd(f.weight, compute_uv=False))
-    assert_close(sigma, jnp.sort(p.s), rtol=1e-9, atol=1e-9)
+    tol = TOL["closed_form"]
+    assert_close(sigma, jnp.sort(p.s), rtol=tol, atol=tol)
 
 
 @pytest.mark.parametrize("dim", [2, 3])
 def test_identity_init(dim):
     f = BiLipschitzLinear(dim=dim, max_lipschitz=2.0, key=jax.random.key(3))
-    assert_close(f.weight, jnp.eye(dim), atol=1e-12)
-    assert_close(f.params.s, jnp.ones(dim), atol=1e-12)
+    assert_close(f.weight, jnp.eye(dim), atol=TOL["identity"])
+    assert_close(f.params.s, jnp.ones(dim), atol=TOL["identity"])
 
 
 @pytest.mark.parametrize("seed", range(5))
@@ -71,9 +74,10 @@ def test_rotation_init_is_orthogonal_with_unit_singular_values(seed):
         dim=3, max_lipschitz=2.0, init="rotation", key=jax.random.key(seed)
     )
     W = f.weight
-    assert_close(W @ W.T, jnp.eye(3), rtol=1e-10, atol=1e-10)
+    tol = TOL["closed_form"]
+    assert_close(W @ W.T, jnp.eye(3), rtol=tol, atol=tol)
     assert jnp.linalg.det(W) > 0
-    assert_close(f.params.s, jnp.ones(3), atol=1e-12)
+    assert_close(f.params.s, jnp.ones(3), atol=TOL["identity"])
     assert not jnp.allclose(W, jnp.eye(3))  # actually rotated
 
 

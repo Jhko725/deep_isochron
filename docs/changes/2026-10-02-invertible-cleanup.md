@@ -63,7 +63,17 @@ removes the remaining `ty: ignore`s and moves `matplotlib` to the dev group (A8,
 - `src/deep_isochron/model/latent_dynamics.py` — `HopfLatentDynamics` calls
   `self.hopf.solve(…)` (`HopfNormalForm` is not callable; legacy path, see Open issues).
 - `pyproject.toml` — `matplotlib` moved from `dependencies` to the `dev` group (A9).
-- `docs/roadmap.md` — Phase A items moved to the Done ledger as they land.
+- `docs/roadmap.md` — Phase A items moved to the Done ledger as they land; review
+  follow-ups recorded (Parked: `InvertibleLinear` return conditions, grouping the scalar
+  bijections; B1: `AbstractLatentDynamics ⊂ AbstractODE`).
+
+Review follow-up (commit after `2d081e6`):
+
+- `tests/helpers.py` — `TOL` gains `jit_eager`, `bspline_inverse`, `closed_form`, `join`;
+  every entry documented; `assert_close` defaults to `TOL["closed_form"]`.
+- `tests/test_linear.py`, `test_analytic.py`, `test_constraints.py`, `test_splines.py`,
+  `test_bijections.py` — every inline tolerance replaced by a `TOL` entry.
+- `tests/registry.py` — `IDENTITY_TOL` deleted.
 - `docs/changes/2026-10-02-invertible-cleanup.md` — this document.
 
 ## Design
@@ -151,6 +161,36 @@ ADRs: [0001](../decisions/0001-unconstrained-leaves.md),
 [0006](../decisions/0006-cubic-bspline-boundary-and-inverse.md) (new);
 design note [`docs/design/cubic-bspline.md`](../design/cubic-bspline.md).
 
+### Review follow-up — named tolerances, `IDENTITY_TOL` dropped
+
+Every tolerance in the suite is now a `TOL` entry (the review asked for this on
+`test_linear.py`; extended to the whole suite). The mapping was by *kind of claim*, not by
+file:
+
+| `TOL` key | value | claim | formerly inline |
+|---|---|---|---|
+| `jit_eager` | 1e-14 | same graph under `jit` and eagerly | `test_constraints` 1e-14 |
+| `identity` | 1e-12 | exact algebra: identity at `raw = 0`, `W == (U·s)Vᵀ`, scipy oracle, `Widths` gauge invariance | 1e-12 everywhere |
+| `bspline_inverse` | 1e-11 | Newton reaches float64 round trip at extreme parameters | `test_splines` 1e-11 |
+| `closed_form` | 1e-9 | two closed-form evaluations of one quantity: primitive `inverse∘forward`, `from_constrained` round trip, parameter-swap inverse, `f'(x_k)` vs `knot_derivs`, SVD vs `s`, `expm(skew)` orthogonality, round trip *at knots* | 1e-9, 1e-10, and two 1e-8 |
+| `join` | 1e-7 | one-sided limits of `f, f', f''` at the range endpoints | `test_splines` 1e-7 |
+| `jacobian` | 1e-6 | Jacobian products; second derivative of the inverse | 1e-6 (+ atol 1e-8) |
+
+Three choices worth knowing: (i) the two 1e-8 inverse checks (`Widths` in the mean-zero
+gauge, `CubicConjugation.from_constrained`) were tightened to `closed_form` = 1e-9 after
+verifying they hold at the `ci` profile (300 examples) — one key for one kind of claim
+beats a second key for two tests; (ii) the knot round-trip checks loosened from 1e-10 to
+1e-9 for the same reason; (iii) the inverse-second-derivative `atol` loosened from 1e-8 to
+`jacobian` = 1e-6, immaterial since the quantity is `O(1)`. Numbers that are *laws* stay
+inline and are commented as such: the `1e-3` asymptotic-slope bound in
+`test_sinh_asymptotically_linear`, finite-difference steps `h`, strategy magnitude ranges.
+
+`IDENTITY_TOL` is gone. It was an empty override table read as
+`IDENTITY_TOL.get(name, TOL["identity"])`; since A2 every vector bijection is the identity
+to round-off, an entry would mean "this class is not the identity at init", which is what
+the universal law forbids. A future exception belongs in the registry with a stated reason
+(`UNTESTED`-style), not in a silent tolerance bump.
+
 ## Bugs fixed
 
 - `ResidualCoupling` was not the identity at init (no zeroed final layer); see Design.
@@ -221,4 +261,7 @@ skipped; `ty check src` clean (`--python` pointing at a venv with `wandb` instal
 | `src/deep_isochron/model/conjugacy.py`: `latent_dynamics: AbstractODE` | Fair. The original issue stemmed from the fact the `AbstractODE` and `AbstractLatentDynamics` were designed at different times + Proper design refinement was not performed (`AbstractLatentDynamics` should have been a subclass of `AbstractODE`; The intention was `AbstractODE` are all ODE systems used in the study - normal forms, data generation; not necessarily need to carry helper methods required to analytically compute phase/amplitude response curves, etc., whereas `AbstractLatentDynamics` are the subsets carrying that info). For now, this revised type hint suffices, and the design refinement will be done in Phase B. | None |
 | `src/deep_isochron/model/latent_dynamics.py`: `HopfLatentDynamics` uses `.solve` | Good. The latent_dynamics code here is legacy, and not planned to be used in experiments for the immediate future. So keeping them type correct is sufficient. | None |
 | `pyproject.toml`: `matplotlib` → dev group | Trivial changes. | Ran uv sync on the local repo. |
+| `tests/helpers.py`: `TOL` extended and documented; `assert_close` default named | | |
+| `tests/{test_linear,test_analytic,test_constraints,test_splines,test_bijections}.py`: inline tolerances → `TOL` | | |
+| `tests/registry.py`: `IDENTITY_TOL` deleted | | |
 | `docs/roadmap.md`: Phase A ledger updates | Read through. Looks good. | None |

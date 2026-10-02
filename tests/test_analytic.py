@@ -20,7 +20,7 @@ from deep_isochron.model.invertible import (
 )
 from hypothesis import given, strategies as st
 
-from tests.helpers import assert_close, roundtrip
+from tests.helpers import assert_close, roundtrip, TOL
 from tests.strategies import EXTREME_RAW_BOUND, magnitudes, raw_vectors
 
 
@@ -42,7 +42,8 @@ def test_sinh_inverse_is_parameter_swap(raw, x):
     f = SinhConjugation().from_unconstrained(raw)
     p = f.params
     g = SinhConjugation.from_constrained(p.loc, p.scale, -p.beta, -p.nu, -p.mu)
-    assert_close(jax.vmap(f.inverse)(x), jax.vmap(g)(x), rtol=1e-9, atol=1e-9)
+    tol = TOL["closed_form"]
+    assert_close(jax.vmap(f.inverse)(x), jax.vmap(g)(x), rtol=tol, atol=tol)
 
 
 # --------------------------------------------------------------- 2. asymptotics ---
@@ -53,7 +54,8 @@ def test_cubic_rational_asymptotic_identity(raw):
     p = f.params
     x = jnp.array([-1e4, -1e3, 1e3, 1e4])
     bound = jnp.abs(p.alpha) / (p.beta * jnp.abs(x - p.loc))
-    assert jnp.all(jnp.abs(jax.vmap(f)(x) - x) <= bound * (1 + 1e-9) + 1e-12)
+    slack = bound * (1 + TOL["closed_form"]) + TOL["identity"]
+    assert jnp.all(jnp.abs(jax.vmap(f)(x) - x) <= slack)
     assert jnp.all(bound < 0.1)  # and the bound itself is small at |x| >= 1e3
 
 
@@ -62,6 +64,7 @@ def test_sinh_asymptotically_linear(raw):
     f = SinhConjugation().from_unconstrained(raw)
     x = jnp.array([50.0, 100.0, 200.0])
     slopes = jnp.diff(jax.vmap(f)(x)) / jnp.diff(x)
+    # A law, not a tolerance: the slope approaches 1 like O(1/x) at these |x|.
     assert_close(slopes, jnp.ones(2), rtol=1e-3, atol=1e-3)
 
 
@@ -100,7 +103,7 @@ def test_cubic_rational_from_constrained_round_trip(raw):
     f = CubicRational(eps_beta=0.5).from_unconstrained(raw)
     p = f.params
     g = CubicRational.from_constrained(p.alpha, p.beta, p.loc, eps_beta=0.5)
-    assert_close(g.raw, f.raw, rtol=1e-9, atol=1e-9)
+    assert_close(g.raw, f.raw, rtol=TOL["closed_form"], atol=TOL["closed_form"])
 
 
 @given(raw=raw_vectors(4))
@@ -108,4 +111,4 @@ def test_cubic_conjugation_from_constrained_round_trip(raw):
     f = CubicConjugation().from_unconstrained(raw)
     p = f.params
     g = CubicConjugation.from_constrained(p.loc, p.beta, p.a, p.b)
-    assert_close(g.raw, f.raw, rtol=1e-8, atol=1e-8)
+    assert_close(g.raw, f.raw, rtol=TOL["closed_form"], atol=TOL["closed_form"])

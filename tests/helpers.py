@@ -5,16 +5,29 @@ import numpy as np
 import optax
 
 
-# Tolerances (float64 throughout). Each law uses the entry named after it so that a
-# tolerance is a documented decision rather than a per-test literal.
+# Tolerances (float64 throughout). Every tolerance in the suite is an entry here, used
+# by name, so that a tolerance is a documented decision rather than a per-test literal.
+# Numbers that are *laws* (an asymptotic slope bound, a finite-difference step, a
+# magnitude range for a strategy) are not tolerances and stay where the law is stated.
 TOL = {
-    # exact algebra at zero raw parameters: round-off only
+    # the same algebra evaluated under jit and eagerly: equal up to summation order
+    "jit_eager": 1e-14,
+    # exact algebra, round-off only: identity at zero raw parameters, a product
+    # assembled from its factors, an oracle (scipy) evaluating the same spline
     "identity": 1e-12,
+    # the CubicBSpline inverse at extreme parameters: Newton reaches float64 round trip
+    "bspline_inverse": 1e-11,
+    # two closed-form evaluations of one quantity: a primitive's inverse∘forward, a
+    # parameter-swap inverse, f'(x_k) vs. the stored knot derivative, SVD vs. the
+    # constrained singular values, expm(skew) orthogonality, round trip at knots
+    "closed_form": 1e-9,
     # one analytic/spline map and its closed-form or 20-step Newton inverse
     "scalar_roundtrip": 1e-8,
     # a coupling/radial/linear layer: inverse plus a solve or a ratio
     "vector_roundtrip": 1e-7,
-    # products of forward-mode Jacobians, 2x2
+    # one-sided limits of f, f', f'' at the range endpoints (mismatch ~ h * f^(k+1))
+    "join": 1e-7,
+    # products of forward-mode Jacobians, 2x2; second derivatives of inverses
     "jacobian": 1e-6,
 }
 
@@ -39,7 +52,10 @@ def inverse_jacobian_product(f, x):
     return Jinv @ J
 
 
-def assert_close(actual, desired, *, rtol=1e-9, atol=1e-9, msg=""):
+def assert_close(actual, desired, *, rtol=None, atol=None, msg=""):
+    """``np.testing.assert_allclose`` with ``TOL["closed_form"]`` as the default."""
+    rtol = TOL["closed_form"] if rtol is None else rtol
+    atol = TOL["closed_form"] if atol is None else atol
     np.testing.assert_allclose(
         np.asarray(actual), np.asarray(desired), rtol=rtol, atol=atol, err_msg=msg
     )

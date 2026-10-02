@@ -64,9 +64,6 @@ SCALAR_TEMPLATES = {
 }
 """``K`` is the number of bins (``num_bins``)."""
 
-IDENTITY_TOL: dict[str, float] = {}
-"""Per-entry identity-at-init tolerance overrides (default 1e-12)."""
-
 
 def _coupling(template, **kw):
     return lambda key: CouplingFlow(
