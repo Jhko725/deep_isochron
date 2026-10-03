@@ -16,7 +16,7 @@ Hydra/wandb/Orbax → science.
 
 All items in the Done ledger; see `docs/changes/2026-10-02-invertible-cleanup.md`.
 
-## Phase B — `data-generation` (current)
+## Phase B — `data-generation` (current; B1–B12 landed, awaiting review)
 
 Decisions taken 2026-10-02 (ADR-0007, ADR-0008) and refined by the review of 2026-10-03.
 B1–B7 landed; the review (change document, *Review notes*) set the remaining items, in
@@ -26,9 +26,9 @@ this order:
 |---|---|---|---|
 | B8 | Mechanical review fixes: single `flow -> diffrax.Solution`; `strategy` → `integration` (`normal_forms/integration.py`, `AbstractFlowIntegration`); `systems/normal_forms/{base,hopf,bautin}.py`; `AbstractODE.params()` contract; `GreaterThan(lower, at_zero=lower+1)` with `Positive` as alias; `test_normal_forms.py` split from `test_systems.py` with Langfield et al. cited | review of `6c0fdc2` | *done 2026-10-03* |
 | B9 | Data layer as grain transforms: whole-trajectory frozen-dataclass source (`copy.replace`), `RandomWindow` / `WeightedWindow`, `mixed_windows`; grouped `DatasetMetadata`; `test_data.py` rewritten; ADR-0008 amended | review: idiomatic grain; organised metadata | *done 2026-10-03* |
-| B10 | `docs/design/normal-forms.md` — **agreed 2026-10-03**; amended 2026-10-03 (corollary sign fixed; §5.3 rewritten from the paper; §5.4 Kvalheim & Revzen *proposed*, pending Joon) (Joon's revision merging the B10 draft with his derivation notes): `Θ`/`Ψ` notation, `κ = ρ'(1)`, Wilson–Moehlis normalisation `∂ᵣΨ(1) = 1`, Option B (`_sq` hooks), `ClosedFormIntegration` + `(Θ, Ψ)` chart in B11, log-polar member deferred. Pending minor correction: §5.1 corollary sign of `A` | review: `r`/`s` inconsistency; math laid down before implementation | *done* |
-| B11 | Reimplement `AbstractNormalForm`'s analytic methods against B10; ADR-0007 amended | — | tests unchanged in intent, API in `r` |
-| B12 | Yawata et al. (Chaos 34, 063111, 2024) baseline, per `docs/design/normal-forms.md` §5.3 mapping: `PhaseAmplitudeLatentDynamics(omega, kappa)` (closed-form rotation ⊕ decay on `R³`, replaces `LinearLatentDynamics`); encoder with unit-circle normalisation of the first two outputs; `PhaseAutoencoderLoss` = reconstruction + phase/amplitude latent consistency over a window with the `α_k` schedule + centre-of-mass term with Yawata's weight schedule; `OnCycleGaussian` IC sampler (cycle points + `γ₂ σ ⊙ ξ`, `γ₂ = 0.5`, evolved `γ₁ T = 3T`); `phase(x)`, PRC by `grad`; test on Hopf/Bautin data against `to_phase_amplitude` (Θ up to a constant, Ψ up to scale, κ reported) | the paper's baseline; the design document's §5.4 says what it learns | module + loss + sampler + test; `LinearLatentDynamics` removed |
+| B10 | `docs/design/normal-forms.md` — **agreed 2026-10-03** (Joon's revision merging the B10 draft with his derivation notes): `Θ`/`Ψ` notation, `κ = ρ'(1)`, Wilson–Moehlis normalisation `∂ᵣΨ(1) = 1`, Option B (`_sq` hooks), `ClosedFormIntegration` + `(Θ, Ψ)` chart in B11, log-polar member deferred. Amended 2026-10-03: §5.1 corollary sign fixed (confirmed); §5.3 rewritten from the paper and §5.4 Kvalheim & Revzen added — both *proposed*, pending Joon | review: `r`/`s` inconsistency; math laid down before implementation | *done 2026-10-03* |
+| B11 | `AbstractNormalForm` reimplemented against the design document §9 (`_sq` hooks, API in `r`, `κ = ρ'(1)`, `Ψ` normalised, `eigenvalues_origin`, `(Θ, Ψ)` chart with differentiable `Ψ⁻¹`, `ClosedFormIntegration`); tests per §10; ADR-0007 amended | — | *done 2026-10-03* |
+| B12 | Yawata et al. (Chaos 34, 063111, 2024) baseline per `docs/design/normal-forms.md` §5.3: `PhaseAmplitudeLatentDynamics(omega, kappa)` (replaces `LinearLatentDynamics`), `PhaseAmplitudeAutoencoder` with unit-circle normalisation, `phase`/`phase_sensitivity`; `PhaseAutoencoderLoss` (Eqs. (21)–(26), `α_k` and weight schedules); `OnCycleGaussian` sampler; `tests/test_baseline.py` against the exact chart + a `slow` training test on Hopf (Θ asserted up to a constant; Ψ, κ reported) | the paper's baseline; §5.4 says what it learns | *done 2026-10-03* |
 
 ## Phase C — `trainer`
 
@@ -78,9 +78,10 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
   Householder products). It was markedly cheaper to evaluate, and `det W` crossing zero was
   never observed in practice; the price would be one test-exception group
   (`ORIENTATION_NOT_GUARANTEED`) coming back.
-- `AbstractLatentDynamics` / `PhaseAmplitudeAutoencoder` (non-invertible baseline) stay as
-  they are until the baseline is needed in the paper; they consume an `AbstractNormalForm`
-  through `flow` if ever adapted.
+- Phase-autoencoder baseline refinements — batch normalisation in the MLPs, the paper's
+  once-and-for-all weight switch and per-epoch `α_k` (Phase C's trainer owns schedules),
+  input standardisation, the FHN cycle for `OnCycleGaussian` (needs the numerical limit
+  cycle of Phase E) — when the baseline is run for the paper.
 - Grouping the scalar bijections (`affine.py`, `analytic.py`, `splines/`, `OffsetedBijection`)
   under one subpackage — cosmetic; when the vocabulary stops growing.
 
@@ -100,6 +101,8 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-09-30 | `splines-refactor` | `AbstractSpline`; `CubicBSpline` ported; `LinearSpline`; RQ-spline bug fixes; `BijectionFactory` removed; first Hypothesis suite; change-document convention | `docs/changes/2026-09-30-splines-refactor.md` |
 | 2026-10-01 | `scalar-param-refactor` | `raw`/`constrain` contract (ADR-0001/0002); declared `smoothness` (ADR-0003); `AbstractVar` as static `init=False` fields (ADR-0004); constraint primitives (ADR-0005); `ScalarChain`; `CouplingFlow` with pluggable conditioner; `PolarCouplingFlow`; circular spline as exact rotation; `InvertibleLinear` rotation init; `BiLipschitzLinear._s` vector; 303-test suite; `ty` clean on the invertible package | `docs/changes/2026-10-01-scalar-param-refactor.md`, ADRs 0001–0005 |
 | 2026-10-02 | `invertible-cleanup` | A1: `Shift`/`Affine` scalar templates; `AffineCoupling`/`ResidualCoupling` as `CouplingFlow` factories (the latter now identity at init) | `docs/changes/2026-10-02-invertible-cleanup.md` |
+| 2026-10-03 | `data-generation` | B12: Yawata et al. phase-autoencoder baseline — `PhaseAmplitudeLatentDynamics`, `PhaseAmplitudeAutoencoder` (`phase`, `phase_sensitivity`), `PhaseAutoencoderLoss`, `OnCycleGaussian`; `LinearLatentDynamics` removed; `tests/test_baseline.py` | `docs/changes/2026-10-02-data-generation.md`, `docs/design/normal-forms.md` §5.3 |
+| 2026-10-03 | `data-generation` | B10–B11: `docs/design/normal-forms.md` agreed; normal forms reimplemented against its §9 (`log_growth_rate_sq`/`angular_rate_sq` hooks, public API in `r`, `κ = ρ'(1)`, `∂ᵣΨ(1) = 1`, `eigenvalues_origin`, `to/from_phase_amplitude` with a differentiable root solve, `ClosedFormIntegration`); `test_normal_forms.py` per §10 | `docs/changes/2026-10-02-data-generation.md`, `docs/design/normal-forms.md`, ADR-0007 |
 | 2026-10-03 | `data-generation` | B9: whole-trajectory `TimeSeriesDataSource` (frozen dataclass); `RandomWindow`/`WeightedWindow` grain transforms, `windows`, `mixed_windows`; grouped `DatasetMetadata` (`system/sampling/grid/solve/provenance/extra`); dict batches | `docs/changes/2026-10-02-data-generation.md`, ADR-0008 |
 | 2026-10-03 | `data-generation` | B8: review round 1 — `flow -> Solution`; `integration` naming; `normal_forms/` subpackage; `params()`; `GreaterThan`; tests split, Langfield et al. cited (FHN equilibrium, eigenvalues, period) | `docs/changes/2026-10-02-data-generation.md` |
 | 2026-10-02 | `data-generation` | B1–B7: `AbstractODE.flow` + `SolverConfig`; `AbstractNormalForm` (closed-form phase, isostable, isochrons, chart); flow strategies (cartesian / polar / `r²`); Hopf/Bautin rewritten on two rates with constrained leaves; `HopfLatentDynamics` deleted; xarray/netCDF `TimeSeriesDataSource` + `DatasetMetadata`; `generate` with loud failures and `config_hash`; `split_time`/`split_trajectories`; `weighted_windows` + `mixed_split`; `scripts/generate_data.py` + configs; `test_systems.py`, `test_data.py` | `docs/changes/2026-10-02-data-generation.md`, ADR-0007/0008 |

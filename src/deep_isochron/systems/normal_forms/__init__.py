@@ -4,6 +4,7 @@ from .hopf import A_CONSTRAINT as A_CONSTRAINT, HopfNormalForm as HopfNormalForm
 from .integration import (
     AbstractFlowIntegration as AbstractFlowIntegration,
     CartesianIntegration as CartesianIntegration,
+    ClosedFormIntegration as ClosedFormIntegration,
     INTEGRATIONS as INTEGRATIONS,
     PolarIntegration as PolarIntegration,
     RadiusSquaredIntegration as RadiusSquaredIntegration,

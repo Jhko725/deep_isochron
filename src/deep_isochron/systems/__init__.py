@@ -10,6 +10,7 @@ from .normal_forms import (
     AbstractNormalForm as AbstractNormalForm,
     BautinNormalForm as BautinNormalForm,
     CartesianIntegration as CartesianIntegration,
+    ClosedFormIntegration as ClosedFormIntegration,
     HopfNormalForm as HopfNormalForm,
     INTEGRATIONS as INTEGRATIONS,
     PolarIntegration as PolarIntegration,

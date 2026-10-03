@@ -1,20 +1,26 @@
-r"""The Hopf (Stuart–Landau) normal form: $\rho(s) = a(1 - s)$, $\omega$ linear in $s$.
+r"""The Hopf (Stuart–Landau) normal form (design document §3): $\rho(r) = a(1 - r^2)$,
+$\omega(r) = \omega_0 + (\omega_1 - \omega_0) r^2$.
 
-Limit cycle $r = 1$ with frequency $w$; the origin is an unstable focus with
-eigenvalues $a \pm i w_0$; $w_0 \ne w$ gives sheared (spiralling) isochrons. Closed
-forms, derived by
-separating $\dot\varphi = w$ and $\dot\psi = \kappa\psi$ and verified by autodiff in
-``tests/test_normal_forms.py``: $\kappa = -2a$, $h(r) = \frac{w - w_0}{a}\ln r$,
-$\psi(r) = (1 - r^2)/r^2$. The Bautin form with $b = 0$ coincides with this class.
+Limit cycle $r = 1$ with frequency $\omega_1$; unstable focus at the origin with
+eigenvalues $a \pm i\omega_0$; $\omega_0 \ne \omega_1$ shears the isochrons into
+logarithmic spirals (nonisochronicity $\omega_1 - \omega_0$). Closed forms, with
+$c = (\omega_1 - \omega_0)/a$:
 
-Parameters are unconstrained leaves constrained on read (ADR-0001 in spirit): $a > 0$
-through ``A_CONSTRAINT = GreaterThan(0.0)`` (``raw = 0`` ↦ $a = 1$); $w$, $w_0$ free.
-The constructor takes constrained values.
+* $\kappa = \rho'(1) = -2a$, $\mu = e^{-4\pi a/\omega_1}$;
+* $h(r) = c\ln r$;
+* $\Psi(r) = (r^2 - 1)/(2r^2) = \tfrac12(1 - r^{-2})$ — Wilson–Moehlis normalised
+  ($\partial_r\Psi(1) = 1$), range $(-\infty, \tfrac12)$, inverse
+  $r = (1 - 2\Psi)^{-1/2}$;
+* explicit trajectories (§6.1): $r(t)^{-2} = 1 + (r_0^{-2} - 1)e^{-2at}$.
+
+Hopf is Bautin with $b = 0$. Parameters: $a > 0$ through
+``A_CONSTRAINT = GreaterThan(0)`` (``raw = 0`` ↦ $a = 1$); $\omega_1$ (``w``),
+$\omega_0$ (``w0``) free, ``w0`` defaults to
+``w``. The constructor takes constrained values.
 """
 
-import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Complex, Float
+from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
 from .base import AbstractNormalForm
@@ -25,7 +31,8 @@ A_CONSTRAINT = GreaterThan(0.0)
 
 
 class HopfNormalForm(AbstractNormalForm):
-    r"""$\dot r = a r (1 - r^2)$, $\dot\theta = w_0 + (w - w_0) r^2$."""
+    r"""$\dot r = a r (1 - r^2)$,
+    $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$."""
 
     raw_a: Float[Array, ""]
     w: Float[Array, ""]
@@ -45,20 +52,20 @@ class HopfNormalForm(AbstractNormalForm):
     def params(self):
         return {"a": float(self.a), "w": float(self.w), "w0": float(self.w0)}
 
-    def radial_rate(self, s):
+    # defining data, in s = r²
+    def log_growth_rate_sq(self, s):
         return self.a * (1 - s)
 
-    def angular_rate(self, s):
+    def angular_rate_sq(self, s):
         return self.w0 + (self.w - self.w0) * s
 
-    def floquet_exponent(self):
-        return -2 * self.a
-
+    # closed forms, in r
     def phase_shift(self, r):
         return (self.w - self.w0) / self.a * jnp.log(r)
 
     def isostable(self, r):
-        return (1 - r**2) / r**2
+        return 0.5 * (1 - r ** (-2))
 
-    def eigenvalues_origin(self) -> Complex[Array, " 2"]:
-        return jax.lax.complex(self.a * jnp.ones(2), self.w0 * jnp.array([1.0, -1.0]))
+    def radius_from_isostable(self, psi):
+        """Explicit inverse: ``r = (1 - 2 Ψ)^(-1/2)`` for ``Ψ < 1/2``."""
+        return (1 - 2 * psi) ** (-0.5)

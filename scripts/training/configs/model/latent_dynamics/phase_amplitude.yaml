@@ -1,0 +1,3 @@
+_target_: deep_isochron.model.PhaseAmplitudeLatentDynamics
+omega: 1.0
+kappa: -1.0

@@ -24,9 +24,9 @@ deep_isochron
 │   ├── fitzhugh_nagumo.py   FitzhughNagumo (dim 2)
 │   ├── hodgekin_huxley.py   HodgekinHuxley (dim 4)
 │   └── normal_forms/
-│       ├── base.py          AbstractNormalForm: closed-form phase, isostable amplitude,
-│       │                    isochrons, Floquet exponent, polar chart
-│       ├── hopf.py          HopfNormalForm            (two rates ρ(s), ω(s))
+│       ├── base.py          AbstractNormalForm: closed-form phase Θ, isostable Ψ,
+│       │                    isochrons, κ, eigenvalues at 0, polar and (Θ, Ψ) charts
+│       ├── hopf.py          HopfNormalForm            (ρ, ω via `_sq` hooks in s = r²)
 │       ├── bautin.py        BautinNormalForm
 │       └── integration.py   CartesianIntegration / PolarIntegration /
 │                            RadiusSquaredIntegration — flow(..., integration=)
@@ -45,20 +45,22 @@ deep_isochron
 │   │   └── linear.py        BiLipschitzLinear (the linear layer)
 │   ├── fourier.py           TruncatedFourier (conditioner on S¹)
 │   ├── conjugacy.py         ConjugateLatentDynamics = bijection + latent ODE + SolverConfig
-│   ├── latent_dynamics.py   LinearLatentDynamics (autoencoder baseline's latent flow)
-│   ├── autoencoder.py       PhaseAmplitudeAutoencoder (non-invertible baseline)
+│   ├── latent_dynamics.py   PhaseAmplitudeLatentDynamics(omega, kappa): rotation ⊕ decay
+│   ├── autoencoder.py       PhaseAmplitudeAutoencoder — Yawata et al. (2024) baseline;
+│   │                        phase(x), phase_sensitivity(θ)
 │   └── utils.py             zero_final_layer
 ├── data/                    one netCDF4 file per dataset (xarray)       ── ADR-0008
 │   ├── dataset.py           DatasetMetadata (grouped); TimeSeriesDataSource = whole
 │   │                        trajectories (frozen dataclass; splits; save/load)
-│   ├── generate.py          IC samplers; generate(system, sampler, ts, n, seed=…) with
+│   ├── generate.py          IC samplers (UniformBox, UniformAnnulus, OnCycleGaussian);
+│   │                        generate(system, sampler, ts, n, seed=…) with
 │   │                        loud failures and config_hash
 │   └── windows.py           RandomWindow / WeightedWindow (grain RandomMap);
 │                            windows(); mixed_windows()
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
 │                            (namespace reserved; Phase E)
 ├── training/                TrainerState / Trainer (optax + orbax + wandb);
-│                            ConjugacyTrajectoryLoss                        ── Phase C
+│                            ConjugacyTrajectoryLoss; PhaseAutoencoderLoss  ── Phase C
 └── misc.py                  inv_softplus, squashed_exp, polar ↔ cartesian
 
 scripts/generate_data.py + configs/data/*.yaml   Hydra entry point for data generation
@@ -116,19 +118,33 @@ one initial condition; batching is `eqx.filter_vmap(ode.flow, in_axes=(None, 0))
 `ṙ = rρ(r²)`, `θ̇ = ω(r²)` and a stable cycle at `r = 1`. A subclass supplies the two rates
 and two closed-form integrals (`phase_shift` `h(r)`, `isostable` `ψ(r)`); the base derives
 the cartesian `rhs` (smooth at the origin), `rhs_polar`, `period`, `floquet_exponent`
-(`2ρ'(1)` by autodiff), `phase` (`θ + h(r)`), `amplitude`, `limit_cycle`, `isochron`, and the
-chart maps. **The rule**: a class carries only what is available analytically; anything
+(`κ = ρ'(1)` by autodiff), `eigenvalues_origin`, `phase` (`Θ = θ + h(r)`), `amplitude`
+(`Ψ`, `∂ᵣΨ(1) = 1`), `limit_cycle`, `isochron`, and the chart maps `to_chart`/`from_chart`
+(polar) and `to_phase_amplitude`/`from_phase_amplitude` (the latter through
+`radius_from_isostable`, a differentiable root solve unless the subclass overrides it with
+the explicit inverse, as Hopf does). The mathematics and the implementation contract are
+`docs/design/normal-forms.md` (§9). **The rule**: a class carries only what is available analytically; anything
 numerical — locating a limit cycle, monodromy, asymptotic phase of FitzHugh–Nagumo — is a
 function over `AbstractODE` in `analysis/` (Phase E). Everything public is cartesian.
 
 **Integrations** (`normal_forms/integration.py`) are objects in the diffrax style — pass an
-instance, or one of `"cartesian" | "polar" | "r_squared"` for the defaults. They are
+instance, or one of `"cartesian" | "polar" | "r_squared" | "closed_form"` for the
+defaults (`closed_form` evolves `(Θ, Ψ)` exactly and maps back; no solver). They are
 leafless modules, hence static: each traces separately and dispatch is free. All return
 cartesian `.ys` in the same `Solution`, so `ConjugateLatentDynamics` never converts charts.
 
-`latent_dynamics.py` / `autoencoder.py` are the non-invertible baseline
-(`PhaseAmplitudeAutoencoder` with `LinearLatentDynamics`), kept for comparison; they do not
-use `AbstractODE`.
+`latent_dynamics.py` / `autoencoder.py` are the non-invertible baseline: the phase
+autoencoder of Yawata et al. (Chaos 34, 063111, 2024), as mapped in
+`docs/design/normal-forms.md` §5.3. `PhaseAmplitudeLatentDynamics(omega, kappa)` is the
+closed-form flow on `R³` — `(Y₁, Y₂)` rotating at `omega`, `Y₃` decaying at `kappa < 0`
+(Eqs. (12)–(14)); `PhaseAmplitudeAutoencoder` is an MLP encoder whose first two outputs
+are normalised to the unit circle (Eqs. (15)–(16)), an MLP decoder, and that flow;
+`phase(x) = atan2(Y₂, Y₁)` (Eq. (19)) and `phase_sensitivity(θ)` by `jax.grad` at the
+decoded cycle point (Eq. (20)). Its latent space is exactly the `(Θ, Ψ)` chart of a
+normal form (`(cos Θ, sin Θ, Ψ)`), which is what `tests/test_baseline.py` checks; the
+loss `PhaseAutoencoderLoss` (Eqs. (21)–(26)) lives in `training/losses.py` and the
+near-cycle training distribution is the `OnCycleGaussian` sampler (Eqs. (27)–(28)). It
+does not use `AbstractODE`.
 
 ## Data
 
@@ -190,7 +206,8 @@ optimiser step), run through Hypothesis draws from `tests/strategies.py`. Per-fa
 are in `test_splines.py`, `test_analytic.py`, `test_constraints.py`, `test_linear.py`;
 `test_normal_forms.py` pins the normal forms' closed forms by autodiff and the integrations,
 `test_systems.py` the flow machinery and the observed systems' facts (Langfield et al. 2014),
-`test_data.py` the data layer end to end. Shape
+`test_data.py` the data layer end to end, `test_baseline.py` the phase autoencoder
+against the exact chart (plus one `slow` training test on Hopf data). Shape
 annotations are checked at runtime by the jaxtyping/beartype import hook (`conftest.py`).
 
 ## Decision records

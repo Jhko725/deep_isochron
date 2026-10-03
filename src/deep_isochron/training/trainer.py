@@ -4,7 +4,7 @@ from contextlib import ExitStack
 from dataclasses import replace
 from functools import cached_property
 from pathlib import Path
-from typing import Any, cast, Self, TypeVar
+from typing import Any, cast, TypeVar
 
 import equinox as eqx
 import jax
@@ -52,7 +52,7 @@ class TrainerState[M: eqx.Module](eqx.Module):
     def take_step(
         self,
         grads: M,
-    ) -> Self:
+    ) -> "TrainerState[M]":
         """Given a pytree of model gradients, update model parameters using the
         appropriate optimizer update function."""
         # Equinox modules are pytrees, but optax's ``Params`` alias (a recursive

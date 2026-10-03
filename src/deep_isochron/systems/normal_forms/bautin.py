@@ -1,32 +1,29 @@
-r"""The Bautin normal form: $\rho(s) = a(1 - s)(1 + bs)$, $\omega(s) = w_0 + (w - w_0)s$
+r"""The Bautin (generalised Hopf) normal form (design document §3):
+$\rho(r) = a(1 - r^2)(1 + b r^2)$, $\omega(r) = \omega_0 + (\omega_1 - \omega_0) r^2$.
 
-The extra factor $(1 + b r^2)$ makes the radial contraction rate depend on $r$ (the
-amplitude dynamics are no longer those of a Hopf form), which is what lets the conjugacy
-target match an observed oscillator's non-trivial Floquet exponent *and* its frequency
-independently of $a$. Closed forms (derived by separating $\dot\varphi = w$ and
-$\dot\psi = \kappa\psi$; verified by autodiff in ``tests/test_normal_forms.py``), with
-$c = (w - w_0)/a$:
+The quintic factor makes the radial contraction depend on $r$, decoupling the cycle's
+Floquet exponent from the focus's instability: with $c = (\omega_1 - \omega_0)/a$,
 
-* $\kappa = -2a(1 + b)$
-* $h(r) = c\,[\ln r - \tfrac12 \ln\tfrac{1 + b r^2}{1 + b}]$   (so that $h(1) = 0$)
-* $\psi(r) = (1 - r^2)(1 + b r^2)^b / r^{2(1 + b)}$
+* $\kappa = \rho'(1) = -2a(1 + b)$, $\mu = e^{-4\pi a(1+b)/\omega_1}$;
+* $h(r) = c\,[\ln r - \tfrac12\ln((1 + b r^2)/(1 + b))]$;
+* $\Psi(r) = \dfrac{(r^2 - 1)(1 + b r^2)^b}{2(1 + b)^b\, r^{2(1+b)}}$ — Wilson–Moehlis
+  normalised ($\partial_r\Psi(1) = 1$); $\Psi \to \tfrac12(b/(1+b))^b$ as $r \to \infty$
+  for $b \ge 0$.
 
-For $b \ge 0$ the cycle $r = 1$ attracts all of $\mathbb R^2 \setminus \{0\}$. For
-$-1 < b < 0$ there is a second, *unstable* cycle at $r^2 = -1/b$ (the two-cycle regime
-of the Bautin bifurcation): the basin of $r = 1$ is $r < 1/\sqrt{-b}$, trajectories
-outside escape in finite time, and the isostable is defined only inside. As a conjugacy
-target use $b \ge 0$.
+For $b \ge 0$ the cycle attracts $\mathbb R^2 \setminus \{0\}$. For $-1 < b < 0$ there
+is
+an unstable outer cycle at $r^2 = -1/b$ bounding the basin (the two-cycle regime of the
+Bautin bifurcation); $\Psi \to +\infty$ there. As a conjugacy target use $b \ge 0$.
 
-Parameters are unconstrained leaves constrained on read: $a > 0$ through
-``A_CONSTRAINT = GreaterThan(0.0)`` (``raw = 0`` ↦ $a = 1$) and $b > -1$ through
-``B_CONSTRAINT = GreaterThan(-1.0)`` (``raw = 0`` ↦ $b = 0$, the Hopf form; $b > -1$ is
-exactly $\rho'(1) < 0$, the stability of the cycle). $w$, $w_0$ free. The constructor
-takes constrained values.
+Parameters: $a > 0$ through ``A_CONSTRAINT = GreaterThan(0)`` (``raw = 0`` ↦ $a = 1$),
+$b > -1$ through ``B_CONSTRAINT = GreaterThan(-1)`` (``raw = 0`` ↦ $b = 0$, the Hopf
+form;
+$b > -1$ is exactly $\rho'(1) < 0$); $\omega_1$ (``w``), $\omega_0$ (``w0``) free. The
+constructor takes constrained values.
 """
 
-import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Complex, Float
+from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
 from .base import AbstractNormalForm
@@ -38,7 +35,8 @@ B_CONSTRAINT = GreaterThan(-1.0)
 
 
 class BautinNormalForm(AbstractNormalForm):
-    r"""$\dot r = a r (1 - r^2)(1 + b r^2)$, $\dot\theta = w_0 + (w - w_0) r^2$."""
+    r"""$\dot r = a r (1 - r^2)(1 + b r^2)$, $\dot\theta = \omega_0 + (\omega_1 -
+    \omega_0) r^2$."""
 
     raw_a: Float[Array, ""]
     raw_b: Float[Array, ""]
@@ -73,15 +71,14 @@ class BautinNormalForm(AbstractNormalForm):
             "w0": float(self.w0),
         }
 
-    def radial_rate(self, s):
+    # defining data, in s = r²
+    def log_growth_rate_sq(self, s):
         return self.a * (1 - s) * (1 + self.b * s)
 
-    def angular_rate(self, s):
+    def angular_rate_sq(self, s):
         return self.w0 + (self.w - self.w0) * s
 
-    def floquet_exponent(self):
-        return -2 * self.a * (1 + self.b)
-
+    # closed forms, in r
     def phase_shift(self, r):
         b = self.b
         return (
@@ -92,7 +89,5 @@ class BautinNormalForm(AbstractNormalForm):
 
     def isostable(self, r):
         b = self.b
-        return (1 - r**2) * (1 + b * r**2) ** b / r ** (2 * (1 + b))
-
-    def eigenvalues_origin(self) -> Complex[Array, " 2"]:
-        return jax.lax.complex(self.a * jnp.ones(2), self.w0 * jnp.array([1.0, -1.0]))
+        s = r * r
+        return (s - 1) * (1 + b * s) ** b / (2 * (1 + b) ** b * s ** (1 + b))

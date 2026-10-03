@@ -16,6 +16,12 @@ oversampling alongside the existing `mix` design, and a Hydra entry point with t
 Two new test files pin the closed forms exactly (autodiff of the defining identities) and
 the data layer end to end.
 
+After two review rounds (B8, B9) the normal forms were re-derived in
+`docs/design/normal-forms.md` (B10) and reimplemented against it (B11: `_sq` hooks, API in
+`r`, `κ = ρ'(1)`, Wilson–Moehlis `Ψ`, `(Θ, Ψ)` chart with a differentiable inverse,
+`ClosedFormIntegration`), and the non-invertible baseline became the phase autoencoder of
+Yawata et al. (2024) (B12), whose latent space is exactly that chart. Phase B is complete.
+
 ## Files
 
 Systems:
@@ -75,6 +81,23 @@ Tests and docs:
   single `flow`); `data/generate.py` (`params()`, `integration`); `configs/data/*.yaml`,
   `scripts/generate_data.py` (`integration:`); `tests/test_normal_forms.py` (new),
   `tests/test_systems.py` (facts only); `docs/decisions/0007` amended.
+- B11: `src/deep_isochron/systems/normal_forms/{base,hopf,bautin,integration}.py`
+  rewritten against `docs/design/normal-forms.md` §9 (`log_growth_rate_sq`/
+  `angular_rate_sq` hooks, public API in `r`, `κ = ρ'(1)`, `eigenvalues_origin`,
+  `to_phase_amplitude`/`from_phase_amplitude`, `radius_from_isostable` root solve with
+  implicit-function JVP, `ClosedFormIntegration`, `"closed_form"`); `normal_forms/__init__.py`,
+  `systems/__init__.py` (export); `tests/test_normal_forms.py` rewritten per §10;
+  `docs/decisions/0007` amended; `docs/architecture.md`, `docs/roadmap.md`.
+- B12: `src/deep_isochron/model/latent_dynamics.py` (`PhaseAmplitudeLatentDynamics`,
+  `DECAY_CONSTRAINT`; `LinearLatentDynamics` and the `solve_*` helpers removed),
+  `model/autoencoder.py` (rewritten: normalised encoder, `encode`/`decode`/`phase`/
+  `amplitude`/`cycle_point`/`phase_sensitivity`; encoder/decoder as `Callable` fields),
+  `model/__init__.py` (exports), `training/losses.py` (`PhaseAutoencoderLoss`),
+  `training/trainer.py` (`Self` → string annotation so the package imports under the
+  beartype hook), `data/generate.py` (`OnCycleGaussian`), `data/__init__.py`,
+  `scripts/training/configs/model/{base,latent_dynamics/phase_amplitude}.yaml`
+  (`hopf.yaml`/`linear.yaml` deleted — both named deleted classes), `tests/test_baseline.py`
+  (new), `docs/architecture.md`, `docs/roadmap.md`, ADR-0007 consequences.
 - `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`,
   `docs/decisions/0008-dataset-format-and-sampling.md` — new ADRs.
 - `docs/architecture.md` — systems and data sections rewritten; module map updated.
@@ -137,6 +160,74 @@ deferred to discussion were settled on 2026-10-03 and are tracked as roadmap B9�
   `TimeSeriesDataSource` is no longer re-exported from `training`.
 - Notebook data cells rewritten on the new API (`windows` with `start_range` for the two
   halves, `transient_weight`, `mixed_windows`; `batch["u"]`).
+
+## B11 (2026-10-03) — normal forms against the design document
+
+- **Hooks in `s = r²`, API in `r`** (design document §9, Option B). Subclasses implement
+  `log_growth_rate_sq(s)`, `angular_rate_sq(s)`, `phase_shift(r)`, `isostable(r)`;
+  the base class exposes `log_growth_rate(r)`, `angular_rate(r)`, `omega`, `period`,
+  `floquet_exponent = grad(log_growth_rate)(1)` (`κ = ρ'(1)`, no factor 2), `eigenvalues_origin
+  = ρ_sq(0) ± iω_sq(0)`, and builds the cartesian `rhs` from `s = u·u` so it is smooth at
+  the origin.
+- **Normalisation.** `Ψ` follows Wilson & Moehlis: `∂ᵣΨ(1) = 1`, `Ψ < 0` inside the cycle.
+  Hopf `Ψ = ½(1 − r⁻²)`; Bautin `Ψ = (s − 1)(1 + bs)^b / (2(1 + b)^b s^{1+b})` with
+  `Ψ(∞) = ½(b/(1 + b))^b` for `b > 0` and `Ψ → +∞` at the outer cycle `s = −1/b` for `b < 0`.
+- **Phase–amplitude chart.** `to_phase_amplitude(u) = (Θ wrapped to (−π, π], Ψ)`;
+  `from_phase_amplitude` inverts through `radius_from_isostable`. Hopf overrides it with
+  the explicit `r = (1 − 2Ψ)^{−1/2}`; the default is a root solve in `ℓ = ln r`: bracket by
+  doubling away from `ℓ = 0` (halving the step when `Ψ` is non-finite, i.e. past the basin
+  edge for `b < 0`), then 48 bisection-safeguarded Newton iterations, `nan` when the bracket
+  never closes (`Ψ` above `Ψ(∞)`). It is an `eqx.filter_custom_jvp` with the
+  implicit-function tangent `dr = (dΨ − ∂Ψ/∂θ·dθ) / Ψ'(r)` over the module's array
+  leaves, so gradients flow to `Ψ` *and* to the normal form's parameters.
+- **`ClosedFormIntegration`** (`"closed_form"`): `Θ(t) = Θ₀ + ω₁(t − t₀)`,
+  `Ψ(t) = Ψ₀e^{κ(t − t₀)}`, mapped back; returns a `diffrax.Solution` built directly
+  (`result = RESULTS.successful`, zero stats), ignoring the `SolverConfig`. It is the
+  reference the three numerical integrations are now tested against.
+- Verified by hand before the tests were written: Bautin(1.3, 0.5): `κ = −3.9`, `Ψ'(1) = 1`,
+  chart round trip `1e-17`, closed form vs cartesian `2e-11`, `dr/db` matches finite
+  differences, origin Jacobian `[[1.3, −0.7], [0.7, 1.3]]`.
+
+## B12 (2026-10-03) — the phase-autoencoder baseline (Yawata et al. 2024)
+
+Implemented from the paper as mapped in the design document §5.3; every equation number
+below is the paper's.
+
+- **`PhaseAmplitudeLatentDynamics(omega, kappa)`** (`model/latent_dynamics.py`): the
+  latent flow of Eqs. (12)–(14) written continuously in `t` — `(Y₁, Y₂)` rotated by
+  `omega·Δt`, `Y₃` scaled by `e^{kappa·Δt}`. `kappa < 0` through `DECAY_CONSTRAINT =
+  GreaterThan(0)` on `−kappa` (the paper: "we assume that λ is negative"); `omega` free.
+  `LinearLatentDynamics` (a general `ż = Az` with eigenvalue bookkeeping) is removed: the
+  paper's latent dynamics is this specific rotation ⊕ decay, and nothing else used the
+  general form.
+- **`PhaseAmplitudeAutoencoder`** (`model/autoencoder.py`): MLP encoder with the first two
+  outputs normalised to the unit circle (Eqs. (15)–(16), `normalise_phase_plane`), MLP
+  decoder (one layer deeper, as in the paper's 2×100 / 3×100), the latent flow;
+  `phase(x) = atan2(Y₂, Y₁)` (Eq. (19)), `cycle_point(θ) = f_dec(cos θ, sin θ, 0)`,
+  `phase_sensitivity(θ) = ∇ₓ phase` there by `jax.grad` (Eq. (20)). Defaults follow the
+  paper (ReLU, width 100, depth 2/3); batch normalisation is omitted (open issue). The
+  encoder/decoder fields are typed `Callable` so a test can substitute the exact chart
+  of a normal form with `eqx.tree_at`.
+- **`PhaseAutoencoderLoss`** (`training/losses.py`): Eqs. (21)–(26) on a window batch.
+  `recon` over all window points; `pha`/`dev` are the `k = 1..K` latent prediction
+  errors of the flow against the encoded future states, split into `(Y₁, Y₂)` and `Y₃`;
+  `α_k = k^{−min(1, L_pha)}` with `L_pha` of the current batch under `stop_gradient`;
+  `aux` is the squared centre of mass of the batch's `(Y₁, Y₂)` at `t₀`. Weights
+  `(1, 0.5, 0.5, 2)` switch to `(1, 5, 0.5, 0)` when `pha < 0.01` and `aux < 0.05`
+  (Sec. IV.A), decided *per batch* here (the paper switches once); `switched` is
+  reported, and `omega`/`kappa` are reported for logging.
+- **`OnCycleGaussian(cycle_points, gamma2=0.5)`** (`data/generate.py`): Eqs. (27)–(28);
+  `from_normal_form(nf, n)` uses `limit_cycle`; the `3T` horizon is the `ts` passed to
+  `generate`. For FitzHugh–Nagumo the cycle points will come from Phase E's numerical
+  limit cycle.
+- **What the smoke run showed** (Hopf `a = 1, ω₁ = 2, ω₀ = 1`; 256 orbits × 3 periods,
+  windows of `K = 20` at `T/40`, Adam 1e-3, batch 128): after 1500 steps the learned
+  phase matches the exact `Θ` on a grid at `r ∈ {0.8, 1, 1.25}` to a circular standard
+  deviation of 0.08 rad (orientation taken as the better of the two signs), `ω → 1.996`;
+  `κ → −0.47` against the exact `−2`, and `corr(Y₃, Ψ) ≈ −0.5`. The latter two are what
+  the paper reports about its `λ` and `Y₃` ("closely related, though not equivalent"),
+  and are the reason the design document says the baseline learns the phase but not the
+  isostable normalisation; the test asserts `Θ` (and `|ω|` to 5 %) and prints the rest.
 
 ## Design
 
@@ -220,6 +311,32 @@ indices; `transient_weights` shape/decay/validation; `weighted_windows` empirica
 match the weights within 3 % over 4000 draws and the stream is seed-deterministic; weight
 validation; `mixed_split` interleaves in ratio and rejects splits that do not fit a window.
 
+`tests/test_normal_forms.py` after B11 (21 tests, design document §10): defining
+identities in `r` by autodiff (`ṙ = rρ(r)`, `ω + h'·rρ = ω₁`, `Ψ'·rρ = κΨ`, `Ψ'(1) = 1`,
+`Ψ < 0` inside), also inside the outer cycle for `−1 < b < 0`; `_sq` hooks equal the `r` views; Hopf `floquet_multiplier` equals the monodromy of the radial linearisation over one period (`−2a`); `h(1) = Ψ(1) = ρ(1) = 0`; `κ` and the
+`Ψ` limits in closed form for Hopf and Bautin; `eigenvalues_origin` equals the Jacobian of
+`rhs` at `0` (Hopf explicitly `a ± iω₀`); `rhs` equals `rhs_polar` through the chart;
+`isochron`/`limit_cycle`; Hopf = Bautin(b=0); the outer cycle for `b < 0` with `Ψ`
+diverging like `ε^b` (exponent pinned to 5 %); chart round trip and `radius_from_isostable
+∘ isostable = id`; `radius_from_isostable` differentiable (`dr/dΨ · Ψ'(r) = 1` and `d/d raw_b`
+vs finite differences); unreachable `Ψ` → `nan`, basin edge for `b < 0`; the three numerical
+integrations agree with `closed_form` to `TOL["flow"]`; Hopf `closed_form` equals §6.1's
+explicit solution (angle compared modulo 2π); cartesian finite at the origin; names
+rejected/resolved; integrations static under `filter_jit`.
+
+`tests/test_baseline.py` (11 tests; the training test is `@pytest.mark.slow`, ~65 s):
+the latent flow is rotation ⊕ decay with radius preserved and is a semigroup; `kappa ≥ 0`
+rejected; the exact chart `(cos Θ, sin Θ, Ψ)` of a drawn Hopf/Bautin form, pushed through
+the latent flow with `(ω₁, κ)`, equals the chart of the normal form's `closed_form` flow
+(the §5.3 correspondence); encoder normalisation (Eqs. (15)–(16)); shapes of
+`encode`/`phase`/`phase_sensitivity`/`__call__`; the loss vanishes on the exact chart
+except for the centre-of-mass term, detects a wrong `ω` in `pha` only, switches weights,
+and reproduces `α_k = 1/k` for a badly wrong `ω`; gradients through the MLPs are finite
+and non-zero; `OnCycleGaussian` reproduces the cycle at `γ₂ = 0`, has the right spread at
+`γ₂ = 0.5`, is seeded and validates; the slow test learns the Hopf phase to a circular
+std `< 0.25` rad and `|ω|` to 5 % in 1500 steps, printing `corr(Y₃, Ψ)` and `κ` (run with
+`-s` to see them; deselect with `-m "not slow"`).
+
 Also run by hand: `scripts/generate_data.py --config-name {bautin,fhn}` writes
 `<name>-<hash>.nc`; reloading gives the metadata including the resolved Hydra config, and
 `weighted_windows(...).batch(64)` yields `(64, W)`, `(64, W, 2)` batches.
@@ -232,6 +349,20 @@ Also run by hand: `scripts/generate_data.py --config-name {bautin,fhn}` writes
 - `t_settle` per trajectory (a physical basis for sampling weights) parked with B8.
 - `scripts/training/` (the earlier autoencoder training script and its configs) untouched;
   Phase D decides whether it is folded into `scripts/train.py`.
+- Found while running the whole suite, *not* touched here (invertible package, Phase A's
+  territory): `test_vector_jacobian_consistent_with_inverse[circular_rq (K=8)]` fails for
+  the Hypothesis draw `x = (1e-12, 0)` — a point at the origin of the polar chart, where
+  `Df⁻¹·Df` has a `0.36` on the angular diagonal (reproduce with
+  `@reproduce_failure('6.168.3', b'AEEAQQABQQEoAAAAAAAAAAAAKD1xl5mBLeoR')`). Either the
+  `point_batches` strategy should exclude a neighbourhood of the origin for polar
+  couplings, or `PolarCouplingFlow`'s Jacobian there needs a look; it reproduces on the
+  branch before this work.
+- Baseline: no batch normalisation (the paper's encoder has it); weight switch per batch
+  and `α_k` per batch rather than once / per epoch — a trainer-level schedule in Phase C
+  would reproduce the paper exactly; inputs are not standardised by the loss (the data
+  pipeline's job); `OnCycleGaussian` for FHN waits for the numerical cycle (Phase E).
+- `scripts/training/train_autoencoder.py` still only instantiates the model; its configs
+  now name the new classes so `hydra.utils.instantiate` works, nothing more.
 - `uv.lock` not regenerated here (same reason as the previous branch); `uv sync` will add
   `xarray`/`h5netcdf`.
 
@@ -287,3 +418,30 @@ Review round 2 (B9) and the B10 draft:
 | `tests/test_data.py`: rewritten for the transform design | | |
 | `configs/data/*.yaml`, `scripts/generate_data.py`, `prototype.ipynb`: follow the API | | |
 | `docs/decisions/0008-…`, `docs/architecture.md`, `docs/roadmap.md`: amended | | |
+
+B11:
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `src/deep_isochron/systems/normal_forms/base.py`: `_sq` hooks, API in `r`, `κ = ρ'(1)`, `eigenvalues_origin`, `(Θ, Ψ)` chart, `radius_from_isostable` root solve with implicit-function JVP | | |
+| `src/deep_isochron/systems/normal_forms/hopf.py`: `log_growth_rate_sq`/`angular_rate_sq`; `Ψ = ½(1 − r⁻²)`; explicit `radius_from_isostable` | | |
+| `src/deep_isochron/systems/normal_forms/bautin.py`: hooks; `Ψ` per §6.2 | | |
+| `src/deep_isochron/systems/normal_forms/integration.py`: `ClosedFormIntegration`, `"closed_form"` | | |
+| `src/deep_isochron/systems/normal_forms/__init__.py`, `systems/__init__.py`: export | | |
+| `tests/test_normal_forms.py`: rewritten per design document §10 | | |
+| `docs/decisions/0007-…`: amended — design document authoritative; `ClosedFormIntegration`; root solve | | |
+| `docs/architecture.md`, `docs/roadmap.md`: B10–B11 done | | |
+
+B12:
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `src/deep_isochron/model/latent_dynamics.py`: `PhaseAmplitudeLatentDynamics(omega, kappa)`, `DECAY_CONSTRAINT`; `LinearLatentDynamics` removed | | |
+| `src/deep_isochron/model/autoencoder.py`: normalised encoder, `encode`/`decode`/`phase`/`amplitude`/`cycle_point`/`phase_sensitivity`; `Callable` fields | | |
+| `src/deep_isochron/model/__init__.py`: exports | | |
+| `src/deep_isochron/training/losses.py`: `PhaseAutoencoderLoss` (Eqs. (21)–(26)) | | |
+| `src/deep_isochron/training/trainer.py`: `Self` → `"TrainerState[M]"` (beartype) | | |
+| `src/deep_isochron/data/generate.py`, `data/__init__.py`: `OnCycleGaussian` | | |
+| `scripts/training/configs/model/*`: `phase_amplitude.yaml` replaces `hopf`/`linear` | | |
+| `tests/test_baseline.py`: new (11 tests, one `slow`) | | |
+| `docs/architecture.md`, `docs/roadmap.md`, `docs/decisions/0007-…`: B12 | | |

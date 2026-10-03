@@ -17,11 +17,17 @@ diffrax's. (Dense output or saved solver state, if ever requested through
   method that can start *at* the origin.
 * ``PolarIntegration`` — ``rhs_polar`` on $(r, \theta)$; ``theta`` accumulates without
   wrapping. Singular at $r = 0$ (``theta`` undefined), fine elsewhere.
-* ``RadiusSquaredIntegration`` — integrates $s = r^2$ ($\dot s = 2 s\rho(s)$, a
+* ``RadiusSquaredIntegration`` — integrates $s = r^2$ ($\dot s = 2 s\tilde\rho(s)$, a
   polynomial for the Hopf/Bautin forms, no square root) together with the phase
-  quadrature $\theta(t) = \theta_0 + \int_0^t \omega(s)\,dt$ as a second state;
+  quadrature $\theta(t) = \theta_0 + \int_0^t \tilde\omega(s)\,dt$ as a second state;
   recovers $r = \sqrt s$ on output. The former ``BautinNormalForm.solve``. Also
   singular at the origin (through $\theta_0$ and $\sqrt s$'s derivative).
+* ``ClosedFormIntegration`` — no ODE solve: $(\Theta, \Psi)$ evolve linearly,
+  $\Theta(t) = \Theta_0 + \omega_1 t$, $\Psi(t) = \Psi_0 e^{\kappa t}$, and the point is
+  recovered by ``from_phase_amplitude`` (one monotone root solve per output time;
+  explicit
+  for Hopf). Design document §6.1. Exact up to the root solve; the reference the three
+  numerical integrations are tested against. ``config`` is ignored.
 """
 
 import abc
@@ -76,7 +82,10 @@ class RadiusSquaredIntegration(AbstractFlowIntegration):
             del t, args
             s, _ = state
             return jnp.stack(
-                (2 * s * normal_form.radial_rate(s), normal_form.angular_rate(s))
+                (
+                    2 * s * normal_form.log_growth_rate_sq(s),
+                    normal_form.angular_rate_sq(s),
+                )
             )
 
         r0, theta0 = normal_form.to_chart(u0)
@@ -86,10 +95,34 @@ class RadiusSquaredIntegration(AbstractFlowIntegration):
         return _with_ys(sol, jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)), -1))
 
 
+class ClosedFormIntegration(AbstractFlowIntegration):
+    def __call__(self, normal_form, ts, u0, args, config):
+        del args, config
+        Theta0, Psi0 = normal_form.to_phase_amplitude(u0)
+        dt = ts - ts[0]
+        Theta = Theta0 + normal_form.omega() * dt
+        Psi = Psi0 * jnp.exp(normal_form.floquet_exponent() * dt)
+        ys = jax.vmap(normal_form.from_phase_amplitude)(jnp.stack((Theta, Psi), -1))
+        return dfx.Solution(
+            t0=ts[0],
+            t1=ts[-1],
+            ts=ts,
+            ys=ys,
+            interpolation=None,
+            stats={},
+            result=dfx.RESULTS.successful,
+            solver_state=None,
+            controller_state=None,
+            made_jump=None,
+            event_mask=None,
+        )
+
+
 INTEGRATIONS: dict[str, AbstractFlowIntegration] = {
     "cartesian": CartesianIntegration(),
     "polar": PolarIntegration(),
     "r_squared": RadiusSquaredIntegration(),
+    "closed_form": ClosedFormIntegration(),
 }
 
 
