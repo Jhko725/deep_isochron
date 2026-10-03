@@ -1,249 +1,600 @@
 # Normal forms — conventions, derivations, and the API they imply
 
-**Status: draft for review (roadmap B10).** Once agreed, B11 reimplements
-`systems/normal_forms/` against this document and ADR-0007 is amended to point here. The
-current code is correct but mixes `r` and `s = r²` in its public names; the open decisions
-are collected at the end.
+**Status: agreed (roadmap B10), 2026-10-03 — ready for B11.** This document merges the
+B10 design note with Joon's earlier derivation notes (LaTeX, "Tractable periodic
+dynamics") and resolves the conflicts between them. It is the single reference for the
+mathematics of the analytic base systems; `systems/normal_forms/` is implemented against
+it in B11, and ADR-0007 is to be amended to point here. All design decisions are settled
+and listed in §11; §9 is the implementation contract.
 
 Companion files: `systems/normal_forms/{base,hopf,bautin,integration}.py`;
 `tests/test_normal_forms.py`. Related: ADR-0007 (hierarchy, `SolverConfig`, integrations
 as objects).
 
+All closed forms below were re-verified symbolically/numerically on 2026-10-03
+(residuals of the defining identities at machine precision, including the regime
+$-1 < b < 0$).
+
+---
+
 ## 1. Setting and symbols
 
 A **normal form** here is a planar ODE with an attracting limit cycle, rotationally
-symmetric about the origin, so that in polar coordinates `u = (x, y) = (r cos θ, r sin θ)`
-the radial and angular motions decouple:
+symmetric about the origin, so that in polar coordinates
+$\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motions decouple.
 
 | symbol | meaning | convention |
 |---|---|---|
-| `r ≥ 0`, `θ ∈ (−π, π]` | polar coordinates about the origin | `to_chart(u) = (r, θ)`, `θ = atan2(y, x)` |
-| `ρ(r)` | **growth rate** of the radius, `ṙ = r ρ(r)` | even in `r`; `ρ(1) = 0`, `ρ'(1) < 0` |
-| `ω(r)` | **angular rate**, `θ̇ = ω(r)` | even in `r`; `ω(1) =: ω₁ ≠ 0` |
-| `Γ` | the limit cycle `r = 1` | the only attracting cycle |
-| `T = 2π/ω₁` | period | sign of `ω₁` is the sense of rotation |
-| `κ = 2ρ'(1) < 0` | non-trivial Floquet exponent | contraction rate of the amplitude |
-| `φ(u) ∈ (−π, π]` | **asymptotic phase**: `φ̇ = ω₁` along every trajectory | `φ = θ` on `Γ` |
-| `h(r)` | **phase shift**: `φ = θ + h(r)` | `h(1) = 0` |
-| `ψ(u)` | **isostable coordinate** (amplitude): `ψ̇ = κ ψ` | `ψ = 0` on `Γ`, `ψ > 0` inside |
-| `J` | rotation by `+π/2`, `J(x, y) = (−y, x)` | |
+| $r \ge 0$, $\theta \in (-\pi, \pi]$ | polar coordinates about the origin | `to_chart(u) = (r, θ)`, $\theta = \operatorname{atan2}(y, x)$; $\theta$ is *unwrapped* ($\in\mathbb{R}$) whenever it is integrated |
+| $\rho(r)$ | **log growth rate** of the radius, $\rho = \dot r/r = \tfrac{d}{dt}\ln r$ | even in $r$; $\rho(1) = 0$, $\rho'(1) < 0$ |
+| $\omega(r)$ | **angular rate**, $\dot\theta = \omega(r)$ | even in $r$; $\omega(1) =: \omega_1 \ne 0$ |
+| $\Gamma$ | the limit cycle $r = 1$ | the only attracting cycle |
+| $T = 2\pi/\omega_1$ | period | sign of $\omega_1$ is the sense of rotation |
+| $\kappa = \rho'(1) < 0$ | non-trivial **Floquet exponent** | **[decided]** no factor 2 — see §4.2 |
+| $\mu = e^{\kappa T}$ | non-trivial **Floquet multiplier** | $0 < \mu < 1$ |
+| $\Theta(\mathbf{u}) \in (-\pi, \pi]$ | **asymptotic phase**: $\dot\Theta = \omega_1$ along every trajectory | $\Theta = \theta$ on $\Gamma$ |
+| $h(r)$ | **phase shift**: $\Theta = \theta + h(r)$ | $h(1) = 0$ |
+| $\Psi(\mathbf{u})$ | **isostable coordinate** (amplitude): $\dot\Psi = \kappa\Psi$ | **[decided]** $\Psi = 0$ on $\Gamma$, $\nabla\Psi\cdot\mathbf{e}_r = 1$ on $\Gamma$ (§5.2) |
+| $\mathsf{J}$ | rotation by $+\pi/2$, $\mathsf{J}(x, y) = (-y, x)$ | |
 
-"Even in `r`" means `ρ(r) = ρ̃(r²)` for a smooth `ρ̃` — equivalently, `ρ` has only even
-powers in its Taylor expansion at 0. This is what makes the cartesian vector field smooth
-at the origin (§2) and is a *requirement* on the defining data, not a convenience.
+**Notation [decided].** Uppercase $\Theta, \Psi$ are the two *coordinate functions* on the
+basin; lowercase $\theta$ is the polar angle. $\Psi$ and $\kappa$ follow Wilson & Moehlis
+(2016), who write the isostable coordinate as $\psi$ and the exponent as $\kappa$; we
+capitalise $\psi\to\Psi$ so that both coordinate functions $(\Theta,\Psi)$ are uppercase.
+Langfield, Krauskopf & Osinga (2014) use a period-normalised phase $\vartheta\in[0,1)$;
+we use radians, $\Theta = 2\pi\vartheta$.
 
-**Why these quantities.** Isochrons are the level sets of `φ`; the phase response of the
-oscillator is `∇φ`; `κ` and `T` are the smooth-conjugacy invariants the learned map must
-match (`learnings`: Floquet exponent, period and the eigenvalue structure at the enclosed
-fixed point are hard constraints); `ψ` gives the amplitude coordinate in which the
-conjugacy target is linear (`ψ̇ = κψ`). For the observed systems none of this is closed
-form, which is the reason the normal forms carry it.
+"Even in $r$" means $\rho(r) = \tilde\rho(r^2)$ for a smooth $\tilde\rho$ — equivalently,
+$\rho$ has only even powers in its Taylor expansion at $0$. This is what makes the
+cartesian vector field smooth at the origin (§2) and is a *requirement* on the defining
+data, not a convenience.
+
+**Why these quantities.** Isochrons are the level sets of $\Theta$ and isostables the
+level sets of $\Psi$; the infinitesimal phase and amplitude response curves are
+$\nabla\Theta$ and $\nabla\Psi$; $\kappa$, $T$ and the eigenvalues at the enclosed fixed
+point are the smooth-conjugacy invariants the learned map must match (`learnings`);
+$(\Theta,\Psi)$ is the chart in which the flow is *linear*. For the observed systems (FHN)
+none of this is closed form, which is the reason the normal forms carry it.
+
+---
 
 ## 2. Vector fields in the three charts
 
-**Polar** (the defining chart): `ṙ = r ρ(r)`, `θ̇ = ω(r)`.
+**Polar** (the defining chart):
+$$\dot r = r\rho(r), \qquad \dot\theta = \omega(r).$$
 
-**Cartesian** (what the data and the bijection see): with `r = |u|`,
+**Cartesian** (what the data and the bijection see): with $r = |\mathbf{u}|$,
+$$\dot{\mathbf{u}} = \rho(r)\,\mathbf{u} + \omega(r)\,\mathsf{J}\mathbf{u},
+\qquad\text{i.e.}\qquad
+\dot x = \rho x - \omega y,\quad \dot y = \rho y + \omega x .$$
 
-```
-u̇ = ρ(|u|) u + ω(|u|) J u ,   i.e.  ẋ = ρ x − ω y ,  ẏ = ρ y + ω x .
-```
+*Derivation.* $\mathbf{u} = r\mathbf{e}_r$, $\dot{\mathbf{u}} = \dot r\,\mathbf{e}_r +
+r\dot\theta\,\mathbf{e}_\theta = r\rho\,\mathbf{e}_r + r\omega\,\mathbf{e}_\theta = \rho\mathbf{u}
++ \omega\mathsf{J}\mathbf{u}$, since $r\mathbf{e}_\theta = \mathsf{J}\mathbf{u}$. Because $\rho,\omega$
+are even, $\rho(|\mathbf{u}|) = \tilde\rho(x^2+y^2)$ is a smooth function of $\mathbf{u}$ and the
+field is smooth at the origin. *Numerical note*: $|\mathbf{u}| = \sqrt{x^2+y^2}$ has no
+derivative at exactly $\mathbf{u}=0$, so the code never forms it — the cartesian `rhs` is
+evaluated as $\tilde\rho(x^2+y^2)\,\mathbf u + \tilde\omega(x^2+y^2)\,\mathsf J\mathbf u$ (§9).
 
-*Derivation.* `u = r e_r`, `u̇ = ṙ e_r + r θ̇ e_θ = rρ e_r + rω e_θ = ρ u + ω J u` since
-`r e_θ = J u`. Because `ρ`, `ω` are even, `ρ(|u|) = ρ̃(x² + y²)` is a smooth function of
-`u`, and `u̇` is smooth at the origin with Jacobian `ρ(0) I + ω(0) J` there — eigenvalues
-`ρ(0) ± i ω(0)` (`eigenvalues_origin`). *Numerical caveat*: computing `|u| = √(x²+y²)` has
-no derivative at exactly `u = 0`; §7 says how the code avoids a NaN there.
+**Cartesian Jacobian.** For general even $\rho,\omega$,
+$$\mathsf{D}\dot{\mathbf{u}} = \rho(r)\,\mathsf{I} + \omega(r)\,\mathsf{J}
++ \frac{1}{r}\bigl(\rho'(r)\,\mathbf{u} + \omega'(r)\,\mathsf{J}\mathbf{u}\bigr)\mathbf{u}^{\mathsf T}.$$
+Written out for the Hopf form ($\rho = a(1-r^2)$, $\omega = \omega_0 + (\omega_1-\omega_0)r^2$),
+$$\mathsf{D}\dot{\mathbf{u}} = \begin{bmatrix}
+a(1-r^2) - 2ax^2 - 2(\omega_1-\omega_0)xy &
+-2axy - \omega_0 - (\omega_1-\omega_0)r^2 - 2(\omega_1-\omega_0)y^2 \\
+-2axy + \omega_0 + (\omega_1-\omega_0)r^2 + 2(\omega_1-\omega_0)x^2 &
+a(1-r^2) - 2ay^2 + 2(\omega_1-\omega_0)xy
+\end{bmatrix}.$$
+(The $(1,2)$ entry had a sign error, $+(\omega_1-\omega_0)r^2$, in the earlier LaTeX notes;
+it does not affect the value at the origin.) Since $\rho'(r), \omega'(r) = O(r)$ for even
+functions, the rank-one term is $O(r^2)$ and the Jacobian at the origin is
+$$\mathsf{D}\dot{\mathbf{u}}(0) = \rho(0)\,\mathsf{I} + \omega(0)\,\mathsf{J}.$$
 
-**Phase–amplitude** `(φ, ψ)`: `φ̇ = ω₁`, `ψ̇ = κψ` — the flow is *linear*: `φ(t) = φ₀ +
-ω₁ t`, `ψ(t) = ψ₀ e^{κt}`. This chart is defined on the basin minus the origin; its inverse
-needs the inverse of `ψ(r)` (§6).
+**Phase–amplitude** $(\Theta, \Psi)$: $\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$ — the
+flow is *linear*:
+$$\Theta(t) = \Theta_0 + \omega_1 t, \qquad \Psi(t) = \Psi_0\, e^{\kappa t}.$$
+This chart is defined on the basin minus the origin; its inverse needs the inverse of
+$\Psi(r)$ (§7).
 
-## 3. Derivations
+**Polar-to-cartesian conversion** (general planar flow $\dot r = f(r,\theta)$,
+$\dot\theta = g(r,\theta)$):
+$\dot x = x f/r - y g$, $\dot y = y f/r + x g$. For the two concrete forms this gives
+$$\begin{aligned}
+\dot x &= a\,x\,(1-x^2-y^2)\bigl(1+b(x^2+y^2)\bigr) - y\bigl(\omega_0 + (\omega_1-\omega_0)(x^2+y^2)\bigr),\\
+\dot y &= a\,y\,(1-x^2-y^2)\bigl(1+b(x^2+y^2)\bigr) + x\bigl(\omega_0 + (\omega_1-\omega_0)(x^2+y^2)\bigr),
+\end{aligned}$$
+with $b = 0$ for Hopf.
 
-### 3.1 Asymptotic phase and the phase shift `h`
+---
 
-Seek `φ = θ + h(r)` with `φ̇ = ω₁` everywhere in the basin. Then
+## 3. The two concrete forms
 
-```
-φ̇ = θ̇ + h'(r) ṙ = ω(r) + h'(r) r ρ(r) = ω₁   ⟹   h'(r) = (ω₁ − ω(r)) / (r ρ(r)) ,
-```
+Both have $\omega(r) = \omega_0 + (\omega_1 - \omega_0)\,r^2$, so $\omega(1) = \omega_1$,
+$\omega(0) = \omega_0$. Write $c := (\omega_1 - \omega_0)/a$.
 
-with `h(1) = 0` so that `φ = θ` on the cycle. The integrand is finite at `r = 1` (both
-numerator and denominator vanish linearly, ratio `→ −ω'(1)/(ρ'(1))`) and the integral from
-`1` to `r` converges for `r` in the basin. **Isochrons** are `φ = const`, i.e. the curves
-`θ = φ − h(r)`; for `ω ≡ ω₁` they are the radial lines `θ = φ`, and `ω(r) ≠ ω₁` shears
-them into spirals (the Bautin form with `w₀ ≠ w`). `isochron(φ, r)` returns these points
-in cartesian coordinates; `limit_cycle(φ) = (cos φ, sin φ)`.
+**Hopf (Stuart–Landau).** The generic planar Hopf normal form is
+$\dot r = r(\alpha + \beta r^2)$, $\dot\theta = \gamma + \delta r^2$; for $\alpha>0$,
+$\beta<0$ it has an unstable focus at $r=0$ and a stable cycle at
+$r^* = \sqrt{-\alpha/\beta}$. The cycle radius is immaterial for a conjugacy target, so we
+fix $r^*=1$ by $\beta = -\alpha =: -a$, and reparametrise the angular rate by its value on
+the cycle, $\omega_1 = \gamma+\delta$, and at the origin, $\omega_0 = \gamma$:
+$$\dot r = a\,r\,(1 - r^2), \qquad \dot\theta = \omega_0 + (\omega_1 - \omega_0)\,r^2 .$$
 
-### 3.2 Isostable coordinate `ψ` and the Floquet exponent `κ`
+**Bautin (generalised Hopf).** Adds a quintic term. Keeping the same stability pattern
+(unstable focus at $0$, stable cycle at $r=1$) suggests the factorised parametrisation
+$$\dot r = a\,r\,(1 - r^2)(1 + b r^2), \qquad \dot\theta = \omega_0 + (\omega_1 - \omega_0)\,r^2 ,$$
+so that $\rho(r) = a(1-r^2)(1+br^2) = a\bigl(1 + (b-1)r^2 - br^4\bigr)$ and
+$$\rho'(r) = 2ar\,(b - 1 - 2br^2), \qquad \rho'(1) = -2a(1+b).$$
 
-**`κ` first, with the convention fixed.** The amplitude equation is `ṙ = g(r) := r ρ(r)`;
-its linearisation at the cycle is `g'(1) = ρ(1) + ρ'(1) = ρ'(1)`. So, **with `ρ` a function
-of `r`, `κ = ρ'(1)`** — no factor. The same quantity written in `s = r²`, `ṡ = 2sρ̃(s)`,
-linearises to `2ρ̃'(1)`; and since `ρ'(r) = 2rρ̃'(r²)`, both give the same number (Hopf:
-`ρ(r) = a(1 − r²)`, `ρ'(1) = −2a`; `ρ̃(s) = a(1 − s)`, `2ρ̃'(1) = −2a`). The current code
-computes `2·grad(radial_rate)(1)` *because* `radial_rate` takes `s`; after B11 it is
-`grad(growth_rate)(1)` with `growth_rate(r)`. The factor of two is a chart artefact — the
-kind of thing this document exists to pin down.
-
-**`ψ`.** Seek `ψ = ψ(r)` with `ψ̇ = κψ`: `ψ'(r) r ρ(r) = κ ψ(r)`, i.e.
-
-```
-d ln ψ / dr = κ / (r ρ(r)) .
-```
-
-Near the cycle `rρ(r) ≈ ρ'(1)(r − 1) = κ(r − 1)`, so `d ln ψ/dr ≈ 1/(r − 1)` and `ψ ∝
-(r − 1)`: the isostable coordinate is **linear** in the distance to the cycle, as it must
-be (it is the Koopman eigenfunction of eigenvalue `κ`, and its gradient on `Γ` is the
-left Floquet vector). Sign and normalisation, fixed here: `ψ > 0` inside the cycle, `ψ < 0`
-outside, `ψ → +∞` as `r → 0`, and `ψ ≈ 1 − r²` (`≈ 2(1 − r)`) to first order at the
-cycle. Any other choice is `ψ ↦ Cψ`, which leaves `ψ̇ = κψ` unchanged; `C = 1` makes
-Hopf's `ψ = (1 − r²)/r²` the reference.
-
-### 3.3 The two concrete forms
-
-Both have `ω(r) = w₀ + (w − w₀) r²`, so `ω₁ = w`, `ω(0) = w₀`, and `c := (w − w₀)/a`.
-
-| | Hopf (Stuart–Landau) | Bautin |
+| | Hopf | Bautin |
 |---|---|---|
-| `ρ(r)` | `a(1 − r²)` | `a(1 − r²)(1 + b r²)` |
-| `κ = ρ'(1)` | `−2a` | `−2a(1 + b)` |
-| `h(r)` | `c ln r` | `c [ln r − ½ ln((1 + b r²)/(1 + b))]` |
-| `ψ(r)` | `(1 − r²)/r²` | `(1 − r²)(1 + b r²)^b / r^{2(1+b)}` |
-| eigenvalues at 0 | `a ± i w₀` | `a ± i w₀` |
-| basin of `Γ` | `R² \ {0}` | `R² \ {0}` if `b ≥ 0`; `0 < r < 1/√(−b)` if `−1 < b < 0` |
+| $\rho(r)$ | $a(1-r^2)$ | $a(1-r^2)(1+br^2)$ |
+| $\kappa = \rho'(1)$ | $-2a$ | $-2a(1+b)$ |
+| $\mu = e^{\kappa T}$ | $e^{-4\pi a/\omega_1}$ | $e^{-4\pi a(1+b)/\omega_1}$ |
+| $h(r)$ | $c\ln r$ | $c\left[\ln r - \tfrac12\ln\dfrac{1+br^2}{1+b}\right]$ |
+| $\Psi(r)$ | $\dfrac{r^2-1}{2r^2}$ | $\dfrac{(r^2-1)(1+br^2)^{b}}{2(1+b)^{b}\,r^{2(1+b)}}$ |
+| eigenvalues at $0$ | $a \pm i\omega_0$ | $a \pm i\omega_0$ |
+| basin of $\Gamma$ | $\mathbb{R}^2\setminus\{0\}$ | $\mathbb{R}^2\setminus\{0\}$ if $b \ge 0$; $\;0 < r < 1/\sqrt{-b}$ if $-1 < b < 0$ |
+| $\Psi$ as $r\to\infty$ (or $\to$ basin edge) | $\tfrac12$ | $\tfrac12\bigl(\tfrac{b}{1+b}\bigr)^{b}$ if $b>0$; $+\infty$ at $r^2 = -1/b$ if $b<0$ |
 
-*Derivations (Bautin; Hopf is `b = 0`).* With `s = r²` and `ds = 2r dr`:
+Stability condition: $\rho'(1) < 0 \iff b > -1$. The earlier notes required $a, b > 0$;
+that is sufficient but stricter than needed. For $-1 < b < 0$ the factor $(1 + br^2)$ has a
+second zero at $r^2 = -1/b$ with $\rho' > 0$ there: an **unstable outer cycle** bounding
+the basin of $\Gamma$ (the two-cycle regime of the Bautin bifurcation, Kuznetsov Ch. 8).
+Outside it $\rho > 0$ and $r\to\infty$ in finite time (quintic growth, $\dot r \sim a|b|r^5$).
+As a conjugacy target $b \ge 0$ is used (`learnings`: $b$ decouples the fixed-point
+instability $a$ from the cycle's contraction $\kappa = -2a(1+b)$, which is why Bautin was
+chosen over cubic Hopf). Hopf is Bautin with $b = 0$ throughout.
 
-- `h`: `h' = (ω₁ − ω)/(rρ) = (w − w₀)(1 − r²) / (a r (1 − r²)(1 + b r²)) = c / (r(1 + b
-  r²))`. `∫ dr/(r(1+br²)) = ln r − ½ ln(1 + b r²)` (check: derivative `1/r − br/(1+br²) =
-  1/(r(1+br²))`). Normalising `h(1) = 0` adds `+½ ln(1+b)`.
-- `ψ`: `d ln ψ/dr = κ/(rρ) = −2(1+b) / (r(1−r²)(1+br²))`. In `s`: `−(1+b) ds /
-  (s(1−s)(1+bs))`, partial fractions `1/(s(1−s)(1+bs)) = 1/s + 1/((1+b)(1−s)) −
-  b²/((1+b)(1+bs))`, integrate: `ln ψ = −(1+b) ln s + ln(1−s) + b ln(1+bs)`, i.e. `ψ =
-  (1−s)(1+bs)^b / s^{1+b}`. Leading behaviour at `s = 1`: `(1 − s)·(1+b)^b`, so the
-  normalisation `ψ ≈ 1 − s` divides by `(1 + b)^b` — **the current code omits this
-  factor** (harmless for the laws, which are invariant under `ψ ↦ Cψ`, but not the
-  normalisation stated in §3.2; B11 fixes it). The table above shows the unnormalised
-  form; the normalised one is `(1 − r²)(1 + b r²)^b / ((1 + b)^b r^{2(1+b)})`.
-- Both identities are verified exactly by autodiff in `test_phase_and_isostable_identities`
-  and along integrated trajectories in `test_phase_and_amplitude_along_the_flow`.
+---
 
-*Bautin with `b < 0`.* `ρ(r) = a(1 − r²)(1 + b r²)` has a second zero at `r² = −1/b` where
-`ρ' > 0`: an unstable cycle bounding the basin of `Γ` (the two-cycle regime of the Bautin
-bifurcation). Outside it `ρ > 0` and `r → ∞` in finite time (cubic growth). `ψ` involves
-`(1 + b r²)^b`, undefined past the outer cycle. `b > −1` is exactly `ρ'(1) < 0`, so the
-constraint `B_CONSTRAINT = GreaterThan(−1)` is the stability condition; as a conjugacy
-target `b ≥ 0` is used (`learnings`: `b` decouples the fixed-point instability `a` from the
-cycle's contraction `κ = −2a(1+b)`, which is why Bautin was chosen over cubic Hopf).
+## 4. Linear invariants
 
-## 4. Parameters
+### 4.1 The fixed point at the origin
 
-Unconstrained leaves, constrained on read (ADR-0001 in spirit): `a = GreaterThan(0)(raw_a)`
-(`raw = 0 ↦ a = 1`), `b = GreaterThan(−1)(raw_b)` (`raw = 0 ↦ b = 0`, the Hopf form); `w`,
-`w₀` free; `w₀` defaults to `w` (no shear). `params()` reports the constrained values.
+From §2, $\mathsf{D}\dot{\mathbf{u}}(0) = \rho(0)\mathsf{I} + \omega(0)\mathsf{J}$ with
+eigenvalues $\rho(0) \pm i\,\omega(0)$. For both forms this is
+$$\mathsf{D}\dot{\mathbf{u}}(0) = \begin{bmatrix} a & -\omega_0 \\ \omega_0 & a \end{bmatrix},
+\qquad \lambda_{1,2} = a \pm i\omega_0 ,$$
+an unstable **focus** (spiral) for $a > 0$, $\omega_0 \ne 0$. The Bautin factor $(1+br^2)$
+is $1 + O(r^2)$, so it cannot change the linearisation at $0$. A smooth conjugacy
+preserves these eigenvalues; a topological one preserves only the stability type.
 
-## 5. Integrations (`flow(..., integration=)`)
+### 4.2 Stability of the cycle: Floquet exponent and multiplier
 
-All take cartesian `u₀`, return a `diffrax.Solution` with cartesian `.ys`.
+Linearise the polar system about $r = 1$ (write $\delta r$, $\delta\theta$):
+$$\begin{bmatrix}\dot{\delta r}\\ \dot{\delta\theta}\end{bmatrix}
+= \begin{bmatrix}\partial_r(r\rho) & 0\\ \omega'(1) & 0\end{bmatrix}_{r=1}
+\begin{bmatrix}\delta r\\ \delta\theta\end{bmatrix}
+= \begin{bmatrix}\rho'(1) & 0\\ \omega'(1) & 0\end{bmatrix}
+\begin{bmatrix}\delta r\\ \delta\theta\end{bmatrix} =: \mathsf{A}
+\begin{bmatrix}\delta r\\ \delta\theta\end{bmatrix},$$
+using $\partial_r(r\rho)|_{r=1} = \rho(1) + \rho'(1) = \rho'(1)$. For the two forms
+$\mathsf{A} = \begin{bmatrix}-2a(1+b) & 0\\ 2(\omega_1-\omega_0) & 0\end{bmatrix}$.
+
+**Convention [decided]: $\kappa = \rho'(1)$ with $\rho$ a function of $r$ — no factor 2.**
+The same number written in $s = r^2$, $\dot s = 2s\tilde\rho(s)$, linearises to
+$2\tilde\rho'(1)$, and since $\rho'(r) = 2r\tilde\rho'(r^2)$ both agree
+(Hopf: $\rho'(1) = -2a = 2\tilde\rho'(1)$). The pre-B11 code computed
+`2·grad(radial_rate)(1)` *because* `radial_rate` took $s$; the factor of two was a chart
+artefact.
+
+**Multiplier.** The multipliers are the eigenvalues of the monodromy matrix $\mathsf{M}(T)$,
+$\dot{\mathsf{M}} = \mathsf{A}(t)\mathsf{M}$, $\mathsf{M}(0) = \mathsf{I}$. Liouville's formula
+(Chicone, Prop. 2.20) gives, for any planar cycle,
+$$\det\mathsf{M}(T) = \exp\!\int_0^T \operatorname{tr}\mathsf{A}(s)\,ds = \mu_1\mu_2,$$
+and since one multiplier is always $\mu_1 = 1$ (the direction along the flow),
+$\mu_2 = \exp\int_0^T\operatorname{tr}\mathsf{A}$. Here rotational symmetry makes $\mathsf{A}$
+*constant* with $\operatorname{tr}\mathsf{A} = \rho'(1) = \kappa$, so
+$$\mu = e^{\kappa T} = e^{2\pi\kappa/\omega_1}, \qquad
+\mu_{\text{Hopf}} = e^{-4\pi a/\omega_1},\quad \mu_{\text{Bautin}} = e^{-4\pi a(1+b)/\omega_1}.$$
+(The earlier LaTeX notes dropped the $\pi$ in the Bautin multiplier.) Equivalently, since
+$\mathsf{A}$ is constant, $\mathsf{M}(T) = e^{\mathsf{A}T}$ with eigenvalues $e^{0} = 1$ and
+$e^{\kappa T}$ directly. Floquet multipliers are invariant under the smooth change of chart
+polar $\leftrightarrow$ cartesian away from the origin, so these are the multipliers of the
+cartesian field too.
+
+---
+
+## 5. Nonlinear coordinates
+
+### 5.1 Asymptotic phase $\Theta$, the shift $h$, and isochrons
+
+Seek $\Theta = \theta + h(r)$ with $\dot\Theta = \omega_1$ everywhere in the basin:
+$$\dot\Theta = \dot\theta + h'(r)\dot r = \omega(r) + h'(r)\,r\rho(r) = \omega_1
+\quad\Longrightarrow\quad
+h'(r) = \frac{\omega_1 - \omega(r)}{r\rho(r)},$$
+with $h(1) = 0$ so that $\Theta = \theta$ on the cycle. (Equivalently, with the earlier
+notes' sign convention $\Theta = \theta - f(r)$, $f' = (\omega(r) - \omega_1)/\dot r$;
+the general formula there was written with the opposite sign, though the substituted
+result was right.) The integrand is finite at $r = 1$ — numerator and denominator vanish
+linearly, ratio $\to -\omega'(1)/\rho'(1)$ — and the integral from $1$ to $r$ converges
+for $r$ in the basin.
+
+For the concrete forms, $\omega_1 - \omega(r) = (\omega_1-\omega_0)(1-r^2)$ cancels the
+$(1-r^2)$ in $\rho$:
+$$h'(r) = \frac{c}{r(1+br^2)} = c\left(\frac1r - \frac{br}{1+br^2}\right),\qquad
+h(r) = c\left[\ln r - \tfrac12\ln(1+br^2)\right] + C,$$
+and $h(1)=0$ gives $C = \tfrac{c}{2}\ln(1+b)$, i.e. the table in §3. Thus
+$$\Theta(r,\theta) = \theta + \frac{\omega_1-\omega_0}{2a}\,\ln\frac{(1+b)\,r^2}{1+br^2}
+\qquad(\text{Hopf: } \theta + \tfrac{\omega_1-\omega_0}{a}\ln r).$$
+For Hopf this is the Stuart–Landau phase function of Nakao (2016, App. D).
+
+**Isochrons** are $\Theta = \Theta_0$, i.e. the curves
+$$\theta = \Theta_0 - h(r).$$
+This is the primary representation (`isochron(Θ, r)` returns these points in cartesian
+coordinates; `limit_cycle(Θ) = (cos Θ, sin Θ)`). For $\omega \equiv \omega_1$ ($c = 0$) they
+are the radial lines $\theta = \Theta_0$; $\omega(r)\ne\omega_1$ shears them into spirals.
+Amplitude dependence of the frequency is what the synchronisation literature calls
+*nonisochronicity* (Kuramoto; Pikovsky, Rosenblum & Kurths) or *shear*; for the standard
+$\omega(r)$ the nonisochronicity parameter is $\omega_1-\omega_0$.
+
+*Corollary — radius as a function of angle.* When $c \ne 0$ one can solve for $r$. Let
+$A^2 := \exp\!\bigl(2(\theta - \Theta_0)/c\bigr)$ with $\theta$ unwrapped; then
+$(1+b)r^2 = A^2(1+br^2)$ and
+$$r(\theta;\Theta_0) = \frac{A}{\sqrt{1 + b(1 - A^2)}},\qquad
+A = \exp\frac{a(\theta-\Theta_0)}{\omega_1-\omega_0}
+\qquad(\text{Hopf: } r = A).$$
+Caveats: (i) it is singular at $c = 0$ (radial isochrons); (ii) for $b>0$ each isochron
+reaches $r\to\infty$ at the *finite* angle where $A^2 = (1+b)/b$, because
+$h(r)\to \tfrac{c}{2}\ln\tfrac{1+b}{b}$ as $r\to\infty$, so the formula is defined only for
+$A^2 < (1+b)/b$; (iii) for $-1<b<0$, $A^2 \to 0$ as $r\to 0$ and $A^2\to\infty$ is not
+reached — the isochron ends at the outer cycle. The form $\theta = \Theta_0 - h(r)$ has
+none of these problems.
+
+### 5.2 Isostable coordinate $\Psi$
+
+**Definition.** $\Psi$ is the Koopman eigenfunction of the generator with eigenvalue
+$\kappa$ (Mauroy, Mezić & Moehlis 2013; Kato et al. 2021, Eq. (2)/(12)):
+$$\dot{\mathbf{u}}\cdot\nabla\Psi = \kappa\,\Psi \quad\text{on the basin.}$$
+Wilson & Moehlis (2016) define the same object for periodic orbits through the Poincaré
+map (their Eq. (5)) and fix its scale by **$\nabla\Psi\cdot\mathbf{v} = 1$ on $\Gamma$**
+(their Eq. (14)), where $\mathbf{v}$ is the right Floquet eigenvector for $\mu$. Any
+$\Psi\mapsto C\Psi$ satisfies the same equation (Kato et al.: "the scale of the amplitude
+function is arbitrary"), so a normalisation is a convention, not a modelling choice; it
+matters only when comparing $\nabla\Psi$ (the isostable response curve) with values
+reported elsewhere.
+
+**Normalisation [decided]: Wilson–Moehlis.** For the normal forms the right Floquet vector
+at $r=1$ is radial; with $\mathbf{v} = \mathbf{e}_r$ the condition reads
+$$\partial_r\Psi\big|_{r=1} = 1,\qquad\text{i.e.}\qquad \Psi \approx r - 1 \text{ near }\Gamma,$$
+so $\Psi < 0$ inside the cycle, $\Psi > 0$ outside, and $\Psi$ is the linear Floquet
+coordinate $\delta r$ to first order. (The B10 draft proposed $\Psi \approx 1 - r^2$,
+positive inside; that is the Hopf expression $(1-r^2)/r^2$ taken as reference. It is
+superseded. Code and docstrings must agree with the sign here.)
+
+**Derivation.** Seek $\Psi = \Psi(r)$: $\Psi'(r)\,r\rho(r) = \kappa\Psi$, i.e.
+$$\frac{d\ln|\Psi|}{dr} = \frac{\kappa}{r\rho(r)}.$$
+Near the cycle $r\rho(r)\approx\rho'(1)(r-1) = \kappa(r-1)$, so $d\ln|\Psi|/dr \approx
+1/(r-1)$ and $\Psi\propto (r-1)$: the isostable coordinate is **linear** in the distance to
+the cycle, as it must be (its gradient on $\Gamma$ is the left Floquet vector).
+
+For Bautin, in $s = r^2$ ($ds = 2r\,dr$):
+$$\frac{d\ln|\Psi|}{ds} = \frac{-(1+b)}{s(1-s)(1+bs)},\qquad
+\frac{1}{s(1-s)(1+bs)} = \frac1s + \frac{1}{(1+b)(1-s)} - \frac{b^2}{(1+b)(1+bs)},$$
+so $\ln|\Psi| = -(1+b)\ln s + \ln|1-s| + b\ln(1+bs) + \text{const}$, i.e.
+$$\Psi = C\,\frac{(s-1)(1+bs)^{b}}{s^{1+b}}.$$
+The leading behaviour at $s=1$ is $C(1+b)^b (s-1) \approx 2C(1+b)^b (r-1)$, so the
+normalisation $\partial_r\Psi(1) = 1$ fixes $C = 1/\bigl(2(1+b)^b\bigr)$:
+$$\boxed{\;\Psi(r) = \frac{(r^2-1)\,(1+br^2)^{b}}{2\,(1+b)^{b}\,r^{2(1+b)}}\;}
+\qquad\Bigl(\text{Hopf: } \Psi = \frac{r^2-1}{2r^2} = \tfrac12\bigl(1 - r^{-2}\bigr)\Bigr).$$
+
+**Monotonicity and range.** $\Psi' = \kappa\Psi/(r\rho)$ has the sign of $\kappa\Psi/\rho$,
+which is positive both inside ($\Psi<0$, $\rho>0$) and outside ($\Psi>0$, $\rho<0$): $\Psi$
+is strictly increasing on the basin, from $-\infty$ at $r = 0$ (where
+$\Psi\sim -r^{-2(1+b)}/(2(1+b)^b)$, exponent $\kappa/a$) to
+
+- $\tfrac12\bigl(\tfrac{b}{1+b}\bigr)^{b}$ as $r\to\infty$ for $b \ge 0$ (Hopf: $\tfrac12$);
+- $+\infty$ at the outer cycle $r^2 = -1/b$ for $-1<b<0$, through the factor $(1+br^2)^{b}$.
+
+So $r(\Psi)$ exists and is unique for every reachable $\Psi$ (§7). **Isostables** are the
+circles $r = \text{const}$ — rotational symmetry puts *all* non-trivial isostable (and
+isochron) geometry of a target system into the conjugating map, exactly as `learnings`
+records for isochrons.
+
+**Transport through a conjugacy.** If $H$ conjugates a target field $F$ to the normal form
+with matched $\kappa$, then by the chain rule $(F\cdot\nabla)(\Psi\circ H) = \kappa\,(\Psi\circ H)$,
+so $\Psi\circ H$ is the target's isostable coordinate and $\mathsf{D}H^{\mathsf T}\,\nabla\Psi\circ H$
+its isostable response curve; likewise $\Theta\circ H$ and the phase response. The
+Wilson–Moehlis scale is inherited only if the matched Floquet vector is normalised the same
+way on the target side — this is what makes the normalisation choice matter downstream.
+
+### 5.3 The family generated by $\Psi$; the first-order member; Yawata et al.'s latent space
+
+**$\Psi$ determines the radial field.** Reading the eigen-equation
+$\Psi'(r)\,r\rho(r) = \kappa\Psi(r)$ backwards, any strictly increasing $\Psi$ with
+$\Psi(1) = 0$, $\Psi'(1) = 1$ defines a rotationally symmetric normal form
+$$\dot r = \kappa\,\frac{\Psi(r)}{\Psi'(r)}, \qquad \dot\theta = \omega(r),$$
+whose isostable coordinate is $\Psi$ by construction and whose Floquet exponent is $\kappa$.
+Hopf and Bautin are the members with $\Psi = \tfrac12(1 - r^{-2})$ and the boxed
+expression above (verified: substituting them recovers $\dot r = ar(1-r^2)$ and
+$ar(1-r^2)(1+br^2)$). The polynomial degree of $\dot r$ in $r$ — cubic for Hopf, quintic
+for Bautin — is a property of the chosen $\Psi$, not of the construction. Note that an
+*odd polynomial* $\dot r = r(\alpha + \beta r^2 + \cdots)$ needs degree $\ge 3$ to have a
+cycle at all: the degree-1 member $\dot r = kr$, $\dot\theta = \omega$ has no limit cycle
+(the origin is a global focus for $k<0$), so it cannot be a conjugacy target for an
+oscillator. "First order" has to be understood as *linear in some coordinate other than
+$r$*, which is exactly what the chart $(\Theta,\Psi)$ provides.
+
+**The first-order (log-polar) member.** The simplest admissible $\Psi$ is
+$$\Psi(r) = \ln r:\qquad \dot r = \kappa\, r\ln r,\quad \dot\theta = \omega(r),\qquad
+\rho(r) = \kappa\ln r .$$
+In log-polar coordinates $(\ln r, \theta)$ the flow is literally linear, $\tfrac{d}{dt}\ln r
+= \kappa\ln r$, so the $(\Theta,\Psi)$ chart *is* the log-polar chart: $h\equiv 0$ when
+$\omega\equiv\omega_1$, isochrons are the rays $\theta = \Theta_0$, isostables the circles,
+$r(t) = r_0^{\,e^{\kappa t}}$. The alternative "affine" choice $\Psi = r - 1$ gives
+$\dot r = \kappa(r-1)$, which is linear in $r$ but has $\dot r = -\kappa > 0$ at the origin:
+the origin is not a fixed point and the field is not even continuous there as a planar
+vector field, so it is excluded. The log-polar member keeps the origin fixed
+($r\ln r\to 0$) and its basin is $\mathbb{R}^2\setminus\{0\}$, but it violates the "even in
+$r$" requirement of §1: $\rho(0) = \kappa\ln 0 = +\infty$, the cartesian field
+$\dot{\mathbf u} = \kappa\ln|\mathbf u|\,\mathbf u + \omega\mathsf{J}\mathbf u$ is continuous
+but not $C^1$ at the origin, and **the eigenvalues at the origin do not exist**. Its
+isostable coordinate diverges only logarithmically at the focus, whereas for a
+hyperbolic unstable focus with eigenvalues $\alpha\pm i\beta$ (Hopf: $\alpha = a$) the
+isostable coordinate diverges like $\operatorname{dist}^{\kappa/\alpha}$ (Hopf:
+$\Psi\sim -\tfrac12 r^{-2} = -\tfrac12 r^{\kappa/a}$). Consequences for this project:
+
+- the invariant "eigenvalues at the enclosed fixed point" (`learnings`) cannot be matched,
+  so a conjugacy to FHN can only be a diffeomorphism of the *punctured* basin, and must
+  blow up (exponentially in $\Psi$) as it approaches the equilibrium;
+- in exchange the member has one parameter fewer ($a$ disappears; only $\kappa$,
+  $\omega_1$, $\omega_0$) and the smallest possible nonlinearity in the base.
+
+It is admissible as a *third* subclass (`LogPolarNormalForm`) provided the base class
+does not assume finite `eigenvalues_origin()`; it is **deferred** (§11). The row for the §3 table would be: $\rho = \kappa\ln r$; $\kappa$ free;
+$\mu = e^{\kappa T}$; $\Psi = \ln r$; eigenvalues at $0$: none; basin
+$\mathbb{R}^2\setminus\{0\}$; $\Psi\to\pm\infty$ as $r\to\infty, 0$. The angular rate
+should *not* be the standard $\omega_0 + (\omega_1-\omega_0)r^2$ here: the $(1-r^2)$ no
+longer cancels against $\rho$ and $h' = (\omega_1-\omega_0)(1-r^2)/(\kappa r\ln r)$
+integrates to $\ln|\ln r| - \operatorname{Ei}(2\ln r)$, not elementary. The natural shear
+for this member is linear in the log chart, $\omega(r) = \omega_1 + \delta\ln r$, giving
+$h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 +
+(\delta/\kappa)\ln r$ — logarithmic spirals, as for Hopf — and $\omega(0)$ undefined,
+consistent with the missing eigenvalues.
+
+**Relation to Yawata et al. (2024).** Their phase autoencoder maps the oscillator state to
+a three-dimensional latent vector $\mathbf Y = (Y_1, Y_2, Y_3)$ with $Y_1^2 + Y_2^2 = 1$,
+$(Y_1,Y_2)$ rotating at constant frequency $\omega$ and $Y_3$ decaying as $e^{\lambda t}$
+(their Eqs. (11)–(14)). Their Appendix B identifies $Y_1 + iY_2$ with the Koopman
+eigenfunction $e^{i\Theta}$ and $Y_3$ with the eigenfunction of exponent $\lambda$ — i.e.
+with $\Psi$ and $\lambda = \kappa$ — while noting that the trained $Y_3$ is "closely
+related, though not equivalent" to it (their learned $\lambda$ differs from the true
+second Floquet exponent, e.g. $-1.4$ vs $-2.0$ for Stuart–Landau, $-2.42$ vs $-1.0$ for
+FHN, Sec. VI). So their latent space is precisely the chart of §7,
+$$\mathbf Y = (\cos\Theta, \sin\Theta, \Psi),$$
+a cylinder embedded in $\mathbb{R}^3$, and not a planar normal form; the linear latent
+dynamics is the statement $\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$ of §2. Which
+planar normal form one associates with it is a matter of choosing $\Psi(r)$: the log-polar
+member corresponds to $Y_3 = \ln r$, Hopf to $Y_3 = \tfrac12(1 - r^{-2})$, and so on. What
+distinguishes this project's setting is that the base is a *planar* flow conjugate to the
+target on its whole basin (including the equilibrium when $\rho(0)$ is finite), whereas
+the autoencoder is not invertible and its latent dynamics need only hold near the cycle.
+This is the sense in which Hopf/Bautin "add" the fixed point to Yawata's picture, and why
+the log-polar member sits between the two.
+
+---
+
+## 6. Trajectories
+
+### 6.1 Closed form via the phase–amplitude chart
+
+Since $\Psi(t) = \Psi_0 e^{\kappa t}$ and $\Theta(t) = \Theta_0 + \omega_1 t$,
+$$r(t) = \Psi^{-1}\!\bigl(\Psi(r_0)\,e^{\kappa t}\bigr), \qquad
+\theta(t) = \theta_0 + h(r_0) + \omega_1 t - h\bigl(r(t)\bigr).$$
+This is what `learnings` records as "the radial ODE admits a closed-form antiderivative
+via partial fractions; the angular integral has an exact closed form": $\ln|\Psi|$ *is*
+that antiderivative, and $h(r_0) - h(r(t))$ *is* the angular integral
+$(\omega_1-\omega_0)\int_0^t (r^2 - 1)\,dt'$.
+
+**Hopf is explicit.** $\Psi = \tfrac12(1 - r^{-2})$ inverts in closed form:
+$1 - r^{-2} = (1 - r_0^{-2})e^{-2at}$, hence
+$$r(t) = \sqrt{\frac{r_0^2}{r_0^2 + (1 - r_0^2)\,e^{-2at}}},\qquad
+\theta(t) = \theta_0 + \omega_1 t + \frac{\omega_1-\omega_0}{a}\ln\frac{r_0}{r(t)} .$$
+(The earlier notes derive the same $r(t)$ for the unscaled form $\dot r = \alpha r - r^3$,
+$\dot\theta = 1$, as $r = r_0\sqrt{\alpha/(r_0^2 + (\alpha - r_0^2)e^{-2\alpha t})}$;
+rescaling $r\mapsto r/\sqrt\alpha$ gives $a = \alpha$, $\omega_1=\omega_0=1$ and the
+formula above.)
+
+**Bautin needs one scalar root solve** per output time: $\Psi$ is strictly monotone (§5.2),
+so $r(\Psi)$ is a bracketed 1-D root on $(0, r_{\max})$ with $r_{\max} = 1/\sqrt{-b}$ for
+$b<0$ and a growing bracket otherwise. No ODE solver, no step-size error; exactly the map
+the conjugacy learns. Implemented in B11 as `ClosedFormIntegration`, bisection-safeguarded
+Newton as in `CubicBSpline` (ADR-0006).
+
+### 6.2 Numerical integrations
+
+All take cartesian $\mathbf{u}_0$ and return a `diffrax.Solution` with cartesian `.ys`.
 
 | name | state integrated | singular at | notes |
 |---|---|---|---|
-| `cartesian` | `u ∈ R²`, `rhs` | nowhere | the only one that can start at `0` |
-| `polar` | `(r, θ)`, `rhs_polar` | `r = 0` | `θ` unwrapped |
-| `r_squared` | `(s, θ)`: `ṡ = 2sρ(√s)`, `θ̇ = ω(√s)` | `r = 0` (via `θ₀`, `√s`) | polynomial RHS for Hopf/Bautin; the former `BautinNormalForm.solve` |
-| `closed_form` (**proposed**) | none — `(φ, ψ)` chart | `r = 0` | `ψ(t) = ψ₀e^{κt}`, `φ(t) = φ₀ + ω₁t`; needs `ψ⁻¹` by a 1-D monotone root solve (§6) |
+| `cartesian` | $\mathbf{u}\in\mathbb{R}^2$, `rhs` | nowhere | the only one that can start at $0$ |
+| `polar` | $(r,\theta)$, `rhs_polar` | $r=0$ | $\theta$ unwrapped |
+| `r_squared` | $(s,\theta)$: $\dot s = 2s\tilde\rho(s)$, $\dot\theta = \omega(\sqrt s)$ | $r=0$ (via $\theta_0$, $\sqrt s$) | polynomial RHS for Hopf/Bautin; the former `BautinNormalForm.solve` |
+| `closed_form` (B11) | none — $(\Theta,\Psi)$ chart | $r=0$ | §6.1; needs $\Psi^{-1}$ |
 
-The closed-form integration is what `learnings` records as "the radial ODE admits a
-closed-form antiderivative via partial fractions; the angular integral has an exact closed
-form" — in the present language, `ln ψ` *is* that antiderivative (`F(s) = −ln ψ/(1+b)`
-satisfies `F(s(t)) = F(s₀) + 2at`), and `θ(t) = θ₀ + h(r₀) + ω₁ t − h(r(t))` *is* the
-angular integral. It costs one Newton solve per output time instead of an ODE solve, has no
-step-size error, and is exactly the map the conjugacy learns; it is the natural reference
-for the three numerical integrations. Proposed for B11 as `ClosedFormIntegration`, with
-the root solve bisection-safeguarded on `r ∈ (0, r_max)` as in `CubicBSpline` (ADR-0006).
+For Bautin the `r_squared` system is
+$\dot s = 2a\,s(1-s)(1+bs)$, $\dot\theta = \omega_0 + (\omega_1-\omega_0)s$ — the earlier
+notes used the equivalent pair $(u, v) = (r^2, \int_0^t r^2)$ and reported that adaptive
+explicit Runge–Kutta methods sometimes failed to converge for larger $b$ in this chart,
+falling back to the implicit `Kvaerno5` (rtol $10^{-4}$, atol $10^{-6}$). The current
+default is `Tsit5` + `PIDController` in double precision; the closed-form integration
+removes the question for the normal forms and is the natural reference the three numerical
+integrations are tested against.
 
-## 6. The phase–amplitude chart as API
+---
 
-Given §3, the normal form can expose a third chart:
+## 7. The phase–amplitude chart as API
 
 ```
-to_phase_amplitude(u)   = (φ(u), ψ(u))          # closed form
-from_phase_amplitude(φ, ψ) = (r(ψ) cos(φ − h(r)), r(ψ) sin(φ − h(r)))   # r(ψ): monotone root
+to_phase_amplitude(u)       = (Θ(u), Ψ(u))                                  # closed form
+from_phase_amplitude(Θ, Ψ)  = (r(Ψ) cos(Θ − h(r)), r(Ψ) sin(Θ − h(r)))      # r(Ψ): monotone root
 ```
 
-`ψ(r)` is strictly decreasing on the basin (`ψ' = κψ/(rρ)` has the sign of `κψ/ρ`, which
-is negative both inside, `ψ > 0, ρ > 0`, and outside, `ψ < 0, ρ < 0`), from `+∞` at `r =
-0` to `−b^b` (Bautin, `b > 0`) or `−1` (Hopf) as `r → ∞`, so `r(ψ)` exists for every
-reachable `ψ`. With `r(ψ)` in hand, `from_phase_amplitude` and `ClosedFormIntegration` are
-the same code.
+With $r(\Psi)$ in hand, `from_phase_amplitude` and `ClosedFormIntegration` are the same
+code.
 
-## 7. API implied (for B11)
+$(\cos\Theta, \sin\Theta, \Psi)$ is the latent space of the phase autoencoder of
+Yawata et al. (2024); see §5.3.
 
-Public names in `r`; the defining data in `r`; the `s = r²` form confined to the `r_squared`
-integration and to the smoothness argument.
+---
+
+## 8. Parameters
+
+Unconstrained leaves, constrained on read (ADR-0001 in spirit):
+$a = \texttt{GreaterThan(0)}(\texttt{raw\_a})$ (raw $0\mapsto a=1$),
+$b = \texttt{GreaterThan(-1)}(\texttt{raw\_b})$ (raw $0\mapsto b=0$, the Hopf form);
+$\omega_1$ (`w`), $\omega_0$ (`w0`) free; `w0` defaults to `w` (no shear). `params()`
+reports the constrained values. $b > -1$ is exactly the stability condition $\rho'(1)<0$
+(§3).
+
+---
+
+## 9. API implied (for B11)
+
+**Decided: Option B.** The defining data are even functions of $r$, which is enforced
+*by construction* by having subclasses supply them as smooth functions of $s = r^2$; the
+public API is entirely in $r$. The $s$-chart appears in exactly two places: the abstract
+`*_sq` hooks and the `r_squared` integration.
 
 ```python
 class AbstractNormalForm(AbstractODE):
-    # defining data — even functions of r (Taylor series in r² at 0)
-    def growth_rate(self, r):   ...      # ρ(r): ṙ = r ρ(r); ρ(1) = 0, ρ'(1) < 0
-    def angular_rate(self, r):  ...      # ω(r): θ̇ = ω(r)
-    def phase_shift(self, r):   ...      # h(r), h(1) = 0
-    def isostable(self, r):     ...      # ψ(r), ψ(1) = 0, ψ ≈ 1 − r² near the cycle
+    # defining data — abstract, in s = r²  (ρ̃(s) = ρ(√s), ω̃(s) = ω(√s))
+    def log_growth_rate_sq(self, s): ...   # ρ̃(s): ṙ = r ρ̃(r²); ρ̃(1) = 0, ρ̃'(1) < 0
+    def angular_rate_sq(self, s):    ...   # ω̃(s): θ̇ = ω̃(r²)
+    def phase_shift(self, r):        ...   # h(r), h(1) = 0            (closed form, in r)
+    def isostable(self, r):          ...   # Ψ(r), Ψ(1) = 0, Ψ'(1) = 1 (closed form, in r)
+
+    # public r-chart views of the defining data (final)
+    def log_growth_rate(self, r): return self.log_growth_rate_sq(r * r)   # ρ(r)
+    def angular_rate(self, r):    return self.angular_rate_sq(r * r)      # ω(r)
 
     # derived (final)
-    omega()  period()  floquet_exponent() = grad(growth_rate)(1.0)  floquet_multiplier()
-    eigenvalues_origin() = growth_rate(0) ± i angular_rate(0)
-    rhs(t, u) / rhs_polar(t, (r, θ))
-    phase(u)  amplitude(u)  limit_cycle(φ)  isochron(φ, r)
-    to_chart / from_chart (polar);  to_phase_amplitude / from_phase_amplitude (§6)
+    omega() = angular_rate(1.0)      period()
+    floquet_exponent() = grad(log_growth_rate)(1.0)      floquet_multiplier() = exp(κ T)
+    eigenvalues_origin() = log_growth_rate_sq(0.0) ± i angular_rate_sq(0.0)
+    rhs(t, u)      # s = u·u;  log_growth_rate_sq(s) * u + angular_rate_sq(s) * J u
+    rhs_polar(t, (r, θ))
+    phase(u)  amplitude(u)  limit_cycle(Θ)  isochron(Θ, r)
+    to_chart / from_chart (polar);  to_phase_amplitude / from_phase_amplitude (§7)
     flow(ts, u0, *, config, integration="r_squared")
 ```
 
-- `growth_rate` is the proposed name for `ρ = ṙ/r` (it is the exponential growth rate of
-  the radius, `d ln r/dt`); `radial_rate` was ambiguous between `ṙ` and `ṙ/r`.
-- `floquet_exponent` becomes `grad(growth_rate)(1.0)` — no factor 2, by §3.2 — and stays
-  concrete on the base class with the subclasses' closed forms tested against it.
-- The cartesian `rhs` computes `r = |u|` with the standard safe pattern (`r = √s` where
-  `s > 0`, else `0`) so that autodiff at exactly the origin gives the correct Jacobian
-  `ρ(0)I + ω(0)J` rather than NaN; second derivatives *at exactly the origin* are not
-  reproduced by this device (they are zero by symmetry for the true field and come out as
-  zero from the device too for even `ρ`, `ω` — but this is not relied upon anywhere).
-  Away from the origin everything is exact. The alternative — keeping the defining data in
-  `s` — avoids the device entirely at the cost of the `r`/`s` split the review objected to.
-- `r_squared` integration calls `growth_rate(√s)`; since `ρ` is even this is exactly
-  `ρ̃(s)`, and `√s` only appears in a place that is already singular at the origin.
+- **Names.** `log_growth_rate` is $\rho = \dot r/r = d\ln r/dt$; the literature names its
+  value at the origin (the *linear growth rate*), its cubic coefficient (the *first
+  Lyapunov coefficient*) and its slope at the cycle (the Floquet exponent), but not the
+  function itself, so the name states what it is. `radial_rate` (ambiguous between $\dot r$
+  and $\dot r/r$) and `growth_rate` (invites the $\dot r$ reading) are rejected.
+  `angular_rate` is $\omega(r)$; "frequency" is avoided because of the $\omega$ vs
+  $\omega/2\pi$ ambiguity. The `_sq` suffix marks the $s$-chart hooks.
+- **Why the data live in $s$.** With $\tilde\rho,\tilde\omega$ smooth in $s$, the cartesian
+  field $\tilde\rho(|\mathbf u|^2)\,\mathbf u + \tilde\omega(|\mathbf u|^2)\,\mathsf J\mathbf u$
+  is smooth at the origin with no $\sqrt{}$ anywhere: for Hopf/Bautin it is literally a
+  polynomial in $(x,y)$, and *all* its derivatives at the origin are exact under autodiff.
+  The rejected Option A (data in $r$, cartesian `rhs` recovering $r=|\mathbf u|$ through a
+  double-`where` safe-$\sqrt{}$ device) gives the right Jacobian at exactly $\mathbf u = 0$
+  only because of the device, the right second derivatives there only by coincidence (both
+  are zero), wrong third and higher derivatives there, and cannot stop a subclass from
+  supplying a non-even $\rho$ and silently producing a non-smooth field. Away from the
+  origin the two are identical. Nothing in the project evaluates the base field at exactly
+  the origin, so the practical difference is small; the structural guarantee is the
+  reason for B.
+- **Factor 2.** `floquet_exponent` is `grad(log_growth_rate)(1.0)` — the $r$-chart
+  derivative, $\kappa = \rho'(1)$, by §4.2. Autodiff through `r * r` supplies
+  $\rho'(1) = 2\tilde\rho'(1)$; no manual factor anywhere. Concrete on the base class, with
+  the subclasses' closed forms tested against it.
+- **`r_squared` integration** calls `log_growth_rate_sq(s)` and `angular_rate_sq(s)`
+  directly: polynomial RHS, no $\sqrt{}$; the chart is singular at the origin only through
+  $\theta_0$.
+- **`polar` integration, `phase_shift`, `isostable`, the root solve** are all in $r$ via the
+  public views.
+- **`phase_shift` and `isostable` stay in $r$** because their closed forms (§3) are most
+  legible there and they are never evaluated at the origin (both diverge). They are
+  abstract per subclass; `test_phase_and_isostable_identities` checks them against the
+  `_sq` data by autodiff, so a subclass cannot get them inconsistent unnoticed.
+- The `AbstractNormalForm` docstring points to this document, §1 (evenness) and §9.
 
-## 8. Tests the document implies
+---
 
-Existing tests carry over with `κ = grad(growth_rate)(1)`; new or changed:
-`ψ` normalisation (`ψ(r) ≈ 1 − r²` near 1 for both forms); Jacobian of `rhs` at the origin
-equals `ρ(0)I + ω(0)J`; `to_phase_amplitude ∘ from_phase_amplitude = id` on the basin;
-`closed_form` agrees with `cartesian` to `TOL["flow"]`; the `r → ∞` limit of `ψ`.
+## 10. Tests the document implies
 
-## 9. Open decisions for review
+Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or changed:
 
-1. **Name of `ρ`**: `growth_rate` (proposed) vs `radial_rate` (current, ambiguous) vs
-   `rho`.
-2. **Convention `κ = ρ'(1)` with `ρ(r)`** (proposed, no factor 2) — confirm.
-3. **`ψ` normalisation `ψ ≈ 1 − r²` near the cycle** (divide Bautin's by `(1+b)^b`) —
-   confirm, or keep the unnormalised current form.
-4. **Defining data in `r` with the safe-`√` device** (Option A) vs **defining data in `s`,
-   public API in `r`** (Option B). Proposed: A.
-5. **Add `ClosedFormIntegration` and the `(φ, ψ)` chart in B11**, or defer to Phase E.
-   Proposed: B11 — they are a few dozen lines once `r(ψ)` exists and give the exact
-   reference the numerical integrations are compared against.
+- $\Psi$ normalisation: `grad(isostable)(1.0) == 1` and $\Psi(1) = 0$ for both forms, and
+  $\Psi < 0$ for $r<1$;
+- the defining identities $\dot{\mathbf{u}}\cdot\nabla\Theta = \omega_1$ and
+  $\dot{\mathbf{u}}\cdot\nabla\Psi = \kappa\Psi$ by autodiff on the basin, including
+  $-1<b<0$ inside the outer cycle (`test_phase_and_isostable_identities`), and along
+  integrated trajectories (`test_phase_and_amplitude_along_the_flow`);
+- Jacobian of `rhs` at the origin equals $\rho(0)\mathsf{I} + \omega(0)\mathsf{J}$, and
+  matches the explicit Hopf Jacobian of §2 at a few generic points; `log_growth_rate(r)
+  == log_growth_rate_sq(r*r)` (trivial, but pins the public/private contract);
+- `floquet_multiplier == exp(floquet_exponent · period)`, and for Hopf equals the
+  monodromy of the polar linearisation integrated over one period;
+- `to_phase_amplitude ∘ from_phase_amplitude = id` on the basin;
+- `closed_form` agrees with `cartesian` to `TOL["flow"]`; Hopf `closed_form` agrees with
+  the explicit $r(t)$ of §6.1;
+- the $r\to\infty$ limit of $\Psi$ (table in §3), and $\Psi\to+\infty$ at the outer cycle
+  for $b<0$.
+
+---
+
+## 11. Decisions
+
+**Decided 2026-10-03.**
+
+- Notation: $\Theta$ phase, $\Psi$ isostable (uppercase coordinate functions), $\theta$
+  polar angle, $\kappa$ exponent, $\mu$ multiplier, $\omega_1$ (`w`) / $\omega_0$ (`w0`).
+- $\kappa = \rho'(1)$ with $\rho(r)$; no factor 2.
+- $\Psi$ normalised à la Wilson & Moehlis: $\partial_r\Psi(1) = 1$, negative inside.
+  Bautin's expression is divided by $2(1+b)^b$ and sign-flipped relative to the B10 draft.
+- This document lives in the repo as Markdown with LaTeX math; the LaTeX manuscript
+  section is to be regenerated from it, not maintained separately.
+- `ClosedFormIntegration` and the $(\Theta,\Psi)$ chart go into B11 (§6.1, §7); the Hopf
+  trajectories were already computed from the analytical formula before, so this
+  restores that and extends it to Bautin via the root solve.
+- The log-polar member of §5.3 is **deferred**: it cannot match the fixed-point invariant
+  the project relies on, and has no concrete use until a Yawata-style baseline (roadmap
+  B12) needs it. If added later it is a third subclass with non-finite
+  `eigenvalues_origin()` and a non-standard `angular_rate`.
+- Names: `log_growth_rate` for $\rho$, `angular_rate` for $\omega$, with `_sq` suffix for
+  the $s$-chart hooks (§9).
+- Defining data in $s$ with the public API in $r$ (**Option B**, §9); Option A and its
+  safe-$\sqrt{}$ device are rejected.
+
+Nothing remains open. Changes to any of the above go through this document first.
+
+---
 
 ## References
 
 - A. T. Winfree, *The Geometry of Biological Time*, 2nd ed., Springer (2001) — isochrons,
   asymptotic phase.
 - J. Guckenheimer, Isochrons and phaseless sets, *J. Math. Biol.* 1, 259–273 (1975).
-- A. Mauroy, J. Moehlis, I. Mezić, Isostables, isochrons, and Koopman spectrum for the
-  action-angle representation of stable fixed point dynamics, *Physica D* 261, 19–30
-  (2013) — isostable coordinates as Koopman eigenfunctions (`ψ̇ = κψ`).
+- J. Guckenheimer, P. Holmes, *Nonlinear Oscillations, Dynamical Systems, and Bifurcations
+  of Vector Fields*, Springer (1983) — Floquet theory.
+- C. Chicone, *Ordinary Differential Equations with Applications*, 3rd ed., Springer
+  (2024) — Liouville's formula, Prop. 2.20.
+- Yu. A. Kuznetsov, *Elements of Applied Bifurcation Theory*, 3rd ed., Springer (2004),
+  Ch. 8 — the Bautin (generalised Hopf) normal form and its two-cycle regime.
+- H. Nakao, Phase reduction approach to synchronisation of nonlinear oscillators,
+  *Contemp. Phys.* 57(2), 188–214 (2016) — phase function $\Theta(\mathbf{X})$; Stuart–Landau
+  isochrons (App. D).
+- A. Mauroy, I. Mezić, J. Moehlis, Isostables, isochrons, and Koopman spectrum for the
+  action–angle representation of stable fixed point dynamics, *Physica D* 261, 19–30
+  (2013) — isostables as level sets of a Koopman eigenfunction.
 - D. Wilson, J. Moehlis, Isostable reduction of periodic orbits, *Phys. Rev. E* 94, 052213
-  (2016) — isostables of limit cycles and the Floquet normalisation.
-- Yu. A. Kuznetsov, *Elements of Applied Bifurcation Theory*, Ch. 8 — the Bautin
-  (generalised Hopf) normal form and its two-cycle regime.
+  (2016) — isostable coordinates $\psi_i$ of limit cycles, Eq. (5); normalisation
+  $\nabla\psi_i\cdot\mathbf{v}_i = 1$, Eq. (14).
+- Y. Kato, J. Zhu, W. Kurebayashi, H. Nakao, Asymptotic phase and amplitude for classical
+  and semiclassical stochastic oscillators via Koopman operator theory, *Mathematics*
+  9(18), 2188 (2021) — eigenfunction characterisation of phase and amplitude, Eqs. (2),
+  (12); arbitrariness of the amplitude scale.
+- P. Langfield, B. Krauskopf, H. M. Osinga, Solving Winfree's puzzle: the isochrons in the
+  FitzHugh–Nagumo model, *Chaos* 24, 013131 (2014) — FHN isochrons; period-normalised
+  phase $\vartheta\in[0,1)$.
+- K. Yawata, K. Fukami, K. Taira, H. Nakao, Phase autoencoder for limit-cycle
+  oscillators, *Chaos* 34, 063111 (2024) — latent variables $(Y_1,Y_2,Y_3)$, Eqs.
+  (11)–(14); relation to Koopman eigenfunctions, App. B and Sec. VI.
+- P. Kidger, *On Neural Differential Equations*, DPhil thesis, Oxford (2021) — diffrax.
