@@ -1,6 +1,6 @@
 # Normal forms — conventions, derivations, and the API they imply
 
-**Status: agreed (roadmap B10), 2026-10-03 — ready for B11.** This document merges the
+**Status: agreed (roadmap B10), 2026-10-03 — ready for B11.** Amended 2026-10-03: §5.1 corollary sign; §5.3 Yawata paragraph rewritten from the paper's equations and §5.4 (Kvalheim & Revzen) added — the latter two *proposed*, pending Joon. This document merges the
 B10 design note with Joon's earlier derivation notes (LaTeX, "Tractable periodic
 dynamics") and resolves the conflicts between them. It is the single reference for the
 mathematics of the analytic base systems; `systems/normal_forms/` is implemented against
@@ -230,18 +230,21 @@ Amplitude dependence of the frequency is what the synchronisation literature cal
 *nonisochronicity* (Kuramoto; Pikovsky, Rosenblum & Kurths) or *shear*; for the standard
 $\omega(r)$ the nonisochronicity parameter is $\omega_1-\omega_0$.
 
-*Corollary — radius as a function of angle.* When $c \ne 0$ one can solve for $r$. Let
-$A^2 := \exp\!\bigl(2(\theta - \Theta_0)/c\bigr)$ with $\theta$ unwrapped; then
+*Corollary — radius as a function of angle.* When $c \ne 0$ one can solve for $r$. On
+the isochron $\Theta_0$, $h(r) = \Theta_0 - \theta$; let
+$A^2 := \exp\!\bigl(2(\Theta_0 - \theta)/c\bigr)$ with $\theta$ unwrapped; then
 $(1+b)r^2 = A^2(1+br^2)$ and
 $$r(\theta;\Theta_0) = \frac{A}{\sqrt{1 + b(1 - A^2)}},\qquad
-A = \exp\frac{a(\theta-\Theta_0)}{\omega_1-\omega_0}
+A = \exp\frac{a(\Theta_0-\theta)}{\omega_1-\omega_0}
 \qquad(\text{Hopf: } r = A).$$
-Caveats: (i) it is singular at $c = 0$ (radial isochrons); (ii) for $b>0$ each isochron
-reaches $r\to\infty$ at the *finite* angle where $A^2 = (1+b)/b$, because
-$h(r)\to \tfrac{c}{2}\ln\tfrac{1+b}{b}$ as $r\to\infty$, so the formula is defined only for
-$A^2 < (1+b)/b$; (iii) for $-1<b<0$, $A^2 \to 0$ as $r\to 0$ and $A^2\to\infty$ is not
-reached — the isochron ends at the outer cycle. The form $\theta = \Theta_0 - h(r)$ has
-none of these problems.
+(Sign corrected 2026-10-03: the first version had $A^2 = \exp(2(\theta-\Theta_0)/c)$, the
+reciprocal, which recovers $1/r$-like values; checked numerically against
+$\theta = \Theta_0 - h(r)$.) Caveats: (i) it is singular at $c = 0$ (radial isochrons);
+(ii) for $b>0$ each isochron reaches $r\to\infty$ at the *finite* angle where
+$A^2 = (1+b)/b$, because $h(r)\to \tfrac{c}{2}\ln\tfrac{1+b}{b}$ as $r\to\infty$, so the
+formula is defined only for $A^2 < (1+b)/b$; (iii) for $-1<b<0$, $A^2 \to 0$ as $r\to 0$
+and $A^2\to\infty$ is not reached — the isochron ends at the outer cycle. The form
+$\theta = \Theta_0 - h(r)$ has none of these problems.
 
 ### 5.2 Isostable coordinate $\Psi$
 
@@ -354,25 +357,138 @@ $h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 +
 (\delta/\kappa)\ln r$ — logarithmic spirals, as for Hopf — and $\omega(0)$ undefined,
 consistent with the missing eigenvalues.
 
-**Relation to Yawata et al. (2024).** Their phase autoencoder maps the oscillator state to
-a three-dimensional latent vector $\mathbf Y = (Y_1, Y_2, Y_3)$ with $Y_1^2 + Y_2^2 = 1$,
-$(Y_1,Y_2)$ rotating at constant frequency $\omega$ and $Y_3$ decaying as $e^{\lambda t}$
-(their Eqs. (11)–(14)). Their Appendix B identifies $Y_1 + iY_2$ with the Koopman
-eigenfunction $e^{i\Theta}$ and $Y_3$ with the eigenfunction of exponent $\lambda$ — i.e.
-with $\Psi$ and $\lambda = \kappa$ — while noting that the trained $Y_3$ is "closely
-related, though not equivalent" to it (their learned $\lambda$ differs from the true
-second Floquet exponent, e.g. $-1.4$ vs $-2.0$ for Stuart–Landau, $-2.42$ vs $-1.0$ for
-FHN, Sec. VI). So their latent space is precisely the chart of §7,
+**Relation to Yawata et al. (2024).** Their phase autoencoder maps the oscillator state
+$X$ to a three-dimensional latent $\mathbf Y = (Y_1, Y_2, Y_3) = f_{\rm enc}(X)$ with
+$Y_1^2 + Y_2^2 = 1$ (Eq. (11), enforced by normalising the first two encoder outputs,
+Eqs. (15)–(16)), $(Y_1, Y_2)$ rotating at a constant learned frequency $\omega$ and $Y_3$
+decaying as $e^{\lambda\tau}$ per sampling interval $\tau$ with learned $\lambda<0$
+(Eqs. (12)–(14)), "for all $\tau > 0$". The phase is $\Theta(X) = \arctan(Y_2/Y_1)$
+(Eq. (19)) and the phase sensitivity function is $Z(\theta) = \nabla_X\Theta|_{X =
+f_{\rm dec}(\theta)}$ by autodiff (Eq. (20)). Sec. VI identifies $Y_1 + iY_2$ with the
+Koopman eigenfunction of exponent $i\omega$ and, for planar oscillators, $Y_3$ with the
+eigenfunction of exponent $\lambda$ — i.e. with $e^{i\Theta}$ and $\Psi$, $\lambda = \kappa$
+— while noting that the trained $Y_3$ is "closely related, though not equivalent" to it
+(their learned $\lambda$ differs from the true second Floquet exponent because Eq. (14)
+"is not strictly satisfied by the trained phase autoencoder"; they report it is "not easy
+to realize in practice"). So their latent space is exactly the chart of §7,
 $$\mathbf Y = (\cos\Theta, \sin\Theta, \Psi),$$
-a cylinder embedded in $\mathbb{R}^3$, and not a planar normal form; the linear latent
-dynamics is the statement $\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$ of §2. Which
-planar normal form one associates with it is a matter of choosing $\Psi(r)$: the log-polar
-member corresponds to $Y_3 = \ln r$, Hopf to $Y_3 = \tfrac12(1 - r^{-2})$, and so on. What
-distinguishes this project's setting is that the base is a *planar* flow conjugate to the
-target on its whole basin (including the equilibrium when $\rho(0)$ is finite), whereas
-the autoencoder is not invertible and its latent dynamics need only hold near the cycle.
-This is the sense in which Hopf/Bautin "add" the fixed point to Yawata's picture, and why
-the log-polar member sits between the two.
+a cylinder embedded in $\mathbb R^3$, and their latent dynamics is the linear flow
+$\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$ of §2 discretised at $\tau$.
+
+Two things about this chart that the baseline inherits from §5.4 rather than from the
+autoencoder: the exact $(\Theta, \Psi)$ **exists and is unique on the whole basin**, as a
+$C^{k,\alpha}$ *diffeomorphism* $Q \to S^1 \times \mathbb R$ (Kvalheim & Revzen 2021,
+Prop. 3 — see §5.4), so the cylinder is not a near-cycle approximation but the global
+structure of every planar oscillator's basin; and the two conventions the autoencoder
+cannot learn — the phase origin and the scale of $\Psi$ — are precisely the two
+normalisations in that uniqueness statement ($\psi_\theta(x_0) = 1$ and
+$\mathsf D_{x_0}\psi_z|_{E^s} = \mathrm{id}$, the latter being the Wilson–Moehlis choice
+of §5.2). What is *approximate* in Yawata et al. is the learned map, and it is trained
+near the cycle by construction: initial states are points of the cycle perturbed by
+Gaussian noise of $\gamma_2 = 0.5$ cycle-standard-deviations and evolved for
+$\gamma_1 = 3$ periods ($N_s = 1000$ orbits; Eqs. (27)–(28)), which is why their
+$\lambda$ is poorly determined. Which planar normal form one associates with the chart is
+a matter of choosing $\Psi(r)$: the log-polar member corresponds to $Y_3 = \ln r$, Hopf to
+$Y_3 = \tfrac12(1 - r^{-2})$, and so on.
+
+What distinguishes this project's setting is topological. The chart $(\Theta, \Psi)$ maps
+the *punctured* plane onto the cylinder; there is no diffeomorphism of $\mathbb R^2$ onto
+$S^1\times\mathbb R$. The autoencoder sidesteps this by not being invertible (separate
+encoder and decoder, the cylinder embedded in $\mathbb R^3$). The conjugacy approach keeps
+a diffeomorphism of the plane, $H:\mathbb R^2\to\mathbb R^2$, and lets the *normal form's
+own* chart $\psi_{\rm NF}: \mathbb R^2\setminus\{0\}\to S^1\times\mathbb R$ carry the
+topology: $\psi_{\rm FHN} = \psi_{\rm NF}\circ H$ (§5.2, transport). This is the precise
+sense in which Hopf/Bautin "add" the fixed point to Yawata's picture (§5.4 for what that
+costs), and why the log-polar member sits between the two.
+
+*Implementation mapping (roadmap B12).* The baseline lives in `model/`, not in
+`systems/normal_forms/`:
+
+| Yawata et al. | this document | `deep_isochron` |
+|---|---|---|
+| $(Y_1, Y_2)/R$, $Y_3$ (Eqs. (15)–(16)) | $(\cos\Theta, \sin\Theta, \Psi)$ | `PhaseAmplitudeAutoencoder.encoder`: MLP, first two outputs normalised |
+| $f_{\rm step}$ with learned $\omega$, $\lambda$ (Eq. (18)) | $\Theta(t+\tau) = \Theta + \omega_1\tau$, $\Psi(t+\tau) = e^{\kappa\tau}\Psi$ | `PhaseAmplitudeLatentDynamics(omega, kappa)`: closed-form flow on $\mathbb R^3$, continuous in $t$ (replaces `LinearLatentDynamics`) |
+| $L_{\rm recon}$ (21); $L_{\rm pha}$, $L_{\rm dev}$ over $k = 1..K$ steps with $\alpha_k = k^{-\min(1, L_{\rm pha})}$ (22)–(24); $L_{\rm aux}$ = centre of mass of $(Y_1,Y_2)$ in the batch (25), to escape the $\omega = 0$ solution; weights $(1, 0.5, 0.5, 2)$ then $(1, 5, 0.5, 0)$ once $L_{\rm pha}<0.01$, $L_{\rm aux}<0.05$ (26) | — | `PhaseAutoencoderLoss` over a window: reconstruction, latent consistency split into phase/amplitude parts, centre-of-mass term; the $\alpha_k$ and weight schedules as config |
+| ICs on the cycle $+\,\gamma_2\sigma\odot\xi$, evolved $\gamma_1 T$ (27)–(28) | near-cycle training distribution | an `AbstractICSampler` `OnCycleGaussian(cycle_points, gamma2)`; `limit_cycle(Θ)` for normal forms, a long integration for FHN |
+| $\Theta = \arctan(Y_2/Y_1)$, $Z = \nabla\Theta$ at $f_{\rm dec}(\theta)$ (19)–(20) | $\Theta$, $\nabla\Theta$ (§1) | `phase(x)`, `jax.grad` |
+| evaluation: Stuart–Landau analytic phase | §7 `to_phase_amplitude` on Hopf/Bautin data | learned $\Theta$ vs exact up to a constant; $\Psi$ up to scale; $\kappa$ *reported*, not asserted |
+
+### 5.4 Global existence and uniqueness of the chart (Kvalheim & Revzen 2021) — *proposed addition, 2026-10-03*
+
+The closed forms of §5.1–5.2 are special to the normal forms, but the *objects* they
+compute exist for every oscillator in the study, on the whole basin, and are unique. This
+is the content of Kvalheim & Revzen's global Floquet normal form, specialised here to the
+plane.
+
+**Statement** (their Prop. 3, specialised). Let $\Phi$ be a $C^{k,\alpha}_{\rm loc}$ flow on
+the basin $Q$ of an attracting hyperbolic $\tau$-periodic orbit $\Gamma$, $x_0\in\Gamma$,
+$E^s_{x_0}$ the $\mathsf D_{x_0}\Phi^\tau$-invariant complement of $\mathsf T_{x_0}\Gamma$,
+and assume the spectral-spread condition $\nu(\mathsf D\Phi^\tau|_{E^s}, \mathsf D\Phi^\tau|_{E^s}) < k+\alpha$
+and $k$-nonresonance of $\mathsf D\Phi^\tau|_{E^s}$ with itself. Then there is a **unique
+proper $C^{k,\alpha}_{\rm loc}$ embedding** $\psi = (\psi_\theta, \psi_z): Q\to S^1\times
+(E^s_{x_0})_{\mathbb C}$ with $\psi_\theta(x_0) = 1$ and $\mathsf D_{x_0}\psi_z|_{E^s} =
+\mathrm{id}$ such that
+$$\psi_\theta\circ\Phi^t = e^{2\pi i t/\tau}\,\psi_\theta,\qquad \psi_z\circ\Phi^t = e^{tA}\psi_z
+\qquad(\text{their Eq. (21)}),$$
+and when $A$ is real, $\psi: Q\to S^1\times E^s_{x_0}$ is a **diffeomorphism**. Their
+Prop. 7 states the same for the principal eigenfunction (the isostable coordinate) alone:
+existence and uniqueness modulo scalar multiplication, given the derivative along $E^s$.
+
+**In the plane.** $\dim E^s = 1$, $\mathsf D\Phi^\tau|_{E^s} = \mu = e^{\kappa\tau}\in(0,1)$ is
+real, so the spectral spread is $\nu(\mu,\mu) = \ln\mu/\ln\mu = 1 < k+\alpha$ for any
+$k\ge 2$ or ($k = 1$, $\alpha > 0$), and $k$-nonresonance ($\mu\ne\mu^m$, $m\ge2$) holds
+because $0<\mu<1$. For a $C^\infty$ field (FHN is polynomial) the conditions are
+automatic (their Remark 6). Hence, *for every planar oscillator in this project*:
+
+$$(\Theta, \Psi) := \bigl(\arg\psi_\theta,\ \psi_z\bigr): \ Q \to S^1\times\mathbb R
+\quad\text{is a $C^\infty$ diffeomorphism of the whole basin},\qquad
+\dot\Theta = \omega_1,\ \dot\Psi = \kappa\Psi .$$
+
+For the normal forms this is §5.1–5.2 with $Q = \mathbb R^2\setminus\{0\}$ ($b\ge0$) and
+the uniqueness explains why there was nothing to choose beyond $h(1) = 0$ and
+$\partial_r\Psi(1) = 1$: those are exactly the two normalisations in the statement. For FHN
+it is Langfield et al.'s isochron foliation together with the (there uncomputed)
+amplitude coordinate; $Q = \mathbb R^2\setminus\{x^*\}$, the plane minus the equilibrium
+(Winfree's phaseless set).
+
+**Consequence for the conjugacy (deduced, not in the paper).** If the target and the
+normal form have the same period $T$ and Floquet exponent $\kappa$, then
+$$H := \psi_{\rm NF}^{-1}\circ\psi_{\rm target}: \ \mathbb R^2\setminus\{x^*\}\ \to\ \mathbb R^2\setminus\{0\}$$
+is a $C^\infty$ diffeomorphism conjugating the two flows on the punctured basins, and it is
+**unique up to the two-parameter group** generated by the normalisations — a phase shift
+$\Theta\mapsto\Theta + c$ (rotation of the normal form) and a scale $\Psi\mapsto C\Psi$ —
+because any two such $H$ differ by a self-conjugacy of the normal form on its basin, and
+uniqueness pins those down. Conversely, if $T$ or $\kappa$ differ no conjugacy exists
+(they are invariants). This is the existence/uniqueness theory behind the project's
+"co-optimise the invariants with the INN" (`learnings`): once the invariants match, the
+map the INN is asked to learn exists, is smooth on the punctured plane, and is determined
+up to a rotation and an amplitude scale.
+
+**The fixed point.** $H$ above is defined on the punctured plane. Extending it *smoothly*
+across $x^*\mapsto 0$ is a separate question, governed by the linearisation at the
+equilibrium: in reverse time $x^*$ is a hyperbolic sink whose basin is the open disk
+bounded by $\Gamma$, and their Prop. 2 (global Sternberg linearisation) gives a unique
+$C^{k,\alpha}$ linearising diffeomorphism of that disk, determined by its derivative at
+$x^*$, provided the eigenvalues $\alpha\pm i\beta$ at $x^*$ are nonresonant. So a smooth
+conjugacy *including the fixed point* requires, in addition, the eigenvalues at $x^*$ to
+equal $a\pm i\omega_0$ — three further invariants are therefore one period, one Floquet
+exponent and one complex eigenvalue, i.e. four real numbers, which is exactly the number
+of parameters $(a, b, \omega_1, \omega_0)$ of the Bautin form and one more than Hopf has.
+That the two local conjugacies (basin-of-$\Gamma$ and disk-of-$x^*$) glue into one
+diffeomorphism of the plane is plausible by the uniqueness statements on the overlap (the
+symmetry groups coincide: rotation $\leftrightarrow$ $\Theta$-shift, complex scaling at the
+focus $\leftrightarrow$ $\Psi$-scale, since $\Psi\sim -\tfrac12 r^{\kappa/a}$ near $0$) but is
+**not proved here**; it is the statement the project's "eigenvalue invariant" rests on
+and should be either proved or cited before the paper. Without the eigenvalue match, $H$
+is still a diffeomorphism of the punctured planes extending to a *homeomorphism* of the
+planes (both ends compactify to a point), which is the NCF-style topological conjugacy
+(`learnings`: homeomorphism vs diffeomorphism trade-off).
+
+**For the baseline (B12).** The autoencoder learns $\psi_{\rm target}$ directly — the
+cylinder *is* the global target, Prop. 3 guarantees it exists and is smooth — without
+the planar intermediate; its two free conventions are the two normalisations; and the
+quality of its $\Psi$ is limited by the near-cycle training distribution, not by the
+theory.
 
 ---
 
@@ -597,4 +713,9 @@ Nothing remains open. Changes to any of the above go through this document first
 - K. Yawata, K. Fukami, K. Taira, H. Nakao, Phase autoencoder for limit-cycle
   oscillators, *Chaos* 34, 063111 (2024) — latent variables $(Y_1,Y_2,Y_3)$, Eqs.
   (11)–(14); relation to Koopman eigenfunctions, App. B and Sec. VI.
+- M. D. Kvalheim, S. Revzen, Existence and uniqueness of global Koopman eigenfunctions
+  for stable fixed points and periodic orbits, *Physica D* 425, 132959 (2021);
+  arXiv:1911.11996v4 — Theorem 2 / Prop. 3 (global Floquet normal form, unique proper
+  embedding $Q\to S^1\times E^s$), Prop. 7 (principal eigenfunctions of a limit cycle),
+  Prop. 2 (global Sternberg linearisation of a sink), Remark 6 ($C^\infty$ case).
 - P. Kidger, *On Neural Differential Equations*, DPhil thesis, Oxford (2021) — diffrax.

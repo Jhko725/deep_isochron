@@ -279,7 +279,7 @@ Review round 2 (B9) and the B10 draft:
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `docs/design/normal-forms.md`: **draft for review** — conventions, derivations (`κ = ρ'(1)` in `r`; `ψ` normalisation), charts, integrations incl. proposed `closed_form`, API for B11, open decisions §9 | | |
+| `docs/design/normal-forms.md`: agreed revision (Joon, 2026-10-03) adopted; then amended — §5.1 corollary sign (confirmed), §5.3 Yawata paragraph rewritten from Eqs. (11)–(28) of the paper with the B12 implementation mapping, §5.4 Kvalheim & Revzen global existence/uniqueness (*proposed*) | | |
 | `src/deep_isochron/data/dataset.py`: frozen-dataclass whole-trajectory source; grouped `DatasetMetadata`; `copy.replace` splits | | |
 | `src/deep_isochron/data/windows.py`: `RandomWindow`, `WeightedWindow`, `transient_weight`, `windows`, `mixed_windows` (replaces `sampling.py`) | | |
 | `src/deep_isochron/data/generate.py`: grouped metadata from `params()` | | |
