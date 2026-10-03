@@ -1,6 +1,6 @@
 # ADR-0008 — Datasets are one netCDF4 file via xarray; transient oversampling by weighted windows (and `mix`, for comparison)
 
-**Status**: accepted (2026-10-02)
+**Status**: accepted (2026-10-02); amended 2026-10-03 after review — metadata grouped; the source holds whole trajectories and windowing is a grain transform (Decision 2 rewritten).
 
 ## Context
 
@@ -13,9 +13,15 @@ the near-periodic tail.
 
 ## Decision 1 — one netCDF4 file, written and read through xarray
 
-`TimeSeriesDataSource` wraps an `xarray.Dataset` with dims `(trajectory, time, dim)`, the
-time grid as the `time` coordinate, and a `DatasetMetadata` flattened into the attributes
-(dict-valued fields JSON-encoded, since netCDF attributes are flat). `save` writes one
+`TimeSeriesDataSource` is a frozen dataclass (`ts`, `ys`, `metadata`) whose `dataset`
+property is the `xarray.Dataset` view with dims `(trajectory, time, dim)` and the time grid
+as the `time` coordinate. `DatasetMetadata` is **grouped** — `system` (name, constrained
+`params()`), `sampling` (IC sampler, its params, seed, `n_trajectories`), `grid` (`t0`,
+`t1`, `n`), `solve` (`SolverConfig.params()` + integration name), `provenance` (created,
+git SHA/dirty, package version, dtype), `extra` — and each group is written as one
+JSON-string attribute, since netCDF attributes are flat (netCDF4 *groups* were rejected as
+too heavy for six small dicts, and xarray reads them only with `group=`). `config_hash` is
+a property over the first four groups. `save` writes one
 `.nc` file with the `h5netcdf` engine; `load` reads it and can insist on a dtype. The file
 is named `<name>-<config_hash>.nc`, the hash being the first 8 hex digits of SHA-256 over
 the generation-defining fields (provenance such as timestamps and git state excluded, so
@@ -40,18 +46,33 @@ deterministic to regenerate; `(git_sha, config_hash, seed)` in the file's own me
 version. If data ever becomes expensive, shared, or too big for git, `dvc add data/` is a
 retrofit that changes nothing in this format.
 
-## Decision 2 — weighted window sampling, with the two-loader `mix` kept alongside
+## Decision 2 — the source holds whole trajectories; windowing is a grain transform
 
-`weighted_windows(source, weights, seed)` draws window indices i.i.d. with probability
-proportional to a per-window weight (`transient_weights`: `1 + boost·exp(−(t_start −
-t₀)/τ)`), implemented as `grain.MapDataset.range(n).repeat().seed(s).random_map(...)` with
-an inverse-CDF lookup. One dataset, one loader, a smooth policy described by two numbers.
-`mixed_split(source, split_idx, weights, seed)` is the previous design — cut in time,
-shuffle each half, `grain.MapDataset.mix` — kept so the two can be compared on the same
-data. `mix` is a deterministic interleave by weights whose length is that of the shortest
-input and which needs its inputs shuffled beforehand (grain 0.2.18 docstring); hence the
-`.shuffle().repeat()` on each half.
+The source is a random-access dataset of *whole trajectories* (`source[i] = {"t": ts,
+"u": ys[i]}`), and windows are cut by `grain.transforms.RandomMap`s applied after
+`.shuffle().repeat()` — the swirl-dynamics pattern (`ArrayDataSource` + `RandomSection`
+in the DySLIM code). grain seeds the per-element generator by the global index, so a
+repeated trajectory gets a fresh window every epoch (verified). This removes all window
+bookkeeping from the source (window size, enumeration, start times), which had made the
+first version of `TimeSeriesDataSource` carry sampling policy in its state.
 
+Two transforms implement transient oversampling, kept side by side for comparison:
+
+- `WeightedWindow(length, weight)` draws the start index with probability ∝
+  `weight(t_start)` by inverse-CDF lookup; `transient_weight(boost, tau)` is the smooth
+  default `1 + boost·exp(−(t − t₀)/τ)`. In distribution this equals the earlier
+  index-level weighted sampler (the weight depends on start time only), with trajectories
+  visited uniformly.
+- `mixed_windows(source, length, split_idx, weights, seed)` is the two-loader design:
+  `RandomWindow` restricted to starts before `split_idx` and `RandomWindow` restricted to
+  starts at/after it, interleaved by `grain.MapDataset.mix`. `mix` is a deterministic
+  interleave by weights whose length is that of the shortest input and which needs its
+  inputs shuffled beforehand (grain 0.2.18 docstring); hence `.shuffle().repeat()` on each.
+
+- *Rejected*: window-level source + functions emitting `MapDataset`s (the first version).
+  Not idiomatic grain; the sampling policy leaked into the source.
+- *Rejected*: a custom `IndexSampler`. It would have to know window geometry, which is
+  exactly what was removed from the source; the transform is the cleaner home.
 - *Rejected as the only option*: `mix`. The transient/attractor boundary is an index cut,
   and the policy is baked into dataset objects rather than being a function.
 - *Rejected for now*: loss-side weighting (curriculum) — changes loss semantics and spends
@@ -64,7 +85,9 @@ input and which needs its inputs shuffled beforehand (grain 0.2.18 docstring); h
 
 - `xarray` and `h5netcdf` become runtime dependencies.
 - `TimeSeriesDataSource.split(idx)` is now `split_time(idx)`; `split_trajectories(frac,
-  seed)` added for held-out validation.
+  seed)` added for held-out validation; both are `copy.replace` on the frozen dataclass.
+- Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`; `ConjugacyTrajectoryLoss` reads
+  them by key.
 - A per-trajectory settling time (`t_settle`, from the normal form's `amplitude` or a
   numerical distance to the cycle) is a natural extra variable for the file and a better
   basis for weights than wall-clock start time; parked until the analysis module exists.

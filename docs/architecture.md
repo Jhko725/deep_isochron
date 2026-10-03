@@ -49,10 +49,12 @@ deep_isochron
 │   ├── autoencoder.py       PhaseAmplitudeAutoencoder (non-invertible baseline)
 │   └── utils.py             zero_final_layer
 ├── data/                    one netCDF4 file per dataset (xarray)       ── ADR-0008
-│   ├── dataset.py           DatasetMetadata; TimeSeriesDataSource (windows, splits, save/load)
+│   ├── dataset.py           DatasetMetadata (grouped); TimeSeriesDataSource = whole
+│   │                        trajectories (frozen dataclass; splits; save/load)
 │   ├── generate.py          IC samplers; generate(system, sampler, ts, n, seed=…) with
 │   │                        loud failures and config_hash
-│   └── sampling.py          weighted_windows + transient_weights; mixed_split (grain)
+│   └── windows.py           RandomWindow / WeightedWindow (grain RandomMap);
+│                            windows(); mixed_windows()
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
 │                            (namespace reserved; Phase E)
 ├── training/                TrainerState / Trainer (optax + orbax + wandb);
@@ -131,31 +133,37 @@ use `AbstractODE`.
 ## Data
 
 A dataset is **one netCDF4 file** (HDF5 underneath; ADR-0008): dims `(trajectory, time,
-dim)`, the time grid as the `time` coordinate, and `DatasetMetadata` — system and
-parameters, IC sampler and seed, grid, solver and tolerances, integration, dtype, `config_hash`,
-timestamp, git SHA/dirty, package version, free-form `extra` (the resolved Hydra config) —
-flattened into the attributes. `TimeSeriesDataSource` wraps it and serves fixed-length
-windows through grain's random-access protocol; `split_time(idx)` and
-`split_trajectories(frac, seed)` return sources over views; `save`/`load` (with an optional
-dtype assertion) are the only I/O.
+dim)`, the time grid as the `time` coordinate, and a grouped `DatasetMetadata` — `system`
+(name, constrained `params()`), `sampling` (IC sampler, params, seed, `n_trajectories`),
+`grid` (`t0`, `t1`, `n`), `solve` (solver, tolerances, `max_steps`, integration),
+`provenance` (created, git SHA/dirty, package version, dtype), `extra` (the resolved Hydra
+config) — one JSON-string attribute per group. `config_hash` is a property over the first
+four groups, so an unchanged config regenerates to the same `<name>-<hash>.nc`.
 
-`generate(system, ic_sampler, ts, n, *, seed, config, integration, window_size, extra)` draws
-initial conditions from an `AbstractICSampler` (`UniformBox`, `UniformAnnulus`), vmaps
-`flow_result` with `throw=False`, and raises naming any failed indices. Files are named
-`<name>-<config_hash>.nc` (`dataset_path`); the hash covers the generation-defining fields
-only, so an unchanged config regenerates to the same file. `scripts/generate_data.py` is the
-Hydra entry point over `configs/data/*.yaml`.
+`TimeSeriesDataSource` is a frozen dataclass (`ts`, `ys`, `metadata`) and a grain
+random-access source over **whole trajectories**: `len` is the number of trajectories and
+`source[i] = {"t": ts, "u": ys[i]}`. It carries no window bookkeeping. `split_time(idx)`
+and `split_trajectories(frac, seed)` are `copy.replace` with sliced arrays; `save`/`load`
+(with an optional dtype assertion) are the only I/O; `dataset` is the xarray view.
 
-Training draws windows either by **weighted sampling** — `weighted_windows(source,
-transient_weights(boost, tau), seed)`, one grain dataset drawing window indices with
-probability ∝ weight, oversampling the transient — or by the **two-loader mixture**
-`mixed_split(source, split_idx, weights, seed)` (`grain.MapDataset.mix` of the shuffled
-halves). Both are kept so they can be compared.
+`generate(system, ic_sampler, ts, n, *, seed, config, integration, extra)` draws initial
+conditions from an `AbstractICSampler` (`UniformBox`, `UniformAnnulus`), vmaps `flow` with
+`throw=False`, and raises naming any failed indices. `scripts/generate_data.py` is the Hydra
+entry point over `configs/data/*.yaml`.
+
+Windows are **grain transforms** (`data/windows.py`), applied after `.shuffle().repeat()`
+so that every visit of a trajectory cuts a fresh window: `RandomWindow(length,
+start_range)` (uniform start) and `WeightedWindow(length, weight)` (start drawn ∝
+`weight(t_start)`; `transient_weight(boost, tau)` oversamples the transient).
+`windows(source, length, seed=…, weight=… | start_range=…)` wires a source into one
+pipeline; `mixed_windows(source, length, split_idx, weights, seed)` interleaves an early
+and a late `RandomWindow` through `grain.MapDataset.mix` — the two-loader design, kept for
+comparison. Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
 
 ## Data flow of one training step
 
 ```
-batch (t[B,T], x[B,T,d])  ──►  ConjugacyTrajectoryLoss(model, batch)
+batch {t:[B,L], u:[B,L,d]}  ──►  ConjugacyTrajectoryLoss(model, batch)
                                  │
                                  ├─ y0 = Φ(x[:, 0])                       bijection forward
                                  ├─ y[t]  = latent.flow(t, y0, config).ys  systems (integration)
@@ -170,7 +178,7 @@ TrainerState.take_step(grads)  ──►  optax update on eqx.filter(model, is_t
 used to integrate it. The loss is the trajectory reconstruction error plus a weighted
 latent-consistency term; the conjugacy equation is what the two terms together enforce.
 
-Batches come from one of the two samplers above over a `TimeSeriesDataSource`.
+Batches come from `windows`/`mixed_windows` over a `TimeSeriesDataSource`.
 
 ## Tests
 

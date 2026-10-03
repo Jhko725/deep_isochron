@@ -1,17 +1,23 @@
 from .dataset import (
     DatasetMetadata as DatasetMetadata,
+    GridSpec as GridSpec,
+    Provenance as Provenance,
+    SamplingSpec as SamplingSpec,
+    SolveSpec as SolveSpec,
+    SystemSpec as SystemSpec,
     TimeSeriesDataSource as TimeSeriesDataSource,
 )
 from .generate import (
     AbstractICSampler as AbstractICSampler,
-    config_hash as config_hash,
     dataset_path as dataset_path,
     generate as generate,
     UniformAnnulus as UniformAnnulus,
     UniformBox as UniformBox,
 )
-from .sampling import (
-    mixed_split as mixed_split,
-    transient_weights as transient_weights,
-    weighted_windows as weighted_windows,
+from .windows import (
+    mixed_windows as mixed_windows,
+    RandomWindow as RandomWindow,
+    transient_weight as transient_weight,
+    WeightedWindow as WeightedWindow,
+    windows as windows,
 )

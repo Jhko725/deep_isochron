@@ -3,7 +3,6 @@ name: bautin
 out_dir: data
 seed: 0
 n_trajectories: 256
-window_size: null
 
 system:
   _target_: deep_isochron.systems.BautinNormalForm

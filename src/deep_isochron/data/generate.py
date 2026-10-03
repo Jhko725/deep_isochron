@@ -1,11 +1,11 @@
 """Trajectory generation: ``generate(system, ic_sampler, ts, n, ...)`` -> a data source.
 
 Initial conditions are drawn by an ``AbstractICSampler`` (a small equinox module so that
-its configuration is recorded in the metadata), the system's ``flow_result`` is vmapped
-over them with ``throw=False``, and any failed integration is reported *loudly* with the
+its configuration is recorded in the metadata), the system's ``flow`` is vmapped over
+them with ``throw=False``, and any failed integration is reported *loudly* with the
 indices of the offending initial conditions rather than silently dropped. The returned
-source carries a ``DatasetMetadata`` whose ``config_hash`` (first 8 hex digits of the
-SHA-256 of the generation-defining fields) names the file: ``<name>-<hash>.nc``.
+source carries a grouped ``DatasetMetadata`` (``system``, ``sampling``, ``grid``,
+``solve``, ``provenance``) whose ``config_hash`` names the file: ``<name>-<hash>.nc``.
 """
 
 from __future__ import annotations
@@ -13,9 +13,7 @@ from __future__ import annotations
 import abc
 import dataclasses
 import datetime
-import hashlib
 import importlib.metadata
-import json
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -33,7 +31,15 @@ from ..systems.normal_forms import (
     AbstractNormalForm,
     resolve_integration,
 )
-from .dataset import DatasetMetadata, TimeSeriesDataSource
+from .dataset import (
+    DatasetMetadata,
+    GridSpec,
+    Provenance,
+    SamplingSpec,
+    SolveSpec,
+    SystemSpec,
+    TimeSeriesDataSource,
+)
 
 
 # ------------------------------------------------------------------ IC samplers ---
@@ -88,7 +94,7 @@ class UniformAnnulus(AbstractICSampler):
 
 
 # ------------------------------------------------------------------- provenance ---
-def _git_state() -> tuple[str, int]:
+def _git_state() -> tuple[str, bool]:
     """``(sha, dirty)`` of the checkout this package is imported from (not the cwd)."""
     here = Path(__file__).resolve().parent
     try:
@@ -104,9 +110,9 @@ def _git_state() -> tuple[str, int]:
             text=True,
             check=True,
         ).stdout.strip()
-        return sha, int(bool(dirty))
+        return sha, bool(dirty)
     except (OSError, subprocess.CalledProcessError):
-        return "", 0
+        return "", False
 
 
 def _package_version() -> str:
@@ -114,33 +120,6 @@ def _package_version() -> str:
         return importlib.metadata.version("deep-isochron")
     except importlib.metadata.PackageNotFoundError:
         return ""
-
-
-_HASHED = (
-    "system",
-    "system_params",
-    "ic_sampler",
-    "ic_sampler_params",
-    "seed",
-    "n_trajectories",
-    "n_time",
-    "t0",
-    "t1",
-    "solver",
-    "rtol",
-    "atol",
-    "max_steps",
-    "strategy",
-    "dtype",
-)
-
-
-def config_hash(meta: DatasetMetadata) -> str:
-    """First 8 hex digits of SHA-256 over the generation-defining fields (provenance
-    fields — timestamps, git state — excluded, so regenerating gives the same name)."""
-    d = {k: getattr(meta, k) for k in _HASHED}
-    blob = json.dumps(d, sort_keys=True, default=str).encode()
-    return hashlib.sha256(blob).hexdigest()[:8]
 
 
 # --------------------------------------------------------------------- generate ---
@@ -153,7 +132,6 @@ def generate(
     seed: int,
     config: SolverConfig = DEFAULT_SOLVER_CONFIG,
     integration: AbstractFlowIntegration | str | None = None,
-    window_size: int | None = None,
     extra: dict[str, Any] | None = None,
 ) -> TimeSeriesDataSource:
     """Integrate ``n_trajectories`` initial conditions of ``system`` on the grid ``ts``.
@@ -194,31 +172,24 @@ def generate(
             "initial-condition sampler."
         )
 
+    sha, dirty = _git_state()
     meta = DatasetMetadata(
-        system=type(system).__name__,
-        system_params=system.params(),
-        ic_sampler=type(ic_sampler).__name__,
-        ic_sampler_params=ic_sampler.params(),
-        seed=seed,
-        n_trajectories=n_trajectories,
-        n_time=int(ts.shape[0]),
-        dim=system.dim,
-        t0=float(ts[0]),
-        t1=float(ts[-1]),
-        solver=type(config.solver).__name__,
-        rtol=config.rtol,
-        atol=config.atol,
-        max_steps=config.max_steps,
-        strategy=integration_name,
-        dtype=str(ys.dtype),
-        created=datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
-        git_sha=_git_state()[0],
-        git_dirty=_git_state()[1],
-        package_version=_package_version(),
+        system=SystemSpec(type(system).__name__, system.params()),
+        sampling=SamplingSpec(
+            type(ic_sampler).__name__, ic_sampler.params(), seed, n_trajectories
+        ),
+        grid=GridSpec(float(ts[0]), float(ts[-1]), int(ts.shape[0])),
+        solve=SolveSpec(**config.params(), integration=integration_name),
+        provenance=Provenance(
+            created=datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
+            git_sha=sha,
+            git_dirty=dirty,
+            package_version=_package_version(),
+            dtype=str(ys.dtype),
+        ),
         extra=extra or {},
     )
-    meta = dataclasses.replace(meta, config_hash=config_hash(meta))
-    return TimeSeriesDataSource(ts, ys, window_size, meta)
+    return TimeSeriesDataSource(np.asarray(ts), np.asarray(ys), meta)
 
 
 def dataset_path(root: str | Path, name: str, meta: DatasetMetadata) -> Path:

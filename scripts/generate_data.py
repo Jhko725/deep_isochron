@@ -33,7 +33,6 @@ def main(cfg: DictConfig) -> None:
         seed=cfg.seed,
         config=config,
         integration=cfg.integration,
-        window_size=cfg.window_size,
         extra={"config": OmegaConf.to_container(cfg, resolve=True)},
     )
     assert source.metadata is not None

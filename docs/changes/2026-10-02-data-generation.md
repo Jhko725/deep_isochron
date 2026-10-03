@@ -62,6 +62,11 @@ Tests and docs:
 - `tests/test_systems.py` — new (see Tests).
 - `tests/test_data.py` — new (see Tests).
 - `tests/helpers.py` — `TOL["flow"] = 1e-6`.
+- Review round 2: `src/deep_isochron/data/dataset.py` (rewritten), `data/windows.py`
+  (new; replaces `data/sampling.py`), `data/generate.py` (grouped metadata),
+  `data/__init__.py`, `training/losses.py` (dict batch), `training/__init__.py`,
+  `tests/test_data.py` (rewritten), `configs/data/*.yaml`, `scripts/generate_data.py`
+  (no `window_size`), `prototype.ipynb`, ADR-0008 amended, `docs/architecture.md`.
 - Review round 1: `src/deep_isochron/model/invertible/constraints.py` (`GreaterThan`,
   `at_zero` documentation, `BoundedPositive.lower`), `analytic.py`,
   `splines/rational_quadratic.py` (call sites), `tests/test_constraints.py`;
@@ -111,6 +116,27 @@ deferred to discussion were settled on 2026-10-03 and are tracked as roadmap B9�
   `RandomMap` windowing (swirl-dynamics pattern), `copy.replace` on a frozen dataclass,
   grouped metadata. **B10/B11**: the normal-form design note, then the `r`-based API.
   **B12**: the Yawata et al. (2024) baseline.
+
+## Review round 2 (2026-10-03) — data layer as grain transforms (B9)
+
+- **Whole-trajectory source.** `TimeSeriesDataSource` is a frozen dataclass `(ts, ys,
+  metadata)`; `len` = trajectories, `source[i] = {"t", "u"}`. All window bookkeeping
+  (`window_size`, `windows_per_trajectory`, `window_index`, `window_start_times`, the
+  per-half window handling in `split_time`) is gone; splits are `copy.replace`.
+- **Windows are `grain.transforms.RandomMap`s** (`data/windows.py`): `RandomWindow(length,
+  start_range)` and `WeightedWindow(length, weight)`; `windows()` builds
+  `source → shuffle → repeat → random_map`, `mixed_windows()` is `mix` of two start-range
+  restricted `RandomWindow` pipelines. Verified that grain keys the per-element generator
+  by the global index, so a repeated trajectory gets a fresh window every epoch
+  (`test_weighted_window_frequencies_and_determinism`). The DySLIM pattern
+  (`swirl_dynamics/projects/ergodic/utils.py`: `ArrayDataSource` + `RandomSection`).
+- **Grouped metadata**: `SystemSpec`, `SamplingSpec`, `GridSpec`, `SolveSpec`,
+  `Provenance`, `extra`; one JSON attribute per group; `config_hash` a property over the
+  first four. `SolveSpec` is built from `SolverConfig.params()` + the integration name.
+- **Dict batches** `{"t", "u"}`; `ConjugacyTrajectoryLoss` reads by key.
+  `TimeSeriesDataSource` is no longer re-exported from `training`.
+- Notebook data cells rewritten on the new API (`windows` with `start_range` for the two
+  halves, `transient_weight`, `mixed_windows`; `batch["u"]`).
 
 ## Design
 
@@ -248,3 +274,16 @@ Review round 1 (commit `d6e560b`):
 | `tests/test_systems.py`: flow machinery; FHN equilibrium/eigenvalues/period and HH facts, citing Langfield et al. (2014) | | |
 | `docs/decisions/0007-…`: amended for the review | | |
 | `docs/architecture.md`, `docs/roadmap.md`: B8–B12, analysis to Phase E | | |
+
+Review round 2 (B9) and the B10 draft:
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `docs/design/normal-forms.md`: **draft for review** — conventions, derivations (`κ = ρ'(1)` in `r`; `ψ` normalisation), charts, integrations incl. proposed `closed_form`, API for B11, open decisions §9 | | |
+| `src/deep_isochron/data/dataset.py`: frozen-dataclass whole-trajectory source; grouped `DatasetMetadata`; `copy.replace` splits | | |
+| `src/deep_isochron/data/windows.py`: `RandomWindow`, `WeightedWindow`, `transient_weight`, `windows`, `mixed_windows` (replaces `sampling.py`) | | |
+| `src/deep_isochron/data/generate.py`: grouped metadata from `params()` | | |
+| `src/deep_isochron/training/losses.py`, `training/__init__.py`: dict batches; no data re-export | | |
+| `tests/test_data.py`: rewritten for the transform design | | |
+| `configs/data/*.yaml`, `scripts/generate_data.py`, `prototype.ipynb`: follow the API | | |
+| `docs/decisions/0008-…`, `docs/architecture.md`, `docs/roadmap.md`: amended | | |

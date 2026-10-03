@@ -12,7 +12,7 @@ class ConjugacyTrajectoryLoss(eqx.Module):
     def __call__(self, model: ConjugateLatentDynamics, batch, args=None):
         t_batch: Float[Array, "batch time"]
         x_batch: Float[Array, "batch time dim"]
-        t_batch, x_batch = batch
+        t_batch, x_batch = batch["t"], batch["u"]
         x_pred, y_pred = eqx.filter_vmap(model)(t_batch, x_batch[:, 0])
 
         mse = jnp.mean((x_batch - x_pred) ** 2)
