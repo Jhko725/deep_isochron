@@ -62,11 +62,55 @@ Tests and docs:
 - `tests/test_systems.py` — new (see Tests).
 - `tests/test_data.py` — new (see Tests).
 - `tests/helpers.py` — `TOL["flow"] = 1e-6`.
+- Review round 1: `src/deep_isochron/model/invertible/constraints.py` (`GreaterThan`,
+  `at_zero` documentation, `BoundedPositive.lower`), `analytic.py`,
+  `splines/rational_quadratic.py` (call sites), `tests/test_constraints.py`;
+  `systems/normal_forms/{__init__,base,hopf,bautin,integration}.py` replace
+  `normal_form.py`, `normal_forms.py`, `strategies.py`; `systems/base.py` (`params()`,
+  single `flow`); `data/generate.py` (`params()`, `integration`); `configs/data/*.yaml`,
+  `scripts/generate_data.py` (`integration:`); `tests/test_normal_forms.py` (new),
+  `tests/test_systems.py` (facts only); `docs/decisions/0007` amended.
 - `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`,
   `docs/decisions/0008-dataset-format-and-sampling.md` — new ADRs.
 - `docs/architecture.md` — systems and data sections rewritten; module map updated.
 - `docs/roadmap.md` — Phase B rewritten around the decisions; B1–B7 to Done; B8
   (`analysis/`) added; parked items.
+
+## Review round 1 (2026-10-03) — what changed in response
+
+Every row of the first *Review notes* table was answered as follows (the design points
+deferred to discussion were settled on 2026-10-03 and are tracked as roadmap B9–B12):
+
+- **`flow`/`flow_result` → one `flow -> diffrax.Solution`.** Integrations that change
+  chart return the same `Solution` with `.ys` replaced via `eqx.tree_at`, so `.result`,
+  `.stats`, `.ts` are diffrax's and `.ys` is always cartesian. Callers read `.ys`.
+- **Names.** `strategy` → `integration` everywhere (`systems/normal_forms/integration.py`,
+  `AbstractFlowIntegration`, `INTEGRATIONS`, `resolve_integration`, the `flow` keyword,
+  the Hydra key); the first argument is `normal_form: AbstractNormalForm`. Reason beyond
+  taste: `tests/strategies.py` already means Hypothesis strategies.
+- **Subpackage.** `systems/normal_form.py` + `normal_forms.py` → `systems/normal_forms/
+  {base, hopf, bautin, integration}.py`; the integrations live there because they use
+  `radial_rate`/`angular_rate`/`rhs_polar`, which only normal forms have.
+- **`AbstractODE.params()`** is part of the contract: constrained parameter values keyed
+  by mathematical name (default: every non-static field; the normal forms override it).
+  `generate` records `system.params()`; the former `_system_params` and its `k[4:]`
+  attribute-name inspection are gone. `SolverConfig.params()` likewise.
+- **`GreaterThan(lower, at_zero=None)`** replaces `Positive(eps, at_zero)`; the default
+  `at_zero = lower + 1` makes `GreaterThan(0.0)` map `0 ↦ 1` and `GreaterThan(−1.0)` map
+  `0 ↦ 0`, which is exactly what the two normal-form parameters need, so the module-level
+  `A_CONSTRAINT`/`B_CONSTRAINT` read without a comment. `Positive(at_zero=1.0)` stays as
+  `GreaterThan(0.0, at_zero)`; `BoundedPositive` gets the same default and `eps` → `lower`.
+  The constraints module docstring now has a paragraph on the role of `at_zero`.
+- **Tests split.** `test_normal_forms.py` (generic laws, Hypothesis over both forms) and
+  `test_systems.py` (flow machinery; facts about the observed systems). The FHN facts cite
+  Langfield, Krauskopf & Osinga (2014), Sec. III, whose parameters `a = 0.7, b = 0.8, c =
+  3, z = −0.4` are this class's defaults: equilibrium `(0.9066, −0.2582)`, eigenvalues
+  `0.1339 ± 0.9163i`, and — new — the period `T_Γ ≈ 11.2279`, measured from zero
+  crossings after the transient and reproduced to `2e-3`.
+- **Deferred to B9** (same branch, next commit): whole-trajectory source with grain
+  `RandomMap` windowing (swirl-dynamics pattern), `copy.replace` on a frozen dataclass,
+  grouped metadata. **B10/B11**: the normal-form design note, then the `r`-based API.
+  **B12**: the Yawata et al. (2024) baseline.
 
 ## Design
 
@@ -189,3 +233,18 @@ Also run by hand: `scripts/generate_data.py --config-name {bautin,fhn}` writes
 | `docs/decisions/0007-…`, `0008-…`: new ADRs | Looks good. Perhaps 0008 may need additional updates as the data abstractions are refined. | None |
 | `docs/architecture.md`: systems/data sections | Read through, but the new architectural elements will need to be refined as per the comments above. | None |
 | `docs/roadmap.md`: Phase B rewritten; ledger | Overall okay. But phase B will need to be changed - performing the design refinements flagged in this review is the next thing to do. `deep_isochron.analysis` is good, but this pertains to the science I want to do, and want a more careful consideration of what I need / what algorithms I will implement. So keep the namespace, but defer the actual implementation to phase E (and this will also be expanded as research progresses). | Deferred to Claude for updates. |
+
+Review round 1 (commit `d6e560b`):
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `src/.../invertible/constraints.py`: `GreaterThan(lower, at_zero=lower+1)`; `Positive` alias; `at_zero` documented; `BoundedPositive.lower` | | |
+| `src/.../invertible/{analytic,splines/rational_quadratic}.py`, `tests/test_constraints.py`: call sites | | |
+| `src/deep_isochron/systems/base.py`: `params()` contract; single `flow -> Solution`; `SolverConfig.params()` | | |
+| `src/deep_isochron/systems/normal_forms/{__init__,base,hopf,bautin}.py`: subpackage; `A_CONSTRAINT`/`B_CONSTRAINT`; `params()` | | |
+| `src/deep_isochron/systems/normal_forms/integration.py`: `AbstractFlowIntegration` and the three integrations; `Solution` with cartesian `.ys` | | |
+| `src/deep_isochron/model/conjugacy.py`, `data/generate.py`, `configs/`, `scripts/`: `.ys`, `integration`, `system.params()` | | |
+| `tests/test_normal_forms.py`: generic normal-form laws (split out) | | |
+| `tests/test_systems.py`: flow machinery; FHN equilibrium/eigenvalues/period and HH facts, citing Langfield et al. (2014) | | |
+| `docs/decisions/0007-…`: amended for the review | | |
+| `docs/architecture.md`, `docs/roadmap.md`: B8–B12, analysis to Phase E | | |
