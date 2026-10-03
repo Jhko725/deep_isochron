@@ -18,16 +18,17 @@ All items in the Done ledger; see `docs/changes/2026-10-02-invertible-cleanup.md
 
 ## Phase B — `data-generation` (current)
 
-Decisions taken 2026-10-02 (ADR-0007, ADR-0008): `AbstractODE` / `AbstractNormalForm`
-two-layer hierarchy with the rule "a class carries only what is analytically available,
-everything numerical is a function over `AbstractODE`"; `SolverConfig`; flow strategies as
-objects; one netCDF4 file per dataset via xarray; weighted-window sampling kept alongside
-`mix`. B1–B7 landed in `docs/changes/2026-10-02-data-generation.md`.
+Decisions taken 2026-10-02 (ADR-0007, ADR-0008) and refined by the review of 2026-10-03.
+B1–B7 landed; the review (change document, *Review notes*) set the remaining items, in
+this order:
 
 | # | Item | Why | Done when |
 |---|---|---|---|
-| B8 | `deep_isochron/analysis/`: numerical counterparts of `AbstractNormalForm`'s closed forms for any `AbstractODE` — `find_limit_cycle` (Poincaré/shooting), `monodromy` → Floquet exponents, `asymptotic_phase` by long integration against the located cycle, later `isochrons` by the continuation method of Langfield, Krauskopf & Osinga (2014) | ground truth for the learned FHN isochrons; `t_settle` for sampling weights | functions + tests that recover Bautin's closed forms numerically |
-| B9 | `t_settle` per trajectory stored in the dataset (from `amplitude` for normal forms, from B8 for observed systems); `transient_weights` optionally keyed on it | a physical basis for oversampling rather than wall-clock start time | variable in the file; sampler option |
+| B8 | Mechanical review fixes: single `flow -> diffrax.Solution`; `strategy` → `integration` (`normal_forms/integration.py`, `AbstractFlowIntegration`); `systems/normal_forms/{base,hopf,bautin}.py`; `AbstractODE.params()` contract; `GreaterThan(lower, at_zero=lower+1)` with `Positive` as alias; `test_normal_forms.py` split from `test_systems.py` with Langfield et al. cited | review of `6c0fdc2` | *done 2026-10-03* |
+| B9 | Data layer as grain transforms: `TimeSeriesDataSource` holds whole trajectories (a frozen dataclass; `copy.replace`); windowing is `RandomWindow` / `WeightedWindow` (`grain.transforms.RandomMap`) and the two-loader comparison is `mix` of start-range-restricted windows; `DatasetMetadata` grouped into `system / sampling / grid / solve / provenance / extra`; `test_data.py` rewritten; ADR-0008 amended | review: idiomatic grain (swirl-dynamics pattern); organised metadata | transforms + tests; configs/script/notebook follow |
+| B10 | `docs/design/normal-forms.md`: conventions (public API in `r`; the rates as even functions stored in `s = r²`), derivations of `h`, `ψ`, `κ`, sign/normalisation conventions, the `b < 0` basin, what each integration computes — **for review before B11** | review: `r`/`s` inconsistency; math laid down before implementation | document agreed |
+| B11 | Reimplement `AbstractNormalForm`'s analytic methods against B10; ADR-0007 amended | — | tests unchanged in intent, API in `r` |
+| B12 | Yawata et al. baseline, *Phase autoencoder for limit-cycle oscillators*, Chaos 34, 063111 (2024): a two-variable latent with constant phase velocity and exponentially decaying amplitude, i.e. the autoencoder learns `(φ, ψ)` directly; then retire `LinearLatentDynamics` | the paper's baseline | module + test; `LinearLatentDynamics` removed |
 
 ## Phase C — `trainer`
 
@@ -61,7 +62,11 @@ objects; one netCDF4 file per dataset via xarray; weighted-window sampling kept 
 
 ## Phase E — science
 
-Pushforward loss with oversampling near the repelling slow manifold; curvature-matching
+`deep_isochron.analysis` (namespace reserved; algorithms chosen as the research dictates):
+numerical limit cycle, monodromy/Floquet exponents, asymptotic phase by long integration,
+isochrons by the BVP continuation of Langfield, Krauskopf & Osinga (2014) — the ground
+truth for the learned FitzHugh–Nagumo isochrons; `t_settle` per trajectory in the dataset
+once the normal-form `amplitude` or these tools provide it. Pushforward loss with oversampling near the repelling slow manifold; curvature-matching
 (Hessian) loss; INN depth 8–12; Jacobian-anisotropy diagnostics (`diagnostics/`); endpoint
 handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a C¹
 `CircularMonotonicRQCoupling`). As `LossConfig`/`INNConfig` entries once Phase D is in.
@@ -95,6 +100,7 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-09-30 | `splines-refactor` | `AbstractSpline`; `CubicBSpline` ported; `LinearSpline`; RQ-spline bug fixes; `BijectionFactory` removed; first Hypothesis suite; change-document convention | `docs/changes/2026-09-30-splines-refactor.md` |
 | 2026-10-01 | `scalar-param-refactor` | `raw`/`constrain` contract (ADR-0001/0002); declared `smoothness` (ADR-0003); `AbstractVar` as static `init=False` fields (ADR-0004); constraint primitives (ADR-0005); `ScalarChain`; `CouplingFlow` with pluggable conditioner; `PolarCouplingFlow`; circular spline as exact rotation; `InvertibleLinear` rotation init; `BiLipschitzLinear._s` vector; 303-test suite; `ty` clean on the invertible package | `docs/changes/2026-10-01-scalar-param-refactor.md`, ADRs 0001–0005 |
 | 2026-10-02 | `invertible-cleanup` | A1: `Shift`/`Affine` scalar templates; `AffineCoupling`/`ResidualCoupling` as `CouplingFlow` factories (the latter now identity at init) | `docs/changes/2026-10-02-invertible-cleanup.md` |
+| 2026-10-03 | `data-generation` | B8: review round 1 — `flow -> Solution`; `integration` naming; `normal_forms/` subpackage; `params()`; `GreaterThan`; tests split, Langfield et al. cited (FHN equilibrium, eigenvalues, period) | `docs/changes/2026-10-02-data-generation.md` |
 | 2026-10-02 | `data-generation` | B1–B7: `AbstractODE.flow` + `SolverConfig`; `AbstractNormalForm` (closed-form phase, isostable, isochrons, chart); flow strategies (cartesian / polar / `r²`); Hopf/Bautin rewritten on two rates with constrained leaves; `HopfLatentDynamics` deleted; xarray/netCDF `TimeSeriesDataSource` + `DatasetMetadata`; `generate` with loud failures and `config_hash`; `split_time`/`split_trajectories`; `weighted_windows` + `mixed_split`; `scripts/generate_data.py` + configs; `test_systems.py`, `test_data.py` | `docs/changes/2026-10-02-data-generation.md`, ADR-0007/0008 |
 | 2026-10-02 | `invertible-cleanup` | A8–A9: `systems/` on ADR-0004; all `ty: ignore`s gone (`cast`s at the optax/orbax boundaries); `training` import bug, empty-loader crash and `HopfLatentDynamics` call fixed; `matplotlib` → dev group | `docs/changes/2026-10-02-invertible-cleanup.md` |
 | 2026-10-02 | `invertible-cleanup` | A5–A7: `AbstractScalarBijection` implementation checklist; ADR-0006 + `docs/design/cubic-bspline.md` (corrects the inverse error-bound claim); `docs/architecture.md` | `docs/changes/2026-10-02-invertible-cleanup.md` |

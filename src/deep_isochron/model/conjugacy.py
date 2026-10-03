@@ -12,7 +12,7 @@ class ConjugateLatentDynamics(eqx.Module):
 
     The latent ODE is integrated through its own ``flow`` in its own (cartesian)
     coordinates; chart choices are the ODE's business (``AbstractNormalForm``
-    strategies), not this class's. Solver settings live in ``solver_config`` (static).
+    integrations), not this class's. Solver settings live in ``solver_config`` (static).
     """
 
     latent_dynamics: AbstractODE
@@ -40,8 +40,8 @@ class ConjugateLatentDynamics(eqx.Module):
         return_latent_trajectory: bool = True,
     ) -> tuple[Float[Array, "time obs_dim"], Float[Array, "time latent_dim"] | None]:
         y0: Float[Array, " latent_dim"] = self.bijection(x0)
-        yt: Float[Array, "time latent_dim"] = self.latent_dynamics.flow(
-            ts, y0, config=self.solver_config
-        )
+        sol = self.latent_dynamics.flow(ts, y0, config=self.solver_config)
+        assert sol.ys is not None
+        yt: Float[Array, "time latent_dim"] = sol.ys
         xt: Float[Array, "time obs_dim"] = jax.vmap(self.bijection.inverse)(yt)
         return (xt, yt) if return_latent_trajectory else (xt, None)

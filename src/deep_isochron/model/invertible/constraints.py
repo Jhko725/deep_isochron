@@ -8,13 +8,21 @@ own right, with ``__call__`` (raw -> constrained), ``inverse`` (constrained -> r
 ``is_constrained`` (membership in ``S``), so that bijections can also be built from
 constrained values (``from_constrained``) and tests can check the image generically.
 
-Identity-at-zero convention (``docs/decisions/0002-identity-at-zero.md``): every
-primitive with an ``at_zero`` argument maps ``raw = 0`` to ``at_zero``. This puts the
-shift into the *map* rather than into the initialisation, which is what makes a
-zero-initialised conditioner (``CouplingFlow``) the identity. Shifted primitives
-implement the unshifted map pair ``_forward``/``_inverse`` once; the shift is
-``_inverse(at_zero)``, evaluated under ``jax.ensure_compile_time_eval`` so that it is a
-concrete float even when the primitive is constructed inside a ``jit``/``vmap`` trace.
+**The role of ``at_zero``** (``docs/decisions/0002-identity-at-zero.md``). A primitive
+has two independent pieces of configuration: the *constrained set* (``lower`` for
+``GreaterThan``, ``lo``/``hi`` for ``Interval``, ...) and the *point of that set that
+``raw = 0`` maps to*, ``at_zero``. The second exists because a scalar bijection must be
+the identity at ``raw = 0`` (so that a zero-initialised conditioner is the identity
+map), and the identity's parameter value — a scale of ``1``, a shift of ``0``, a slope
+of ``1`` — is usually not what the unshifted map (softplus, sigmoid) gives at ``0``.
+Every primitive therefore has a sensible default for ``at_zero`` (``GreaterThan``:
+``lower + 1``; ``Interval``: the midpoint; ``BoundedPositive``: ``lower + 1``) and
+accepts an explicit value when the identity needs a different one (``CubicConjugation``
+needs ``b = 0.3`` at zero). The shift is put into the *map* rather than into the
+initialisation: shifted primitives implement the unshifted pair
+``_forward``/``_inverse`` once, and the shift ``_inverse(at_zero)`` is evaluated under
+``jax.ensure_compile_time_eval`` so that it is a concrete float even when the primitive
+is constructed inside a ``jit``/``vmap`` trace.
 
 The stateless primitives are also available as module-level singletons ``free`` and
 ``arcsinh`` (``arcsinh(mu)`` reads better than ``Arcsinh()(mu)``).
@@ -108,70 +116,87 @@ class Arcsinh(Constraint):
         return jnp.all(jnp.isfinite(value))
 
 
-class Positive(_Shifted):
-    r"""``(eps, inf)`` via a shifted softplus: ``eps + softplus(raw + c)`` with ``c``
-    chosen so that ``raw = 0`` maps to ``at_zero``.
+class GreaterThan(_Shifted):
+    r"""``(lower, inf)`` via a shifted softplus: ``lower + softplus(raw + c)`` with
+    ``c`` chosen so that ``raw = 0`` maps to ``at_zero``.
 
     **Arguments:**
 
-    - ``eps``: lower bound (exclusive). Default ``0``.
-    - ``at_zero``: image of ``raw = 0``; must exceed ``eps``. Default ``1``.
+    - ``lower``: lower bound (exclusive).
+    - ``at_zero``: image of ``raw = 0``; must exceed ``lower``. Default ``lower + 1``,
+      so that ``GreaterThan(0.0)`` maps ``0 ↦ 1`` (a unit scale) and
+      ``GreaterThan(-1.0)`` maps ``0 ↦ 0`` (a vanishing coefficient).
     """
 
-    def __init__(self, eps: float = 0.0, at_zero: float = 1.0):
-        if not at_zero > eps:
-            raise ValueError("at_zero must be greater than eps.")
-        self.eps = eps
+    def __init__(self, lower: float, at_zero: float | None = None):
+        at_zero = lower + 1.0 if at_zero is None else at_zero
+        if not at_zero > lower:
+            raise ValueError("at_zero must be greater than lower.")
+        self.lower = lower
         self._init_shift(at_zero)
 
     def _forward(self, raw):
-        return self.eps + jax.nn.softplus(raw)
+        return self.lower + jax.nn.softplus(raw)
 
     def _inverse(self, value):
-        return inv_softplus(value - self.eps)
+        return inv_softplus(value - self.lower)
 
     def is_constrained(self, value: Float[Array, " *n"]) -> Bool[Array, ""]:
-        return jnp.all(value > self.eps)
+        return jnp.all(value > self.lower)
 
     def __repr__(self):
-        return f"Positive(eps={self.eps}, at_zero={self.at_zero})"
+        return f"{type(self).__name__}(lower={self.lower}, at_zero={self.at_zero})"
+
+
+class Positive(GreaterThan):
+    """``GreaterThan(0.0, at_zero)``: strictly positive values, ``raw = 0 ↦ at_zero``
+    (default ``1``)."""
+
+    def __init__(self, at_zero: float = 1.0):
+        super().__init__(0.0, at_zero)
 
 
 class BoundedPositive(_Shifted):
-    r"""``(eps + exp(-a), eps + exp(a))`` via a shifted ``squashed_exp``:
-    ``eps + exp(a * tanh((raw + c) / a))`` with ``c`` chosen so that ``raw = 0`` maps to
-    ``at_zero``. Unlike ``Positive`` the image is bounded above, so a large conditioner
-    output cannot drive the value to infinity (used for the cubic generator's ``a, b``).
+    r"""``(lower + exp(-a), lower + exp(a))`` via a shifted ``squashed_exp``:
+    ``lower + exp(a * tanh((raw + c) / a))`` with ``c`` chosen so that ``raw = 0`` maps
+    to ``at_zero``. Unlike ``GreaterThan`` the image is bounded above, so a large
+    conditioner output cannot drive the value to infinity (used for the cubic
+    generator's ``a, b`` and for ``Affine``'s scale).
 
     **Arguments:**
 
-    - ``eps``: lower offset. Default ``0``.
-    - ``at_zero``: image of ``raw = 0``; ``at_zero - eps`` must lie in
-      ``(exp(-a), exp(a))``. Default ``1``.
+    - ``lower``: lower offset. Default ``0``.
+    - ``at_zero``: image of ``raw = 0``; ``at_zero - lower`` must lie in
+      ``(exp(-a), exp(a))``. Default ``lower + 1``.
     - ``a``: squashing scale. Default ``2``.
     """
 
-    def __init__(self, eps: float = 0.0, at_zero: float = 1.0, a: float = 2.0):
+    def __init__(
+        self, lower: float = 0.0, at_zero: float | None = None, a: float = 2.0
+    ):
         import math
 
-        if not math.exp(-a) < at_zero - eps < math.exp(a):
-            raise ValueError("at_zero - eps must lie in (exp(-a), exp(a)).")
-        self.eps = eps
+        at_zero = lower + 1.0 if at_zero is None else at_zero
+        if not math.exp(-a) < at_zero - lower < math.exp(a):
+            raise ValueError("at_zero - lower must lie in (exp(-a), exp(a)).")
+        self.lower = lower
         self.a = a
         self._init_shift(at_zero)
 
     def _forward(self, raw):
-        return self.eps + squashed_exp(raw, self.a)
+        return self.lower + squashed_exp(raw, self.a)
 
     def _inverse(self, value):
-        return inv_squashed_exp(value - self.eps, self.a)
+        return inv_squashed_exp(value - self.lower, self.a)
 
     def is_constrained(self, value: Float[Array, " *n"]) -> Bool[Array, ""]:
-        lo, hi = self.eps + jnp.exp(-self.a), self.eps + jnp.exp(self.a)
+        lo, hi = self.lower + jnp.exp(-self.a), self.lower + jnp.exp(self.a)
         return jnp.all((value > lo) & (value < hi))
 
     def __repr__(self):
-        return f"BoundedPositive(eps={self.eps}, at_zero={self.at_zero}, a={self.a})"
+        return (
+            f"BoundedPositive(lower={self.lower}, at_zero={self.at_zero}, a={self.a})"
+        )
 
 
 class Interval(_Shifted):
@@ -182,7 +207,7 @@ class Interval(_Shifted):
 
     - ``lo``, ``hi``: open interval bounds, ``lo < hi``.
     - ``at_zero``: image of ``raw = 0``; must lie strictly inside the interval. Default
-      is the midpoint.
+      the midpoint.
     """
 
     def __init__(self, lo: float, hi: float, at_zero: float | None = None):

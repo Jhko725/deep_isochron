@@ -14,7 +14,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
 from .base import AbstractScalarBijection
-from .constraints import arcsinh, BoundedPositive, free, Interval, Positive
+from .constraints import arcsinh, BoundedPositive, free, GreaterThan, Interval
 
 
 def solve_cubic(
@@ -80,7 +80,7 @@ class CubicRational(AbstractScalarBijection[CubicRationalParams]):
         alpha, beta, loc = raw
         return CubicRationalParams(
             alpha=Interval(-1 + self.eps_alpha, 8 - self.eps_alpha, at_zero=0.0)(alpha),
-            beta=Positive(self.eps_beta, at_zero=1.0)(beta),
+            beta=GreaterThan(self.eps_beta, at_zero=1.0)(beta),
             loc=free(loc),
         )
 
@@ -91,7 +91,7 @@ class CubicRational(AbstractScalarBijection[CubicRationalParams]):
         raw = jnp.stack(
             [
                 Interval(-1 + eps_alpha, 8 - eps_alpha, at_zero=0.0).inverse(alpha),
-                Positive(eps_beta, at_zero=1.0).inverse(beta),
+                GreaterThan(eps_beta, at_zero=1.0).inverse(beta),
                 jnp.asarray(loc),
             ]
         )
@@ -247,7 +247,7 @@ class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
         loc, scale, beta, mu, nu = raw
         return SinhConjugationParams(
             loc=free(loc),
-            scale=Positive(self.eps_scale, at_zero=1.0)(scale),
+            scale=GreaterThan(self.eps_scale, at_zero=1.0)(scale),
             beta=free(beta),
             mu=arcsinh(mu),
             nu=arcsinh(nu),
@@ -260,7 +260,7 @@ class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
         raw = jnp.stack(
             [
                 jnp.asarray(loc),
-                Positive(eps_scale, at_zero=1.0).inverse(scale),
+                GreaterThan(eps_scale, at_zero=1.0).inverse(scale),
                 jnp.asarray(beta),
                 arcsinh.inverse(mu),
                 arcsinh.inverse(nu),

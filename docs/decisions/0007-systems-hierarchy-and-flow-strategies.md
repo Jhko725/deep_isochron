@@ -1,6 +1,6 @@
-# ADR-0007 — `AbstractODE` / `AbstractNormalForm`, `SolverConfig`, and flow strategies as objects
+# ADR-0007 — `AbstractODE` / `AbstractNormalForm`, `SolverConfig`, and flow integrations as objects
 
-**Status**: accepted (2026-10-02)
+**Status**: accepted (2026-10-02); amended 2026-10-03 after review (names: *integration* not *strategy*; `flow` returns the `diffrax.Solution`; `params()` added to the `AbstractODE` contract; `GreaterThan`). The mathematics will move to `docs/design/normal-forms.md` (roadmap B10).
 
 ## Context
 
@@ -38,21 +38,24 @@ as the interface of the non-invertible autoencoder baseline only.
 
 ### 2. `SolverConfig`: every solver setting in one leafless module
 
-`flow(ts, u0, args=None, *, config: SolverConfig)`. `SolverConfig` holds `solver`, `rtol`,
+`flow(ts, u0, args=None, *, config: SolverConfig) -> diffrax.Solution` (``.ys`` the trajectory, ``.result`` the outcome, ``.stats`` the step counts; there is no separate `flow_result`). `SolverConfig` holds `solver`, `rtol`,
 `atol`, `max_steps`, `adjoint`, `throw` as static fields; it has no array leaves, so under
 `eqx.filter_vmap`/`filter_jit` it is a static argument and never traced. The same object is
 a static field of `ConjugateLatentDynamics` (what Phase C planned as C2). `flow` is written
 for one initial condition; batching is `eqx.filter_vmap(ode.flow, in_axes=(None, 0))`.
-`flow_result` additionally returns diffrax's `RESULTS`, because under `vmap` `throw=True`
+`Solution.result` carries diffrax's `RESULTS`, needed because under `vmap` `throw=True`
 raises if *any* element fails [diffrax docs]; data generation uses `throw=False` and reports
-the failing indices.
+the failing indices. Integrations that change chart return the same `Solution` with `.ys`
+replaced (`eqx.tree_at`), so callers always read cartesian `.ys`.
 
 - *Rejected*: four keyword arguments. They were already being swallowed by `**kwargs`,
   and the trainer will want to carry the same settings around.
 
-### 3. Flow strategies are objects, resolved from names
+### 3. Flow integrations are objects, resolved from names
 
-`AbstractNormalForm.flow(..., strategy=...)` takes an `AbstractFlowStrategy` instance —
+`AbstractNormalForm.flow(..., integration=...)` takes an `AbstractFlowIntegration` instance
+(`systems/normal_forms/integration.py`; the word *strategy* was dropped because
+`tests/strategies.py` already means Hypothesis strategies) —
 `CartesianIntegration`, `PolarIntegration`, `RadiusSquaredIntegration` — or one of the
 names `"cartesian" | "polar" | "r_squared"` mapped to default instances. This is the
 diffrax pattern (pass a solver object). A strategy is an `eqx.Module` with no array leaves,
@@ -69,8 +72,9 @@ internally; `ConjugateLatentDynamics` lost its polar conversion as a result.
 
 ### 4. Normal-form parameters as unconstrained leaves
 
-`a > 0` via `Positive()` (`raw = 0 ↦ a = 1`); Bautin's `b > −1` via
-`Positive(eps=−1, at_zero=0)` (`raw = 0 ↦ b = 0`, the Hopf form). `b > −1` is exactly
+`a > 0` via `GreaterThan(0.0)` and Bautin's `b > −1` via `GreaterThan(−1.0)`; with the
+default `at_zero = lower + 1` these map `raw = 0` to `a = 1` and `b = 0` (the Hopf form)
+without any explicit shift at the call site (`A_CONSTRAINT`, `B_CONSTRAINT`). `b > −1` is exactly
 `ρ'(1) < 0`, the cycle's stability. For `−1 < b < 0` a second, unstable cycle at `r² = −1/b`
 bounds the basin (the Bautin bifurcation's two-cycle regime); as a conjugacy target
 `b ≥ 0` is used and the tests restrict the flow laws to it, while a dedicated test pins the
@@ -85,4 +89,6 @@ imaginary part at the origin).
   (`ω(r²) + h'(r)·rρ(r²) = ω(1)`, `ψ'(r)·rρ(r²) = κψ`), and again by integration.
 - `HopfLatentDynamics` deleted; `LinearLatentDynamics` and `PhaseAmplitudeAutoencoder` kept
   as the non-invertible baseline.
-- The numerical counterparts (`analysis/`) are the next item of Phase B (roadmap B8).
+- The numerical counterparts (`analysis/`) are Phase E; the namespace is reserved.
+- `AbstractODE.params()` returns the constrained parameter values keyed by their
+  mathematical names; dataset metadata records it, nothing inspects attribute names.

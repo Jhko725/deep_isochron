@@ -20,14 +20,16 @@ trajectories.
 ```
 deep_isochron
 ├── systems/                 ODEs (observed and normal forms)      ── AbstractODE
-│   ├── base.py              rhs(t, u) · SolverConfig · flow / flow_result (diffrax)
+│   ├── base.py              rhs(t, u) · params() · SolverConfig · flow -> diffrax.Solution
 │   ├── fitzhugh_nagumo.py   FitzhughNagumo (dim 2)
 │   ├── hodgekin_huxley.py   HodgekinHuxley (dim 4)
-│   ├── normal_form.py       AbstractNormalForm: closed-form phase, isostable amplitude,
-│   │                        isochrons, Floquet exponent, polar chart
-│   ├── normal_forms.py      HopfNormalForm, BautinNormalForm (two rates ρ(s), ω(s))
-│   └── strategies.py        CartesianIntegration / PolarIntegration /
-│                            RadiusSquaredIntegration — flow(..., strategy=)
+│   └── normal_forms/
+│       ├── base.py          AbstractNormalForm: closed-form phase, isostable amplitude,
+│       │                    isochrons, Floquet exponent, polar chart
+│       ├── hopf.py          HopfNormalForm            (two rates ρ(s), ω(s))
+│       ├── bautin.py        BautinNormalForm
+│       └── integration.py   CartesianIntegration / PolarIntegration /
+│                            RadiusSquaredIntegration — flow(..., integration=)
 ├── model/
 │   ├── invertible/          the INN vocabulary                     ── AbstractBijection
 │   │   ├── base.py          AbstractBijection, AbstractScalarBijection, ScalarChain,
@@ -52,7 +54,7 @@ deep_isochron
 │   │                        loud failures and config_hash
 │   └── sampling.py          weighted_windows + transient_weights; mixed_split (grain)
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
-│                            (planned, roadmap B8)
+│                            (namespace reserved; Phase E)
 ├── training/                TrainerState / Trainer (optax + orbax + wandb);
 │                            ConjugacyTrajectoryLoss                        ── Phase C
 └── misc.py                  inv_softplus, squashed_exp, polar ↔ cartesian
@@ -101,8 +103,9 @@ cubic B-spline is the production candidate for that reason; its design is in ADR
 ## Systems and normal forms
 
 Two layers and one rule (ADR-0007). `AbstractODE` is any ODE in the study: `rhs(t, u, args)`
-in the diffrax signature, `dim`, and the numerical `flow(ts, u0, *, config: SolverConfig)` /
-`flow_result` (also returns diffrax's `RESULTS`, for batched generation with `throw=False`).
+in the diffrax signature, `dim`, `params()` (constrained parameter values, for metadata),
+and the numerical `flow(ts, u0, *, config: SolverConfig) -> diffrax.Solution` (`.ys` the
+trajectory; `.result` for batched generation with `throw=False`).
 `SolverConfig` holds solver, tolerances, `max_steps`, adjoint and `throw` as static fields;
 it is leafless, so under `eqx.filter_vmap`/`filter_jit` it is static. `flow` is written for
 one initial condition; batching is `eqx.filter_vmap(ode.flow, in_axes=(None, 0))`.
@@ -114,12 +117,12 @@ the cartesian `rhs` (smooth at the origin), `rhs_polar`, `period`, `floquet_expo
 (`2ρ'(1)` by autodiff), `phase` (`θ + h(r)`), `amplitude`, `limit_cycle`, `isochron`, and the
 chart maps. **The rule**: a class carries only what is available analytically; anything
 numerical — locating a limit cycle, monodromy, asymptotic phase of FitzHugh–Nagumo — is a
-function over `AbstractODE` in `analysis/` (B8). Everything public is cartesian.
+function over `AbstractODE` in `analysis/` (Phase E). Everything public is cartesian.
 
-Integration **strategies** (`strategies.py`) are objects in the diffrax style — pass an
+**Integrations** (`normal_forms/integration.py`) are objects in the diffrax style — pass an
 instance, or one of `"cartesian" | "polar" | "r_squared"` for the defaults. They are
 leafless modules, hence static: each traces separately and dispatch is free. All return
-cartesian trajectories, so `ConjugateLatentDynamics` no longer converts charts itself.
+cartesian `.ys` in the same `Solution`, so `ConjugateLatentDynamics` never converts charts.
 
 `latent_dynamics.py` / `autoencoder.py` are the non-invertible baseline
 (`PhaseAmplitudeAutoencoder` with `LinearLatentDynamics`), kept for comparison; they do not
@@ -129,14 +132,14 @@ use `AbstractODE`.
 
 A dataset is **one netCDF4 file** (HDF5 underneath; ADR-0008): dims `(trajectory, time,
 dim)`, the time grid as the `time` coordinate, and `DatasetMetadata` — system and
-parameters, IC sampler and seed, grid, solver and tolerances, strategy, dtype, `config_hash`,
+parameters, IC sampler and seed, grid, solver and tolerances, integration, dtype, `config_hash`,
 timestamp, git SHA/dirty, package version, free-form `extra` (the resolved Hydra config) —
 flattened into the attributes. `TimeSeriesDataSource` wraps it and serves fixed-length
 windows through grain's random-access protocol; `split_time(idx)` and
 `split_trajectories(frac, seed)` return sources over views; `save`/`load` (with an optional
 dtype assertion) are the only I/O.
 
-`generate(system, ic_sampler, ts, n, *, seed, config, strategy, window_size, extra)` draws
+`generate(system, ic_sampler, ts, n, *, seed, config, integration, window_size, extra)` draws
 initial conditions from an `AbstractICSampler` (`UniformBox`, `UniformAnnulus`), vmaps
 `flow_result` with `throw=False`, and raises naming any failed indices. Files are named
 `<name>-<config_hash>.nc` (`dataset_path`); the hash covers the generation-defining fields
@@ -155,7 +158,7 @@ halves). Both are kept so they can be compared.
 batch (t[B,T], x[B,T,d])  ──►  ConjugacyTrajectoryLoss(model, batch)
                                  │
                                  ├─ y0 = Φ(x[:, 0])                       bijection forward
-                                 ├─ y[t]  = latent.flow(t, y0, config)     systems (strategy)
+                                 ├─ y[t]  = latent.flow(t, y0, config).ys  systems (integration)
                                  ├─ x̂[t]  = Φ⁻¹(y[t])                      bijection inverse
                                  ├─ mse(x, x̂)  +  w · mse(Φ(x[t]), y[t])
                                  ▼
@@ -177,7 +180,8 @@ missing from it. `tests/test_bijections.py` holds the laws every bijection satis
 trip, identity at init, orientation, finiteness, Jacobian consistency, pytree hygiene, one
 optimiser step), run through Hypothesis draws from `tests/strategies.py`. Per-family laws
 are in `test_splines.py`, `test_analytic.py`, `test_constraints.py`, `test_linear.py`;
-`test_systems.py` pins the normal forms' closed forms by autodiff and the flow strategies,
+`test_normal_forms.py` pins the normal forms' closed forms by autodiff and the integrations,
+`test_systems.py` the flow machinery and the observed systems' facts (Langfield et al. 2014),
 `test_data.py` the data layer end to end. Shape
 annotations are checked at runtime by the jaxtyping/beartype import hook (`conftest.py`).
 
@@ -191,5 +195,5 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0004](decisions/0004-abstractvar-fields.md) | `AbstractVar`s implemented as static `init=False` fields |
 | [0005](decisions/0005-constraint-primitives.md) | constraint primitives are plain objects created inside `constrain` |
 | [0006](decisions/0006-cubic-bspline-boundary-and-inverse.md) | `CubicBSpline`: Greville-pinned boundary; bracketed Newton inverse |
-| [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | `AbstractODE` / `AbstractNormalForm`; `SolverConfig`; flow strategies as objects |
+| [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | `AbstractODE` / `AbstractNormalForm`; `SolverConfig`; flow integrations as objects |
 | [0008](decisions/0008-dataset-format-and-sampling.md) | one netCDF4 file per dataset via xarray; weighted windows alongside `mix` |

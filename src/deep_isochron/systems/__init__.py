@@ -5,15 +5,13 @@ from .base import (
 )
 from .fitzhugh_nagumo import FitzhughNagumo as FitzhughNagumo
 from .hodgekin_huxley import HodgekinHuxley as HodgekinHuxley
-from .normal_form import AbstractNormalForm as AbstractNormalForm
 from .normal_forms import (
+    AbstractFlowIntegration as AbstractFlowIntegration,
+    AbstractNormalForm as AbstractNormalForm,
     BautinNormalForm as BautinNormalForm,
-    HopfNormalForm as HopfNormalForm,
-)
-from .strategies import (
-    AbstractFlowStrategy as AbstractFlowStrategy,
     CartesianIntegration as CartesianIntegration,
+    HopfNormalForm as HopfNormalForm,
+    INTEGRATIONS as INTEGRATIONS,
     PolarIntegration as PolarIntegration,
     RadiusSquaredIntegration as RadiusSquaredIntegration,
-    STRATEGIES as STRATEGIES,
 )

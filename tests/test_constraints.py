@@ -21,6 +21,7 @@ from deep_isochron.model.invertible.constraints import (
     arcsinh,
     BoundedPositive,
     free,
+    GreaterThan,
     Interval,
     Positive,
     Widths,
@@ -36,9 +37,11 @@ PRIMITIVES = {
     "free": free,
     "arcsinh": arcsinh,
     "positive": Positive(),
-    "positive (eps=0.1, at_zero=0.9)": Positive(0.1, 0.9),
+    "greater_than (0.1, at_zero=0.9)": GreaterThan(0.1, 0.9),
+    "greater_than (-1, default at_zero)": GreaterThan(-1.0),
     "bounded_positive": BoundedPositive(),
-    "bounded_positive (eps=0.01, at_zero=0.3)": BoundedPositive(0.01, 0.3),
+    "bounded_positive (lower=0.01, at_zero=0.3)": BoundedPositive(0.01, 0.3),
+    "bounded_positive (lower=2, default at_zero)": BoundedPositive(2.0),
     "interval (-1, 8)": Interval(-1.0, 8.0, at_zero=0.0),
     "interval (0.2, 0.3)": Interval(0.2, 0.3),
     "widths (total=2)": Widths(2.0, 1e-3),
@@ -48,9 +51,11 @@ AT_ZERO = {
     "free": 0.0,
     "arcsinh": 0.0,
     "positive": 1.0,
-    "positive (eps=0.1, at_zero=0.9)": 0.9,
+    "greater_than (0.1, at_zero=0.9)": 0.9,
+    "greater_than (-1, default at_zero)": 0.0,
     "bounded_positive": 1.0,
-    "bounded_positive (eps=0.01, at_zero=0.3)": 0.3,
+    "bounded_positive (lower=0.01, at_zero=0.3)": 0.3,
+    "bounded_positive (lower=2, default at_zero)": 3.0,
     "interval (-1, 8)": 0.0,
     "interval (0.2, 0.3)": 0.25,
 }
@@ -123,7 +128,7 @@ def test_widths_rejects_impossible_floor():
 
 def test_shifted_primitives_validate_at_zero():
     with pytest.raises(ValueError):
-        Positive(eps=1.0, at_zero=0.5)
+        GreaterThan(1.0, at_zero=0.5)
     with pytest.raises(ValueError):
         Interval(0.0, 1.0, at_zero=1.0)
     with pytest.raises(ValueError):
@@ -133,7 +138,7 @@ def test_shifted_primitives_validate_at_zero():
 def test_primitive_construction_is_traceable():
     """The shift is computed under ``ensure_compile_time_eval``, so a primitive may be
     constructed inside a jitted/vmapped function (as ``constrain`` does)."""
-    f = lambda r: Interval(-1.0, 8.0, at_zero=0.0)(r) + Positive(0.1)(r)  # noqa: E731
+    f = lambda r: Interval(-1.0, 8.0, at_zero=0.0)(r) + GreaterThan(0.1)(r)  # noqa: E731
     r, tol = jnp.linspace(-1, 1, 5), TOL["jit_eager"]
     assert_close(jax.jit(jax.vmap(f))(r), jax.vmap(f)(r), rtol=tol, atol=tol)
 

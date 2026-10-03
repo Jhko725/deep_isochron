@@ -174,7 +174,7 @@ def test_generate_bautin():
     assert m.solver == "Dopri5" and m.rtol == 1e-9 and m.dtype == "float64"
     assert len(m.config_hash) == 8 and m.created
     # the trajectories are the system's flow
-    ref = nf.flow(ts, jnp.asarray(src.u0[0]), config=TIGHT, strategy="cartesian")
+    ref = nf.flow(ts, jnp.asarray(src.u0[0]), config=TIGHT, integration="cartesian").ys
     assert_close(src.ys[0], ref, rtol=TOL["flow"], atol=TOL["flow"])
     # same config -> same hash; different seed or tolerance -> different hash
     again = generate(nf, UniformAnnulus(0.3, 2.0), ts, 5, seed=3, config=TIGHT)
@@ -191,9 +191,9 @@ def test_generate_fhn_and_failure():
     src = generate(ode, UniformBox([-2.0, -1.0], [2.0, 1.0]), ts, 4, seed=0)
     assert src.ys.shape == (4, 5, 2) and src.metadata.strategy == ""
     assert np.all(np.abs(src.u0[:, 0]) <= 2.0) and np.all(np.abs(src.u0[:, 1]) <= 1.0)
-    with pytest.raises(ValueError, match="strategy"):
+    with pytest.raises(ValueError, match="integration"):
         box = UniformBox([-1.0] * 2, [1.0] * 2)
-        generate(ode, box, ts, 2, seed=0, strategy="polar")
+        generate(ode, box, ts, 2, seed=0, integration="polar")
     with pytest.raises(RuntimeError, match="integrations failed"):
         generate(
             ode,

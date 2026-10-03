@@ -22,6 +22,7 @@ from .constraints import (
     Constraint as Constraint,
     Free as Free,
     free as free,
+    GreaterThan as GreaterThan,
     Interval as Interval,
     Positive as Positive,
     Widths as Widths,

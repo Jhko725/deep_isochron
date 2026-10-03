@@ -12,7 +12,7 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
-from ..constraints import Positive, Widths
+from ..constraints import GreaterThan, Widths
 from .base import AbstractSpline
 
 
@@ -30,7 +30,7 @@ class MonotonicRQSpline(AbstractSpline[RQSplineParams]):
     derivatives make it strictly increasing.
 
     Raw parameters: ``num_bins`` x-widths, ``num_bins`` y-widths (floored softmax onto
-    the range) and ``num_bins - 1`` interior derivatives (``Positive`` with floor
+    the range) and ``num_bins - 1`` interior derivatives (``GreaterThan`` with floor
     ``min_derivative`` and ``at_zero = 1``). The boundary derivatives are 1 so the
     identity tails join C^1. ``raw = 0`` is the identity.
     """
@@ -67,7 +67,7 @@ class MonotonicRQSpline(AbstractSpline[RQSplineParams]):
         K = self.num_bins
         x_raw, y_raw, d_raw = jnp.split(raw, [K, 2 * K])
         widths = Widths(self.range_width, self.min_rel_width)
-        derivs = Positive(self.min_derivative, at_zero=1.0)(d_raw)
+        derivs = GreaterThan(self.min_derivative, at_zero=1.0)(d_raw)
         return RQSplineParams(widths(x_raw), widths(y_raw), derivs)
 
     # -------------------------------------------------------------- knot data -----

@@ -28,8 +28,11 @@ import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from ..systems.base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
-from ..systems.normal_form import AbstractNormalForm
-from ..systems.strategies import AbstractFlowStrategy, resolve_strategy
+from ..systems.normal_forms import (
+    AbstractFlowIntegration,
+    AbstractNormalForm,
+    resolve_integration,
+)
 from .dataset import DatasetMetadata, TimeSeriesDataSource
 
 
@@ -85,17 +88,6 @@ class UniformAnnulus(AbstractICSampler):
 
 
 # ------------------------------------------------------------------- provenance ---
-def _system_params(system: AbstractODE) -> dict[str, Any]:
-    out = {}
-    for k, v in vars(system).items():
-        if k == "dim":
-            continue
-        if k.startswith("raw_") and hasattr(system, k[4:]):
-            k, v = k[4:], getattr(system, k[4:])  # record the constrained value
-        out[k] = float(v) if jnp.ndim(v) == 0 else np.asarray(v).tolist()
-    return out
-
-
 def _git_state() -> tuple[str, int]:
     """``(sha, dirty)`` of the checkout this package is imported from (not the cwd)."""
     here = Path(__file__).resolve().parent
@@ -160,35 +152,37 @@ def generate(
     *,
     seed: int,
     config: SolverConfig = DEFAULT_SOLVER_CONFIG,
-    strategy: AbstractFlowStrategy | str | None = None,
+    integration: AbstractFlowIntegration | str | None = None,
     window_size: int | None = None,
     extra: dict[str, Any] | None = None,
 ) -> TimeSeriesDataSource:
     """Integrate ``n_trajectories`` initial conditions of ``system`` on the grid ``ts``.
 
-    ``seed`` seeds the initial-condition draw (recorded in the metadata). ``strategy``
-    applies to ``AbstractNormalForm`` systems only (default ``"r_squared"``). Failed
-    integrations raise ``RuntimeError`` naming the indices.
+    ``seed`` seeds the initial-condition draw (recorded in the metadata).
+    ``integration`` applies to ``AbstractNormalForm`` systems only (default
+    ``"r_squared"``). Failed integrations raise ``RuntimeError`` naming the indices.
     """
     ts = jnp.asarray(ts)
     u0 = ic_sampler(jax.random.key(seed), n_trajectories)
     config = dataclasses.replace(config, throw=False)
 
     if isinstance(system, AbstractNormalForm):
-        strat = resolve_strategy("r_squared" if strategy is None else strategy)
+        method = resolve_integration(integration or "r_squared")
 
         def flow(u):
-            return system.flow_result(ts, u, config=config, strategy=strat)
+            sol = system.flow(ts, u, config=config, integration=method)
+            return sol.ys, sol.result
 
-        strategy_name = type(strat).__name__
+        integration_name = type(method).__name__
     else:
-        if strategy is not None:
-            raise ValueError("strategy applies to AbstractNormalForm systems only.")
+        if integration is not None:
+            raise ValueError("integration applies to AbstractNormalForm systems only.")
 
         def flow(u):
-            return system.flow_result(ts, u, config=config)
+            sol = system.flow(ts, u, config=config)
+            return sol.ys, sol.result
 
-        strategy_name = ""
+        integration_name = ""
 
     ys, result = eqx.filter_vmap(flow)(u0)
     ok = np.asarray(result == dfx.RESULTS.successful)
@@ -202,7 +196,7 @@ def generate(
 
     meta = DatasetMetadata(
         system=type(system).__name__,
-        system_params=_system_params(system),
+        system_params=system.params(),
         ic_sampler=type(ic_sampler).__name__,
         ic_sampler_params=ic_sampler.params(),
         seed=seed,
@@ -215,7 +209,7 @@ def generate(
         rtol=config.rtol,
         atol=config.atol,
         max_steps=config.max_steps,
-        strategy=strategy_name,
+        strategy=integration_name,
         dtype=str(ys.dtype),
         created=datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
         git_sha=_git_state()[0],

@@ -32,7 +32,7 @@ def main(cfg: DictConfig) -> None:
         cfg.n_trajectories,
         seed=cfg.seed,
         config=config,
-        strategy=cfg.strategy,
+        integration=cfg.integration,
         window_size=cfg.window_size,
         extra={"config": OmegaConf.to_container(cfg, resolve=True)},
     )

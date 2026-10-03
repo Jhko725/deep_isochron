@@ -2,25 +2,21 @@ r"""ODE systems.
 
 ``AbstractODE``
     Any ODE used anywhere in the study — the observed oscillators (FitzHugh–Nagumo,
-    Hodgkin–Huxley) and the normal forms alike. It carries the vector field ``rhs`` and
-    the numerical flow ``flow``/``flow_result`` (diffrax, with every solver setting in a
-    ``SolverConfig``). Anything *numerical* about an ODE — locating its limit cycle,
-    monodromy, asymptotic phase by long integration — is a function over ``AbstractODE``
-    in ``deep_isochron.analysis``, not a method.
+    Hodgkin–Huxley) and the normal forms alike. It carries the vector field ``rhs``, the
+    constrained parameter values ``params()`` (for provenance), and the numerical flow
+    ``flow`` (diffrax, every solver setting in a ``SolverConfig``). Anything *numerical*
+    about an ODE beyond integrating it — locating its limit cycle, monodromy, asymptotic
+    phase by long integration — is a function over ``AbstractODE`` in
+    ``deep_isochron.analysis`` (Phase E), not a method.
 
-``AbstractNormalForm`` The subset that can serve as the normal-form template of a
-conjugacy: planar oscillators with a stable limit cycle whose phase–amplitude structure
-is available in
-    *closed form*. These expose what the observed system does not — ``period``,
-    ``floquet_exponent``, the asymptotic ``phase`` and isostable ``amplitude`` of any
-    point, ``limit_cycle``, ``isochron`` — plus the polar chart (``to_chart``,
-    ``from_chart``) in which they are naturally written. Their flow can be integrated by
-    several strategies (``systems.strategies``), all returning the trajectory in
-    cartesian coordinates.
+``AbstractNormalForm`` (``systems/normal_forms/``)
+    The subset that can serve as the normal-form template of a conjugacy: planar
+    oscillators with a stable limit cycle whose phase–amplitude structure is available
+    in *closed form*. See that subpackage.
 
 Vmapping: ``flow`` is written for one initial condition; batch with
-``eqx.filter_vmap(ode.flow, in_axes=(None, 0))(ts, u0s)``. ``SolverConfig`` and the
-strategies have no array leaves, so they are static under the filter transforms.
+``eqx.filter_vmap(ode.flow, in_axes=(None, 0))(ts, u0s)``. ``SolverConfig`` has no array
+leaves, so it is static under the filter transforms.
 """
 
 import abc
@@ -28,6 +24,7 @@ from typing import Any
 
 import diffrax as dfx
 import equinox as eqx
+import numpy as np
 from jaxtyping import Array, ArrayLike, Float
 
 
@@ -35,8 +32,8 @@ class SolverConfig(eqx.Module):
     """Every numerical setting of a flow, in one hashable object (no array leaves).
 
     **Arguments:** as for ``diffrax.diffeqsolve``. ``throw=False`` makes a failed batch
-    element report through ``flow_result`` instead of raising for the whole batch (under
-    ``vmap``, ``throw=True`` raises if *any* element fails).
+    element report through ``Solution.result`` instead of raising for the whole batch
+    (under ``vmap``, ``throw=True`` raises if *any* element fails).
     """
 
     solver: dfx.AbstractSolver = eqx.field(static=True, default=dfx.Tsit5())
@@ -51,16 +48,24 @@ class SolverConfig(eqx.Module):
     def controller(self) -> dfx.PIDController:
         return dfx.PIDController(rtol=self.rtol, atol=self.atol)
 
+    def params(self) -> dict[str, Any]:
+        """JSON-able description (for dataset metadata)."""
+        return {
+            "solver": type(self.solver).__name__,
+            "rtol": self.rtol,
+            "atol": self.atol,
+            "max_steps": self.max_steps,
+        }
+
 
 DEFAULT_SOLVER_CONFIG = SolverConfig()
 
 
 def diffeqsolve(
     rhs, ts: Float[Array, " time"], u0, args, config: SolverConfig
-) -> tuple[Array, dfx.RESULTS]:
-    """``(ys, result)`` of ``diffrax.diffeqsolve`` of ``rhs`` saved at ``ts``,
-    configured by ``config``. ``ys`` is never ``None`` with ``SaveAt(ts=...)``."""
-    sol = dfx.diffeqsolve(
+) -> dfx.Solution:
+    """``diffrax.diffeqsolve`` of ``rhs`` saved at ``ts``, configured by ``config``."""
+    return dfx.diffeqsolve(
         dfx.ODETerm(rhs),
         config.solver,
         t0=ts[0],
@@ -74,8 +79,11 @@ def diffeqsolve(
         adjoint=config.adjoint,
         throw=config.throw,
     )
-    assert sol.ys is not None
-    return sol.ys, sol.result
+
+
+def _jsonable(v):
+    v = np.asarray(v)
+    return v.item() if v.ndim == 0 else v.tolist()
 
 
 class AbstractODE(eqx.Module):
@@ -90,18 +98,16 @@ class AbstractODE(eqx.Module):
     ) -> Float[Array, " {self.dim}"]:
         """The vector field, in the diffrax signature (``t`` may be a Python float)."""
 
-    def flow_result(
-        self,
-        ts: Float[Array, " time"],
-        u0: Float[Array, " {self.dim}"],
-        args: Any = None,
-        *,
-        config: SolverConfig = DEFAULT_SOLVER_CONFIG,
-    ) -> tuple[Float[Array, "time {self.dim}"], dfx.RESULTS]:
-        """Trajectory through ``u0`` sampled at ``ts``, and the diffrax result
-        (compare with ``diffrax.RESULTS.successful``; elementwise under ``vmap``). Use
-        with ``config.throw=False`` to detect failures in a batch instead of raising."""
-        return diffeqsolve(self.rhs, ts, u0, args, config)
+    def params(self) -> dict[str, Any]:
+        """The system's parameters as JSON-able *constrained* values, keyed by their
+        mathematical names — what a dataset's metadata records. The default is every
+        non-static field; a system that stores unconstrained leaves overrides this to
+        report the constrained values (``AbstractNormalForm`` does)."""
+        return {
+            f.name: _jsonable(getattr(self, f.name))
+            for f in self.__dataclass_fields__.values()
+            if not f.metadata.get("static", False)
+        }
 
     def flow(
         self,
@@ -110,11 +116,17 @@ class AbstractODE(eqx.Module):
         args: Any = None,
         *,
         config: SolverConfig = DEFAULT_SOLVER_CONFIG,
-    ) -> Float[Array, "time {self.dim}"]:
-        """Trajectory through ``u0`` sampled at ``ts``."""
-        return self.flow_result(ts, u0, args, config=config)[0]
+    ) -> dfx.Solution:
+        """The diffrax ``Solution`` through ``u0`` sampled at ``ts``: ``.ys`` is the
+        trajectory ``(time, dim)``, ``.result`` the outcome (compare with
+        ``diffrax.RESULTS.successful``; elementwise under ``vmap`` with
+        ``config.throw=False``), ``.stats`` the step counts."""
+        return diffeqsolve(self.rhs, ts, u0, args, config)
 
     def __repr__(self) -> str:
         cls = self.__class__.__name__
-        args = ", ".join(f"{k}={v}" for k, v in vars(self).items())
+        args = ", ".join(f"{k}={v}" for k, v in self.params().items())
         return f"{cls}({args})"
+
+
+__all__ = ["AbstractODE", "DEFAULT_SOLVER_CONFIG", "SolverConfig", "diffeqsolve"]

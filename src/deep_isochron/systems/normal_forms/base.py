@@ -27,20 +27,25 @@ this is available in closed form; ``deep_isochron.analysis`` computes the same
 quantities numerically for any ``AbstractODE``.
 
 Everything public is in **cartesian** coordinates; ``to_chart``/``from_chart`` convert.
-The flow can be integrated by several ``strategies`` (cartesian, polar, $r^2$ trick),
-all returning cartesian trajectories; see ``systems/strategies.py``.
+The flow can be integrated in several ways (cartesian, polar, $r^2$), all returning
+cartesian trajectories; see ``integration.py``.
+
+The conventions and derivations are being consolidated in
+``docs/design/normal-forms.md`` (roadmap B10); the public API will be expressed in $r$
+once that document is agreed.
 """
 
 import abc
 from typing import Any
 
+import diffrax as dfx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
-from ..misc import cartesian_to_polar, polar_to_cartesian
-from .base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
+from ...misc import cartesian_to_polar, polar_to_cartesian
+from ..base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
 
 
 class AbstractNormalForm(AbstractODE):
@@ -140,23 +145,6 @@ class AbstractNormalForm(AbstractODE):
         return jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)), axis=-1)
 
     # ------------------------------------------------------------------- flow ------
-    def flow_result(
-        self,
-        ts: Float[Array, " time"],
-        u0: Float[Array, " 2"],
-        args: Any = None,
-        *,
-        config: SolverConfig = DEFAULT_SOLVER_CONFIG,
-        strategy="r_squared",
-    ):
-        """Cartesian trajectory through cartesian ``u0`` and the diffrax result, by the
-        chosen integration ``strategy`` (an ``AbstractFlowStrategy`` or one of the names
-        in ``strategies.STRATEGIES``: ``"cartesian"``, ``"polar"``, ``"r_squared"``).
-        The strategy is static: each value traces separately under ``jit``/``vmap``."""
-        from .strategies import resolve_strategy
-
-        return resolve_strategy(strategy)(self, ts, u0, args, config)
-
     def flow(
         self,
         ts: Float[Array, " time"],
@@ -164,6 +152,13 @@ class AbstractNormalForm(AbstractODE):
         args: Any = None,
         *,
         config: SolverConfig = DEFAULT_SOLVER_CONFIG,
-        strategy="r_squared",
-    ) -> Float[Array, "time 2"]:
-        return self.flow_result(ts, u0, args, config=config, strategy=strategy)[0]
+        integration="r_squared",
+    ) -> dfx.Solution:
+        """The diffrax ``Solution`` through cartesian ``u0``, with ``.ys`` the
+        **cartesian** trajectory whichever ``integration`` produced it. ``integration``
+        is an ``AbstractFlowIntegration`` or one of the names in
+        ``integration.INTEGRATIONS`` (``"cartesian"``, ``"polar"``, ``"r_squared"``);
+        it is static, so each value traces separately under ``jit``/``vmap``."""
+        from .integration import resolve_integration
+
+        return resolve_integration(integration)(self, ts, u0, args, config)

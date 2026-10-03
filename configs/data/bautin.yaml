@@ -30,4 +30,4 @@ solver:
   atol: 1.0e-10
   max_steps: 65536
 
-strategy: r_squared
+integration: r_squared

@@ -27,4 +27,4 @@ solver:
   atol: 1.0e-10
   max_steps: 65536
 
-strategy: null  # AbstractNormalForm systems only: cartesian | polar | r_squared
+integration: null  # AbstractNormalForm systems only: cartesian | polar | r_squared
