@@ -25,7 +25,7 @@ $\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motion
 
 | symbol | meaning | convention |
 |---|---|---|
-| $r \ge 0$, $\theta \in (-\pi, \pi]$ | polar coordinates about the origin | `to_chart(u) = (r, θ)`, $\theta = \operatorname{atan2}(y, x)$; $\theta$ is *unwrapped* ($\in\mathbb{R}$) whenever it is integrated |
+| $r \ge 0$, $\theta \in (-\pi, \pi]$ | polar coordinates about the origin | `to_chart(u) = (r, θ)`, $\theta = \mathrm{atan2}(y, x)$; $\theta$ is *unwrapped* ($\in\mathbb{R}$) whenever it is integrated |
 | $\rho(r)$ | **log growth rate** of the radius, $\rho = \dot r/r = \tfrac{d}{dt}\ln r$ | even in $r$; $\rho(1) = 0$, $\rho'(1) < 0$ |
 | $\omega(r)$ | **angular rate**, $\dot\theta = \omega(r)$ | even in $r$; $\omega(1) =: \omega_1 \ne 0$ |
 | $\Gamma$ | the limit cycle $r = 1$ | the only attracting cycle |
@@ -183,10 +183,10 @@ artefact.
 **Multiplier.** The multipliers are the eigenvalues of the monodromy matrix $\mathsf{M}(T)$,
 $\dot{\mathsf{M}} = \mathsf{A}(t)\mathsf{M}$, $\mathsf{M}(0) = \mathsf{I}$. Liouville's formula
 (Chicone, Prop. 2.20) gives, for any planar cycle,
-$$\det\mathsf{M}(T) = \exp\!\int_0^T \operatorname{tr}\mathsf{A}(s)\,ds = \mu_1\mu_2,$$
+$$\det\mathsf{M}(T) = \exp\!\int_0^T \mathrm{tr}\,\mathsf{A}(s)\,ds = \mu_1\mu_2,$$
 and since one multiplier is always $\mu_1 = 1$ (the direction along the flow),
-$\mu_2 = \exp\int_0^T\operatorname{tr}\mathsf{A}$. Here rotational symmetry makes $\mathsf{A}$
-*constant* with $\operatorname{tr}\mathsf{A} = \rho'(1) = \kappa$, so
+$\mu_2 = \exp\int_0^T\mathrm{tr}\,\mathsf{A}$. Here rotational symmetry makes $\mathsf{A}$
+*constant* with $\mathrm{tr}\,\mathsf{A} = \rho'(1) = \kappa$, so
 $$\mu = e^{\kappa T} = e^{2\pi\kappa/\omega_1}, \qquad
 \mu_{\text{Hopf}} = e^{-4\pi a/\omega_1},\quad \mu_{\text{Bautin}} = e^{-4\pi a(1+b)/\omega_1}.$$
 (The earlier LaTeX notes dropped the $\pi$ in the Bautin multiplier.) Equivalently, since
@@ -336,7 +336,7 @@ $\dot{\mathbf u} = \kappa\ln|\mathbf u|\,\mathbf u + \omega\mathsf{J}\mathbf u$ 
 but not $C^1$ at the origin, and **the eigenvalues at the origin do not exist**. Its
 isostable coordinate diverges only logarithmically at the focus, whereas for a
 hyperbolic unstable focus with eigenvalues $\alpha\pm i\beta$ (Hopf: $\alpha = a$) the
-isostable coordinate diverges like $\operatorname{dist}^{\kappa/\alpha}$ (Hopf:
+isostable coordinate diverges like $\mathrm{dist}^{\kappa/\alpha}$ (Hopf:
 $\Psi\sim -\tfrac12 r^{-2} = -\tfrac12 r^{\kappa/a}$). Consequences for this project:
 
 - the invariant "eigenvalues at the enclosed fixed point" (`learnings`) cannot be matched,
@@ -351,7 +351,7 @@ $\mu = e^{\kappa T}$; $\Psi = \ln r$; eigenvalues at $0$: none; basin
 $\mathbb{R}^2\setminus\{0\}$; $\Psi\to\pm\infty$ as $r\to\infty, 0$. The angular rate
 should *not* be the standard $\omega_0 + (\omega_1-\omega_0)r^2$ here: the $(1-r^2)$ no
 longer cancels against $\rho$ and $h' = (\omega_1-\omega_0)(1-r^2)/(\kappa r\ln r)$
-integrates to $\ln|\ln r| - \operatorname{Ei}(2\ln r)$, not elementary. The natural shear
+integrates to $\ln|\ln r| - \mathrm{Ei}(2\ln r)$, not elementary. The natural shear
 for this member is linear in the log chart, $\omega(r) = \omega_1 + \delta\ln r$, giving
 $h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 +
 (\delta/\kappa)\ln r$ — logarithmic spirals, as for Hopf — and $\omega(0)$ undefined,
@@ -559,8 +559,8 @@ Yawata et al. (2024); see §5.3.
 ## 8. Parameters
 
 Unconstrained leaves, constrained on read (ADR-0001 in spirit):
-$a = \texttt{GreaterThan(0)}(\texttt{raw\_a})$ (raw $0\mapsto a=1$),
-$b = \texttt{GreaterThan(-1)}(\texttt{raw\_b})$ (raw $0\mapsto b=0$, the Hopf form);
+`a = GreaterThan(0)(raw_a)` (raw $0\mapsto a=1$),
+`b = GreaterThan(-1)(raw_b)` (raw $0\mapsto b=0$, the Hopf form);
 $\omega_1$ (`w`), $\omega_0$ (`w0`) free; `w0` defaults to `w` (no shear). `params()`
 reports the constrained values. $b > -1$ is exactly the stability condition $\rho'(1)<0$
 (§3).
