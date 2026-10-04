@@ -68,9 +68,8 @@ $$\dot{\mathbf{u}} = \rho(r)\,\mathbf{u} + \omega(r)\,\mathsf{J}\mathbf{u},
 \qquad\text{i.e.}\qquad
 \dot x = \rho x - \omega y,\quad \dot y = \rho y + \omega x .$$
 
-*Derivation.* $\mathbf{u} = r\mathbf{e}_r$, $\dot{\mathbf{u}} = \dot r\,\mathbf{e}_r +
-r\dot\theta\,\mathbf{e}_\theta = r\rho\,\mathbf{e}_r + r\omega\,\mathbf{e}_\theta = \rho\mathbf{u}
-+ \omega\mathsf{J}\mathbf{u}$, since $r\mathbf{e}_\theta = \mathsf{J}\mathbf{u}$. Because $\rho,\omega$
+*Derivation.* $\mathbf{u} = r\mathbf{e}_r$,
+$\dot{\mathbf{u}} = \dot r\,\mathbf{e}_r +r\dot\theta\,\mathbf{e}_\theta = r\rho\,\mathbf{e}_r + r\omega\,\mathbf{e}_\theta = \rho\mathbf{u}+ \omega\mathsf{J}\mathbf{u}$, since $r\mathbf{e}_\theta = \mathsf{J}\mathbf{u}$. Because $\rho,\omega$
 are even, $\rho(|\mathbf{u}|) = \tilde\rho(x^2+y^2)$ is a smooth function of $\mathbf{u}$ and the
 field is smooth at the origin. *Numerical note*: $|\mathbf{u}| = \sqrt{x^2+y^2}$ has no
 derivative at exactly $\mathbf{u}=0$, so the code never forms it — the cartesian `rhs` is
@@ -413,7 +412,7 @@ costs), and why the log-polar member sits between the two.
 | $\Theta = \arctan(Y_2/Y_1)$, $Z = \nabla\Theta$ at $f_{\rm dec}(\theta)$ (19)–(20) | $\Theta$, $\nabla\Theta$ (§1) | `phase(x)`, `jax.grad` |
 | evaluation: Stuart–Landau analytic phase | §7 `to_phase_amplitude` on Hopf/Bautin data | learned $\Theta$ vs exact up to a constant; $\Psi$ up to scale; $\kappa$ *reported*, not asserted |
 
-### 5.4 Global existence and uniqueness of the chart (Kvalheim & Revzen 2021) — *proposed addition, 2026-10-03*
+### 5.4 (*tentative*) Global existence and uniqueness of the chart (Kvalheim & Revzen 2021)
 
 The closed forms of §5.1–5.2 are special to the normal forms, but the *objects* they
 compute exist for every oscillator in the study, on the whole basin, and are unique. This

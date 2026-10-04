@@ -8,9 +8,11 @@ from .dataset import (
     TimeSeriesDataSource as TimeSeriesDataSource,
 )
 from .generate import (
-    AbstractICSampler as AbstractICSampler,
     dataset_path as dataset_path,
     generate as generate,
+)
+from .initial_conditions import (
+    AbstractICSampler as AbstractICSampler,
     OnCycleGaussian as OnCycleGaussian,
     UniformAnnulus as UniformAnnulus,
     UniformBox as UniformBox,

@@ -86,6 +86,7 @@ class WeightedWindow(grain.transforms.RandomMap):
             raise ValueError(
                 "weight must map the start times to a non-negative vector."
             )
+        # Inverse transform sampling
         cdf = np.cumsum(w)
         k = int(np.searchsorted(cdf, rng.random() * cdf[-1], side="right"))
         return _cut(element, min(k, hi - 1), self.length)

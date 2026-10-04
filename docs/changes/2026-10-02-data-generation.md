@@ -395,53 +395,53 @@ Review round 1 (commit `d6e560b`):
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/.../invertible/constraints.py`: `GreaterThan(lower, at_zero=lower+1)`; `Positive` alias; `at_zero` documented; `BoundedPositive.lower` | | |
-| `src/.../invertible/{analytic,splines/rational_quadratic}.py`, `tests/test_constraints.py`: call sites | | |
-| `src/deep_isochron/systems/base.py`: `params()` contract; single `flow -> Solution`; `SolverConfig.params()` | | |
-| `src/deep_isochron/systems/normal_forms/{__init__,base,hopf,bautin}.py`: subpackage; `A_CONSTRAINT`/`B_CONSTRAINT`; `params()` | | |
-| `src/deep_isochron/systems/normal_forms/integration.py`: `AbstractFlowIntegration` and the three integrations; `Solution` with cartesian `.ys` | | |
-| `src/deep_isochron/model/conjugacy.py`, `data/generate.py`, `configs/`, `scripts/`: `.ys`, `integration`, `system.params()` | | |
-| `tests/test_normal_forms.py`: generic normal-form laws (split out) | | |
-| `tests/test_systems.py`: flow machinery; FHN equilibrium/eigenvalues/period and HH facts, citing Langfield et al. (2014) | | |
-| `docs/decisions/0007-…`: amended for the review | | |
-| `docs/architecture.md`, `docs/roadmap.md`: B8–B12, analysis to Phase E | | |
+| `src/.../invertible/constraints.py`: `GreaterThan(lower, at_zero=lower+1)`; `Positive` alias; `at_zero` documented; `BoundedPositive.lower` | Looks good. | None |
+| `src/.../invertible/{analytic,splines/rational_quadratic}.py`, `tests/test_constraints.py`: call sites | Simple replacement changes. | None |
+| `src/deep_isochron/systems/base.py`: `params()` contract; single `flow -> Solution`; `SolverConfig.params()` | Looks good. | None |
+| `src/deep_isochron/systems/normal_forms/{__init__,base,hopf,bautin}.py`: subpackage; `A_CONSTRAINT`/`B_CONSTRAINT`; `params()` | Like the new factored out subpackage. Will comment on the specific contracts below. | None |
+| `src/deep_isochron/systems/normal_forms/integration.py`: `AbstractFlowIntegration` and the three integrations; `Solution` with cartesian `.ys` | Again, good. More changes were introduced below, and I'll comment on them accordingly. | None |
+| `src/deep_isochron/model/conjugacy.py`, `data/generate.py`, `configs/`, `scripts/`: `.ys`, `integration`, `system.params()` | Changes are standard housekeeping. Changes some unrelated stuff in the files that caught my eye during the review. | <ul><li>`dataclasses.replace` changed to `copy.replace` in `generate.py`. <li>Initial condition related logic has grown quite a bit. Split them out from `.generate.py` to `initial_conditions.py`.<ul>|
+| `tests/test_normal_forms.py`: generic normal-form laws (split out) | Confirmed the split out package. Not scrutinizing the specifics of the tests for now. Some stuff here feels like ingredient for the future analysis package - for example, `test_hopf_floquet_multiplier_is_the_polar_monodromy` feels like the logic could later be taken out to write a function that computes the Floquet multiplier for any planar limit cycle system. | None |
+| `tests/test_systems.py`: flow machinery; FHN equilibrium/eigenvalues/period and HH facts, citing Langfield et al. (2014) | Looks good. Noticing that the different tests use different solver configs. Similar to tolerances, maybe organize them into a dict and provide reasons? Also `Tsit5()` is preferred over `Dopri5()` (the `diffrax` [recommendation](https://docs.kidger.site/diffrax/usage/how-to-choose-a-solver/)), so worth replacing? | Changes deferred to the next discussion with Claude. |
+| `docs/decisions/0007-…`: amended for the review | Looks good. | None |
+| `docs/architecture.md`, `docs/roadmap.md`: B8–B12, analysis to Phase E | Looks good. | None |
 
 Review round 2 (B9) and the B10 draft:
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `docs/design/normal-forms.md`: agreed revision (Joon, 2026-10-03) adopted; then amended — §5.1 corollary sign (confirmed), §5.3 Yawata paragraph rewritten from Eqs. (11)–(28) of the paper with the B12 implementation mapping, §5.4 Kvalheim & Revzen global existence/uniqueness (*proposed*) | | |
-| `src/deep_isochron/data/dataset.py`: frozen-dataclass whole-trajectory source; grouped `DatasetMetadata`; `copy.replace` splits | | |
-| `src/deep_isochron/data/windows.py`: `RandomWindow`, `WeightedWindow`, `transient_weight`, `windows`, `mixed_windows` (replaces `sampling.py`) | | |
-| `src/deep_isochron/data/generate.py`: grouped metadata from `params()` | | |
-| `src/deep_isochron/training/losses.py`, `training/__init__.py`: dict batches; no data re-export | | |
-| `tests/test_data.py`: rewritten for the transform design | | |
-| `configs/data/*.yaml`, `scripts/generate_data.py`, `prototype.ipynb`: follow the API | | |
-| `docs/decisions/0008-…`, `docs/architecture.md`, `docs/roadmap.md`: amended | | |
+| `docs/design/normal-forms.md`: agreed revision (Joon, 2026-10-03) adopted; then amended — §5.1 corollary sign (confirmed), §5.3 Yawata paragraph rewritten from Eqs. (11)–(28) of the paper with the B12 implementation mapping, §5.4 Kvalheim & Revzen global existence/uniqueness (*proposed*) | Like having the document. Some of the equation rendering breaks in Github preview as well as in vs code, so this needs further scrutiny. One failure mode found is that the line breaks in the equation breaks equation rendering in vs code. Maybe do not enforce the ruff line length limits for markdown files?  | Changed the *proposed* status of 5.4 to *tentative*. I need to revisit this document multiple times in the future to clarify claims made. |
+| `src/deep_isochron/data/dataset.py`: frozen-dataclass whole-trajectory source; grouped `DatasetMetadata`; `copy.replace` splits | If we are implementing this as a frozen dataclass, why not just make the entire thing as an `equinox.Module`? Want to refine design here. Otherwise, looks good. | Deferredd to the next discussion with Claude on whether to make this class an `equinox.Module`.  |
+| `src/deep_isochron/data/windows.py`: `RandomWindow`, `WeightedWindow`, `transient_weight`, `windows`, `mixed_windows` (replaces `sampling.py`) | `WeightedWindow` uses inverse transform sampling to draw the index. Is is worth separating out that logic (2 lines) into a `inverse_transform` function with similar call signature as the samplig functions in `jax.random` submodule? | For now, just added a comment marking the inverse transform sampling logic. |
+| `src/deep_isochron/data/generate.py`: grouped metadata from `params()` |  Looks good. | None |
+| `src/deep_isochron/training/losses.py`, `training/__init__.py`: dict batches; no data re-export | Simple changes. | None |
+| `tests/test_data.py`: rewritten for the transform design | Looks good | None |
+| `configs/data/*.yaml`, `scripts/generate_data.py`, `prototype.ipynb`: follow the API | Confirmed. | None |
+| `docs/decisions/0008-…`, `docs/architecture.md`, `docs/roadmap.md`: amended | `docs/decisions/0008-…` looks good. The other documents were changed below as well, so addressing them here. | None |
 
 B11:
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/deep_isochron/systems/normal_forms/base.py`: `_sq` hooks, API in `r`, `κ = ρ'(1)`, `eigenvalues_origin`, `(Θ, Ψ)` chart, `radius_from_isostable` root solve with implicit-function JVP | | |
-| `src/deep_isochron/systems/normal_forms/hopf.py`: `log_growth_rate_sq`/`angular_rate_sq`; `Ψ = ½(1 − r⁻²)`; explicit `radius_from_isostable` | | |
-| `src/deep_isochron/systems/normal_forms/bautin.py`: hooks; `Ψ` per §6.2 | | |
-| `src/deep_isochron/systems/normal_forms/integration.py`: `ClosedFormIntegration`, `"closed_form"` | | |
-| `src/deep_isochron/systems/normal_forms/__init__.py`, `systems/__init__.py`: export | | |
-| `tests/test_normal_forms.py`: rewritten per design document §10 | | |
-| `docs/decisions/0007-…`: amended — design document authoritative; `ClosedFormIntegration`; root solve | | |
-| `docs/architecture.md`, `docs/roadmap.md`: B10–B11 done | | |
+| `src/deep_isochron/systems/normal_forms/base.py`: `_sq` hooks, API in `r`, `κ = ρ'(1)`, `eigenvalues_origin`, `(Θ, Ψ)` chart, `radius_from_isostable` root solve with implicit-function JVP | Mostly look good with a couple thoughts. <ul><li>`_sq` hooks are to be supplied by the child class implementations, but at the same time these are not the intended public API. Appending a `_` to their names (ex. `_angular_rate_sq`) <li> Currently, rolling our own bisection / Newton iterations in various places in code. Would there be benefits to adopting Optimistix instead, which is also part of the `equinox` ecosystem? <li> The `from_chart` and `to_chart` methods refer exclusively to conversion between the polar and the Cartesian coordiates, but the design docs describe the phase-amplitude coordinates as another chart. So the naming here has to be revised, or the function changed to support multiple types of conversions. <ul>| Deferred to the next discussion with Claude |
+| `src/deep_isochron/systems/normal_forms/hopf.py`: `log_growth_rate_sq`/`angular_rate_sq`; `Ψ = ½(1 − r⁻²)`; explicit `radius_from_isostable` | Looks good. | None |
+| `src/deep_isochron/systems/normal_forms/bautin.py`: hooks; `Ψ` per §6.2 | Looks good. | None |
+| `src/deep_isochron/systems/normal_forms/integration.py`: `ClosedFormIntegration`, `"closed_form"` | Like the introduction of the closed form integration. For Hopf, may make sense that this is the default integration strategy. | None |
+| `src/deep_isochron/systems/normal_forms/__init__.py`, `systems/__init__.py`: export | Trivial changes. | None |
+| `tests/test_normal_forms.py`: rewritten per design document §10 | Confirmed. | None |
+| `docs/decisions/0007-…`: amended — design document authoritative; `ClosedFormIntegration`; root solve | Confirmed | None |
+| `docs/architecture.md`, `docs/roadmap.md`: B10–B11 done | These documents were changed again below. Not addressing here. | None |
 
 B12:
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/deep_isochron/model/latent_dynamics.py`: `PhaseAmplitudeLatentDynamics(omega, kappa)`, `DECAY_CONSTRAINT`; `LinearLatentDynamics` removed | | |
-| `src/deep_isochron/model/autoencoder.py`: normalised encoder, `encode`/`decode`/`phase`/`amplitude`/`cycle_point`/`phase_sensitivity`; `Callable` fields | | |
-| `src/deep_isochron/model/__init__.py`: exports | | |
-| `src/deep_isochron/training/losses.py`: `PhaseAutoencoderLoss` (Eqs. (21)–(26)) | | |
-| `src/deep_isochron/training/trainer.py`: `Self` → `"TrainerState[M]"` (beartype) | | |
-| `src/deep_isochron/data/generate.py`, `data/__init__.py`: `OnCycleGaussian` | | |
-| `scripts/training/configs/model/*`: `phase_amplitude.yaml` replaces `hopf`/`linear` | | |
-| `tests/test_baseline.py`: new (11 tests, one `slow`) | | |
-| `docs/architecture.md`, `docs/roadmap.md`, `docs/decisions/0007-…`: B12 | | |
+| `src/deep_isochron/model/latent_dynamics.py`: `PhaseAmplitudeLatentDynamics(omega, kappa)`, `DECAY_CONSTRAINT`; `LinearLatentDynamics` removed | Looks good. | None |
+| `src/deep_isochron/model/autoencoder.py`: normalised encoder, `encode`/`decode`/`phase`/`amplitude`/`cycle_point`/`phase_sensitivity`; `Callable` fields | Looks good. But wondering - `ConjugateLatentDynamics` and `PhaseAmplitudeAutoencoder` are supposed to be two algorithms for tackling the same problem. So it makes sense that they both support a common protocol that can later be used to train and evaluate the two frameworks on the same footing. Need to extract out that protocol and make the two classes conform to it. | Deferred to the next discussion with Claude |
+| `src/deep_isochron/model/__init__.py`: exports | Trivial changes. | None |
+| `src/deep_isochron/training/losses.py`: `PhaseAutoencoderLoss` (Eqs. (21)–(26)) | Both `ConjugacyTrajectoryLoss` and `PhaseautoencoderLoss` are very tightly coupled to the respective models. So is it fitting to collect them in a different submodule (`training`)? Maybe `training/losses.py` should provide reusable and composible building blocks for the spefic losses (such as autoencoder loss or trajectory losses in either the data or the latent space). | None |
+| `src/deep_isochron/training/trainer.py`: `Self` → `"TrainerState[M]"` (beartype) | Looks good | None |
+| `src/deep_isochron/data/generate.py`, `data/__init__.py`: `OnCycleGaussian` | Need to change imports due to the introducing `initial_conditions.py`. | Changed import statements for the IC samplers accordingly. |
+| `scripts/training/configs/model/*`: `phase_amplitude.yaml` replaces `hopf`/`linear` | Confirmed. | None |
+| `tests/test_baseline.py`: new (11 tests, one `slow`) | Confirmed. Will check the spefics later as I work with the baseline. | None |
+| `docs/architecture.md`, `docs/roadmap.md`, `docs/decisions/0007-…`: B12 | Read through them. Will need refining based on the reviews made here. A sidenote: for the docs and other knowledge being managed for this project, is it worth introducing the [open knowledge format](https://github.com/GoogleCloudPlatform/open-knowledge-format)? | None |
