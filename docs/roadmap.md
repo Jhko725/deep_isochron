@@ -54,7 +54,7 @@ checkpoint directories owned by the caller (Hydra in D3); `scripts/training/` de
 | C4 | `OrbaxCheckpointer(directory, save_every, metric, custom_metadata)`: whole `TrainerState`, `FixedInterval` + `Any([LatestN(1), BestN])`, `restore(template, step)`, resume | *done 2026-10-04* |
 | C5 | `tests/test_training.py` (15 tests); the slow B12 test runs through the trainer | *done 2026-10-04* |
 | C6 | `scripts/training/` deleted; notebook on the new API; ADR-0009; architecture | *done 2026-10-04* |
-| C7 | Data-pipeline prefetch: `data.to_device` (grain's two-stage prefetch, the tutorial's recommended pattern) is the training-run path — review round 1. Remaining: check that `TimeSeriesDataSource` pickles to `mp_prefetch` workers on the GPU machine (it failed in the dev container), for the case where a step is shorter than the 15 ms window slicing | `to_device` *done 2026-10-04*; `mp_prefetch` pending |
+| C7 | Data-pipeline prefetch: `data.to_device` (grain's two-stage prefetch) is the training-run path — review round 1. `scripts/bench_dataloader.py` measures fetch vs step for option A / `to_device` / `mp_prefetch` on the machine it runs on (in the dev container `mp_prefetch` pickles the source fine once absl flags are parsed; with 2 CPUs the workers only compete with XLA). To run on the GPU machine; close C7 with the numbers | `to_device` *done 2026-10-04*; GPU measurement pending |
 
 ## Phase D — `experiment-config`
 

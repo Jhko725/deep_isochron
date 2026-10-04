@@ -86,6 +86,7 @@ deep_isochron
 
 scripts/generate_data.py + configs/data/*.yaml   Hydra entry point for data generation
 scripts/check_md_math.py                        GitHub-safe Markdown math check
+scripts/bench_dataloader.py                     data-pipeline vs training-step benchmark (C7)
 ```
 
 ## The invertible package
