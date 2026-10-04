@@ -30,14 +30,11 @@ from deep_isochron.systems import (
     BautinNormalForm,
     HopfNormalForm,
     INTEGRATIONS,
-    SolverConfig,
 )
 from hypothesis import given, settings, strategies as st
 
-from tests.helpers import assert_close, TOL
+from tests.helpers import assert_close, SOLVERS, TOL
 
-
-TIGHT = SolverConfig(solver=dfx.Dopri5(), rtol=1e-10, atol=1e-12, max_steps=16384)
 
 normal_forms = st.one_of(
     st.builds(
@@ -111,7 +108,7 @@ def test_hopf_floquet_multiplier_is_the_polar_monodromy(a, w, w0):
         dfx.ODETerm(
             lambda t, dr, _: jax.grad(lambda r: r * nf.log_growth_rate(r))(1.0) * dr
         ),
-        dfx.Dopri5(),
+        dfx.Tsit5(),
         0.0,
         nf.period(),
         None,
@@ -144,10 +141,10 @@ def test_normal_form_closed_forms_are_consistent(nf):
     for r in (0.3, 1.0, 2.2):
         r = jnp.asarray(r)
         assert_close(
-            nf.log_growth_rate(r), nf.log_growth_rate_sq(r * r), rtol=TOL["identity"]
+            nf.log_growth_rate(r), nf._log_growth_rate_sq(r * r), rtol=TOL["identity"]
         )
         assert_close(
-            nf.angular_rate(r), nf.angular_rate_sq(r * r), rtol=TOL["identity"]
+            nf.angular_rate(r), nf._angular_rate_sq(r * r), rtol=TOL["identity"]
         )
     assert_close(nf.period(), 2 * jnp.pi / nf.omega(), rtol=TOL["identity"])
     assert_close(
@@ -161,11 +158,11 @@ def test_normal_form_closed_forms_are_consistent(nf):
     lam = nf.eigenvalues_origin()
     zero = jnp.asarray(0.0)
     assert_close(
-        lam.real, jnp.full(2, nf.log_growth_rate_sq(zero)), rtol=TOL["identity"]
+        lam.real, jnp.full(2, nf._log_growth_rate_sq(zero)), rtol=TOL["identity"]
     )
     assert_close(
         jnp.abs(lam.imag),
-        jnp.full(2, jnp.abs(nf.angular_rate_sq(zero))),
+        jnp.full(2, jnp.abs(nf._angular_rate_sq(zero))),
         rtol=TOL["identity"],
     )
 
@@ -191,7 +188,7 @@ def test_jacobian_at_the_origin(nf):
     cartesian field has no square root."""
     jac = jax.jacfwd(lambda u: nf.rhs(0.0, u))(jnp.zeros(2))
     zero = jnp.asarray(0.0)
-    rho0, w0 = nf.log_growth_rate_sq(zero), nf.angular_rate_sq(zero)
+    rho0, w0 = nf._log_growth_rate_sq(zero), nf._angular_rate_sq(zero)
     expected = jnp.array([[rho0, -w0], [w0, rho0]])
     assert_close(jac, expected, rtol=TOL["identity"], atol=TOL["identity"])
     assert jnp.all(jnp.isfinite(jax.hessian(lambda u: nf.rhs(0.0, u)[0])(jnp.zeros(2))))
@@ -230,13 +227,13 @@ def test_hopf_jacobian_explicit(a, w, w0, x, y):
 def test_cartesian_rhs_is_polar_rhs_in_the_chart(nf, r, theta):
     u = _point(r, theta)
     pushed = jax.jvp(
-        nf.from_chart, (nf.to_chart(u),), (nf.rhs_polar(0.0, nf.to_chart(u)),)
+        nf.from_polar, (nf.to_polar(u),), (nf.rhs_polar(0.0, nf.to_polar(u)),)
     )[1]
     assert_close(
         nf.rhs(0.0, u), pushed, rtol=TOL["closed_form"], atol=TOL["closed_form"]
     )
     assert_close(
-        nf.from_chart(nf.to_chart(u)),
+        nf.from_polar(nf.to_polar(u)),
         u,
         rtol=TOL["closed_form"],
         atol=TOL["closed_form"],
@@ -248,7 +245,9 @@ def test_phase_and_amplitude_along_the_flow(nf, r, theta):
     """Integrated version: phase(u(t)) - phase(u0) == w t (mod 2pi) and
     amplitude(u(t)) == amplitude(u0) exp(kappa t)."""
     ts = jnp.linspace(0.0, 1.5, 7)
-    ys = nf.flow(ts, _point(r, theta), config=TIGHT, integration="cartesian").ys
+    ys = nf.flow(
+        ts, _point(r, theta), config=SOLVERS["tight"], integration="cartesian"
+    ).ys
     dphi = jax.vmap(nf.phase)(ys) - nf.phase(ys[0]) - nf.omega() * ts
     dphi = jnp.arctan2(jnp.sin(dphi), jnp.cos(dphi))  # mod 2pi
     assert_close(dphi, jnp.zeros_like(ts), atol=TOL["flow"])
@@ -361,9 +360,11 @@ def test_radius_from_isostable_unreachable_and_basin_edge():
 def test_integrations_agree(nf, r, theta):
     ts = jnp.linspace(0.0, 2.0, 9)
     u0 = _point(r, theta)
-    ref = nf.flow(ts, u0, config=TIGHT, integration="cartesian").ys
-    for name in ("polar", "r_squared", "closed_form"):
-        ys = nf.flow(ts, u0, config=TIGHT, integration=name).ys
+    ref = nf.flow(ts, u0, integration="closed_form").ys  # exact (§6)
+    assert nf.default_integration == "closed_form"
+    assert_close(nf.flow(ts, u0).ys, ref, rtol=TOL["identity"])  # the default
+    for name in ("cartesian", "polar", "r_squared"):
+        ys = nf.flow(ts, u0, config=SOLVERS["tight"], integration=name).ys
         assert_close(ys, ref, rtol=TOL["flow"], atol=TOL["flow"], msg=name)
         assert_close(ys[0], u0, atol=TOL["closed_form"], msg=f"{name}: y(0) != u0")
 

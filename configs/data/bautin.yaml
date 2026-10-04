@@ -29,4 +29,4 @@ solver:
   atol: 1.0e-10
   max_steps: 65536
 
-integration: r_squared
+integration: null  # null -> the normal form's default (closed_form); or cartesian | polar | r_squared

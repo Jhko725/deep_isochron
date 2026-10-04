@@ -72,10 +72,10 @@ class BautinNormalForm(AbstractNormalForm):
         }
 
     # defining data, in s = r²
-    def log_growth_rate_sq(self, s):
+    def _log_growth_rate_sq(self, s):
         return self.a * (1 - s) * (1 + self.b * s)
 
-    def angular_rate_sq(self, s):
+    def _angular_rate_sq(self, s):
         return self.w0 + (self.w - self.w0) * s
 
     # closed forms, in r

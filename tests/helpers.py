@@ -1,8 +1,10 @@
+import diffrax as dfx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from deep_isochron.systems import SolverConfig
 
 
 # Tolerances (float64 throughout). Every tolerance in the suite is an entry here, used
@@ -32,6 +34,30 @@ TOL = {
     # two numerical integrations of the same ODE at tight tolerance (rtol 1e-10), or an
     # integrated closed-form identity (phase, isostable) against the integrator's error
     "flow": 1e-6,
+}
+
+
+# Solver configurations used by the tests, by name, with the reason — the counterpart of
+# ``TOL`` for ODE solves. ``Tsit5`` is diffrax's recommended non-stiff solver ("now
+# reckoned on being slightly more efficient overall" than Dopri5; docs, "How to choose a
+# solver"); the Kvaerno family is its recommendation for stiff problems.
+SOLVERS = {
+    # reference solutions for closed-form comparisons: error far below TOL["flow"]
+    "tight": SolverConfig(solver=dfx.Tsit5(), rtol=1e-10, atol=1e-12, max_steps=16384),
+    # a second integrator at the same tolerance: the answer is solver-independent
+    "tight_stiff": SolverConfig(
+        solver=dfx.Kvaerno5(), rtol=1e-10, atol=1e-12, max_steps=16384
+    ),
+    # long FitzHugh–Nagumo runs (period measurement over ~18 cycles): tight, many steps
+    "tight_long": SolverConfig(
+        solver=dfx.Tsit5(), rtol=1e-10, atol=1e-12, max_steps=1 << 17
+    ),
+    # Hodgkin–Huxley spiking: stiff gating kinetics, an implicit solver
+    "stiff": SolverConfig(
+        solver=dfx.Kvaerno5(), rtol=1e-8, atol=1e-10, max_steps=65536
+    ),
+    # data-generation tests: tight enough that only the metadata is in question
+    "data": SolverConfig(solver=dfx.Tsit5(), rtol=1e-9, atol=1e-11),
 }
 
 

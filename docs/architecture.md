@@ -1,6 +1,13 @@
+---
+type: architecture
+status: current
+updated: 2026-10-04
+sources: [code]
+---
+
 # Architecture
 
-The shape of the `deep_isochron` package: what each module is for, how data flows through
+The shape of the `deep_isochron` package (`docs/index.md` lists every document): what each module is for, how data flows through
 a training step, and where the design decisions behind each part are recorded. Decisions
 live in `docs/decisions/` (ADRs), the current plan in `docs/roadmap.md`, branch-level
 detail in `docs/changes/`. This page is kept current with the code; when a phase of the
@@ -25,7 +32,8 @@ deep_isochron
 │   ├── hodgekin_huxley.py   HodgekinHuxley (dim 4)
 │   └── normal_forms/
 │       ├── base.py          AbstractNormalForm: closed-form phase Θ, isostable Ψ,
-│       │                    isochrons, κ, eigenvalues at 0, polar and (Θ, Ψ) charts
+│       │                    isochrons, κ, eigenvalues at 0, polar and (Θ, Ψ) charts;
+│       │                    default_integration = closed_form
 │       ├── hopf.py          HopfNormalForm            (ρ, ω via `_sq` hooks in s = r²)
 │       ├── bautin.py        BautinNormalForm
 │       └── integration.py   CartesianIntegration / PolarIntegration /
@@ -44,7 +52,9 @@ deep_isochron
 │   │   │                    CircularMonotonicRQCoupling
 │   │   └── linear.py        BiLipschitzLinear (the linear layer)
 │   ├── fourier.py           TruncatedFourier (conditioner on S¹)
-│   ├── conjugacy.py         ConjugateLatentDynamics = bijection + latent ODE + SolverConfig
+│   ├── base.py              AbstractPhaseAmplitudeModel: phase · amplitude · cycle_point ·
+│   │                        __call__; phase_sensitivity derived      ── both models
+│   ├── conjugacy.py         ConjugateLatentDynamics = bijection + normal form + SolverConfig
 │   ├── latent_dynamics.py   PhaseAmplitudeLatentDynamics(omega, kappa): rotation ⊕ decay
 │   ├── autoencoder.py       PhaseAmplitudeAutoencoder — Yawata et al. (2024) baseline;
 │   │                        phase(x), phase_sensitivity(θ)
@@ -119,7 +129,7 @@ one initial condition; batching is `eqx.filter_vmap(ode.flow, in_axes=(None, 0))
 and two closed-form integrals (`phase_shift` `h(r)`, `isostable` `ψ(r)`); the base derives
 the cartesian `rhs` (smooth at the origin), `rhs_polar`, `period`, `floquet_exponent`
 (`κ = ρ'(1)` by autodiff), `eigenvalues_origin`, `phase` (`Θ = θ + h(r)`), `amplitude`
-(`Ψ`, `∂ᵣΨ(1) = 1`), `limit_cycle`, `isochron`, and the chart maps `to_chart`/`from_chart`
+(`Ψ`, `∂ᵣΨ(1) = 1`), `limit_cycle`, `isochron`, and the chart maps `to_polar`/`from_polar`
 (polar) and `to_phase_amplitude`/`from_phase_amplitude` (the latter through
 `radius_from_isostable`, a differentiable root solve unless the subclass overrides it with
 the explicit inverse, as Hopf does). The mathematics and the implementation contract are
@@ -132,6 +142,14 @@ instance, or one of `"cartesian" | "polar" | "r_squared" | "closed_form"` for th
 defaults (`closed_form` evolves `(Θ, Ψ)` exactly and maps back; no solver). They are
 leafless modules, hence static: each traces separately and dispatch is free. All return
 cartesian `.ys` in the same `Solution`, so `ConjugateLatentDynamics` never converts charts.
+
+`base.py` is the contract both approaches implement, `AbstractPhaseAmplitudeModel`:
+`phase(x)` in `(-π, π]`, `amplitude(x)` (isostable-like, no fixed normalisation),
+`cycle_point(θ)`, `__call__(ts, x0) -> (xt, yt)`; `phase_gradient` and
+`phase_sensitivity` are derived once for all. Training and evaluation code takes the
+contract and never asks which model it has. For `ConjugateLatentDynamics` the contract is
+the normal form's closed forms transported by the bijection (`Θ = Θ_NF ∘ H`,
+`cycle_point = H⁻¹ ∘ limit_cycle`).
 
 `latent_dynamics.py` / `autoencoder.py` are the non-invertible baseline: the phase
 autoencoder of Yawata et al. (Chaos 34, 063111, 2024), as mapped in
@@ -207,7 +225,9 @@ are in `test_splines.py`, `test_analytic.py`, `test_constraints.py`, `test_linea
 `test_normal_forms.py` pins the normal forms' closed forms by autodiff and the integrations,
 `test_systems.py` the flow machinery and the observed systems' facts (Langfield et al. 2014),
 `test_data.py` the data layer end to end, `test_baseline.py` the phase autoencoder
-against the exact chart (plus one `slow` training test on Hopf data). Shape
+against the exact chart (plus one `slow` training test on Hopf data), `test_models.py`
+the `AbstractPhaseAmplitudeModel` contract on both models. Solver configurations used by
+tests are named in `tests/helpers.SOLVERS` with their reasons, like `TOL`. Shape
 annotations are checked at runtime by the jaxtyping/beartype import hook (`conftest.py`).
 
 ## Decision records

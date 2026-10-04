@@ -1,3 +1,11 @@
+---
+type: decision
+id: ADR-0001
+status: accepted
+updated: 2026-10-01
+verified_by: joon
+---
+
 # ADR-0001 — Unconstrained parameters are the trainable leaves of scalar bijections
 
 **Status**: accepted (2026-10-01, branch `scalar-param-refactor`)

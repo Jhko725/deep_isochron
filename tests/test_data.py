@@ -17,7 +17,6 @@
 
 import collections
 
-import diffrax as dfx
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -39,10 +38,11 @@ from deep_isochron.data import (
     WeightedWindow,
     windows,
 )
+from deep_isochron.data.windows import categorical
 from deep_isochron.systems import BautinNormalForm, FitzhughNagumo, SolverConfig
 from hypothesis import given, settings, strategies as st
 
-from tests.helpers import assert_close, TOL
+from tests.helpers import assert_close, SOLVERS, TOL
 
 
 def _source(n=3, T=10, dim=2, metadata=None):
@@ -197,6 +197,18 @@ def test_weighted_window_frequencies_and_determinism(seed):
     assert len({_start_of(ds[i], src) for i in range(50)}) > 1  # re-drawn per visit
 
 
+def test_categorical_matches_the_weights_and_covers_the_support():
+    """``categorical`` draws index k with probability w_k / Σw (3 % over 20000 draws);
+    zero-weight bins are never drawn; a single positive bin is always drawn."""
+    rng = np.random.default_rng(0)
+    w = np.array([0.0, 1.0, 3.0, 0.0, 4.0])
+    draws = np.array([categorical(rng, w) for _ in range(20000)])
+    freq = np.bincount(draws, minlength=5) / len(draws)
+    assert np.all(freq[w == 0] == 0)
+    np.testing.assert_allclose(freq, w / w.sum(), atol=0.03)
+    assert all(categorical(rng, np.array([0.0, 0.0, 2.0])) == 2 for _ in range(50))
+
+
 def test_transient_weight_and_weighted_window_validation():
     w = transient_weight(boost=4.0, tau=0.5)(np.linspace(0.0, 1.0, 10))
     assert w[0] == pytest.approx(5.0) and np.all(np.diff(w) < 0) and np.all(w >= 1.0)
@@ -234,13 +246,10 @@ def test_mixed_windows_ratio_and_validation():
 
 
 # ----------------------------------------------------------------- 5. generate -----
-TIGHT = SolverConfig(solver=dfx.Dopri5(), rtol=1e-9, atol=1e-11)
-
-
 def test_generate_bautin():
     nf = BautinNormalForm(1.0, 0.5, 2.0, 0.5)
     ts = jnp.linspace(0.0, 1.0, 6)
-    src = generate(nf, UniformAnnulus(0.3, 2.0), ts, 5, seed=3, config=TIGHT)
+    src = generate(nf, UniformAnnulus(0.3, 2.0), ts, 5, seed=3, config=SOLVERS["data"])
     assert src.ys.shape == (5, 6, 2)
     assert_close(src.u0, src.ys[:, 0], rtol=TOL["identity"])
     m = src.metadata
@@ -252,15 +261,21 @@ def test_generate_bautin():
         "UniformAnnulus", {"r_min": 0.3, "r_max": 2.0, "center": [0.0, 0.0]}, 3, 5
     )
     assert m.grid == GridSpec(0.0, 1.0, 6)
-    assert m.solve == SolveSpec("Dopri5", 1e-9, 1e-11, 4096, "RadiusSquaredIntegration")
+    assert m.solve == SolveSpec("Tsit5", 1e-9, 1e-11, 4096, "ClosedFormIntegration")
     assert m.provenance.dtype == "float64" and m.provenance.created
     # the trajectories are the system's flow
-    ref = nf.flow(ts, jnp.asarray(src.u0[0]), config=TIGHT, integration="cartesian").ys
+    ref = nf.flow(
+        ts, jnp.asarray(src.u0[0]), config=SOLVERS["data"], integration="cartesian"
+    ).ys
     assert_close(src.ys[0], ref, rtol=TOL["flow"], atol=TOL["flow"])
     # same config -> same hash; different seed or tolerance -> different hash
-    again = generate(nf, UniformAnnulus(0.3, 2.0), ts, 5, seed=3, config=TIGHT)
+    again = generate(
+        nf, UniformAnnulus(0.3, 2.0), ts, 5, seed=3, config=SOLVERS["data"]
+    )
     assert again.metadata.config_hash == m.config_hash
-    other = generate(nf, UniformAnnulus(0.3, 2.0), ts, 5, seed=4, config=TIGHT)
+    other = generate(
+        nf, UniformAnnulus(0.3, 2.0), ts, 5, seed=4, config=SOLVERS["data"]
+    )
     assert other.metadata.config_hash != m.config_hash
     assert dataset_path("data", "bautin", m).name == f"bautin-{m.config_hash}.nc"
 

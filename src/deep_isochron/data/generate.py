@@ -86,15 +86,16 @@ def generate(
     """Integrate ``n_trajectories`` initial conditions of ``system`` on the grid ``ts``.
 
     ``seed`` seeds the initial-condition draw (recorded in the metadata).
-    ``integration`` applies to ``AbstractNormalForm`` systems only (default
-    ``"r_squared"``). Failed integrations raise ``RuntimeError`` naming the indices.
+    ``integration`` applies to ``AbstractNormalForm`` systems only (``None`` → the
+    system's ``default_integration``, ``"closed_form"``). Failed integrations raise
+    ``RuntimeError`` naming the indices.
     """
     ts = jnp.asarray(ts)
     u0 = ic_sampler(jax.random.key(seed), n_trajectories)
     config = copy.replace(config, throw=False)
 
     if isinstance(system, AbstractNormalForm):
-        method = resolve_integration(integration or "r_squared")
+        method = resolve_integration(integration or system.default_integration)
 
         def flow(u):
             sol = system.flow(ts, u, config=config, integration=method)

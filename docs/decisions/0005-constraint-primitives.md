@@ -1,3 +1,11 @@
+---
+type: decision
+id: ADR-0005
+status: accepted
+updated: 2026-10-01
+verified_by: joon
+---
+
 # ADR-0005 — Constraint primitives are plain Python objects created inside `constrain`
 
 **Status**: accepted (2026-10-01)

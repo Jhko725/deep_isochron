@@ -1,3 +1,11 @@
+---
+type: design
+status: agreed
+updated: 2026-10-02
+verified_by: joon (review 2026-10-02)
+sources: [Hong & Chun]
+---
+
 # `CubicBSpline` — the mathematics behind the code
 
 Companion to [ADR-0006](../decisions/0006-cubic-bspline-boundary-and-inverse.md), which

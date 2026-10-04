@@ -4,9 +4,9 @@ baseline (``docs/design/normal-forms.md`` §5.3, roadmap B12).
 Encoder $f_{\rm enc}: \mathbb R^{d} \to \mathbb R^3$ whose first two outputs are
 normalised to the unit circle (Eqs. (15)–(16)), decoder $f_{\rm dec}: \mathbb R^3 \to
 \mathbb R^d$ (Eq. (17)), and a latent flow (``PhaseAmplitudeLatentDynamics``). The
-learned phase is $\Theta(X) = \mathrm{atan2}(Y_2, Y_1)$ (Eq. (19)) and the phase
-sensitivity function is $Z(\theta) = \nabla_X \Theta$ at
-$X = f_{\rm dec}(\cos\theta, \sin\theta, 0)$ (Eq. (20)), by autodiff.
+learned phase is $\Theta(X) = \mathrm{atan2}(Y_2, Y_1)$ (Eq. (19)); the phase
+sensitivity function $Z(\theta) = \nabla_X \Theta$ at $X = f_{\rm dec}(\cos\theta,
+\sin\theta, 0)$ (Eq. (20)) comes from ``AbstractPhaseAmplitudeModel``, by autodiff.
 
 Differences from the paper, deliberate: no batch normalisation in the MLPs (their
 encoder: 2×100 ReLU + BN; decoder 3×100); the latent flow is continuous in $t$; input
@@ -20,6 +20,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, PRNGKeyArray
 
+from .base import AbstractPhaseAmplitudeModel
 from .latent_dynamics import AbstractLatentDynamics, PhaseAmplitudeLatentDynamics
 
 
@@ -29,7 +30,7 @@ def normalise_phase_plane(y: Float[Array, "3"]) -> Float[Array, "3"]:
     return jnp.stack((y[0] / radius, y[1] / radius, y[2]))
 
 
-class PhaseAmplitudeAutoencoder(eqx.Module):
+class PhaseAmplitudeAutoencoder(AbstractPhaseAmplitudeModel):
     """``encoder``/``decoder`` are MLPs by default; any callables ``R^d -> R^3`` and
     ``R^3 -> R^d`` may be substituted with ``eqx.tree_at`` (the tests plug in the exact
     chart of a normal form)."""
@@ -98,10 +99,6 @@ class PhaseAmplitudeAutoencoder(eqx.Module):
     def cycle_point(self, theta: Float[Array, ""]) -> Float[Array, " obs_dim"]:
         """``f_dec(cos θ, sin θ, 0)``: the learned limit cycle at phase ``θ``."""
         return self.decode(jnp.stack((jnp.cos(theta), jnp.sin(theta), 0.0)))
-
-    def phase_sensitivity(self, theta: Float[Array, ""]) -> Float[Array, " obs_dim"]:
-        """Phase sensitivity function ``Z(θ) = ∇ₓΘ`` at the learned cycle (Eq. (20))."""
-        return jax.grad(self.phase)(self.cycle_point(theta))
 
     def __call__(
         self,

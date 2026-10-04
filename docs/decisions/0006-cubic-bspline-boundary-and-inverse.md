@@ -1,3 +1,11 @@
+---
+type: decision
+id: ADR-0006
+status: accepted
+updated: 2026-10-02
+verified_by: joon
+---
+
 # ADR-0006 — `CubicBSpline`: Greville-pinned boundary and a bracketed Newton inverse
 
 **Status**: accepted (2026-10-02; records decisions taken on `splines-refactor`, 2026-09-30)

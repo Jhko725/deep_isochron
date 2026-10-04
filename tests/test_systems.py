@@ -25,10 +25,7 @@ from deep_isochron.systems import (
     SolverConfig,
 )
 
-from tests.helpers import assert_close, TOL
-
-
-TIGHT = SolverConfig(solver=dfx.Dopri5(), rtol=1e-10, atol=1e-12, max_steps=16384)
+from tests.helpers import assert_close, SOLVERS, TOL
 
 
 # --------------------------------------------------------------------- 1. flow -----
@@ -50,7 +47,7 @@ def test_solver_config_is_honoured():
     ode = FitzhughNagumo()
     ts = jnp.linspace(0.0, 20.0, 41)
     u0 = jnp.array([0.5, 0.1])
-    tight = ode.flow(ts, u0, config=TIGHT).ys
+    tight = ode.flow(ts, u0, config=SOLVERS["tight"]).ys
     loose = ode.flow(ts, u0, config=SolverConfig(rtol=1e-2, atol=1e-2)).ys
     assert not jnp.allclose(tight, loose, rtol=1e-8, atol=1e-8), (
         "tolerances had no effect"
@@ -58,9 +55,7 @@ def test_solver_config_is_honoured():
     other = ode.flow(
         ts,
         u0,
-        config=SolverConfig(
-            solver=dfx.Kvaerno5(), rtol=1e-10, atol=1e-12, max_steps=16384
-        ),
+        config=SOLVERS["tight_stiff"],
     ).ys
     assert_close(other, tight, rtol=TOL["flow"], atol=TOL["flow"])
 
@@ -71,7 +66,7 @@ def test_flow_reports_failure_without_raising():
     config = SolverConfig(max_steps=8, throw=False)
     sol = ode.flow(ts, jnp.array([0.5, 0.1]), config=config)
     assert sol.result != dfx.RESULTS.successful
-    sol = ode.flow(ts, jnp.array([0.5, 0.1]), config=TIGHT)
+    sol = ode.flow(ts, jnp.array([0.5, 0.1]), config=SOLVERS["tight"])
     assert sol.result == dfx.RESULTS.successful
 
 
@@ -103,8 +98,10 @@ def test_fitzhugh_nagumo_period():
     ode = FitzhughNagumo()
     x_star = 0.90656707
     ts = jnp.linspace(0.0, 200.0, 20001)
-    cfg = SolverConfig(solver=dfx.Dopri5(), rtol=1e-10, atol=1e-12, max_steps=1 << 17)
-    x = ode.flow(ts, jnp.array([-1.0, 1.0]), config=cfg).ys[:, 0] - x_star
+    x = (
+        ode.flow(ts, jnp.array([-1.0, 1.0]), config=SOLVERS["tight_long"]).ys[:, 0]
+        - x_star
+    )
     up = jnp.flatnonzero((x[:-1] < 0) & (x[1:] >= 0))
     up = up[up > len(ts) // 2]  # after the transient
     t_cross = ts[up] - x[up] * (ts[up + 1] - ts[up]) / (x[up + 1] - x[up])
@@ -119,9 +116,7 @@ def test_hodgkin_huxley_gating_variables_stay_in_unit_interval():
     ys = ode.flow(
         ts,
         u0,
-        config=SolverConfig(
-            solver=dfx.Kvaerno5(), rtol=1e-8, atol=1e-10, max_steps=65536
-        ),
+        config=SOLVERS["stiff"],
     ).ys
     gates = ys[:, 1:]
     assert jnp.all(jnp.isfinite(ys))

@@ -50,6 +50,12 @@ branch, and never edits *Review notes* except when asked to.
   document's *Design* section links to them. `docs/architecture.md` is the
   module map and data flow — read it first in a new session, and update it in
   the same commit as a change that moves or renames a module.
+- Markdown: no line-length limit applies (ruff formats Python only), and inline math
+  `$…$` must never be split across lines — VS Code and GitHub stop rendering it. Wrap
+  prose freely; keep each inline formula on one line and put long formulas in `$$`
+  blocks. Every document under `docs/` starts with a frontmatter block (`type`,
+  `status`, `updated`, plus `verified_by`/`sources`/`id` where relevant; see
+  `docs/index.md`), updated in the same commit as the document.
 - `docs/roadmap.md` is the single, current plan. Finished items move to its
   *Done* ledger (not deleted); it is updated in the same commit as the work
   that changes it, never on its own; history is `git log -p docs/roadmap.md`.

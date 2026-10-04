@@ -1,3 +1,11 @@
+---
+type: decision
+id: ADR-0008
+status: accepted; amended
+updated: 2026-10-03
+verified_by: joon
+---
+
 # ADR-0008 — Datasets are one netCDF4 file via xarray; transient oversampling by weighted windows (and `mix`, for comparison)
 
 **Status**: accepted (2026-10-02); amended 2026-10-03 after review — metadata grouped; the source holds whole trajectories and windowing is a grain transform (Decision 2 rewritten).

@@ -1,3 +1,11 @@
+---
+type: decision
+id: ADR-0003
+status: accepted
+updated: 2026-10-01
+verified_by: joon
+---
+
 # ADR-0003 — Regularity is declared, not inferred
 
 **Status**: accepted (2026-10-01)

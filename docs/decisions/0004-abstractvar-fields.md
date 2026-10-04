@@ -1,3 +1,11 @@
+---
+type: decision
+id: ADR-0004
+status: accepted
+updated: 2026-10-01
+verified_by: joon
+---
+
 # ADR-0004 — `eqx.AbstractVar` is implemented as `eqx.field(static=True, init=False)`
 
 **Status**: accepted (2026-10-01)

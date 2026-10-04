@@ -70,10 +70,10 @@ class CartesianIntegration(AbstractFlowIntegration):
 
 class PolarIntegration(AbstractFlowIntegration):
     def __call__(self, normal_form, ts, u0, args, config):
-        z0 = normal_form.to_chart(u0)
+        z0 = normal_form.to_polar(u0)
         sol = diffeqsolve(normal_form.rhs_polar, ts, z0, args, config)
         assert sol.ys is not None
-        return _with_ys(sol, jax.vmap(normal_form.from_chart)(sol.ys))
+        return _with_ys(sol, jax.vmap(normal_form.from_polar)(sol.ys))
 
 
 class RadiusSquaredIntegration(AbstractFlowIntegration):
@@ -83,12 +83,12 @@ class RadiusSquaredIntegration(AbstractFlowIntegration):
             s, _ = state
             return jnp.stack(
                 (
-                    2 * s * normal_form.log_growth_rate_sq(s),
-                    normal_form.angular_rate_sq(s),
+                    2 * s * normal_form._log_growth_rate_sq(s),
+                    normal_form._angular_rate_sq(s),
                 )
             )
 
-        r0, theta0 = normal_form.to_chart(u0)
+        r0, theta0 = normal_form.to_polar(u0)
         sol = diffeqsolve(rhs_s, ts, jnp.stack((r0**2, theta0)), args, config)
         assert sol.ys is not None
         r, theta = jnp.sqrt(sol.ys[:, 0]), sol.ys[:, 1]

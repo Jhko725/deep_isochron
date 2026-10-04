@@ -1,3 +1,11 @@
+---
+type: decision
+id: ADR-0002
+status: accepted
+updated: 2026-10-01
+verified_by: joon
+---
+
 # ADR-0002 — Identity at zero is a property of the constraining map, not of initialisation
 
 **Status**: accepted (2026-10-01)

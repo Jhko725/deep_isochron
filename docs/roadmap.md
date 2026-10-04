@@ -1,3 +1,10 @@
+---
+type: roadmap
+status: current
+updated: 2026-10-04
+sources: [joon, claude]
+---
+
 # Roadmap
 
 The current plan for `deep_isochron`. This file is a statement of intent and is kept
@@ -16,7 +23,7 @@ Hydra/wandb/Orbax → science.
 
 All items in the Done ledger; see `docs/changes/2026-10-02-invertible-cleanup.md`.
 
-## Phase B — `data-generation` (current; B1–B12 landed, awaiting review)
+## Phase B — `data-generation` (current; B1–B12 landed; review round 3 applied 2026-10-04)
 
 Decisions taken 2026-10-02 (ADR-0007, ADR-0008) and refined by the review of 2026-10-03.
 B1–B7 landed; the review (change document, *Review notes*) set the remaining items, in
@@ -35,8 +42,13 @@ this order:
 - C1 `Trainer(optimizer, loss_fn)` + `train(model, loader, *, logger, checkpointer, num_steps,
   eval_every, eval_loader)`; `NullLogger`/`NullCheckpointer` for tests; document the
   one-step-delayed logging overlap.
-- C2 Explicit loss weights in `ConjugacyTrajectoryLoss` (the `SolverConfig` field on
-  `ConjugateLatentDynamics` landed with Phase B).
+- C2 Losses as composable building blocks (review round 3): `training/losses.py` holds
+  generic terms — trajectory MSE in data and latent space, `k`-step latent consistency
+  with a step weighting, batch centre of mass — and `ConjugacyTrajectoryLoss` /
+  `PhaseAutoencoderLoss` become thin weighted compositions with explicit weights; the
+  trainer owns schedules (Yawata's once-and-for-all weight switch and per-epoch `α_k`,
+  which B12 approximates per batch). The loss contract is bound to the trainer, hence
+  here. (The `SolverConfig` field on `ConjugateLatentDynamics` landed with Phase B.)
 - C3 Held-out evaluation; physics scalars every `eval_every`: base-system `a, b, w`, implied
   period and Floquet exponent, max round-trip error, min/max per-layer Jacobian singular values
   on a fixed grid.
@@ -66,12 +78,24 @@ this order:
 numerical limit cycle, monodromy/Floquet exponents, asymptotic phase by long integration,
 isochrons by the BVP continuation of Langfield, Krauskopf & Osinga (2014) — the ground
 truth for the learned FitzHugh–Nagumo isochrons; `t_settle` per trajectory in the dataset
-once the normal-form `amplitude` or these tools provide it. Pushforward loss with oversampling near the repelling slow manifold; curvature-matching
+once the normal-form `amplitude` or these tools provide it; `floquet_multipliers(ode,
+cycle)` by the variational equation over one period — the computation
+`test_hopf_floquet_multiplier_is_the_polar_monodromy` does by hand for Hopf (review round
+3), and the FHN cycle points for `OnCycleGaussian`. Evaluation works through
+`AbstractPhaseAmplitudeModel` (phase up to a constant, amplitude up to a fitted scale). Pushforward loss with oversampling near the repelling slow manifold; curvature-matching
 (Hessian) loss; INN depth 8–12; Jacobian-anisotropy diagnostics (`diagnostics/`); endpoint
 handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a C¹
 `CircularMonotonicRQCoupling`). As `LossConfig`/`INNConfig` entries once Phase D is in.
 
 ## Parked (with reason)
+
+- Optimistix for `radius_from_isostable` (and other hand-rolled solves) — dropped for now
+  (review round 3, 2026-10-04): the bracketed Newton with its implicit-function JVP is
+  tested and small; revisit if a second root solve appears or the dependency is needed
+  elsewhere.
+- `TimeSeriesDataSource` as an `eqx.Module` instead of a frozen dataclass — pending
+  Joon's call (review round 2); no technical gain identified (it is an I/O object never
+  passed through a JAX transform), uniformity is the argument for.
 
 - Reinstating `InvertibleLinear` — only if `BiLipschitzLinear` stays too slow after trying
   parametrisations of `SO(dim)` other than the matrix exponential (Cayley transform,
@@ -101,6 +125,7 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-09-30 | `splines-refactor` | `AbstractSpline`; `CubicBSpline` ported; `LinearSpline`; RQ-spline bug fixes; `BijectionFactory` removed; first Hypothesis suite; change-document convention | `docs/changes/2026-09-30-splines-refactor.md` |
 | 2026-10-01 | `scalar-param-refactor` | `raw`/`constrain` contract (ADR-0001/0002); declared `smoothness` (ADR-0003); `AbstractVar` as static `init=False` fields (ADR-0004); constraint primitives (ADR-0005); `ScalarChain`; `CouplingFlow` with pluggable conditioner; `PolarCouplingFlow`; circular spline as exact rotation; `InvertibleLinear` rotation init; `BiLipschitzLinear._s` vector; 303-test suite; `ty` clean on the invertible package | `docs/changes/2026-10-01-scalar-param-refactor.md`, ADRs 0001–0005 |
 | 2026-10-02 | `invertible-cleanup` | A1: `Shift`/`Affine` scalar templates; `AffineCoupling`/`ResidualCoupling` as `CouplingFlow` factories (the latter now identity at init) | `docs/changes/2026-10-02-invertible-cleanup.md` |
+| 2026-10-04 | `data-generation` | Review round 3: `to_polar`/`from_polar`; `_log_growth_rate_sq`/`_angular_rate_sq`; `default_integration = "closed_form"`; `tests/helpers.SOLVERS` (Tsit5); `categorical`; `AbstractPhaseAmplitudeModel` protocol implemented by both models; design-doc inline math unwrapped; OKF-style frontmatter + `docs/index.md` | `docs/changes/2026-10-02-data-generation.md` |
 | 2026-10-03 | `data-generation` | B12: Yawata et al. phase-autoencoder baseline — `PhaseAmplitudeLatentDynamics`, `PhaseAmplitudeAutoencoder` (`phase`, `phase_sensitivity`), `PhaseAutoencoderLoss`, `OnCycleGaussian`; `LinearLatentDynamics` removed; `tests/test_baseline.py` | `docs/changes/2026-10-02-data-generation.md`, `docs/design/normal-forms.md` §5.3 |
 | 2026-10-03 | `data-generation` | B10–B11: `docs/design/normal-forms.md` agreed; normal forms reimplemented against its §9 (`log_growth_rate_sq`/`angular_rate_sq` hooks, public API in `r`, `κ = ρ'(1)`, `∂ᵣΨ(1) = 1`, `eigenvalues_origin`, `to/from_phase_amplitude` with a differentiable root solve, `ClosedFormIntegration`); `test_normal_forms.py` per §10 | `docs/changes/2026-10-02-data-generation.md`, `docs/design/normal-forms.md`, ADR-0007 |
 | 2026-10-03 | `data-generation` | B9: whole-trajectory `TimeSeriesDataSource` (frozen dataclass); `RandomWindow`/`WeightedWindow` grain transforms, `windows`, `mixed_windows`; grouped `DatasetMetadata` (`system/sampling/grid/solve/provenance/extra`); dict batches | `docs/changes/2026-10-02-data-generation.md`, ADR-0008 |

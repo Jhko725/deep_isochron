@@ -20,7 +20,10 @@ After two review rounds (B8, B9) the normal forms were re-derived in
 `docs/design/normal-forms.md` (B10) and reimplemented against it (B11: `_sq` hooks, API in
 `r`, `κ = ρ'(1)`, Wilson–Moehlis `Ψ`, `(Θ, Ψ)` chart with a differentiable inverse,
 `ClosedFormIntegration`), and the non-invertible baseline became the phase autoencoder of
-Yawata et al. (2024) (B12), whose latent space is exactly that chart. Phase B is complete.
+Yawata et al. (2024) (B12), whose latent space is exactly that chart. Review round 3
+(2026-10-04) added the `AbstractPhaseAmplitudeModel` contract both models implement,
+`closed_form` as the default integration, named solver configurations, and OKF-style
+frontmatter on the documents. Phase B is complete.
 
 ## Files
 
@@ -98,6 +101,19 @@ Tests and docs:
   `scripts/training/configs/model/{base,latent_dynamics/phase_amplitude}.yaml`
   (`hopf.yaml`/`linear.yaml` deleted — both named deleted classes), `tests/test_baseline.py`
   (new), `docs/architecture.md`, `docs/roadmap.md`, ADR-0007 consequences.
+- Review round 3 (2026-10-04): `systems/normal_forms/{base,hopf,bautin,integration}.py`
+  (`to_polar`/`from_polar`; `_log_growth_rate_sq`/`_angular_rate_sq`;
+  `default_integration`; `flow(integration=None)`), `data/generate.py` and
+  `configs/data/*.yaml` (default integration), `data/windows.py` (`categorical`),
+  `model/base.py` (new: `AbstractPhaseAmplitudeModel`), `model/conjugacy.py` (implements
+  it; `latent_dynamics: AbstractNormalForm`; `return_latent_trajectory` dropped),
+  `model/autoencoder.py` (implements it; `phase_sensitivity` now inherited),
+  `model/__init__.py`, `tests/helpers.py` (`SOLVERS`), `tests/test_{systems,normal_forms,
+  data}.py` (use `SOLVERS`; `categorical` test; default-integration test),
+  `tests/test_models.py` (new), `prototype.ipynb` (`to_polar`), `docs/design/normal-forms.md`
+  (inline math unwrapped; status line), `docs/index.md` (new), frontmatter on every
+  `docs/` document, `CLAUDE.md` (Markdown/frontmatter rule), `docs/architecture.md`,
+  `docs/roadmap.md`, ADR-0007.
 - `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`,
   `docs/decisions/0008-dataset-format-and-sampling.md` — new ADRs.
 - `docs/architecture.md` — systems and data sections rewritten; module map updated.
@@ -229,6 +245,59 @@ below is the paper's.
   and are the reason the design document says the baseline learns the phase but not the
   isostable normalisation; the test asserts `Θ` (and `|ω|` to 5 %) and prints the rest.
 
+## Review round 3 (2026-10-04) — what changed in response
+
+Joon's review of `cb73fb8` (rows below) and the discussion that followed; Optimistix was
+considered and dropped for now (roadmap, *Parked*), the loss refactor scheduled as C2.
+
+- **Charts named after their targets.** `to_chart`/`from_chart` → `to_polar`/`from_polar`;
+  `to_phase_amplitude`/`from_phase_amplitude` unchanged. There are two charts (§7), so
+  "the chart" was ambiguous.
+- **`_sq` hooks underscored**: `_log_growth_rate_sq`, `_angular_rate_sq`, following the
+  spline contract's `_forward_in_range`/`_inverse_in_range` — the subclass's implementation
+  surface, not the user API. Design document §9 updated to the same names.
+- **`default_integration = "closed_form"`** on `AbstractNormalForm` (static field);
+  `flow(..., integration=None)` and `generate(..., integration=None)` use it. It is exact
+  for every normal form and cheaper than any ODE solve; the numerical integrations are
+  now an explicit choice for the comparison experiments. `configs/data/bautin.yaml` says
+  `null`. `test_integrations_agree` now takes `closed_form` as the reference.
+- **Named solver configurations**: `tests/helpers.SOLVERS` (`tight`, `tight_stiff`,
+  `tight_long`, `stiff`, `data`) with one line of reason each, the counterpart of `TOL`.
+  `Tsit5` replaces `Dopri5` everywhere a non-stiff reference solve is needed: diffrax's
+  guide calls `Tsit5` "a good general-purpose solver" that "is now reckoned on being
+  slightly more efficient overall" (`DEFAULT_SOLVER_CONFIG` already used it).
+- **`categorical(rng, weights)`** in `data/windows.py`: the inverse-transform draw factored
+  out of `WeightedWindow` with a `jax.random.categorical`-like signature for NumPy
+  generators; tested on its own (frequencies, zero-weight bins never drawn).
+- **`AbstractPhaseAmplitudeModel`** (`model/base.py`), the contract both approaches
+  implement so that Phase C/E code treats them alike: abstract `phase`, `amplitude`,
+  `cycle_point`, `__call__(ts, x0) -> (xt, yt)`; final `phase_gradient`,
+  `phase_sensitivity`. `amplitude` promises only an *isostable-like* coordinate with no
+  fixed normalisation (Joon's call): the conjugacy model's is `Ψ`, the autoencoder's
+  `Y₃` is only up to scale, and evaluation fits the scale. Kept minimal on purpose — its
+  shape is to be finalised as the science exposes rough edges. `ConjugateLatentDynamics`
+  implements it through the normal form (`Θ_NF ∘ H`, `Ψ_NF ∘ H`, `H⁻¹ ∘ limit_cycle`), so
+  its `latent_dynamics` is now typed `AbstractNormalForm`; the unused
+  `return_latent_trajectory` flag is gone. `PhaseAmplitudeAutoencoder` loses its own
+  `phase_sensitivity` (inherited). `tests/test_models.py` checks the contract on both;
+  the consistency laws (`Θ(cycle_point(θ)) = θ`, `amplitude = 0` on the cycle) are
+  asserted for the conjugacy model only, since for the autoencoder they hold only after
+  training.
+- **Markdown rendering.** Nothing enforces a line length on Markdown (`prek.toml` runs
+  ruff on Python and whitespace fixers only); the breaks were habit. All six remaining
+  inline `$…$` spans crossing a line in the design document are unwrapped, and
+  `CLAUDE.md` now states the rule (inline math on one line; long formulas in `$$`).
+- **Open Knowledge Format, the useful parts.** Every `docs/` document starts with a
+  frontmatter block — `type`, `status`, `updated`, plus `verified_by`, `sources`, `id`
+  where relevant — and `docs/index.md` is the progressive-disclosure entry point listing
+  every document with its status. The §5.4 *tentative* marker Joon added is now also
+  machine-readable (`status: agreed; §5.3–5.4 tentative`). Not adopted: the rest of the
+  spec (bundle layout, `viz.html`, `stale_after`); the ADR/design/change split already
+  encodes document kinds.
+- **Not done, recorded**: `TimeSeriesDataSource` as `eqx.Module` (pending Joon's call,
+  roadmap *Parked*); Optimistix (parked with reason); loss building blocks (C2); the
+  monodromy computation as a Phase E `analysis` function (roadmap).
+
 ## Design
 
 The decisions and their rejected alternatives are in ADR-0007 (hierarchy, `SolverConfig`,
@@ -336,6 +405,12 @@ and non-zero; `OnCycleGaussian` reproduces the cycle at `γ₂ = 0`, has the rig
 `γ₂ = 0.5`, is seeded and validates; the slow test learns the Hopf phase to a circular
 std `< 0.25` rad and `|ω|` to 5 % in 1500 steps, printing `corr(Y₃, Ψ)` and `κ` (run with
 `-s` to see them; deselect with `-m "not slow"`).
+
+`tests/test_models.py` (4 tests): the `AbstractPhaseAmplitudeModel` contract on both
+models (shapes, phase range, `phase_sensitivity == grad(phase)(cycle_point)`,
+`__call__ -> (xt, yt)`); for the conjugacy model `Θ(cycle_point(θ)) = θ`, `Ψ = 0` on the
+cycle and `xt[0] = x0` through any bijection, and with the identity bijection the whole
+contract equals the normal form's closed forms and `closed_form` flow.
 
 Also run by hand: `scripts/generate_data.py --config-name {bautin,fhn}` writes
 `<name>-<hash>.nc`; reloading gives the metadata including the resolved Hydra config, and
@@ -445,3 +520,23 @@ B12:
 | `scripts/training/configs/model/*`: `phase_amplitude.yaml` replaces `hopf`/`linear` | Confirmed. | None |
 | `tests/test_baseline.py`: new (11 tests, one `slow`) | Confirmed. Will check the spefics later as I work with the baseline. | None |
 | `docs/architecture.md`, `docs/roadmap.md`, `docs/decisions/0007-…`: B12 | Read through them. Will need refining based on the reviews made here. A sidenote: for the docs and other knowledge being managed for this project, is it worth introducing the [open knowledge format](https://github.com/GoogleCloudPlatform/open-knowledge-format)? | None |
+
+
+Review round 3:
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `src/deep_isochron/systems/normal_forms/base.py`: `to_polar`/`from_polar`; `_log_growth_rate_sq`/`_angular_rate_sq`; `default_integration = "closed_form"`; `flow(integration=None)` | | |
+| `src/deep_isochron/systems/normal_forms/{hopf,bautin,integration}.py`: renamed hooks and chart calls | | |
+| `src/deep_isochron/data/generate.py`, `configs/data/*.yaml`: default integration from the system | | |
+| `src/deep_isochron/data/windows.py`: `categorical(rng, weights)` | | |
+| `src/deep_isochron/model/base.py`: `AbstractPhaseAmplitudeModel` (new) | | |
+| `src/deep_isochron/model/conjugacy.py`: implements the contract; `latent_dynamics: AbstractNormalForm`; no `return_latent_trajectory` | | |
+| `src/deep_isochron/model/autoencoder.py`, `model/__init__.py`: implements the contract; exports | | |
+| `tests/helpers.py`: `SOLVERS` with reasons; `Tsit5` | | |
+| `tests/test_{systems,normal_forms,data}.py`: use `SOLVERS`; default-integration and `categorical` tests | | |
+| `tests/test_models.py`: new (4 tests) | | |
+| `prototype.ipynb`: `to_polar` | | |
+| `docs/design/normal-forms.md`: inline math unwrapped; status line; §9 hook names | | |
+| `docs/index.md` (new), frontmatter on all `docs/`, `CLAUDE.md`: OKF-lite; Markdown rule | | |
+| `docs/architecture.md`, `docs/roadmap.md`, `docs/decisions/0007-…`: round 3 | | |

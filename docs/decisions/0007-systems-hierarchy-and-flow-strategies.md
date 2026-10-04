@@ -1,6 +1,15 @@
+---
+type: decision
+id: ADR-0007
+status: accepted; amended
+updated: 2026-10-04
+verified_by: joon
+---
+
 # ADR-0007 — `AbstractODE` / `AbstractNormalForm`, `SolverConfig`, and flow integrations as objects
 
-**Status**: accepted (2026-10-02); amended 2026-10-03 after review (names: *integration* not *strategy*; `flow` returns the `diffrax.Solution`; `params()` added to the `AbstractODE` contract; `GreaterThan`); amended again 2026-10-03 (B11): the mathematics lives in
+**Status**: accepted (2026-10-02); amended 2026-10-03 after review (names: *integration* not *strategy*; `flow` returns the `diffrax.Solution`; `params()` added to the `AbstractODE` contract; `GreaterThan`); amended 2026-10-03 (B11) and 2026-10-04 (review round 3: `to_polar`, `_sq` hooks
+underscored, `default_integration`, `AbstractPhaseAmplitudeModel`): the mathematics lives in
 `docs/design/normal-forms.md`, which is authoritative for every symbol and normalisation
 below — where this ADR and the design document disagree, the design document wins.
 
@@ -27,11 +36,15 @@ growth rate, `ṙ = rρ(r)`) and `ω(r)` (`θ̇ = ω(r)`), and carrying in **clo
 the observed systems cannot: `period`, `floquet_exponent` (`κ = ρ'(1)`, by autodiff of
 `log_growth_rate`), `eigenvalues_origin`, `phase` (asymptotic phase `Θ = θ + h(r)`),
 `amplitude` (isostable coordinate `Ψ(r)`, normalised `∂ᵣΨ(1) = 1`, `Ψ < 0` inside),
-`limit_cycle`, `isochron`, the polar chart `to_chart`/`from_chart` and the phase–amplitude
-chart `to_phase_amplitude`/`from_phase_amplitude`. Subclasses implement the defining data
-as smooth functions of `s = r²` (`log_growth_rate_sq`, `angular_rate_sq`, design document
+`limit_cycle`, `isochron`, the polar chart `to_polar`/`from_polar` and the phase–amplitude
+chart `to_phase_amplitude`/`from_phase_amplitude` (named after their targets since review
+round 3; `to_chart` was ambiguous once there were two charts). Subclasses implement the defining data
+as smooth functions of `s = r²` (`_log_growth_rate_sq`, `_angular_rate_sq`, design document
 §9, "Option B"), so the cartesian `rhs` is smooth at the origin; the public API is in `r`
-(B11; the first implementation mixed `r` and `s` in the public methods — review round 1). The rule: **a class
+(B11; the first implementation mixed `r` and `s` in the public methods — review round 1).
+The hooks carry a leading underscore like the spline contract's `_forward_in_range` /
+`_inverse_in_range`: they are the subclass's implementation surface, not the user API
+(review round 3). The rule: **a class
 carries only what is analytically available; everything numerical is a function over
 `AbstractODE`** (the future `deep_isochron.analysis`: limit-cycle location, monodromy,
 numerical asymptotic phase). The name `AbstractLatentDynamics` was not reused because
@@ -67,7 +80,9 @@ replaced (`eqx.tree_at`), so callers always read cartesian `.ys`.
 `ClosedFormIntegration` (B11: `Θ(t) = Θ₀ + ω₁t`, `Ψ(t) = Ψ₀e^{κt}` in the phase–amplitude
 chart, then `from_phase_amplitude`; no ODE solve, the `SolverConfig` is ignored) — or one
 of the names `"cartesian" | "polar" | "r_squared" | "closed_form"` mapped to default
-instances. This is the
+instances, or `None` for the class's `default_integration` — `"closed_form"` for every
+normal form (review round 3): it is exact and cheaper than any ODE solve, so a numerical
+integration is an explicit choice made for comparison. This is the
 diffrax pattern (pass a solver object). A strategy is an `eqx.Module` with no array leaves,
 hence static under the filter transforms: each traces separately and dispatch costs nothing
 at run time (`test_strategies_are_static_under_filter_jit`). Every strategy takes and
@@ -103,6 +118,12 @@ imaginary part at the origin).
   (`eqx.filter_custom_jvp`), so `radius_from_isostable` is differentiable in `Ψ` and in the
   parameters, returns `nan` for `Ψ` outside the range (`Ψ ≥ Ψ(∞)` for `b > 0`), and handles
   the basin edge for `−1 < b < 0`.
+- Both models implement `model/base.py: AbstractPhaseAmplitudeModel` (review round 3):
+  `phase`, `amplitude` (isostable-like, *no fixed normalisation* — the conjugacy model's
+  is `Ψ`, the autoencoder's `Y₃` is only up to scale), `cycle_point`, `__call__`;
+  `phase_gradient`/`phase_sensitivity` derived. Minimal on purpose; it grows with the
+  science. `ConjugateLatentDynamics.latent_dynamics` is typed `AbstractNormalForm`
+  accordingly (phase and amplitude are transported closed forms).
 - `HopfLatentDynamics` deleted. The non-invertible baseline is the phase autoencoder of
   Yawata et al. (2024) (B12): `PhaseAmplitudeLatentDynamics(omega, kappa)` replaced
   `LinearLatentDynamics`; its latent space is the normal forms' `(Θ, Ψ)` chart (design

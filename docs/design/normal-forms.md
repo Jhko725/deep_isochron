@@ -1,10 +1,18 @@
+---
+type: design
+status: agreed; §5.3–5.4 tentative
+updated: 2026-10-04
+verified_by: joon (2026-10-03; §5.3–5.4 pending)
+sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014]
+---
+
 # Normal forms — conventions, derivations, and the API they imply
 
-**Status: agreed (roadmap B10), 2026-10-03 — ready for B11.** Amended 2026-10-03: §5.1 corollary sign; §5.3 Yawata paragraph rewritten from the paper's equations and §5.4 (Kvalheim & Revzen) added — the latter two *proposed*, pending Joon. This document merges the
+**Status: agreed (roadmap B10), 2026-10-03; implemented in B11 (2026-10-03).** Amended 2026-10-03: §5.1 corollary sign (confirmed); §5.3 Yawata paragraph rewritten from the paper's equations and §5.4 (Kvalheim & Revzen) added — both *tentative*, to be revisited by Joon as the claims are checked. This document merges the
 B10 design note with Joon's earlier derivation notes (LaTeX, "Tractable periodic
 dynamics") and resolves the conflicts between them. It is the single reference for the
 mathematics of the analytic base systems; `systems/normal_forms/` is implemented against
-it in B11, and ADR-0007 is to be amended to point here. All design decisions are settled
+it (B11), and ADR-0007 points here. All design decisions are settled
 and listed in §11; §9 is the implementation contract.
 
 Companion files: `systems/normal_forms/{base,hopf,bautin,integration}.py`;
@@ -25,7 +33,7 @@ $\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motion
 
 | symbol | meaning | convention |
 |---|---|---|
-| $r \ge 0$, $\theta \in (-\pi, \pi]$ | polar coordinates about the origin | `to_chart(u) = (r, θ)`, $\theta = \mathrm{atan2}(y, x)$; $\theta$ is *unwrapped* ($\in\mathbb{R}$) whenever it is integrated |
+| $r \ge 0$, $\theta \in (-\pi, \pi]$ | polar coordinates about the origin | `to_polar(u) = (r, θ)`, $\theta = \mathrm{atan2}(y, x)$; $\theta$ is *unwrapped* ($\in\mathbb{R}$) whenever it is integrated |
 | $\rho(r)$ | **log growth rate** of the radius, $\rho = \dot r/r = \tfrac{d}{dt}\ln r$ | even in $r$; $\rho(1) = 0$, $\rho'(1) < 0$ |
 | $\omega(r)$ | **angular rate**, $\dot\theta = \omega(r)$ | even in $r$; $\omega(1) =: \omega_1 \ne 0$ |
 | $\Gamma$ | the limit cycle $r = 1$ | the only attracting cycle |
@@ -268,8 +276,7 @@ superseded. Code and docstrings must agree with the sign here.)
 
 **Derivation.** Seek $\Psi = \Psi(r)$: $\Psi'(r)\,r\rho(r) = \kappa\Psi$, i.e.
 $$\frac{d\ln|\Psi|}{dr} = \frac{\kappa}{r\rho(r)}.$$
-Near the cycle $r\rho(r)\approx\rho'(1)(r-1) = \kappa(r-1)$, so $d\ln|\Psi|/dr \approx
-1/(r-1)$ and $\Psi\propto (r-1)$: the isostable coordinate is **linear** in the distance to
+Near the cycle $r\rho(r)\approx\rho'(1)(r-1) = \kappa(r-1)$, so $d\ln|\Psi|/dr \approx 1/(r-1)$ and $\Psi\propto (r-1)$: the isostable coordinate is **linear** in the distance to
 the cycle, as it must be (its gradient on $\Gamma$ is the left Floquet vector).
 
 For Bautin, in $s = r^2$ ($ds = 2r\,dr$):
@@ -322,8 +329,7 @@ $r$*, which is exactly what the chart $(\Theta,\Psi)$ provides.
 **The first-order (log-polar) member.** The simplest admissible $\Psi$ is
 $$\Psi(r) = \ln r:\qquad \dot r = \kappa\, r\ln r,\quad \dot\theta = \omega(r),\qquad
 \rho(r) = \kappa\ln r .$$
-In log-polar coordinates $(\ln r, \theta)$ the flow is literally linear, $\tfrac{d}{dt}\ln r
-= \kappa\ln r$, so the $(\Theta,\Psi)$ chart *is* the log-polar chart: $h\equiv 0$ when
+In log-polar coordinates $(\ln r, \theta)$ the flow is literally linear, $\tfrac{d}{dt}\ln r = \kappa\ln r$, so the $(\Theta,\Psi)$ chart *is* the log-polar chart: $h\equiv 0$ when
 $\omega\equiv\omega_1$, isochrons are the rays $\theta = \Theta_0$, isostables the circles,
 $r(t) = r_0^{\,e^{\kappa t}}$. The alternative "affine" choice $\Psi = r - 1$ gives
 $\dot r = \kappa(r-1)$, which is linear in $r$ but has $\dot r = -\kappa > 0$ at the origin:
@@ -352,8 +358,7 @@ should *not* be the standard $\omega_0 + (\omega_1-\omega_0)r^2$ here: the $(1-r
 longer cancels against $\rho$ and $h' = (\omega_1-\omega_0)(1-r^2)/(\kappa r\ln r)$
 integrates to $\ln|\ln r| - \mathrm{Ei}(2\ln r)$, not elementary. The natural shear
 for this member is linear in the log chart, $\omega(r) = \omega_1 + \delta\ln r$, giving
-$h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 +
-(\delta/\kappa)\ln r$ — logarithmic spirals, as for Hopf — and $\omega(0)$ undefined,
+$h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 + (\delta/\kappa)\ln r$ — logarithmic spirals, as for Hopf — and $\omega(0)$ undefined,
 consistent with the missing eigenvalues.
 
 **Relation to Yawata et al. (2024).** Their phase autoencoder maps the oscillator state
@@ -362,8 +367,7 @@ $Y_1^2 + Y_2^2 = 1$ (Eq. (11), enforced by normalising the first two encoder out
 Eqs. (15)–(16)), $(Y_1, Y_2)$ rotating at a constant learned frequency $\omega$ and $Y_3$
 decaying as $e^{\lambda\tau}$ per sampling interval $\tau$ with learned $\lambda<0$
 (Eqs. (12)–(14)), "for all $\tau > 0$". The phase is $\Theta(X) = \arctan(Y_2/Y_1)$
-(Eq. (19)) and the phase sensitivity function is $Z(\theta) = \nabla_X\Theta|_{X =
-f_{\rm dec}(\theta)}$ by autodiff (Eq. (20)). Sec. VI identifies $Y_1 + iY_2$ with the
+(Eq. (19)) and the phase sensitivity function is $Z(\theta) = \nabla_X\Theta|_{X = f_{\rm dec}(\theta)}$ by autodiff (Eq. (20)). Sec. VI identifies $Y_1 + iY_2$ with the
 Koopman eigenfunction of exponent $i\omega$ and, for planar oscillators, $Y_3$ with the
 eigenfunction of exponent $\lambda$ — i.e. with $e^{i\Theta}$ and $\Psi$, $\lambda = \kappa$
 — while noting that the trained $Y_3$ is "closely related, though not equivalent" to it
@@ -424,9 +428,7 @@ the basin $Q$ of an attracting hyperbolic $\tau$-periodic orbit $\Gamma$, $x_0\i
 $E^s_{x_0}$ the $\mathsf D_{x_0}\Phi^\tau$-invariant complement of $\mathsf T_{x_0}\Gamma$,
 and assume the spectral-spread condition $\nu(\mathsf D\Phi^\tau|_{E^s}, \mathsf D\Phi^\tau|_{E^s}) < k+\alpha$
 and $k$-nonresonance of $\mathsf D\Phi^\tau|_{E^s}$ with itself. Then there is a **unique
-proper $C^{k,\alpha}_{\rm loc}$ embedding** $\psi = (\psi_\theta, \psi_z): Q\to S^1\times
-(E^s_{x_0})_{\mathbb C}$ with $\psi_\theta(x_0) = 1$ and $\mathsf D_{x_0}\psi_z|_{E^s} =
-\mathrm{id}$ such that
+proper $C^{k,\alpha}_{\rm loc}$ embedding** $\psi = (\psi_\theta, \psi_z): Q\to S^1\times (E^s_{x_0})_{\mathbb C}$ with $\psi_\theta(x_0) = 1$ and $\mathsf D_{x_0}\psi_z|_{E^s} = \mathrm{id}$ such that
 $$\psi_\theta\circ\Phi^t = e^{2\pi i t/\tau}\,\psi_\theta,\qquad \psi_z\circ\Phi^t = e^{tA}\psi_z
 \qquad(\text{their Eq. (21)}),$$
 and when $A$ is real, $\psi: Q\to S^1\times E^s_{x_0}$ is a **diffeomorphism**. Their
@@ -576,23 +578,23 @@ public API is entirely in $r$. The $s$-chart appears in exactly two places: the 
 ```python
 class AbstractNormalForm(AbstractODE):
     # defining data — abstract, in s = r²  (ρ̃(s) = ρ(√s), ω̃(s) = ω(√s))
-    def log_growth_rate_sq(self, s): ...   # ρ̃(s): ṙ = r ρ̃(r²); ρ̃(1) = 0, ρ̃'(1) < 0
-    def angular_rate_sq(self, s):    ...   # ω̃(s): θ̇ = ω̃(r²)
+    def _log_growth_rate_sq(self, s): ...   # ρ̃(s): ṙ = r ρ̃(r²); ρ̃(1) = 0, ρ̃'(1) < 0
+    def _angular_rate_sq(self, s):    ...   # ω̃(s): θ̇ = ω̃(r²)
     def phase_shift(self, r):        ...   # h(r), h(1) = 0            (closed form, in r)
     def isostable(self, r):          ...   # Ψ(r), Ψ(1) = 0, Ψ'(1) = 1 (closed form, in r)
 
     # public r-chart views of the defining data (final)
-    def log_growth_rate(self, r): return self.log_growth_rate_sq(r * r)   # ρ(r)
-    def angular_rate(self, r):    return self.angular_rate_sq(r * r)      # ω(r)
+    def log_growth_rate(self, r): return self._log_growth_rate_sq(r * r)   # ρ(r)
+    def angular_rate(self, r):    return self._angular_rate_sq(r * r)      # ω(r)
 
     # derived (final)
     omega() = angular_rate(1.0)      period()
     floquet_exponent() = grad(log_growth_rate)(1.0)      floquet_multiplier() = exp(κ T)
-    eigenvalues_origin() = log_growth_rate_sq(0.0) ± i angular_rate_sq(0.0)
-    rhs(t, u)      # s = u·u;  log_growth_rate_sq(s) * u + angular_rate_sq(s) * J u
+    eigenvalues_origin() = _log_growth_rate_sq(0.0) ± i _angular_rate_sq(0.0)
+    rhs(t, u)      # s = u·u;  _log_growth_rate_sq(s) * u + _angular_rate_sq(s) * J u
     rhs_polar(t, (r, θ))
     phase(u)  amplitude(u)  limit_cycle(Θ)  isochron(Θ, r)
-    to_chart / from_chart (polar);  to_phase_amplitude / from_phase_amplitude (§7)
+    to_polar / from_polar (polar);  to_phase_amplitude / from_phase_amplitude (§7)
     flow(ts, u0, *, config, integration="r_squared")
 ```
 
@@ -619,7 +621,7 @@ class AbstractNormalForm(AbstractODE):
   derivative, $\kappa = \rho'(1)$, by §4.2. Autodiff through `r * r` supplies
   $\rho'(1) = 2\tilde\rho'(1)$; no manual factor anywhere. Concrete on the base class, with
   the subclasses' closed forms tested against it.
-- **`r_squared` integration** calls `log_growth_rate_sq(s)` and `angular_rate_sq(s)`
+- **`r_squared` integration** calls `_log_growth_rate_sq(s)` and `_angular_rate_sq(s)`
   directly: polynomial RHS, no $\sqrt{}$; the chart is singular at the origin only through
   $\theta_0$.
 - **`polar` integration, `phase_shift`, `isostable`, the root solve** are all in $r$ via the
@@ -644,7 +646,7 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
   integrated trajectories (`test_phase_and_amplitude_along_the_flow`);
 - Jacobian of `rhs` at the origin equals $\rho(0)\mathsf{I} + \omega(0)\mathsf{J}$, and
   matches the explicit Hopf Jacobian of §2 at a few generic points; `log_growth_rate(r)
-  == log_growth_rate_sq(r*r)` (trivial, but pins the public/private contract);
+  == _log_growth_rate_sq(r*r)` (trivial, but pins the public/private contract);
 - `floquet_multiplier == exp(floquet_exponent · period)`, and for Hopf equals the
   monodromy of the polar linearisation integrated over one period;
 - `to_phase_amplitude ∘ from_phase_amplitude = id` on the basin;

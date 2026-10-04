@@ -86,10 +86,17 @@ class WeightedWindow(grain.transforms.RandomMap):
             raise ValueError(
                 "weight must map the start times to a non-negative vector."
             )
-        # Inverse transform sampling
-        cdf = np.cumsum(w)
-        k = int(np.searchsorted(cdf, rng.random() * cdf[-1], side="right"))
-        return _cut(element, min(k, hi - 1), self.length)
+        return _cut(element, categorical(rng, w), self.length)
+
+
+def categorical(rng: np.random.Generator, weights: np.ndarray) -> int:
+    """One index drawn with probability ``weights / weights.sum()`` (inverse-transform
+    sampling on the cumulative sum); the NumPy-``Generator`` counterpart of
+    ``jax.random.categorical`` for the grain pipeline. ``weights`` must be non-negative
+    with a positive sum."""
+    cdf = np.cumsum(np.asarray(weights, dtype=np.float64))
+    k = int(np.searchsorted(cdf, rng.random() * cdf[-1], side="right"))
+    return min(k, len(cdf) - 1)  # guards u == 1 - eps rounding past the last bin
 
 
 def transient_weight(boost: float, tau: float) -> WeightFn:

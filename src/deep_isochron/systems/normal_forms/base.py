@@ -46,15 +46,20 @@ ROOT_NEWTON_ITERS = 48
 
 class AbstractNormalForm(AbstractODE):
     dim: int = eqx.field(static=True, default=2, init=False)
+    default_integration: str = eqx.field(static=True, default="closed_form", init=False)
+    """The integration ``flow`` uses when none is given. ``"closed_form"`` is exact
+    (phase and isostable evolved analytically, §6) and cheaper than any ODE solve, so
+    it is the default for every normal form; the numerical integrations exist for the
+    comparison experiments (``integration.INTEGRATIONS``)."""
 
     # ------------------------------------------------ defining data (abstract) ----
     @abc.abstractmethod
-    def log_growth_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
+    def _log_growth_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
         r"""$\tilde\rho(s) = \rho(\sqrt s)$, with $\dot r = r\,\tilde\rho(r^2)$;
         $\tilde\rho(1) = 0$, $\tilde\rho'(1) < 0$. Smooth in $s$."""
 
     @abc.abstractmethod
-    def angular_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
+    def _angular_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
         r"""$\tilde\omega(s) = \omega(\sqrt s)$, with $\dot\theta = \tilde\omega(r^2)$.
         Smooth in $s$."""
 
@@ -70,11 +75,11 @@ class AbstractNormalForm(AbstractODE):
     # ----------------------------------------------------- public views in r -----
     def log_growth_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
         r"""$\rho(r) = \dot r / r$."""
-        return self.log_growth_rate_sq(r * r)
+        return self._log_growth_rate_sq(r * r)
 
     def angular_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
         r"""$\omega(r) = \dot\theta$."""
-        return self.angular_rate_sq(r * r)
+        return self._angular_rate_sq(r * r)
 
     # ------------------------------------------------------- linear invariants ----
     def omega(self) -> Float[Array, ""]:
@@ -96,17 +101,17 @@ class AbstractNormalForm(AbstractODE):
     def eigenvalues_origin(self) -> Complex[Array, " 2"]:
         r"""$\rho(0) \pm i\,\omega(0)$ (design document §4.1)."""
         zero = jnp.asarray(0.0)
-        re, im = self.log_growth_rate_sq(zero), self.angular_rate_sq(zero)
+        re, im = self._log_growth_rate_sq(zero), self._angular_rate_sq(zero)
         return jax.lax.complex(re * jnp.ones(2), im * jnp.array([1.0, -1.0]))
 
     # ------------------------------------------------------------------ charts -----
     @staticmethod
-    def to_chart(u: Float[Array, " 2"]) -> Float[Array, " 2"]:
+    def to_polar(u: Float[Array, " 2"]) -> Float[Array, " 2"]:
         r"""Cartesian $(x, y)$ -> polar $(r, \theta)$, $\theta \in (-\pi, \pi]$."""
         return cartesian_to_polar(u)
 
     @staticmethod
-    def from_chart(z: Float[Array, " 2"]) -> Float[Array, " 2"]:
+    def from_polar(z: Float[Array, " 2"]) -> Float[Array, " 2"]:
         r"""Polar $(r, \theta)$ -> cartesian $(x, y)$."""
         return polar_to_cartesian(z)
 
@@ -114,7 +119,7 @@ class AbstractNormalForm(AbstractODE):
         r"""Cartesian -> $(\Theta, \Psi)$, the chart in which the flow is linear
         ($\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$; §7); $\Theta \in (-\pi,
         \pi]$."""
-        r, theta = self.to_chart(u)
+        r, theta = self.to_polar(u)
         return jnp.stack((_wrap(theta + self.phase_shift(r)), self.isostable(r)))
 
     def from_phase_amplitude(self, z: Float[Array, " 2"]) -> Float[Array, " 2"]:
@@ -142,7 +147,7 @@ class AbstractNormalForm(AbstractODE):
         smooth at the origin, no square root (§2, §9)."""
         del t, args
         s = jnp.sum(u * u)
-        rho, w = self.log_growth_rate_sq(s), self.angular_rate_sq(s)
+        rho, w = self._log_growth_rate_sq(s), self._angular_rate_sq(s)
         x, y = u
         return jnp.stack((rho * x - w * y, rho * y + w * x))
 
@@ -185,17 +190,19 @@ class AbstractNormalForm(AbstractODE):
         args: Any = None,
         *,
         config: SolverConfig = DEFAULT_SOLVER_CONFIG,
-        integration="r_squared",
+        integration=None,
     ) -> dfx.Solution:
         """The diffrax ``Solution`` through cartesian ``u0``, with ``.ys`` the
         **cartesian** trajectory whichever ``integration`` produced it. ``integration``
-        is an ``AbstractFlowIntegration`` or one of the names in
+        is an ``AbstractFlowIntegration``, one of the names in
         ``integration.INTEGRATIONS`` (``"cartesian"``, ``"polar"``, ``"r_squared"``,
-        ``"closed_form"``); it is static, so each value traces separately under
-        ``jit``/``vmap``."""
+        ``"closed_form"``), or ``None`` for ``self.default_integration``; it is static,
+        so each value traces separately under ``jit``/``vmap``. ``config`` is ignored by
+        ``"closed_form"``."""
         from .integration import resolve_integration
 
-        return resolve_integration(integration)(self, ts, u0, args, config)
+        method = resolve_integration(integration or self.default_integration)
+        return method(self, ts, u0, args, config)
 
 
 def _wrap(angle):
