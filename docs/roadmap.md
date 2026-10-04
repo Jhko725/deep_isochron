@@ -55,7 +55,7 @@ checkpoint directories owned by the caller (Hydra in D3); `scripts/training/` de
 | C5 | `tests/test_training.py` (15 tests); the slow B12 test runs through the trainer | *done 2026-10-04* |
 | C6 | `scripts/training/` deleted; notebook on the new API; ADR-0009; architecture | *done 2026-10-04* |
 | C7 | Data-pipeline prefetch. `data.to_device(dataset, device)` is the training-run path; **found**: grain's default 16 reader threads (bare `iter(MapDataset)` / default `to_iter_dataset()`) contend with the loop for the GIL — 6× slower dispatch on CPU; fixed with a single reader (`single_threaded`). V100 (2026-10-05): `to_device` 94 ms/step vs 92 device-resident, dispatch floors 0.8 ms for committed/uncommitted/NumPy (no state commit needed); NumPy-in-loop 488, `mp_prefetch(4)+to_device` 464 — both rejected | *done 2026-10-05* |
-| C8 | *Proposed.* The step is launch-bound on the V100 with the data on the device: 88 ms at batch 512, 122 at 2048 (≈ 80 ms fixed + 10 ms per 512 points; dispatch ≈ total; floor 0.8 ms). `bench_dataloader.py --hlo-stats`: 114 while loops, ≈ 15 400 launches (5.7 µs each) — 112 loops are `jax.scipy.linalg.expm`'s 16-step scan of `lax.cond` in `BiLipschitzLinear`'s two rotations (×8 layers × call/inverse × primal/Fréchet), ≈ 1 800 conditionals per step, each a device-to-host predicate round trip on GPU. Fix: loop-free orthogonal parameterization (closed-form rotation for `dim = 2`; Cayley `(I − A)(I + A)⁻¹` in general; ADR-0002 holds), then `unroll` on the root-solve loops (64 + 48 × 4) if needed. Also: only `to_device`'s one prefetch thread may run beside the launch thread — other Python threads cost GIL waits, not cores (24-core host, 4× slower with grain's reader pool) | step ≪ 88 ms at batch 512 with dispatch ≪ total, measured with the script |
+| C8 | The step was host-bound on the V100 (88 ms at batch 512, dispatch ≈ total, floor 0.8 ms): `bench_dataloader.py --hlo-stats` found 114 while loops and ≈ 1 700 conditionals per step, 112 loops being `jax.scipy.linalg.expm`'s 16-step scan of `lax.cond` in `BiLipschitzLinear` (0.649 ms per 2×2 call measured, each conditional a device-to-host round trip on GPU). **Fixed**: Cayley transforms (ADR-0010) — 0 conditionals, 3 loops. Remaining: the V100 confirmation number; if still launch-bound, `unroll` / fewer iterations on the root solve's two loops (64 × 4, 48 × 4) | V100 step measured with the Cayley layer, number in ADR-0010 |
 
 ## Phase D — `experiment-config`
 
@@ -96,9 +96,9 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
   Joon's call (review round 2); no technical gain identified (it is an I/O object never
   passed through a JAX transform), uniformity is the argument for.
 
-- Reinstating `InvertibleLinear` — only if `BiLipschitzLinear` stays too slow after trying
-  parametrizations of `SO(dim)` other than the matrix exponential (Cayley transform,
-  Householder products). It was markedly cheaper to evaluate, and `det W` crossing zero was
+- Reinstating `InvertibleLinear` — resolved 2026-10-05: `BiLipschitzLinear`'s slowness was
+  `expm` (ADR-0010); with Cayley transforms it is loop-free, so there is no speed case for
+  the unconstrained layer. It was markedly cheaper to evaluate, and `det W` crossing zero was
   never observed in practice; the price would be one test-exception group
   (`ORIENTATION_NOT_GUARANTEED`) coming back.
 - Phase-autoencoder baseline refinements — batch normalization in the MLPs, the paper's
@@ -137,3 +137,4 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-10-04 | `trainer` | C1–C6: `Trainer`/`TrainerState` with injected `Logger`/`Checkpointer` and `DelayedLogger`; `AbstractLoss` weighted terms + building blocks; schedules (`Constant`, `StepSchedule`, `ThresholdSwitch`) in the state; `Evaluator`; `OrbaxCheckpointer` (whole state, resume); `test_training.py`; `scripts/training/` deleted | `docs/changes/2026-10-04-trainer.md`, ADR-0009 |
 | 2026-10-04 | `trainer` | Review round 1: loader-side transfer (`data.to_device`), `validation_windows` + `Evaluator` over a finite dataset with streamed statistics, logger/checkpointer context managers, loss `terms`/`aux` split, typed schedule state, `circular_std` rationale, American English | `docs/changes/2026-10-04-trainer.md`, ADR-0009 |
 | 2026-10-05 | `trainer` | Review round 2: `Logger`/`Checkpointer` base classes; grain single-reader rule (`single_threaded`, `to_device(dataset, device)`); lazy `_shift` (no JAX at import); `scripts/bench_dataloader.py` redesigned; C7 closed on V100 numbers (`to_device`; `mp_prefetch` rejected; no state commit) | `docs/changes/2026-10-04-trainer.md`, ADR-0009 |
+| 2026-10-05 | `trainer` | C8: `BiLipschitzLinear` rotations by Cayley transform instead of `expm` — the V100 step's ≈ 1 700 per-step conditionals (device-to-host round trips) removed; `cayley`, two tests, ADR-0010 | `docs/changes/2026-10-04-trainer.md`, ADR-0010 |

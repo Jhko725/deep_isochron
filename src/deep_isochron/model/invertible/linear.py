@@ -1,8 +1,8 @@
 r"""The linear layer of the INN vocabulary.
 
 ``BiLipschitzLinear`` is the *only* linear bijection: ``W = U diag(s) Vᵀ`` with ``U, V``
-in ``SO(dim)`` (matrix exponentials of skew-symmetric generators) and singular values
-``s`` in ``(1/L, L)``. Every point of the parameter space is therefore an
+in ``SO(dim)`` (Cayley transforms of skew-symmetric generators, ADR-0010) and singular
+values ``s`` in ``(1/L, L)``. Every point of the parameter space is therefore an
 orientation-preserving linear map with condition number below ``L²``, and the
 unconstrained leaves can be optimized freely. An unconstrained matrix ``W`` (the former
 ``InvertibleLinear``) can cross ``det W = 0`` during training, and with it both
@@ -36,10 +36,32 @@ class LinearParams(NamedTuple):
     s: Float[Array, " dim"]
 
 
+def cayley(skew: Float[Array, "dim dim"]) -> Float[Array, "dim dim"]:
+    r"""The Cayley transform ``Q = (I - A)(I + A)⁻¹`` of a skew-symmetric ``A``.
+
+    ``Q`` is orthogonal with ``det Q = +1`` for every skew ``A`` (the eigenvalues of
+    ``I + A`` are ``1 + iλ``, so the solve is always well conditioned), ``Q = I`` at
+    ``A = 0`` (ADR-0002), and the map is smooth and loop-free. It reaches every rotation
+    except those with an eigenvalue ``-1`` (a half turn in a plane), which no training
+    trajectory from the identity crosses. Replaces ``jax.scipy.linalg.expm`` (ADR-0010):
+    JAX's ``expm`` is a 16-step scan of ``lax.cond`` whose predicates the GPU backend
+    reads back from the device, one round trip each — measured at 0.65 ms per 2×2 call
+    on a V100 against 0.05 ms for a closed form. For ``dim = 2`` the solve is written
+    out: with ``a = A[1, 0]``, ``Q`` is the rotation by ``-2 arctan a``."""
+    n = skew.shape[-1]
+    if n == 2:
+        a = skew[1, 0]
+        den = 1 + a * a
+        c, s = (1 - a * a) / den, 2 * a / den
+        return jnp.array([[c, s], [-s, c]], dtype=skew.dtype)
+    eye = jnp.eye(n, dtype=skew.dtype)
+    return jnp.linalg.solve(eye + skew, eye - skew)
+
+
 class BiLipschitzLinear(AbstractBijection):
     r"""Bi-Lipschitz linear layer ``x -> U diag(s) Vᵀ x + bias``, as introduced in [1].
 
-    ``U = expm(A - Aᵀ)`` and ``V = expm(B - Bᵀ)`` are rotations; ``s`` lies in
+    ``U = cayley(A - Aᵀ)`` and ``V = cayley(B - Bᵀ)`` are rotations; ``s`` lies in
     ``(1/L, L)`` (``Interval`` with ``at_zero = 1``), so the layer and its inverse are
     both ``L``-Lipschitz and ``det W > 0`` everywhere in parameter space.
 
@@ -103,8 +125,8 @@ class BiLipschitzLinear(AbstractBijection):
         """Unconstrained leaves -> ``(U, V, s)``; all zeros give the identity."""
         L = self.max_lipschitz
         return LinearParams(
-            U=jax.scipy.linalg.expm(raw_U - raw_U.T),
-            V=jax.scipy.linalg.expm(raw_V - raw_V.T),
+            U=cayley(raw_U - raw_U.T),
+            V=cayley(raw_V - raw_V.T),
             s=Interval(1 / L, L, at_zero=1.0)(raw_s),
         )
 

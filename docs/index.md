@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-04
+updated: 2026-10-05
 ---
 
 # `deep_isochron` documentation — index
@@ -42,6 +42,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | accepted; amended | `AbstractODE`/`AbstractNormalForm`, `SolverConfig`, integrations as objects |
 | [0008](decisions/0008-dataset-format-and-sampling.md) | accepted; amended | netCDF4 datasets via xarray; weighted windows alongside `mix` |
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | accepted; amended (review round 2 pending) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
+| [0010](decisions/0010-rotations-by-cayley-transform.md) | accepted (review pending) | `BiLipschitzLinear` rotations by Cayley transform, not `expm` (GPU conditionals) |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 

@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-04
+updated: 2026-10-05
 sources: [code]
 ---
 
@@ -117,8 +117,10 @@ the identity, a fresh layer is the identity. This is why every scalar bijection 
 spline, chain, offset — is automatically a coupling layer, and why `AffineCoupling` and
 `ResidualCoupling` are three-line factories rather than classes.
 
-`BiLipschitzLinear` is the only linear layer: `U diag(s) Vᵀ` with `U, V ∈ SO(d)` and
-`s ∈ (1/L, L)`, so it is orientation-preserving and well-conditioned everywhere; the
+`BiLipschitzLinear` is the only linear layer: `U diag(s) Vᵀ` with `U, V ∈ SO(d)` (Cayley
+transforms of skew generators, ADR-0010 — `expm`'s 16 `lax.cond`s per rotation were the
+training step's host-side cost on GPU) and `s ∈ (1/L, L)`, so it is
+orientation-preserving and well-conditioned everywhere; the
 unconstrained `InvertibleLinear` was removed for failing both (change document
 2026-10-02). An INN is a `SequentialINN` of alternating linear and coupling layers (the
 notebook's `make_invertible_block`).
@@ -270,3 +272,4 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | `AbstractODE` / `AbstractNormalForm`; `SolverConfig`; flow integrations as objects |
 | [0008](decisions/0008-dataset-format-and-sampling.md) | one netCDF4 file per dataset via xarray; weighted windows alongside `mix` |
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
+| [0010](decisions/0010-rotations-by-cayley-transform.md) | `BiLipschitzLinear` rotations by Cayley transform, not `expm` |

@@ -87,3 +87,31 @@ def test_validation():
     # Under the beartype import hook the Literal annotation rejects this first.
     with pytest.raises((ValueError, TypeError)):
         BiLipschitzLinear(dim=2, max_lipschitz=2.0, init="haar", key=jax.random.key(0))
+
+
+@pytest.mark.parametrize("dim", [2, 3])
+def test_rotations_have_no_conditionals(dim):
+    """ADR-0010: the compiled parameter map has no ``conditional`` — and for ``dim = 2``
+    no ``while`` either. ``jax.scipy.linalg.expm`` put 16 ``lax.cond``s per rotation in
+    the step, each a device-to-host round trip on GPU (0.65 ms per 2×2 call on a V100).
+    For ``dim > 2`` the LU solve keeps a ``dim``-trip pivot loop with no conditional."""
+    f = BiLipschitzLinear(
+        dim=dim, max_lipschitz=2.0, init="rotation", key=jax.random.key(0)
+    )
+    hlo = jax.jit(lambda m: m.params).lower(f).compile().as_text()
+    assert " conditional(" not in hlo
+    if dim == 2:
+        assert " while(" not in hlo
+
+
+def test_cayley_dim2_closed_form_matches_the_solve():
+    from deep_isochron.model.invertible.linear import cayley
+
+    for a in (0.0, 0.3, -2.0, 50.0):
+        skew = jnp.array([[0.0, -a], [a, 0.0]])
+        eye = jnp.eye(2)
+        q = cayley(skew)
+        ref = jnp.linalg.solve(eye + skew, eye - skew)
+        assert_close(q, ref, atol=TOL["closed_form"])
+        assert_close(q @ q.T, eye, atol=TOL["closed_form"])
+        assert jnp.linalg.det(q) > 0
