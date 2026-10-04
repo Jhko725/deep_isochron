@@ -67,7 +67,8 @@ deep_isochron
 │   │                        loud failures and config_hash
 │   └── windows.py           RandomWindow / WeightedWindow (grain RandomMap);
 │                            windows(); mixed_windows(); validation_windows() (finite,
-│                            deterministic); to_device() (grain two-stage prefetch)
+│                            deterministic); single_threaded(); to_device(ds, device)
+│                            (grain two-stage prefetch, one reader thread)
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
 │                            (namespace reserved; Phase E)
 ├── training/                                                            ── ADR-0009

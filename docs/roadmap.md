@@ -54,7 +54,7 @@ checkpoint directories owned by the caller (Hydra in D3); `scripts/training/` de
 | C4 | `OrbaxCheckpointer(directory, save_every, metric, custom_metadata)`: whole `TrainerState`, `FixedInterval` + `Any([LatestN(1), BestN])`, `restore(template, step)`, resume | *done 2026-10-04* |
 | C5 | `tests/test_training.py` (15 tests); the slow B12 test runs through the trainer | *done 2026-10-04* |
 | C6 | `scripts/training/` deleted; notebook on the new API; ADR-0009; architecture | *done 2026-10-04* |
-| C7 | Data-pipeline prefetch: `data.to_device` is the training-run path; `scripts/bench_dataloader.py` measures fetch vs step for option A / `to_device` / `mp_prefetch`. First V100 run exposed that importing the package initialized JAX in every `mp_prefetch` worker (CUDA OOM) — fixed (lazy constraint shift). Re-run on the V100 and close C7 with the numbers | `to_device` *done*; GPU numbers pending |
+| C7 | Data-pipeline prefetch. `data.to_device` is the training-run path; **found**: grain's default 16 reader threads (bare `iter(MapDataset)` / default `to_iter_dataset()`) contend with the loop for the GIL — 6× slower dispatch on CPU; fixed with a single reader (`single_threaded`). `scripts/bench_dataloader.py` now reports dispatch vs total, a dispatch floor and committed/uncommitted inputs, interleaved; `--device` required. Remaining: the V100 run (resident batches slowest) with the new script, then close with numbers | pending GPU numbers |
 
 ## Phase D — `experiment-config`
 

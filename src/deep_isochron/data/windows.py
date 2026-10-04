@@ -195,24 +195,36 @@ def validation_windows(
     return grain.MapDataset.source(_FixedWindows(source, length, stride))
 
 
+def single_threaded(dataset: grain.MapDataset | grain.IterDataset) -> grain.IterDataset:
+    """An ``IterDataset`` that reads with one thread and no read-ahead. Iterating a
+    ``MapDataset`` directly starts grain's default reader (16 threads, 500-element
+    buffer), which competes with a JAX training loop for the GIL; use this (or
+    ``to_device``, which does the same) wherever a pipeline is consumed next to JAX
+    work, e.g. validation batches."""
+    if isinstance(dataset, grain.IterDataset):
+        return dataset
+    return dataset.to_iter_dataset(
+        grain.ReadOptions(num_threads=1, prefetch_buffer_size=1)
+    )
+
+
 def to_device(
     dataset: grain.MapDataset | grain.IterDataset,
-    device=None,
+    device: jax.Device,
     *,
     cpu_buffer_size: int = 4,
     device_buffer_size: int = 2,
 ) -> grain.IterDataset:
     """grain's two-stage prefetch to the accelerator (its JAX training tutorial's
-    "option C", the recommended pattern for real training): a CPU-side thread
-    prepares ``cpu_buffer_size`` batches ahead while ``device_buffer_size`` batches
-    already sit on ``device`` (default: JAX's default device). The transfer then
-    overlaps the training step instead of blocking the loop between steps. Apply
+    "option C", the recommended pattern for real training): one CPU-side thread
+    prepares ``cpu_buffer_size`` batches ahead while a second thread keeps
+    ``device_buffer_size`` batches already transferred to ``device`` (exactly two
+    prefetch threads, one per stage, plus one reader thread; no pool). The transfer
+    then overlaps the training step instead of blocking the loop between steps.
+    ``device`` is explicit — on a shared machine the caller (or the scheduler, through
+    ``CUDA_VISIBLE_DEVICES``) decides which card a job uses, never this function. Apply
     after ``.batch(...)``."""
-    if device is None:
-        device = jax.devices()[0]
-    ds = (
-        dataset if isinstance(dataset, grain.IterDataset) else dataset.to_iter_dataset()
-    )
+    ds = single_threaded(dataset)  # one reader; the two prefetch stages buffer
     return grain.experimental.device_put(
         ds,
         device,

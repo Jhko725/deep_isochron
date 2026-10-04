@@ -243,7 +243,7 @@ def test_to_device_yields_device_arrays():
     same order and with the same values as the host pipeline."""
     src = _source(n=3, T=10)
     host = list(validation_windows(src, 4).batch(2))
-    dev = list(to_device(validation_windows(src, 4).batch(2)))
+    dev = list(to_device(validation_windows(src, 4).batch(2), jax.devices()[0]))
     assert len(dev) == len(host)
     for h, d in zip(host, dev):
         assert isinstance(d["u"], jax.Array) and d["u"].dtype == jnp.float64

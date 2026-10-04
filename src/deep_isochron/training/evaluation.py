@@ -30,11 +30,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 import equinox as eqx
+import grain
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
 
+from ..data.windows import single_threaded
 from ..model.autoencoder import PhaseAmplitudeAutoencoder
 from ..model.base import AbstractPhaseAmplitudeModel
 from ..model.conjugacy import ConjugateLatentDynamics
@@ -181,6 +183,13 @@ class Evaluator:
     grid_points: int = 32
     _grid: Array | None = field(default=None, init=False, repr=False)
 
+    def _batches(self) -> Iterable[dict[str, Array | np.ndarray]]:
+        """One pass over the validation data; a grain ``MapDataset`` is read with a
+        single thread so evaluation does not start 16 reader threads next to JAX."""
+        if isinstance(self.val_data, grain.MapDataset | grain.IterDataset):
+            return single_threaded(self.val_data)
+        return self.val_data
+
     @property
     def grid(self) -> Float[Array, "m dim"]:
         if self._grid is None:
@@ -189,7 +198,7 @@ class Evaluator:
 
     def _bounds(self) -> Float[Array, "2 dim"]:
         lo = hi = None
-        for batch in self.val_data:
+        for batch in self._batches():
             u = np.asarray(batch["u"]).reshape(-1, np.shape(batch["u"])[-1])
             lo = u.min(0) if lo is None else np.minimum(lo, u.min(0))
             hi = u.max(0) if hi is None else np.maximum(hi, u.max(0))
@@ -200,7 +209,7 @@ class Evaluator:
     def __call__(self, model: AbstractPhaseAmplitudeModel) -> dict[str, float]:
         mse_sum = final_sum = count = 0.0
         sums: dict[str, Array] | None = None
-        for batch in self.val_data:
+        for batch in self._batches():
             n = np.shape(batch["u"])[0]
             mse, final = prediction_errors(model, batch)
             mse_sum, final_sum, count = (
