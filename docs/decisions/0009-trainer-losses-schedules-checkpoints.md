@@ -58,7 +58,7 @@ forwarded on the next call, flushed on `close()`. The loop body stays free of it
 `AbstractLoss.terms(model, batch) -> {name: scalar}`; `weight_names` says which terms are
 weighted and in what order; `__call__(model, batch, weights=None) -> (Σ wᵢ·termᵢ,
 terms)`. The building blocks (`trajectory_mse`, `final_mse`, `step_weighted_consistency`,
-`alpha_schedule`, `batch_centre_of_mass`) are plain functions. The weights reach the loss
+`alpha_schedule`, `batch_center_of_mass`) are plain functions. The weights reach the loss
 from the trainer every step, so they are logged (`w/<name>`) and scheduled outside the
 loss.
 

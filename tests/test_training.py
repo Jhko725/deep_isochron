@@ -57,7 +57,7 @@ from deep_isochron.training import (
 from deep_isochron.training.evaluation import bounding_box_grid, circular_std
 from deep_isochron.training.losses import (
     alpha_schedule,
-    batch_centre_of_mass,
+    batch_center_of_mass,
     final_mse,
     step_weighted_consistency,
     trajectory_mse,
@@ -149,8 +149,8 @@ def test_loss_building_blocks():
     assert_close(alpha_schedule(3, jnp.asarray(2.0)), 1 / jnp.arange(1, 4))  # L ≥ 1
     assert_close(alpha_schedule(3, jnp.asarray(0.0)), jnp.ones(3))  # L → 0
     assert_close(alpha_schedule(2, jnp.asarray(0.5)), jnp.array([1.0, 2**-0.5]))
-    assert_close(batch_centre_of_mass(jnp.array([[1.0, 0.0], [-1.0, 0.0]])), 0.0)
-    assert_close(batch_centre_of_mass(jnp.array([[1.0, 0.0], [1.0, 0.0]])), 1.0)
+    assert_close(batch_center_of_mass(jnp.array([[1.0, 0.0], [-1.0, 0.0]])), 0.0)
+    assert_close(batch_center_of_mass(jnp.array([[1.0, 0.0], [1.0, 0.0]])), 1.0)
 
 
 def test_abstract_loss_weights_named_terms_in_order():

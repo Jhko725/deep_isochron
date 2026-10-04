@@ -243,7 +243,7 @@ class Widths(Constraint):
     Durkan et al. 2019). ``raw = 0`` maps to equal widths.
 
     The softmax is shift-invariant, so the inverse is defined up to a constant; the
-    gauge chosen here is **mean-zero raw** (``raw = log(rel - min_rel)`` centred), which
+    gauge chosen here is **mean-zero raw** (``raw = log(rel - min_rel)`` centerd), which
     is also the gauge in which equal widths map back to ``raw = 0``.
 
     **Arguments:**

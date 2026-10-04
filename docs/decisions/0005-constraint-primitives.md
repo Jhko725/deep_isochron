@@ -93,7 +93,7 @@ trace the same way.
   `inverse` calls; the identity-at-zero shift exists in exactly one place per primitive.
 - `Widths.inverse` is defined up to a constant (softmax is shift-invariant); the chosen gauge
   is mean-zero raw, which is also the gauge in which equal widths map back to `raw = 0`.
-  Tests state the law as `inverse(c(r_centred)) == r_centred`.
+  Tests state the law as `inverse(c(r_centerd)) == r_centerd`.
 - `is_constrained(value)` is part of the contract: the primitive that claims a set also
   decides membership, so tests can check the image generically over every primitive without
   a hand-maintained predicate table.

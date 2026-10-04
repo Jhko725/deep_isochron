@@ -19,7 +19,7 @@ script (Phase D) wires wandb, Orbax and Hydra's run directory."""
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import replace
+from copy import replace
 from functools import cached_property
 from typing import Any, cast, Generic, TypeVar
 
@@ -169,7 +169,7 @@ class Trainer(Generic[M]):
         logger: Logger | None = None,
         checkpointer: Checkpointer | None = None,
         evaluate: Callable[[M], Mapping[str, Any]] | None = None,
-        eval_every: int | None = None,
+        eval_every: int = 1,
     ) -> TrainerState[M]:
         """Run ``num_steps`` steps (fewer if the loader ends). ``evaluate(model)``
         returns validation metrics (``training.evaluation``); they are logged under
@@ -202,13 +202,14 @@ class Trainer(Generic[M]):
                 state, metrics = self.train_step(state, to_device(batch))
                 step += 1
                 logger.log(metrics, step)
-                if evaluate is not None and eval_every and step % eval_every == 0:
+                if evaluate is not None and step % eval_every == 0:
                     val_metrics = {
                         k: float(v) for k, v in evaluate(state.model).items()
                     }
                     logger.log(val_metrics, step)
+                    # No intermediate checkpoints are made if evaluate=None
                     checkpointer.save(step, state, val_metrics)
-            if evaluate is not None and (not eval_every or step % eval_every != 0):
+            if evaluate is not None and step % eval_every != 0:
                 val_metrics = {k: float(v) for k, v in evaluate(state.model).items()}
                 logger.log(val_metrics, step)
                 checkpointer.save(step, state, val_metrics)

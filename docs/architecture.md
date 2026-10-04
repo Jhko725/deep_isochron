@@ -74,7 +74,7 @@ deep_isochron
 │   │                        state); Trainer(optimizer, loss, schedule): jitted
 │   │                        train_step, train(loader, logger, checkpointer, evaluate)
 │   ├── losses.py            building blocks (trajectory_mse, step_weighted_consistency,
-│   │                        alpha_schedule, batch_centre_of_mass); AbstractLoss =
+│   │                        alpha_schedule, batch_center_of_mass); AbstractLoss =
 │   │                        weighted named terms; ConjugacyTrajectoryLoss,
 │   │                        PhaseAutoencoderLoss
 │   ├── schedules.py         Constant / StepSchedule (curriculum) / ThresholdSwitch

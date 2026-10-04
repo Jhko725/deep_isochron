@@ -80,7 +80,7 @@ boundary; the forward map and its inverse live together in one class.
 
 **`Widths.inverse` gauge.** The floored softmax is shift-invariant, so its inverse is defined
 up to a constant. The inverse returns mean-zero raw values, which is also the gauge in which
-equal widths map back to `raw = 0`. Tests state the law as `inverse(c(r_centred)) == r_centred`.
+equal widths map back to `raw = 0`. Tests state the law as `inverse(c(r_centerd)) == r_centerd`.
 
 **Unconstrained leaves (ADR-0001).** `raw` is the only trainable leaf of a scalar bijection;
 `constrain(raw)` is the single conversion site, used by `params` (read path) and, through the

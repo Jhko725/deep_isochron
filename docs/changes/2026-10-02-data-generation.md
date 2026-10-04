@@ -231,7 +231,7 @@ below is the paper's.
   `recon` over all window points; `pha`/`dev` are the `k = 1..K` latent prediction
   errors of the flow against the encoded future states, split into `(Y₁, Y₂)` and `Y₃`;
   `α_k = k^{−min(1, L_pha)}` with `L_pha` of the current batch under `stop_gradient`;
-  `aux` is the squared centre of mass of the batch's `(Y₁, Y₂)` at `t₀`. Weights
+  `aux` is the squared center of mass of the batch's `(Y₁, Y₂)` at `t₀`. Weights
   `(1, 0.5, 0.5, 2)` switch to `(1, 5, 0.5, 0)` when `pha < 0.01` and `aux < 0.05`
   (Sec. IV.A), decided *per batch* here (the paper switches once); `switched` is
   reported, and `omega`/`kappa` are reported for logging.
@@ -436,7 +436,7 @@ rejected; the exact chart `(cos Θ, sin Θ, Ψ)` of a drawn Hopf/Bautin form, pu
 the latent flow with `(ω₁, κ)`, equals the chart of the normal form's `closed_form` flow
 (the §5.3 correspondence); encoder normalisation (Eqs. (15)–(16)); shapes of
 `encode`/`phase`/`phase_sensitivity`/`__call__`; the loss vanishes on the exact chart
-except for the centre-of-mass term, detects a wrong `ω` in `pha` only, switches weights,
+except for the center-of-mass term, detects a wrong `ω` in `pha` only, switches weights,
 and reproduces `α_k = 1/k` for a badly wrong `ω`; gradients through the MLPs are finite
 and non-zero; `OnCycleGaussian` reproduces the cycle at `γ₂ = 0`, has the right spread at
 `γ₂ = 0.5`, is seeded and validates; the slow test learns the Hopf phase to a circular

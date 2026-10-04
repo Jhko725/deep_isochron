@@ -63,8 +63,8 @@ def alpha_schedule(num_steps: int, phase_loss: Float[Array, ""]) -> Float[Array,
     return k ** (-jnp.minimum(1.0, jax.lax.stop_gradient(phase_loss)))
 
 
-def batch_centre_of_mass(y: Float[Array, "batch 2"]) -> Float[Array, ""]:
-    """``‖mean_b y‖²`` — the squared centre of mass of a batch of points on the latent
+def batch_center_of_mass(y: Float[Array, "batch 2"]) -> Float[Array, ""]:
+    """``‖mean_b y‖²`` — the squared center of mass of a batch of points on the latent
     unit circle (Yawata et al. 2024, Eq. (25)); small when the phases spread evenly."""
     return jnp.sum(jnp.mean(y, axis=0) ** 2)
 
@@ -127,7 +127,7 @@ class ConjugacyTrajectoryLoss(AbstractLoss):
 class PhaseAutoencoderLoss(AbstractLoss):
     r"""Yawata et al. (Chaos 34, 063111, 2024), Eqs. (21)–(26): ``recon`` (21), ``pha``
     (22, components 1–2) and ``amp`` (23, component 3) of the ``α_k``-weighted latent
-    consistency over the window's ``K`` prediction steps, and ``aux`` (25), the centre
+    consistency over the window's ``K`` prediction steps, and ``aux`` (25), the center
     of mass of the batch's ``(Y₁, Y₂)`` at ``t₀``. ``α_k`` (24) uses the current
     batch's ``L_pha`` under ``stop_gradient`` (the paper updates it per epoch). Default
     weights are the paper's first stage ``(1, 0.5, 0.5, 2)``; its switch to
@@ -161,7 +161,7 @@ class PhaseAutoencoderLoss(AbstractLoss):
             "recon": trajectory_mse(decode(y), x),
             "pha": per_component[0] + per_component[1],
             "amp": per_component[2],
-            "aux": batch_centre_of_mass(y[:, 0, :2]),
+            "aux": batch_center_of_mass(y[:, 0, :2]),
         }
         if isinstance(model.latent_dynamics, PhaseAmplitudeLatentDynamics):
             terms["omega"] = model.latent_dynamics.omega

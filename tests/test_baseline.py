@@ -182,7 +182,7 @@ def _window_batch(nf, n=16, length=6, seed=0):
 
 def test_loss_vanishes_on_the_exact_chart():
     """With the exact chart and the exact (ω₁, κ), reconstruction, phase and deviation
-    losses are zero; only the centre-of-mass term is left, and it is reported."""
+    losses are zero; only the center-of-mass term is left, and it is reported."""
     nf = HopfNormalForm(1.0, 2.0, 0.5)
     model = _exact_autoencoder(nf)
     batch = _window_batch(nf)
