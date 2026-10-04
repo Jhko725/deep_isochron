@@ -583,8 +583,8 @@ Review round 4:
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `docs/design/normal-forms.md`: GitHub-safe math (standalone `$$` blocks; inline rewrites listed above); stray `\\;` typo fixed | | |
-| `scripts/check_md_math.py` (new), `pyproject.toml` (`markdown-it-py` dev dep): GitHub-emulating math check | | |
-| `CLAUDE.md`: Markdown rules (both renderers; run the check); Done ledger append-only | | |
-| `docs/roadmap.md`: Done ledger reordered chronologically; round-4 row | | |
-| `tests/test_{models,baseline,normal_forms}.py`: chained array comparisons → `bool(jnp.abs(·) <= π)` (ty reachability) | | |
+| `docs/design/normal-forms.md`: GitHub-safe math (standalone `$$` blocks; inline rewrites listed above); stray `\\;` typo fixed | Looks good. | None |
+| `scripts/check_md_math.py` (new), `pyproject.toml` (`markdown-it-py` dev dep): GitHub-emulating math check | Will scrutinize later. | Ran `uv sync --all-extras` |
+| `CLAUDE.md`: Markdown rules (both renderers; run the check); Done ledger append-only | Rule addition confirmed. | None |
+| `docs/roadmap.md`: Done ledger reordered chronologically; round-4 row | Confirmed. | None |
+| `tests/test_{models,baseline,normal_forms}.py`: chained array comparisons → `bool(jnp.abs(·) <= π)` (ty reachability) | Looks good. | None |
