@@ -114,6 +114,9 @@ Tests and docs:
   (inline math unwrapped; status line), `docs/index.md` (new), frontmatter on every
   `docs/` document, `CLAUDE.md` (Markdown/frontmatter rule), `docs/architecture.md`,
   `docs/roadmap.md`, ADR-0007.
+- Review round 4 (2026-10-04): `docs/design/normal-forms.md` (GitHub-safe math),
+  `scripts/check_md_math.py` (new), `pyproject.toml` (`markdown-it-py`), `CLAUDE.md`,
+  `docs/roadmap.md` (ledger order), `tests/test_{models,baseline,normal_forms}.py`.
 - `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`,
   `docs/decisions/0008-dataset-format-and-sampling.md` — new ADRs.
 - `docs/architecture.md` — systems and data sections rewritten; module map updated.
@@ -297,6 +300,40 @@ considered and dropped for now (roadmap, *Parked*), the loss refactor scheduled 
 - **Not done, recorded**: `TimeSeriesDataSource` as `eqx.Module` (pending Joon's call,
   roadmap *Parked*); Optimistix (parked with reason); loss building blocks (C2); the
   monodromy computation as a Phase E `analysis` function (roadmap).
+
+## Review round 4 (2026-10-04) — GitHub-safe math, ledger order, ty reachability
+
+- **Why the design document broke on GitHub but not in VS Code.** GitHub runs Markdown
+  *before* MathJax; VS Code's KaTeX preview parses `$…$` first. So inside inline math,
+  GitHub applies Markdown escapes to backslash + ASCII punctuation (`\,` → `,`, which is
+  the ", u" in the first screenshot; `\{0\}` → `{0}`; `\\` → `\`, which killed every
+  inline matrix), `*` opens emphasis (`x^*` lost its star and italicised the paragraph),
+  and `_` preceded by `}` `)` `|` can open emphasis that a later `_{` or `_\theta` closes
+  (the italic runs in screenshots 1 and 3); display math written inline (`$$…$$` within a
+  paragraph) gets the same treatment, and a continuation line beginning `- ` became a
+  list item (screenshot 1). Standalone `$$` blocks are raw on GitHub and fine in VS Code.
+- **Fix, compatible with both renderers**: every display formula is now a standalone
+  `$$` block; inside inline math `\,`/`\;`/`\!` → `\thinspace`/`\medspace`/
+  `\negthinspace`, `\{ \}` → `\lbrace \rbrace`, `\|` → `\Vert`, `*` → `\ast`,
+  `|_{…}` → `\vert_{…}`, `\mathbf{e}_r` → `\mathbf e_r`, `C^{k,\alpha}_{\rm loc}` →
+  `C_{\rm loc}^{k,\alpha}`, `(E^s_{x_0})_{\mathbb C}` → `E^s_{x_0}\otimes\mathbb C`
+  (an `_` preceded by a letter cannot open CommonMark emphasis), spaces around `<`/`>`.
+  One pre-existing typo surfaced (`$\\;0 < r …$`, a stray double backslash) and was
+  fixed. 239 insertions / 115 deletions, all mechanical; the text is unchanged.
+- **`scripts/check_md_math.py`** emulates GitHub (markdown-it, CommonMark + HTML) and
+  reports every inline span altered by Markdown and every display formula not in a
+  block; `markdown-it-py` added to the dev group. All 17 documents under `docs/` pass.
+  Every span was also parsed with KaTeX 0.19 (`strict: "ignore"`, as VS Code) — 651
+  spans, 0 errors — with a node script kept out of the repo (needs node + katex).
+  `CLAUDE.md` states the rules and makes the check mandatory before a Markdown commit.
+- **Done ledger chronological**, new rows appended at the end (`CLAUDE.md` rule added).
+- **ty "unreachable" in `test_models.py`**: ty inferred `theta.shape == () and
+  -jnp.pi <= theta <= jnp.pi` as `Literal[False]` when `theta` is `Unknown & Array`
+  (the chained comparison on a JAX array against Python floats), so everything after
+  the `assert` was dead to the checker — a false positive at runtime, but it meant the
+  rest of the test was not type-checked. Rewritten as two asserts with
+  `bool(jnp.abs(theta) <= jnp.pi)`; the same chained pattern in `test_baseline.py` and
+  `test_normal_forms.py` rewritten likewise.
 
 ## Design
 
@@ -540,3 +577,14 @@ Review round 3:
 | `docs/design/normal-forms.md`: inline math unwrapped; status line; §9 hook names | Code renders cleanly in VS code, but some parts break in GitHub. Unavoidable, or can be fixed? Will supply the offending lines as screenshots to Claude in the next discussion session. | Deferred to the next discussion with Claude. |
 | `docs/index.md` (new), frontmatter on all `docs/`, `CLAUDE.md`: OKF-lite; Markdown rule | Confirmed. | None. |
 | `docs/architecture.md`, `docs/roadmap.md`, `docs/decisions/0007-…`: round 3 | Overall looks good. For `roadmap.md`, though, organize the done table in chronological order. Fix the ordering this time, and for all future edits, always append at the end. (May want to supply this append-at-the-end rule to CLAUDE.md as well.) | Deferred to Claude. |
+
+
+Review round 4:
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `docs/design/normal-forms.md`: GitHub-safe math (standalone `$$` blocks; inline rewrites listed above); stray `\\;` typo fixed | | |
+| `scripts/check_md_math.py` (new), `pyproject.toml` (`markdown-it-py` dev dep): GitHub-emulating math check | | |
+| `CLAUDE.md`: Markdown rules (both renderers; run the check); Done ledger append-only | | |
+| `docs/roadmap.md`: Done ledger reordered chronologically; round-4 row | | |
+| `tests/test_{models,baseline,normal_forms}.py`: chained array comparisons → `bool(jnp.abs(·) <= π)` (ty reachability) | | |

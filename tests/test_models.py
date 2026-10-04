@@ -44,7 +44,8 @@ def test_phase_amplitude_contract(build):
     assert isinstance(model, AbstractPhaseAmplitudeModel)
     x = jnp.array([0.4, -1.1])
     theta = model.phase(x)
-    assert theta.shape == () and -jnp.pi <= theta <= jnp.pi
+    assert theta.shape == ()
+    assert bool(jnp.abs(theta) <= jnp.pi)
     assert model.amplitude(x).shape == ()
 
     phi = jnp.asarray(0.9)

@@ -312,7 +312,7 @@ def test_bautin_rejects_unstable_cycle():
 def test_phase_amplitude_chart_round_trip(nf, r, theta):
     u = _point(r, theta)
     z = nf.to_phase_amplitude(u)
-    assert -jnp.pi <= z[0] <= jnp.pi
+    assert bool(jnp.abs(z[0]) <= jnp.pi)
     assert_close(
         nf.from_phase_amplitude(z), u, rtol=TOL["closed_form"], atol=TOL["closed_form"]
     )

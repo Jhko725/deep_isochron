@@ -148,7 +148,7 @@ def test_autoencoder_shapes_and_derived_quantities():
     y = model.encode(x)
     assert y.shape == (3,)
     assert_close(y[0] ** 2 + y[1] ** 2, 1.0, rtol=TOL["closed_form"])
-    assert -jnp.pi <= model.phase(x) <= jnp.pi
+    assert bool(jnp.abs(model.phase(x)) <= jnp.pi)
     assert model.amplitude(x) == y[2]
     assert model.cycle_point(jnp.asarray(0.7)).shape == (2,)
     z = model.phase_sensitivity(jnp.asarray(0.7))  # Eq. (20), by autodiff
