@@ -1,14 +1,16 @@
 ---
 type: decision
 id: ADR-0005
-status: accepted
-updated: 2026-10-01
+status: accepted; amended
+updated: 2026-10-04
 verified_by: joon
 ---
 
 # ADR-0005 — Constraint primitives are plain Python objects created inside `constrain`
 
 **Status**: accepted (2026-10-01)
+
+*Amended 2026-10-04 (`trainer` branch)*: the identity-at-zero shift of `_Shifted` primitives is computed lazily (`functools.cached_property`) rather than at construction, so that the module-level primitives (`A_CONSTRAINT`, `B_CONSTRAINT`, `DECAY_CONSTRAINT`) do not initialize a JAX backend at import time — grain worker processes importing the package each grabbed a CUDA context and preallocated GPU memory, OOM-ing on a V100. Nothing else about the contract changes; the shift is still concrete under a trace (`ensure_compile_time_eval`).
 
 ## Context
 

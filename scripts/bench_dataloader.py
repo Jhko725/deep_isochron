@@ -21,7 +21,13 @@ batches already resident), the thread keeps up and ``mp_prefetch`` is unnecessar
 
 from __future__ import annotations
 
-import argparse
+import os
+
+
+if __name__ == "__mp_main__":  # a grain worker re-importing this script (spawn start)
+    os.environ.setdefault("JAX_PLATFORMS", "cpu")  # workers must never touch the GPU
+
+import argparse  # noqa: E402
 import pickle
 import sys
 import time

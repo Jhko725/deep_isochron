@@ -16,6 +16,8 @@
 """
 
 import collections
+import subprocess
+import sys
 
 import jax
 import jax.numpy as jnp
@@ -219,6 +221,21 @@ def test_validation_windows_are_finite_deterministic_and_complete():
         validation_windows(src, 4, stride=0)
     with pytest.raises(ValueError):
         validation_windows(src, 11)
+
+
+def test_importing_the_package_does_not_initialize_a_jax_backend():
+    """grain worker processes import the package to unpickle the source; if that
+    initialized JAX they would each grab a CUDA context and preallocate GPU memory
+    (seen on a V100: every worker OOM at import). Module-level constraint primitives
+    compute their shift lazily for this reason."""
+    code = (
+        "import jax._src.xla_bridge as xb; import deep_isochron.data, "
+        "deep_isochron.training, deep_isochron.model; print(bool(xb._backends))"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "False", out.stdout + out.stderr
 
 
 def test_to_device_yields_device_arrays():
