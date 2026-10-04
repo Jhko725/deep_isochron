@@ -71,19 +71,23 @@ floor is 0.8 ms for committed, uncommitted and NumPy batches alike, so handing t
 pytrees to JAX costs nothing and the earlier "committed inputs are slow" pattern was the
 old script's artifact — the state is **not** committed at `Trainer.init`. Device-resident
 batches step in 92 ms, `to_device` in 94 ms: the loader-side prefetch keeps up and is the
-training-run path. NumPy batches in the loop (grain's option A) take 488 ms and
-`mp_prefetch(4) + to_device` 464 ms (although the fetch alone drops 27 → 7 ms), so
-neither is used; the `mp_prefetch` slowdown is most plausibly its four worker processes
-competing for CPU with a host-bound main thread (unverified; needs the job's `nproc`).
-The step itself is host-bound (dispatch ≈ total at 92 ms with no data work), which is a
-model/XLA matter, not the loader's — recorded in the roadmap as the next performance
-item.
+training-run path. NumPy batches iterated from the bare
+`MapDataset` take 488 ms — grain's 16 reader threads next to the launch thread, the
+round-2 finding again (reproduced 5× on CPU) — and `mp_prefetch(4) + to_device` 464 ms
+although the fetch alone drops 27 → 7 ms; at batch 2048 even the single-thread
+`to_device` stopped hiding the fetch (356 ms vs 122 resident + 104 fetch). Reading: on
+this host anything that runs beside the thread launching the step's kernels slows it far
+beyond time-sharing, which a one- or two-core job allocation would explain (the script
+now prints the CPU allowance). So `mp_prefetch` is not in the default pipeline, and a
+training job must be given the cores its loader thread needs. The step itself is
+host-bound (dispatch ≈ total, ≈ 80 ms fixed + 10 ms per 512 points), a model/XLA matter,
+not the loader's — roadmap C8.
 
 - *Rejected*: committing the `TrainerState` to the device at `init` — the floors show no
   committed/uncommitted difference to fix.
 - *Rejected*: `mp_prefetch` in the default pipeline — measured 5× slower end to end on
   the V100 even though the fetch itself is faster; kept available for a loader whose
-  fetch genuinely dominates.
+  fetch dominates *and* a job with the cores for the workers.
 
 - *Rejected*: the trainer constructing the wandb run and the run directory. Both belong to
   the experiment script (Hydra owns directories, Phase D), and tests must not need them.

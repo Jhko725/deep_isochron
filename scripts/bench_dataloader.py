@@ -8,12 +8,19 @@ Answers, on the machine it runs on and the device the *user* names:
    returning, JAX's asynchronous dispatch) and **total** (device finished), for batches
    that are (a) already on the device, (b) NumPy — transferred by ``jit`` in the loop,
    grain's "option A" — and (c) delivered by ``data.to_device`` (grain's option C);
-3. optionally a profiler trace of one configuration (``--profile DIR``; open it in
+3. optionally (``--hlo-stats``) the shape of the compiled step: instruction count, the
+   ``while`` loops with their trip counts, and an estimate of kernel launches per step —
+   a step whose host time is flat in ``--batch`` is launch-bound, and this says by how
+   many launches;
+4. optionally a profiler trace of one configuration (``--profile DIR``; open it in
    TensorBoard or Perfetto) when the numbers above do not explain themselves.
 
 Configurations are run **interleaved and repeated** (``--repeats``), after a throwaway
 warm-up, and the table reports the **min** and **median** over repeats — a single
-back-to-back pass is not a measurement on a shared machine.
+back-to-back pass is not a measurement on a shared machine. The header prints the CPU
+allowance of the process (affinity, cgroup quota, Slurm variables): every loader thread
+or worker process competes with the host thread that launches the step's kernels, so a
+one-core allocation serializes them all.
 
 Usage (from the repository root, with the dev environment; ``--device`` is the index
 into ``jax.devices()`` and is required — the script never picks a GPU on its own)::
@@ -21,13 +28,17 @@ into ``jax.devices()`` and is required — the script never picks a GPU on its o
     uv run python scripts/bench_dataloader.py --device 0
     uv run python scripts/bench_dataloader.py --device 0 --model ae --batch 2048
     uv run python scripts/bench_dataloader.py --device 0 --data data/fhn-<hash>.nc
+    uv run python scripts/bench_dataloader.py --device 0 --hlo-stats --no-mp
     uv run python scripts/bench_dataloader.py --device 0 --profile /tmp/trace --no-mp
 
-Reading the table: ``dispatch ≈ total`` means the host is the bottleneck (Python
-dispatch of the step, GIL contention with loader threads); ``dispatch ≪ total`` means
-the device is. If ``to_device`` ≈ ``device-resident``, the prefetch thread keeps up and
-``mp_prefetch`` is unnecessary; if ``to_device`` ≈ ``fetch only``, the fetch is the
-bottleneck and worker processes are the remedy.
+Reading the table: ``dispatch ≈ total`` means the host is the bottleneck — Python
+dispatch and GIL contention if the dispatch floor is of the order of the step, otherwise
+the kernel launches (or a synchronization) inside the executable; ``dispatch ≪ total``
+means the device is. If ``to_device`` ≈ ``device-resident``, the prefetch thread keeps
+up and ``mp_prefetch`` is unnecessary; if ``to_device`` ≈ ``fetch only``, the fetch is
+the bottleneck and worker processes are the remedy — provided the process has the cores
+for them. The ``grain default readers`` row iterates the ``MapDataset`` bare (16 reader
+threads, 500-batch buffer) and is there to show what that costs next to the step.
 """
 
 from __future__ import annotations
@@ -40,6 +51,7 @@ if __name__ == "__mp_main__":  # a grain worker re-importing this script (spawn 
 
 import argparse  # noqa: E402
 import pickle  # noqa: E402
+import re  # noqa: E402
 import statistics  # noqa: E402
 import sys  # noqa: E402
 import time  # noqa: E402
@@ -55,6 +67,7 @@ from absl import flags  # noqa: E402
 from deep_isochron.data import (  # noqa: E402
     generate,
     OnCycleGaussian,
+    single_threaded,
     TimeSeriesDataSource,
     to_device,
     windows,
@@ -95,6 +108,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--repeats", type=int, default=3, help="interleaved repeats")
     p.add_argument("--workers", type=int, default=4, help="mp_prefetch workers")
     p.add_argument("--no-mp", action="store_true", help="skip the mp_prefetch rows")
+    p.add_argument(
+        "--hlo-stats",
+        action="store_true",
+        help="print the compiled step's while loops and a kernel-launch estimate",
+    )
     p.add_argument(
         "--profile",
         type=Path,
@@ -177,6 +195,103 @@ def cycle(items: list) -> Iterator:
         yield from items
 
 
+def device_put_each(loader: Iterable, device: jax.Device) -> Iterator:
+    """grain's option A literally: a synchronous ``jax.device_put`` per batch."""
+    for batch in loader:
+        yield jax.device_put(batch, device)
+
+
+def cpu_allowance() -> str:
+    """What the process may actually run on: CPU affinity, cgroup quota, Slurm."""
+    parts = [f"affinity {len(os.sched_getaffinity(0))} of {os.cpu_count()} CPUs"]
+    for path in ("/sys/fs/cgroup/cpu.max", "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"):
+        try:
+            parts.append(f"{path.rsplit('/', 1)[1]} {Path(path).read_text().strip()}")
+            break
+        except OSError:
+            continue
+    slurm = {k: v for k, v in os.environ.items() if k.startswith("SLURM_CPUS")}
+    if slurm:
+        parts.append(" ".join(f"{k}={v}" for k, v in sorted(slurm.items())))
+    return "; ".join(parts)
+
+
+# ------------------------------------------------------------- compiled-step shape --
+_HLO_HEADER = re.compile(r"^(?:ENTRY\s+)?%(\S+)\s*\(")
+_HLO_INSTR = re.compile(r"^\s*(?:ROOT\s+)?%(\S+)\s*=\s*.+?\s([a-z\-]+)\(")
+_HLO_NO_LAUNCH = {"parameter", "constant", "get-tuple-element", "tuple", "bitcast"}
+
+
+def hlo_launch_estimate(
+    text: str,
+) -> tuple[int, list[tuple[str, int | None, int]], int]:
+    """``(instructions, loops, launches)`` from optimized HLO text: the module's
+    instruction count, one ``(name, trip_count, launches_per_iteration)`` per ``while``
+    (trip count from XLA's ``known_trip_count`` annotation when present), and an
+    *estimate* of kernel launches per call — every instruction other than a parameter,
+    constant, tuple or bitcast counts one, a loop body counts ``trip_count`` times (once
+    when unknown), ``call``s are inlined, ``conditional`` branches are summed."""
+    comps: dict[str, list[str]] = {}
+    entry: str | None = None
+    current: list[str] | None = None
+    for line in text.splitlines():
+        m = _HLO_HEADER.match(line)
+        if m:
+            current = comps.setdefault(m.group(1), [])
+            if line.startswith("ENTRY"):
+                entry = m.group(1)
+        elif current is not None and _HLO_INSTR.match(line):
+            current.append(line)
+    if entry is None:
+        raise ValueError("no ENTRY computation in the HLO text")
+    loops: list[tuple[str, int | None, int]] = []
+
+    def ref(line: str, key: str) -> str | None:
+        m = re.search(rf"{key}=%(\S+?)[,\s)]", line + " ")
+        return m.group(1) if m else None
+
+    def cost(name: str) -> int:
+        n = 0
+        for line in comps.get(name, []):
+            m = _HLO_INSTR.match(line)
+            assert m is not None
+            op = m.group(2)
+            if op in _HLO_NO_LAUNCH:
+                continue
+            if op == "call":
+                target = ref(line, "to_apply")
+                n += cost(target) if target else 1
+            elif op == "while":
+                body, cond = ref(line, "body"), ref(line, "condition")
+                per = (cost(body) if body else 0) + (cost(cond) if cond else 0)
+                t = re.search(r'known_trip_count\\?":\{\\?"n\\?":\\?"(\d+)', line)
+                trip = int(t.group(1)) if t else None
+                loops.append((m.group(1), trip, per))
+                n += per * (trip or 1)
+            elif op == "conditional":
+                branches = re.findall(r"(?:true|false)_computation=%(\S+?)[,\s)]", line)
+                branches += re.findall(r"branch_computations=\{([^}]*)\}", line)
+                n += 1 + sum(cost(b.strip().lstrip("%")) for b in branches)
+            else:
+                n += 1
+        return n
+
+    return sum(len(v) for v in comps.values()), loops, cost(entry)
+
+
+def report_hlo_stats(trainer: Trainer, state, batch) -> None:
+    text = trainer.train_step.lower(state, batch).compile().compiled.as_text()
+    instructions, loops, launches = hlo_launch_estimate(text)
+    print(
+        f"\ncompiled step: {instructions} HLO instructions, {len(loops)} while loops, "
+        f"≈{launches} kernel launches per step (estimate; a launch costs the host of "
+        f"the order of 5–10 µs)"
+    )
+    for name, trip, per in sorted(loops, key=lambda x: -(x[1] or 1) * x[2])[:12]:
+        trip_s = "?" if trip is None else str(trip)
+        print(f"  {name:<32} trip count {trip_s:>5} × {per:>5} launches/iteration")
+
+
 def main() -> None:
     args = parse_args()
     flags.FLAGS(sys.argv[:1])  # grain's multiprocessing reads absl flags
@@ -191,7 +306,8 @@ def main() -> None:
         f"device: {device.platform}:{device.id} ({device.device_kind}); "
         f"{len(source)} trajectories × {source.trajectory_length} steps; batch "
         f"{args.batch} × window {args.length}; model {args.model}; "
-        f"{args.steps} steps × {args.repeats} repeats, interleaved"
+        f"{args.steps} steps × {args.repeats} repeats, interleaved\n"
+        f"host: {cpu_allowance()}; jax {jax.__version__}"
     )
 
     def pipeline() -> grain.MapDataset:
@@ -207,18 +323,28 @@ def main() -> None:
         )
 
     # one fetch of a few batches, three ways to hold them
-    first = [next(it) for it in [iter(pipeline())] for _ in range(8)]
+    first = [next(it) for it in [iter(single_threaded(pipeline()))] for _ in range(8)]
     resident = [jax.device_put(b, device) for b in first]  # committed to `device`
     uncommitted = [{k: jnp.asarray(v) for k, v in b.items()} for b in first]
+    cached = grain.MapDataset.source(first).repeat()  # a pipeline with no fetch work
 
     fetch_rows: list[tuple[str, Callable[[], Iterable]]] = [
-        ("fetch only (host)", pipeline),
+        ("fetch only (host, 1 reader thread)", lambda: single_threaded(pipeline())),
     ]
     step_rows: list[tuple[str, Callable[[], Iterable]]] = [
         ("step, device-resident (committed) batches", lambda: cycle(resident)),
         ("step, device-resident (uncommitted) batches", lambda: cycle(uncommitted)),
-        ("step, NumPy batches (option A)", pipeline),
+        (
+            "step, NumPy batches, 1 reader (option A)",
+            lambda: single_threaded(pipeline()),
+        ),
+        (
+            "step, NumPy + device_put in loop (option A)",
+            lambda: device_put_each(single_threaded(pipeline()), device),
+        ),
+        ("step, NumPy batches, grain default readers", pipeline),
         ("step, to_device (option C)", lambda: to_device(pipeline(), device)),
+        ("step, to_device over cached batches", lambda: to_device(cached, device)),
     ]
     mp_ok = not args.no_mp
     if mp_ok:
@@ -254,6 +380,8 @@ def main() -> None:
     # warm-up (compile, allocator, lazy CUDA state; several steps, not one), then
     # interleaved repeats
     time_steps(trainer, state, cycle(resident), 5)
+    if args.hlo_stats:
+        report_hlo_stats(trainer, state, resident[0])
     time_floor(cycle(resident), 5)
     floor: dict[str, list[float]] = {"committed": [], "uncommitted": [], "numpy": []}
     fetch: dict[str, list[float]] = {name: [] for name, _ in fetch_rows}
@@ -288,7 +416,9 @@ def main() -> None:
         "inside the executable (launch-bound dispatch is flat in --batch; device-bound "
         "scales with it); dispatch ≪ total → the device is.\n"
         "to_device ≈ device-resident → the prefetch thread keeps up and mp_prefetch is "
-        "unnecessary; to_device ≈ fetch only → the fetch is the bottleneck."
+        "unnecessary; to_device ≈ fetch only → the fetch is the bottleneck.\n"
+        "to_device ≫ to_device over cached batches → the fetch thread's CPU work is "
+        "what slows the step (too few cores for the loader threads), not the transfer."
     )
 
     if args.profile is not None:
