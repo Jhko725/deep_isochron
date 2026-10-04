@@ -69,11 +69,22 @@ deep_isochron
 │                            windows(); mixed_windows()
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
 │                            (namespace reserved; Phase E)
-├── training/                TrainerState / Trainer (optax + orbax + wandb);
-│                            ConjugacyTrajectoryLoss; PhaseAutoencoderLoss  ── Phase C
+├── training/                                                            ── ADR-0009
+│   ├── trainer.py           TrainerState (model · opt_state · step · key · schedule
+│   │                        state); Trainer(optimizer, loss, schedule): jitted
+│   │                        train_step, train(loader, logger, checkpointer, evaluate)
+│   ├── losses.py            building blocks (trajectory_mse, step_weighted_consistency,
+│   │                        alpha_schedule, batch_centre_of_mass); AbstractLoss =
+│   │                        weighted named terms; ConjugacyTrajectoryLoss,
+│   │                        PhaseAutoencoderLoss
+│   ├── schedules.py         Constant / StepSchedule (curriculum) / ThresholdSwitch
+│   ├── loggers.py           Logger protocol; Null / List / Print / Wandb; DelayedLogger
+│   ├── checkpoint.py        Checkpointer protocol; OrbaxCheckpointer (whole state)
+│   └── evaluation.py        Evaluator(val_batches, reference) on the model contract
 └── misc.py                  inv_softplus, squashed_exp, polar ↔ cartesian
 
 scripts/generate_data.py + configs/data/*.yaml   Hydra entry point for data generation
+scripts/check_md_math.py                        GitHub-safe Markdown math check
 ```
 
 ## The invertible package
@@ -197,22 +208,33 @@ comparison. Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
 ## Data flow of one training step
 
 ```
-batch {t:[B,L], u:[B,L,d]}  ──►  ConjugacyTrajectoryLoss(model, batch)
-                                 │
-                                 ├─ y0 = Φ(x[:, 0])                       bijection forward
-                                 ├─ y[t]  = latent.flow(t, y0, config).ys  systems (integration)
-                                 ├─ x̂[t]  = Φ⁻¹(y[t])                      bijection inverse
-                                 ├─ mse(x, x̂)  +  w · mse(Φ(x[t]), y[t])
-                                 ▼
-TrainerState.take_step(grads)  ──►  optax update on eqx.filter(model, is_trainable)
-                                 └─ wandb log (one step delayed), orbax checkpoint
+loader ──► batch {t:[B,L], u:[B,L,d]}  (grain; NumPy or already on device)
+                 │
+Trainer.train_step(state, batch)                                  ── jitted, pure
+                 ├─ weights = schedule.weights(state.schedule_state, state.step)
+                 ├─ (loss, terms) = loss_fn(model, batch, weights)
+                 │     ConjugacyTrajectoryLoss:  y0 = H(x[:, 0]); y[t] = nf.flow(t, y0).ys;
+                 │                               x̂ = H⁻¹(y); data = mse(x, x̂),
+                 │                               latent = mse(H(x[t]), y[t])
+                 │     PhaseAutoencoderLoss:     Y = f_enc(x); Ŷ = latent flow of Y[:, 0];
+                 │                               recon, pha, amp (α_k-weighted), aux
+                 ├─ grads = ∇_model loss ; schedule_state' = schedule.update(…, terms)
+                 ▼
+state' = state.take_step(grads, schedule_state')   optax update on is_trainable leaves
+                 │
+                 ├─ logger.log({loss, terms, w/*}, step)   DelayedLogger: forwarded one
+                 │                                          step later (host sync then)
+                 └─ every eval_every: evaluate(model) → {val/mse, period, κ, …}
+                                      logger.log(…); checkpointer.save(step, state, …)
 ```
 
-`ConjugateLatentDynamics` is the model: a bijection, a latent ODE and the `SolverConfig`
-used to integrate it. The loss is the trajectory reconstruction error plus a weighted
-latent-consistency term; the conjugacy equation is what the two terms together enforce.
-
-Batches come from `windows`/`mixed_windows` over a `TimeSeriesDataSource`.
+The model is an `AbstractPhaseAmplitudeModel` — `ConjugateLatentDynamics` (bijection,
+normal form, `SolverConfig`) or `PhaseAmplitudeAutoencoder`. A loss is a weighted sum of
+named terms whose weights the trainer's schedule supplies each step (ADR-0009); the
+conjugacy equation is what `data` and `latent` together enforce. Batches come from
+`windows`/`mixed_windows` over a `TimeSeriesDataSource`; validation batches are collected
+once (`collect_batches`) and evaluated by an `Evaluator`, whose `val/mse` is what the
+`OrbaxCheckpointer` keeps the best checkpoint by.
 
 ## Tests
 
@@ -226,7 +248,8 @@ are in `test_splines.py`, `test_analytic.py`, `test_constraints.py`, `test_linea
 `test_systems.py` the flow machinery and the observed systems' facts (Langfield et al. 2014),
 `test_data.py` the data layer end to end, `test_baseline.py` the phase autoencoder
 against the exact chart (plus one `slow` training test on Hopf data), `test_models.py`
-the `AbstractPhaseAmplitudeModel` contract on both models. Solver configurations used by
+the `AbstractPhaseAmplitudeModel` contract on both models, `test_training.py` the losses,
+schedules, loggers, trainer loop, evaluation and Orbax round trip. Solver configurations used by
 tests are named in `tests/helpers.SOLVERS` with their reasons, like `TOL`. Shape
 annotations are checked at runtime by the jaxtyping/beartype import hook (`conftest.py`).
 
@@ -242,3 +265,4 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0006](decisions/0006-cubic-bspline-boundary-and-inverse.md) | `CubicBSpline`: Greville-pinned boundary; bracketed Newton inverse |
 | [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | `AbstractODE` / `AbstractNormalForm`; `SolverConfig`; flow integrations as objects |
 | [0008](decisions/0008-dataset-format-and-sampling.md) | one netCDF4 file per dataset via xarray; weighted windows alongside `mix` |
+| [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |

@@ -41,6 +41,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [0006](decisions/0006-cubic-bspline-boundary-and-inverse.md) | accepted | `CubicBSpline` boundary and inverse |
 | [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | accepted; amended | `AbstractODE`/`AbstractNormalForm`, `SolverConfig`, integrations as objects |
 | [0008](decisions/0008-dataset-format-and-sampling.md) | accepted; amended | netCDF4 datasets via xarray; weighted windows alongside `mix` |
+| [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | accepted (review pending) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 
@@ -50,3 +51,4 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | `scalar-param-refactor` | [`2026-10-01-scalar-param-refactor.md`](changes/2026-10-01-scalar-param-refactor.md) |
 | `invertible-cleanup` | [`2026-10-02-invertible-cleanup.md`](changes/2026-10-02-invertible-cleanup.md) |
 | `data-generation` | [`2026-10-02-data-generation.md`](changes/2026-10-02-data-generation.md) |
+| `trainer` | [`2026-10-04-trainer.md`](changes/2026-10-04-trainer.md) |

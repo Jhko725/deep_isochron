@@ -22,7 +22,19 @@ from deep_isochron.model import (
 )
 from deep_isochron.model.autoencoder import normalise_phase_plane
 from deep_isochron.systems import BautinNormalForm, HopfNormalForm
-from deep_isochron.training.losses import PhaseAutoencoderLoss
+from deep_isochron.training import (
+    collect_batches,
+    Evaluator,
+    ListLogger,
+    PhaseAutoencoderLoss,
+    ThresholdSwitch,
+    Trainer,
+)
+from deep_isochron.training.losses import (
+    YAWATA_STAGE_1,
+    YAWATA_STAGE_2,
+    YAWATA_SWITCH_AT,
+)
 from hypothesis import given, settings, strategies as st
 
 from tests.helpers import assert_close, TOL
@@ -175,7 +187,7 @@ def test_loss_vanishes_on_the_exact_chart():
     model = _exact_autoencoder(nf)
     batch = _window_batch(nf)
     total, aux = PhaseAutoencoderLoss()(model, batch)
-    for name in ("recon", "pha", "dev"):
+    for name in ("recon", "pha", "amp"):
         assert_close(aux[name], 0.0, atol=TOL["vector_roundtrip"])
     assert 0.0 <= aux["aux"] <= 1.0
     assert_close(total, 2.0 * aux["aux"], rtol=TOL["closed_form"], atol=1e-10)
@@ -183,9 +195,10 @@ def test_loss_vanishes_on_the_exact_chart():
     assert_close(aux["kappa"], nf.floquet_exponent(), rtol=TOL["closed_form"])
 
 
-def test_loss_detects_wrong_latent_frequency_and_switches_weights():
-    """A wrong ω shows up in ``pha`` only (the decay is still right); with the exact
-    chart the weights switch to the paper's second stage once pha and aux are small."""
+def test_loss_detects_wrong_latent_frequency_and_takes_weights():
+    """A wrong ω shows up in ``pha`` only (the decay is still right); the weights are an
+    argument (the trainer's schedule supplies them): under the paper's second stage
+    ``w_aux = 0`` and the exact chart has zero total loss."""
     nf = HopfNormalForm(1.0, 2.0, 0.5)
     batch = _window_batch(nf)
     wrong = _exact_autoencoder(
@@ -195,30 +208,11 @@ def test_loss_detects_wrong_latent_frequency_and_switches_weights():
         ),
     )
     _, aux = PhaseAutoencoderLoss()(wrong, batch)
-    assert aux["pha"] > 1e-2 and aux["dev"] < TOL["vector_roundtrip"]
-    assert not bool(aux["switched"])
+    assert aux["pha"] > 1e-2 and aux["amp"] < TOL["vector_roundtrip"]
 
     exact = _exact_autoencoder(nf)
-    loss = PhaseAutoencoderLoss(switch_at=(0.01, 10.0))  # aux threshold never binds
-    total, aux = loss(exact, batch)
-    assert bool(aux["switched"])
-    assert_close(total, 0.0, atol=TOL["vector_roundtrip"])  # w_aux = 0 after the switch
-
-
-def test_alpha_schedule_weights_early_steps_when_phase_loss_is_large():
-    """Eq. (24): α_k = k^{-min(1, L_pha)}; for a badly wrong ω the k-th step error is
-    down-weighted by 1/k, so the loss is smaller than the unweighted sum."""
-    nf = HopfNormalForm(1.0, 2.0, 0.5)
-    batch = _window_batch(nf)
-    wrong = _exact_autoencoder(nf, PhaseAmplitudeLatentDynamics(-2.0, -2.0))
-    _, aux = PhaseAutoencoderLoss()(wrong, batch)
-    encode = jax.vmap(jax.vmap(wrong.encode))
-    y = encode(batch["u"])
-    y_pred = jax.vmap(wrong.latent_dynamics)(batch["t"], y[:, 0])
-    err = jnp.mean(jnp.sum((y - y_pred)[:, 1:, :2] ** 2, axis=-1), axis=0)
-    assert jnp.sum(err) > 1.0  # α_k = 1/k regime
-    k = jnp.arange(1, err.shape[0] + 1)
-    assert_close(aux["pha"], jnp.sum(err / k), rtol=TOL["closed_form"])
+    total, _ = PhaseAutoencoderLoss()(exact, batch, jnp.asarray(YAWATA_STAGE_2))
+    assert_close(total, 0.0, atol=TOL["vector_roundtrip"])
 
 
 def test_loss_is_differentiable_through_the_mlps():
@@ -263,62 +257,48 @@ def test_on_cycle_gaussian_sampler():
 @pytest.mark.slow
 def test_phase_autoencoder_learns_the_hopf_phase():
     """End to end on the paper's recipe (N_s ICs on the cycle + 0.5 σ noise, 3 periods,
-    K = 20): the learned Θ matches the exact asymptotic phase up to a constant (and an
-    orientation) on a grid in the basin. Ψ (up to scale) and κ are reported only."""
+    K = 20) through the trainer with Yawata's weight switch and held-out evaluation:
+    the learned Θ matches the exact asymptotic phase up to a constant (and an
+    orientation) on the validation states, and ω to 5 %. Ψ (up to scale) and κ are
+    reported only (``pytest -s``)."""
     nf = HopfNormalForm(1.0, 2.0, 1.0)
     period = float(nf.period())
     length = 21
-    sampler = OnCycleGaussian.from_normal_form(nf, 1000, 0.5)
     source = generate(
         nf,
-        sampler,
+        OnCycleGaussian.from_normal_form(nf, 1000, 0.5),
         jnp.arange(0.0, 3 * period, period / 40),
         256,
         seed=0,
-        integration="closed_form",
     )
-    batches = iter(windows(source, length, seed=0).batch(128))
-
-    model = PhaseAmplitudeAutoencoder(
-        2, PhaseAmplitudeLatentDynamics(1.0, -0.5), key=jax.random.key(0)
+    train_src, val_src = source.split_trajectories(0.125, seed=0)
+    evaluator = Evaluator(
+        collect_batches(windows(val_src, length, seed=1).batch(128), 4), reference=nf
     )
-    loss = PhaseAutoencoderLoss()
-    opt = optax.adam(1e-3)
-    opt_state = opt.init(eqx.filter(model, eqx.is_inexact_array))
-
-    @eqx.filter_jit
-    def step(model, opt_state, batch):
-        (_, aux), grads = eqx.filter_value_and_grad(loss, has_aux=True)(model, batch)
-        updates, opt_state = opt.update(
-            grads, opt_state, eqx.filter(model, eqx.is_inexact_array)
-        )
-        return eqx.apply_updates(model, updates), opt_state, aux
-
-    for _ in range(1500):
-        b = next(batches)
-        model, opt_state, aux = step(
-            model, opt_state, {"t": jnp.asarray(b["t"]), "u": jnp.asarray(b["u"])}
-        )
-
-    theta = jnp.linspace(-jnp.pi, jnp.pi, 64, endpoint=False)
-    grid = jnp.concatenate(
-        [r * jnp.stack((jnp.cos(theta), jnp.sin(theta)), -1) for r in (0.8, 1.0, 1.25)]
+    trainer = Trainer(
+        optax.adam(1e-3),
+        PhaseAutoencoderLoss(),
+        ThresholdSwitch(YAWATA_STAGE_1, YAWATA_STAGE_2, YAWATA_SWITCH_AT),
     )
-    exact = jax.vmap(nf.to_phase_amplitude)(grid)
-    learned = jax.vmap(model.phase)(grid)
-    # concentration of the phase difference on the circle, for either orientation
-    concentration = max(
-        float(jnp.abs(jnp.mean(jnp.exp(1j * (sign * learned - exact[:, 0])))))
-        for sign in (1.0, -1.0)
+    log = ListLogger()
+    state = trainer.train(
+        PhaseAmplitudeAutoencoder(
+            2, PhaseAmplitudeLatentDynamics(1.0, -0.5), key=jax.random.key(0)
+        ),
+        windows(train_src, length, seed=0).batch(128),
+        num_steps=1500,
+        key=jax.random.key(1),
+        logger=log,
+        evaluate=evaluator,
+        eval_every=500,
     )
-    circular_std = jnp.sqrt(-2 * jnp.log(concentration))
-    assert circular_std < 0.25, f"learned phase off by circular std {circular_std:.3f}"
-    assert_close(jnp.abs(aux["omega"]), nf.omega(), rtol=0.05)
-
-    psi_corr = jnp.corrcoef(jax.vmap(model.amplitude)(grid), exact[:, 1])[0, 1]
+    final = log.records[-1][1]
+    assert final["phase/circ_std"] < 0.25, f"phase off by {final['phase/circ_std']:.3f}"
+    assert final["period"] == pytest.approx(period, rel=0.05)
     print(
-        f"\nB12 Hopf: circular std of Θ error {circular_std:.3f}; "
-        f"corr(Y3, Ψ) = {psi_corr:.2f}; learned ω = {float(aux['omega']):.3f} "
-        f"(exact {float(nf.omega()):.3f}); learned κ = {float(aux['kappa']):.3f} "
-        f"(exact {float(nf.floquet_exponent()):.3f})"
+        f"\nB12 Hopf: circular std of Θ error {final['phase/circ_std']:.3f}; "
+        f"corr(Y3, Ψ) = {final['amplitude/corr']:.2f}; learned period "
+        f"{final['period']:.3f} (exact {period:.3f}); learned κ = {final['kappa']:.3f} "
+        f"(exact {float(nf.floquet_exponent()):.3f}); switched = "
+        f"{bool(state.schedule_state)}"
     )

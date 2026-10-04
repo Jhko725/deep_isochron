@@ -37,26 +37,24 @@ this order:
 | B11 | `AbstractNormalForm` reimplemented against the design document §9 (`_sq` hooks, API in `r`, `κ = ρ'(1)`, `Ψ` normalised, `eigenvalues_origin`, `(Θ, Ψ)` chart with differentiable `Ψ⁻¹`, `ClosedFormIntegration`); tests per §10; ADR-0007 amended | — | *done 2026-10-03* |
 | B12 | Yawata et al. (Chaos 34, 063111, 2024) baseline per `docs/design/normal-forms.md` §5.3: `PhaseAmplitudeLatentDynamics(omega, kappa)` (replaces `LinearLatentDynamics`), `PhaseAmplitudeAutoencoder` with unit-circle normalisation, `phase`/`phase_sensitivity`; `PhaseAutoencoderLoss` (Eqs. (21)–(26), `α_k` and weight schedules); `OnCycleGaussian` sampler; `tests/test_baseline.py` against the exact chart + a `slow` training test on Hopf (Θ asserted up to a constant; Ψ, κ reported) | the paper's baseline; §5.4 says what it learns | *done 2026-10-03* |
 
-## Phase C — `trainer`
+## Phase C — `trainer` (current; C1–C6 landed 2026-10-04, awaiting review)
 
-- C1 `Trainer(optimizer, loss_fn)` + `train(model, loader, *, logger, checkpointer, num_steps,
-  eval_every, eval_loader)`; `NullLogger`/`NullCheckpointer` for tests; document the
-  one-step-delayed logging overlap.
-- C2 Losses as composable building blocks (review round 3): `training/losses.py` holds
-  generic terms — trajectory MSE in data and latent space, `k`-step latent consistency
-  with a step weighting, batch centre of mass — and `ConjugacyTrajectoryLoss` /
-  `PhaseAutoencoderLoss` become thin weighted compositions with explicit weights; the
-  trainer owns schedules (Yawata's once-and-for-all weight switch and per-epoch `α_k`,
-  which B12 approximates per batch). The loss contract is bound to the trainer, hence
-  here. (The `SolverConfig` field on `ConjugateLatentDynamics` landed with Phase B.)
-- C3 Held-out evaluation; physics scalars every `eval_every`: base-system `a, b, w`, implied
-  period and Floquet exponent, max round-trip error, min/max per-layer Jacobian singular values
-  on a fixed grid.
-- C4 `training/checkpoint.py`: Orbax wrapper — `FixedIntervalPolicy` + `AnyPreservationPolicy(
-  [BestN, LatestN(1)])`, `save_async`, whole `TrainerState` saved, `custom_metadata` = resolved
-  config + dataset hash + `x64` flag; `restore(template)` via a `ShapeDtypeStruct` tree.
-- C5 Tests: toy linear fit (`TrainerState` determinism, trainable filter, convergence,
-  `StopIteration`); Orbax save → load → `tree_equal`; `jax_enable_x64` guard.
+Decisions taken with Joon on 2026-10-04 (ADR-0009): step-dependent loss weights for
+curricula; the one-step-delayed logging kept as a `DelayedLogger` adapter (JAX cookbook
+pattern; see the change document for the measurements); evaluation on a validation
+loader with `val/mse` as the checkpoint metric and the dataset's bounding box as the
+diagnostic grid; FHN reports prediction error and learned period until Phase E;
+checkpoint directories owned by the caller (Hydra in D3); `scripts/training/` deleted.
+
+| # | Item | Done when |
+|---|---|---|
+| C1 | `Trainer(optimizer, loss, schedule)`; `TrainerState` with schedule state; pure jitted `train_step`; `train(…, logger, checkpointer, evaluate, eval_every)`; `Logger`/`Checkpointer` protocols, `Null`/`List`/`Print`/`Wandb` loggers, `DelayedLogger` | *done 2026-10-04* |
+| C2 | Losses as weighted named terms (`AbstractLoss`, building blocks); weights from the trainer's schedule (`Constant`, `StepSchedule`, `ThresholdSwitch`) | *done 2026-10-04* |
+| C3 | `Evaluator(val_batches, reference)`: `val/mse`, `val/final_mse`, `period`, `kappa`, normal-form params, bijection round trip and Jacobian singular values on the bounding-box grid, phase circular std and amplitude correlation against a reference normal form | *done 2026-10-04* |
+| C4 | `OrbaxCheckpointer(directory, save_every, metric, custom_metadata)`: whole `TrainerState`, `FixedInterval` + `Any([LatestN(1), BestN])`, `restore(template, step)`, resume | *done 2026-10-04* |
+| C5 | `tests/test_training.py` (15 tests); the slow B12 test runs through the trainer | *done 2026-10-04* |
+| C6 | `scripts/training/` deleted; notebook on the new API; ADR-0009; architecture | *done 2026-10-04* |
+| C7 | Data-pipeline prefetch for training runs: `mp_prefetch` once `TimeSeriesDataSource` pickles cleanly in worker processes (it failed in the dev container; to check on the GPU machine), `ThreadPrefetchIterDataset` as the fallback (the notebook already uses it) — the measured 15 ms/batch of window slicing is the host-side cost the delayed logging hides | pending |
 
 ## Phase D — `experiment-config`
 
@@ -135,3 +133,4 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-10-03 | `data-generation` | B12: Yawata et al. phase-autoencoder baseline — `PhaseAmplitudeLatentDynamics`, `PhaseAmplitudeAutoencoder` (`phase`, `phase_sensitivity`), `PhaseAutoencoderLoss`, `OnCycleGaussian`; `LinearLatentDynamics` removed; `tests/test_baseline.py` | `docs/changes/2026-10-02-data-generation.md`, `docs/design/normal-forms.md` §5.3 |
 | 2026-10-04 | `data-generation` | Review round 3: `to_polar`/`from_polar`; `_log_growth_rate_sq`/`_angular_rate_sq`; `default_integration = "closed_form"`; `tests/helpers.SOLVERS` (Tsit5); `categorical`; `AbstractPhaseAmplitudeModel` protocol implemented by both models; design-doc inline math unwrapped; OKF-style frontmatter + `docs/index.md` | `docs/changes/2026-10-02-data-generation.md` |
 | 2026-10-04 | `data-generation` | Review round 4: design-document math made GitHub-safe (standalone `$$` blocks; no backslash-punctuation escapes, `*`, `\\` or emphasis-forming `_` inside inline math) with `scripts/check_md_math.py`; Done ledger chronological; ty-unreachable asserts fixed | `docs/changes/2026-10-02-data-generation.md` |
+| 2026-10-04 | `trainer` | C1–C6: `Trainer`/`TrainerState` with injected `Logger`/`Checkpointer` and `DelayedLogger`; `AbstractLoss` weighted terms + building blocks; schedules (`Constant`, `StepSchedule`, `ThresholdSwitch`) in the state; `Evaluator`; `OrbaxCheckpointer` (whole state, resume); `test_training.py`; `scripts/training/` deleted | `docs/changes/2026-10-04-trainer.md`, ADR-0009 |

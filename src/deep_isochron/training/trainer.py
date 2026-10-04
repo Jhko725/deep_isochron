@@ -1,29 +1,55 @@
-import datetime
-from collections.abc import Callable, Iterable
-from contextlib import ExitStack
+"""The training loop (roadmap C1, ADR-0009).
+
+``Trainer(optimizer, loss, schedule)`` holds what defines a step; ``TrainerState`` holds
+everything that changes (model, optimiser state, step, key, schedule state) and is what
+checkpoints save. ``train_step`` is a pure jitted function of ``(state, batch)``;
+``train`` is the loop:
+
+    for each step: batch = next(loader); state, metrics = train_step(state, batch)
+                   logger.log(metrics, step)
+                   every eval_every steps: evaluate(state.model) -> val metrics,
+                                           logged and handed to the checkpointer
+
+The loop never reads a device value itself: the logger decides when to sync (see
+``loggers.DelayedLogger``, the cookbook's one-step delay), and evaluation syncs only
+every ``eval_every`` steps. Loggers, checkpointer and the evaluation function are
+injected, so tests run with ``NullLogger``/``NullCheckpointer`` and the experiment
+script (Phase D) wires wandb, Orbax and Hydra's run directory."""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import replace
 from functools import cached_property
-from pathlib import Path
-from typing import Any, cast, TypeVar
+from typing import Any, cast, Generic, TypeVar
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
-import wandb
 from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree
-from orbax.checkpoint import v1 as ocp
+
+from .checkpoint import Checkpointer, NullCheckpointer
+from .loggers import Logger, NullLogger
+from .losses import AbstractLoss, Batch
+from .schedules import AbstractLossSchedule, Constant
 
 
-FilterSpec = Callable
+FilterSpec = Callable[[Any], bool]
+M = TypeVar("M", bound=eqx.Module)
+Metrics = dict[str, Float[Array, ""]]
 
 
-# Inspired by levanter
-class TrainerState[M: eqx.Module](eqx.Module):
+class TrainerState(eqx.Module, Generic[M]):
+    """Everything that changes during training; array leaves are what a checkpoint
+    saves. ``optimizer`` and ``is_trainable`` are static (part of the recipe)."""
+
     step: Int[Array, ""]
     model: M
     opt_state: optax.OptState
     training_key: PRNGKeyArray
+    schedule_state: PyTree
 
     optimizer: optax.GradientTransformation = eqx.field(static=True)
     is_trainable: FilterSpec = eqx.field(static=True)
@@ -34,185 +60,161 @@ class TrainerState[M: eqx.Module](eqx.Module):
         model: M,
         optimizer: optax.GradientTransformation,
         is_trainable: FilterSpec = eqx.is_inexact_array,
+        schedule_state: PyTree = None,
         *,
         key: PRNGKeyArray,
-    ):
-        # Making this as the __init__ will clash with the use of replace()
-        opt_state = optimizer.init(eqx.filter(model, is_trainable))
-
+    ) -> TrainerState[M]:
         return cls(
             step=jnp.asarray(0, dtype=int),
             model=model,
-            opt_state=opt_state,
+            opt_state=optimizer.init(eqx.filter(model, is_trainable)),
             training_key=key,
+            schedule_state=schedule_state,
             optimizer=optimizer,
             is_trainable=is_trainable,
         )
 
-    def take_step(
-        self,
-        grads: M,
-    ) -> "TrainerState[M]":
-        """Given a pytree of model gradients, update model parameters using the
-        appropriate optimizer update function."""
-        # Equinox modules are pytrees, but optax's ``Params`` alias (a recursive
-        # ArrayTree union) does not know that; the casts are type-level only.
+    def take_step(self, grads: M, schedule_state: PyTree = None) -> TrainerState[M]:
+        """Apply one optimiser update from ``grads`` (filtered to the trainable
+        leaves); advance ``step`` and the key; store the schedule state."""
         grads = self.filter_trainable(grads)
-        updates, opt_state_next = self.optimizer.update(
+        updates, opt_state = self.optimizer.update(
             cast(optax.Params, grads),
             self.opt_state,
             cast(optax.Params, self.filter_trainable(self.model)),
         )
-        model_next = eqx.apply_updates(self.model, updates)
         return replace(
             self,
             step=self.step + 1,
-            model=model_next,
-            opt_state=opt_state_next,
+            model=eqx.apply_updates(self.model, updates),
+            opt_state=opt_state,
             training_key=jax.random.fold_in(self.training_key, self.step),
+            schedule_state=schedule_state,
         )
 
     def filter_trainable(self, pytree: M) -> M:
-        """Filter the given pytree to retain the trainable model parameters, as
-        determined by self.is_trainable. Note that this function works on all pytrees
-        that are compatible with self.model."""
         return eqx.filter(pytree, self.is_trainable)
 
 
-Batch = PyTree
-M = TypeVar("M", bound=eqx.Module)
+def check_batch_dtype(batch: Batch, *, x64_enabled: bool | None = None) -> None:
+    """Refuse float64 data when ``jax_enable_x64`` is off: ``jnp.asarray`` would
+    silently round it to float32 and every tolerance in the project assumes float64."""
+    if x64_enabled is None:
+        x64_enabled = bool(jax.config.jax_enable_x64)
+    for name, value in batch.items():
+        if np.asarray(value).dtype == np.float64 and not x64_enabled:
+            raise TypeError(
+                f"batch[{name!r}] is float64 but jax_enable_x64 is off; enable it "
+                "(jax.config.update('jax_enable_x64', True)) or generate float32 data."
+            )
 
 
-class Trainer:
-    loss_fn: Callable
-    optimizer: optax.GradientTransformation
-    checkpoint_path: Path
-    wandb_kwargs: dict[str, Any]
+def to_device(batch: Batch) -> Batch:
+    """NumPy (grain) batches to device arrays; device arrays pass through."""
+    return {k: jnp.asarray(v) for k, v in batch.items()}
 
+
+class Trainer(Generic[M]):
     def __init__(
         self,
         optimizer: optax.GradientTransformation,
-        loss_fn: Callable,
-        checkpoint_dir: str | Path,
-        checkpoint_name: str | None,
-        wandb_kwargs: dict[str, Any],
-        config_dict: dict[str, Any],
-    ):
-        self.optimizer = optimizer
-        self.loss_fn = loss_fn
-        self.checkpoint_path = self._make_checkpoint_path(
-            checkpoint_dir, checkpoint_name
-        )
-        self.wandb_kwargs = wandb_kwargs
-        self.config_dict = config_dict
-
-    def _make_checkpoint_path(
-        self, checkpoint_dir: str | Path, checkpoint_name: str | None
-    ) -> Path:
-        """Given checkpoint directory and name, return the absolute path to save
-        checkpoints in."""
-        now = datetime.datetime.now()
-        now_str = now.strftime("%y-%m-%d-%H_%M_%S")
-        if checkpoint_name is None:
-            checkpoint_name = ""
-
-        checkpoint_path = Path(checkpoint_dir) / checkpoint_name / now_str
-        # orbax.checkpoint does not like relative paths
-        checkpoint_path = checkpoint_path.resolve()
-        return checkpoint_path
-
-    def train(
-        self,
-        model: M,
-        train_dataloader: Iterable[Batch],
-        loss_args: Any = None,
+        loss: AbstractLoss,
+        schedule: AbstractLossSchedule | None = None,
         *,
-        trainable_filterspec: FilterSpec = eqx.is_inexact_array,
-        num_steps: int = 5000,
-        seed: int = 0,
-    ):
-        self.checkpoint_path.mkdir(parents=True, exist_ok=True)
+        is_trainable: FilterSpec = eqx.is_inexact_array,
+    ) -> None:
+        self.optimizer = optimizer
+        self.loss = loss
+        self.schedule = Constant(loss.default_weights) if schedule is None else schedule
+        self.is_trainable = is_trainable
+        n = len(self.schedule.weights(self.schedule.init(), jnp.asarray(0)))
+        if n != loss.num_weights:
+            raise ValueError(
+                f"schedule produces {n} weights, loss {type(loss).__name__} expects "
+                f"{loss.num_weights} ({loss.weight_names})."
+            )
 
-        state = TrainerState[M].init(
-            model, self.optimizer, trainable_filterspec, key=jax.random.key(seed)
+    def init(self, model: M, *, key: PRNGKeyArray) -> TrainerState[M]:
+        return TrainerState.init(
+            model, self.optimizer, self.is_trainable, self.schedule.init(), key=key
         )
-        train_dataiter = iter(train_dataloader)
-
-        save_metric = "train_loss"
-
-        with ExitStack() as stack:
-            logger = stack.enter_context(
-                wandb.init(config=self.config_dict, **self.wandb_kwargs)
-            )
-            # ``BestN`` does not satisfy orbax's own ``PreservationPolicy`` protocol
-            # as typed (its ``should_preserve`` signature differs); the cast is
-            # type-level only.
-            best_n = ocp.training.preservation_policies.BestN(
-                get_metric_fn=lambda metrics: metrics[save_metric], reverse=True, n=1
-            )
-            ckptr = stack.enter_context(
-                ocp.training.Checkpointer(
-                    str(self.checkpoint_path),
-                    preservation_policy=cast(
-                        ocp.training.preservation_policies.PreservationPolicy, best_n
-                    ),
-                    custom_metadata=self.config_dict["model"],
-                )
-            )
-
-            state_prev: TrainerState[M] | None = None
-            outputs_prev: dict[str, Any] | None = None
-
-            for _ in range(num_steps):
-                try:
-                    batch = next(train_dataiter)
-                except StopIteration:
-                    break
-
-                state_next, loss, metrics = self.train_step(state, batch, loss_args)
-
-                output = {"train_loss": loss} | metrics
-
-                if (outputs_prev is not None) and (state_prev is not None):
-                    step_log = int(state_prev.step)
-                    outputs_prev = jax.tree.map(lambda x: float(x), outputs_prev)
-                    logger.log(outputs_prev, step=step_log)
-                    loss_prev = outputs_prev["train_loss"]
-                    print(f"Step: {step_log} | Train loss: {loss_prev}")
-                    weights = eqx.filter(state_prev.model, eqx.is_array)
-                    ckptr.save(step_log, weights, metrics=outputs_prev)
-
-                outputs_prev = output
-                state, state_prev = state_next, state
-
-            # Flush the last step (the loop logs one step behind so that logging
-            # overlaps with the next step's computation). Nothing to flush if the
-            # loader was empty or ``num_steps == 0``.
-            if state_prev is not None and outputs_prev is not None:
-                step_log = int(state_prev.step)
-                outputs_prev = jax.tree.map(lambda x: float(x), outputs_prev)
-                logger.log(outputs_prev, step=step_log)
-                loss_prev = outputs_prev["train_loss"]
-                print(f"Step: {step_log} | Train loss: {loss_prev}")
-                weights = eqx.filter(state_prev.model, eqx.is_array)
-                ckptr.save(step_log, weights, metrics=outputs_prev)
-            return state.model
 
     @cached_property
     def train_step(
         self,
-    ) -> Callable[
-        [TrainerState[M], Batch, Any],
-        tuple[TrainerState[M], Float[Array, ""], dict[str, Array]],
-    ]:
+    ) -> Callable[[TrainerState[M], Batch], tuple[TrainerState[M], Metrics]]:
         return eqx.filter_jit(self._train_step)
 
     def _train_step(
-        self, state: TrainerState[M], batch: Batch, args: Any
-    ) -> tuple[TrainerState[M], Float[Array, ""], dict[str, Array]]:
+        self, state: TrainerState[M], batch: Batch
+    ) -> tuple[TrainerState[M], Metrics]:
+        weights = self.schedule.weights(state.schedule_state, state.step)
         model = eqx.nn.inference_mode(state.model, False)
+        (loss, terms), grads = eqx.filter_value_and_grad(self.loss, has_aux=True)(
+            model, batch, weights
+        )
+        schedule_state = self.schedule.update(state.schedule_state, state.step, terms)
+        metrics: Metrics = {"loss": loss, **terms}
+        for name, w in zip(self.loss.weight_names, weights):
+            metrics[f"w/{name}"] = w
+        return state.take_step(grads, schedule_state), metrics
 
-        loss_grad_fn = eqx.filter_value_and_grad(self.loss_fn, has_aux=True)
-        (loss, metrics), grads = loss_grad_fn(model, batch, args)
-        state_next = state.take_step(grads)
-        return state_next, loss, metrics
+    def train(
+        self,
+        model_or_state: M | TrainerState[M],
+        train_loader: Iterable[Batch],
+        *,
+        num_steps: int,
+        key: PRNGKeyArray | None = None,
+        logger: Logger | None = None,
+        checkpointer: Checkpointer | None = None,
+        evaluate: Callable[[M], Mapping[str, Any]] | None = None,
+        eval_every: int | None = None,
+    ) -> TrainerState[M]:
+        """Run ``num_steps`` steps (fewer if the loader ends). ``evaluate(model)``
+        returns validation metrics (``training.evaluation``); they are logged under
+        their own keys and passed to ``checkpointer.save`` every ``eval_every`` steps
+        and at the end. Resume by passing a restored ``TrainerState``."""
+        if isinstance(model_or_state, TrainerState):
+            state = model_or_state
+        else:
+            if key is None:
+                raise ValueError("key is required when starting from a model.")
+            state = self.init(model_or_state, key=key)
+        logger = NullLogger() if logger is None else logger
+        checkpointer = NullCheckpointer() if checkpointer is None else checkpointer
+        if (evaluate is None) != (eval_every is None):
+            raise ValueError("evaluate and eval_every go together.")
+
+        batches = iter(train_loader)
+        step = int(state.step)  # Python-side counter: the device value is never read
+        first = True
+        val_metrics: dict[str, float] = {}
+        try:
+            for _ in range(num_steps):
+                try:
+                    batch = next(batches)
+                except StopIteration:
+                    break
+                if first:
+                    check_batch_dtype(batch)
+                    first = False
+                state, metrics = self.train_step(state, to_device(batch))
+                step += 1
+                logger.log(metrics, step)
+                if evaluate is not None and eval_every and step % eval_every == 0:
+                    val_metrics = {
+                        k: float(v) for k, v in evaluate(state.model).items()
+                    }
+                    logger.log(val_metrics, step)
+                    checkpointer.save(step, state, val_metrics)
+            if evaluate is not None and (not eval_every or step % eval_every != 0):
+                val_metrics = {k: float(v) for k, v in evaluate(state.model).items()}
+                logger.log(val_metrics, step)
+                checkpointer.save(step, state, val_metrics)
+            elif evaluate is None:
+                checkpointer.save(step, state, {})
+        finally:
+            logger.close()
+            checkpointer.close()
+        return state
