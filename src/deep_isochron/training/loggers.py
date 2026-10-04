@@ -19,8 +19,9 @@ the loop never does it directly:
 
 from __future__ import annotations
 
+import abc
 from collections.abc import Mapping
-from typing import Any, Protocol, runtime_checkable
+from typing import Any
 
 import jax
 
@@ -28,22 +29,14 @@ import jax
 Metrics = Mapping[str, Any]
 
 
-@runtime_checkable
-class Logger(Protocol):
-    """``log(metrics, step)``; a context manager whose exit closes it (``close`` stays
-    for callers managing the lifetime themselves)."""
+class Logger(abc.ABC):
+    """Base class: subclasses implement ``log(metrics, step)``. Every logger is a
+    context manager whose exit calls ``close()`` (a no-op unless overridden), also when
+    the loop raised; ``close`` stays public for callers managing the lifetime
+    themselves."""
 
+    @abc.abstractmethod
     def log(self, metrics: Metrics, step: int) -> None: ...
-
-    def close(self) -> None: ...
-
-    def __enter__(self) -> "Logger": ...
-
-    def __exit__(self, *exc: object) -> None: ...
-
-
-class _Closing:
-    """``with logger:`` → ``close()`` on exit, also on exceptions."""
 
     def close(self) -> None:
         pass
@@ -60,12 +53,12 @@ def to_floats(metrics: Metrics) -> dict[str, float]:
     return {k: float(v) for k, v in metrics.items()}
 
 
-class NullLogger(_Closing):
+class NullLogger(Logger):
     def log(self, metrics: Metrics, step: int) -> None:
         pass
 
 
-class ListLogger(_Closing):
+class ListLogger(Logger):
     """Keeps every ``(step, metrics)`` it receives; for tests and notebooks."""
 
     def __init__(self) -> None:
@@ -75,7 +68,7 @@ class ListLogger(_Closing):
         self.records.append((step, to_floats(metrics)))
 
 
-class PrintLogger(_Closing):
+class PrintLogger(Logger):
     def __init__(self, every: int = 1, keys: tuple[str, ...] | None = None) -> None:
         self.every, self.keys = every, keys
 
@@ -88,7 +81,7 @@ class PrintLogger(_Closing):
         print(f"step {step} | {body}")
 
 
-class WandbLogger(_Closing):
+class WandbLogger(Logger):
     """``run.log(metrics, step=step)`` on a ``wandb`` run the caller created and will
     finish (``close`` does not finish it)."""
 
@@ -100,7 +93,7 @@ class WandbLogger(_Closing):
             self.run.log(to_floats(metrics), step=step)
 
 
-class DelayedLogger(_Closing):
+class DelayedLogger(Logger):
     """Forward each ``log`` call one call later (see the module docstring)."""
 
     def __init__(self, inner: Logger) -> None:

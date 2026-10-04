@@ -8,7 +8,7 @@ verified_by: joon (review round 1, 2026-10-04); round 2 pending
 
 # ADR-0009 — Trainer: injected logging and checkpointing, losses as weighted terms, schedules in the state
 
-**Status**: accepted (2026-10-04, branch `trainer`; decisions taken with Joon on 2026-10-04); amended after review round 1 (loader-side transfer, finite validation dataset, context managers, terms/aux split, typed schedule state).
+**Status**: accepted (2026-10-04, branch `trainer`; decisions taken with Joon on 2026-10-04); amended after review round 1 (loader-side transfer, finite validation dataset, context managers, terms/aux split, typed schedule state) and round 2 (`Logger`/`Checkpointer` as base classes; loaders must not start reader pools).
 
 ## Context
 
@@ -28,20 +28,48 @@ evaluate on held-out data, and let the trainer — not the loss — own curricul
 state, step, key, schedule state; optimizer and trainable filter static) is everything
 that changes; `train_step(state, batch) -> (state, metrics)` is a jitted pure function.
 `train(model_or_state, loader, *, num_steps, key, logger, checkpointer, evaluate,
-eval_every)` is the loop, with `Logger` and `Checkpointer` *protocols* (`NullLogger`,
-`NullCheckpointer` for tests; `PrintLogger`, `ListLogger`, `WandbLogger` wrapping a run the
-caller created; `OrbaxCheckpointer` taking a directory the caller chose) and an
-`evaluate(model) -> {name: float}` callable. The loop never reads a device value: the
-logger decides when to synchronize. Logger and checkpointer are context managers
-(`with log, ckpt:`), so they close — and the `DelayedLogger` flushes — even when a step
-raises; `close()` remains for callers managing lifetimes themselves.
+eval_every)` is the loop, with `Logger` and `Checkpointer` **abstract base classes**
+(`NullLogger`, `NullCheckpointer` for tests; `PrintLogger`, `ListLogger`, `WandbLogger`
+wrapping a run the caller created; `OrbaxCheckpointer` taking a directory the caller
+chose) and an `evaluate(model) -> {name: float}` callable. The loop never reads a device
+value: the logger decides when to synchronize. The base classes carry the lifetime
+logic: `close()` is a no-op unless overridden, and both are context managers
+(`with log, ckpt:`; exit calls `close`), so they close — and the `DelayedLogger`
+flushes — even when a step raises; `close()` remains for callers managing lifetimes
+themselves.
+
+- *Rejected* (review round 2): `Logger`/`Checkpointer` as `Protocol`s with a shared
+  `_Closing` mixin for the context-manager methods (round 1's shape). Every concrete class
+  had to inherit the mixin anyway, so the protocol only restated what the mixin provided
+  and the mixin was duplicated in two modules; a base class with the methods baked in is
+  the same contract with one definition.
 
 The loop does **not** move batches to the device. grain's JAX training tutorial calls a
 `jax.device_put` in the loop its option A, where "the host blocks while the device
 receives data", and recommends its option C, `grain.experimental.device_put` — a CPU
 prefetch thread, the transfer, and a device-side buffer — "for real training".
-`data.to_device(dataset)` wraps that; the trainer accepts whatever the loader yields
+`data.to_device(dataset, device)` wraps that, with the device given by the caller (no
+auto-selection on a shared cluster); the trainer accepts whatever the loader yields
 (NumPy batches still work: `jit` transfers them synchronously, which is fine for tests).
+
+**Loaders must not start grain's default reader pool** (review round 2, measured on CPU
+in `scripts/bench_dataloader.py`). The training loop is host-sensitive: its cost per
+step is the Python dispatch of one jitted call, ≈15 ms here. Iterating a `MapDataset`
+directly, or `to_iter_dataset()` with default `ReadOptions`, starts 16 reader threads
+and a 500-element prefetch buffer; those threads contend with the loop for the GIL and
+the dispatch alone grew to ≈90 ms, with the device idle (`dispatch == total`). With one
+reader thread (`data.single_threaded`, `ReadOptions(num_threads=1,
+prefetch_buffer_size=1)`) under `to_device`'s two single-thread prefetch stages the step
+returned to ≈22 ms. `to_device` and the `Evaluator` read grain datasets this way; a
+training loader is `to_device(windows(...).batch(B), device)`, never the `MapDataset`
+itself. Deduced from the measurement and grain's `ReadOptions` defaults, not from a
+documented grain recommendation.
+
+- *Pending* (GPU, C7): whether committed device-resident batches dispatch slower than
+  uncommitted ones next to an uncommitted `TrainerState` (the V100 pattern), and whether
+  `mp_prefetch` adds anything over `to_device`. The decision this gates: committing the
+  state at `Trainer.init` versus keeping loader batches uncommitted. To be filled in from
+  Joon's `scripts/bench_dataloader.py --device <n>` run.
 
 - *Rejected*: the trainer constructing the wandb run and the run directory. Both belong to
   the experiment script (Hydra owns directories, Phase D), and tests must not need them.

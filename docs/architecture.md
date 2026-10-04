@@ -80,8 +80,8 @@ deep_isochron
 │   │                        weighted named terms; ConjugacyTrajectoryLoss,
 │   │                        PhaseAutoencoderLoss
 │   ├── schedules.py         Constant / StepSchedule (curriculum) / ThresholdSwitch
-│   ├── loggers.py           Logger protocol; Null / List / Print / Wandb; DelayedLogger
-│   ├── checkpoint.py        Checkpointer protocol; OrbaxCheckpointer (whole state)
+│   ├── loggers.py           Logger base class; Null / List / Print / Wandb; DelayedLogger
+│   ├── checkpoint.py        Checkpointer base class; OrbaxCheckpointer (whole state)
 │   └── evaluation.py        Evaluator(val_data, reference) on the model contract
 └── misc.py                  inv_softplus, squashed_exp, polar ↔ cartesian
 

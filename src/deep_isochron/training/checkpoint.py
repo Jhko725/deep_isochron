@@ -13,9 +13,10 @@ the caller passes; nothing here invents paths or metadata.
 
 from __future__ import annotations
 
+import abc
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast, Protocol, runtime_checkable, TypeVar
+from typing import Any, cast, TypeVar
 
 import equinox as eqx
 import jax
@@ -25,20 +26,14 @@ from orbax.checkpoint import v1 as ocp
 S = TypeVar("S", bound=eqx.Module)
 
 
-@runtime_checkable
-class Checkpointer(Protocol):
-    """``save(step, state, metrics)``; a context manager whose exit closes it."""
+class Checkpointer(abc.ABC):
+    """Base class: subclasses implement ``save(step, state, metrics)``. Every
+    checkpointer is a context manager whose exit calls ``close()`` (a no-op unless
+    overridden), also when the loop raised."""
 
+    @abc.abstractmethod
     def save(self, step: int, state: Any, metrics: Mapping[str, float]) -> None: ...
 
-    def close(self) -> None: ...
-
-    def __enter__(self) -> "Checkpointer": ...
-
-    def __exit__(self, *exc: object) -> None: ...
-
-
-class _Closing:
     def close(self) -> None:
         pass
 
@@ -49,12 +44,12 @@ class _Closing:
         self.close()
 
 
-class NullCheckpointer(_Closing):
+class NullCheckpointer(Checkpointer):
     def save(self, step: int, state: Any, metrics: Mapping[str, float]) -> None:
         pass
 
 
-class OrbaxCheckpointer(_Closing):
+class OrbaxCheckpointer(Checkpointer):
     """See the module docstring. ``metric`` is the key of ``metrics`` the best
     checkpoint is chosen by (smaller is better unless ``maximize``)."""
 
