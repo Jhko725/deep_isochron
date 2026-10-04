@@ -143,4 +143,4 @@ so minimization passes `reverse=True`.
   is the squared Euclidean norm per point (formerly the per-coordinate mean, a factor
   `dim`).
 - Training runs put the transfer in the loader (`to_device`); `validation_windows` is the
-  validation source. American English throughout the repository (`CLAUDE.md`).
+  validation source.
