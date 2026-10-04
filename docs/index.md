@@ -37,7 +37,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [0002](decisions/0002-identity-at-zero.md) | accepted | `constrain(0)` is the identity |
 | [0003](decisions/0003-declared-smoothness.md) | accepted | regularity is declared, not inferred |
 | [0004](decisions/0004-abstractvar-fields.md) | accepted | `AbstractVar` as `eqx.field(static=True, init=False)` |
-| [0005](decisions/0005-constraint-primitives.md) | accepted | constraint primitives created inside `constrain` |
+| [0005](decisions/0005-constraint-primitives.md) | accepted; amended | constraint primitives created inside `constrain`; shift computed lazily (no JAX at import) |
 | [0006](decisions/0006-cubic-bspline-boundary-and-inverse.md) | accepted | `CubicBSpline` boundary and inverse |
 | [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | accepted; amended | `AbstractODE`/`AbstractNormalForm`, `SolverConfig`, integrations as objects |
 | [0008](decisions/0008-dataset-format-and-sampling.md) | accepted; amended | netCDF4 datasets via xarray; weighted windows alongside `mix` |

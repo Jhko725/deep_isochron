@@ -29,6 +29,7 @@ The stateless primitives are also available as module-level singletons ``free`` 
 """
 
 import abc
+import functools
 
 import jax
 import jax.numpy as jnp
@@ -69,11 +70,18 @@ class _Shifted(Constraint):
 
     def _init_shift(self, at_zero: float) -> None:
         self.at_zero = at_zero
-        # Concrete even inside a trace: constructing a primitive under jit/vmap must not
-        # stage this computation (a traced float() would raise ConcretizationTypeError).
-        # Requires _inverse to be plain jnp (no jit-decorated helpers; see Interval).
+
+    @functools.cached_property
+    def _shift(self) -> float:
+        """Computed on first use, not at construction: module-level primitives
+        (``A_CONSTRAINT``, ``DECAY_CONSTRAINT``, ...) must not initialize a JAX backend
+        at import time — a grain worker process importing the package would otherwise
+        grab GPU memory (ADR-0005). Concrete even inside a trace: constructing a
+        primitive under jit/vmap must not stage this computation (a traced ``float()``
+        would raise ``ConcretizationTypeError``). Requires ``_inverse`` to be plain
+        ``jnp`` (no jit-decorated helpers; see ``Interval``)."""
         with jax.ensure_compile_time_eval():
-            self._shift = float(self._inverse(jnp.asarray(at_zero)))
+            return float(self._inverse(jnp.asarray(self.at_zero)))
 
     @abc.abstractmethod
     def _forward(self, raw: Float[Array, " *n"]) -> Float[Array, " *n"]: ...
