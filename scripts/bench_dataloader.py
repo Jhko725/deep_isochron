@@ -224,13 +224,16 @@ _HLO_NO_LAUNCH = {"parameter", "constant", "get-tuple-element", "tuple", "bitcas
 
 def hlo_launch_estimate(
     text: str,
-) -> tuple[int, list[tuple[str, int | None, int]], int]:
-    """``(instructions, loops, launches)`` from optimized HLO text: the module's
-    instruction count, one ``(name, trip_count, launches_per_iteration)`` per ``while``
-    (trip count from XLA's ``known_trip_count`` annotation when present), and an
+) -> tuple[int, list[tuple[str, int | None, int]], int, int]:
+    """``(instructions, loops, launches, conditionals)`` from optimized HLO text: the
+    module's instruction count, one ``(name, trip_count, launches_per_iteration)`` per
+    ``while`` (trip count from XLA's ``known_trip_count`` annotation when present), an
     *estimate* of kernel launches per call — every instruction other than a parameter,
     constant, tuple or bitcast counts one, a loop body counts ``trip_count`` times (once
-    when unknown), ``call``s are inlined, ``conditional`` branches are summed."""
+    when unknown), ``call``s are inlined, ``conditional`` branches are summed — and the
+    number of ``conditional`` executions per call (loop multiplicity included): on the
+    GPU backend each one needs its predicate on the host, i.e. a device-to-host copy the
+    launching thread waits for."""
     comps: dict[str, list[str]] = {}
     entry: str | None = None
     current: list[str] | None = None
@@ -245,12 +248,13 @@ def hlo_launch_estimate(
     if entry is None:
         raise ValueError("no ENTRY computation in the HLO text")
     loops: list[tuple[str, int | None, int]] = []
+    conditionals = [0]
 
     def ref(line: str, key: str) -> str | None:
         m = re.search(rf"{key}=%(\S+?)[,\s)]", line + " ")
         return m.group(1) if m else None
 
-    def cost(name: str) -> int:
+    def cost(name: str, mult: int = 1) -> int:
         n = 0
         for line in comps.get(name, []):
             m = _HLO_INSTR.match(line)
@@ -260,36 +264,65 @@ def hlo_launch_estimate(
                 continue
             if op == "call":
                 target = ref(line, "to_apply")
-                n += cost(target) if target else 1
+                n += cost(target, mult) if target else 1
             elif op == "while":
                 body, cond = ref(line, "body"), ref(line, "condition")
-                per = (cost(body) if body else 0) + (cost(cond) if cond else 0)
                 t = re.search(r'known_trip_count\\?":\{\\?"n\\?":\\?"(\d+)', line)
                 trip = int(t.group(1)) if t else None
+                inner = mult * (trip or 1)
+                per = cost(body, inner) if body else 0
+                per += cost(cond, inner) if cond else 0
                 loops.append((m.group(1), trip, per))
                 n += per * (trip or 1)
             elif op == "conditional":
+                conditionals[0] += mult
                 branches = re.findall(r"(?:true|false)_computation=%(\S+?)[,\s)]", line)
                 branches += re.findall(r"branch_computations=\{([^}]*)\}", line)
-                n += 1 + sum(cost(b.strip().lstrip("%")) for b in branches)
+                n += 1 + sum(cost(b.strip().lstrip("%"), mult) for b in branches)
             else:
                 n += 1
         return n
 
-    return sum(len(v) for v in comps.values()), loops, cost(entry)
+    launches = cost(entry)
+    return sum(len(v) for v in comps.values()), loops, launches, conditionals[0]
 
 
-def report_hlo_stats(trainer: Trainer, state, batch) -> None:
+def report_hlo_stats(trainer: Trainer, state, batch, device: jax.Device) -> None:
     text = trainer.train_step.lower(state, batch).compile().compiled.as_text()
-    instructions, loops, launches = hlo_launch_estimate(text)
+    instructions, loops, launches, conditionals = hlo_launch_estimate(text)
     print(
         f"\ncompiled step: {instructions} HLO instructions, {len(loops)} while loops, "
         f"≈{launches} kernel launches per step (estimate; a launch costs the host of "
-        f"the order of 5–10 µs)"
+        f"the order of 5–10 µs), {conditionals} conditional executions per step (on "
+        f"the GPU backend each waits for its predicate from the device)"
     )
     for name, trip, per in sorted(loops, key=lambda x: -(x[1] or 1) * x[2])[:12]:
         trip_s = "?" if trip is None else str(trip)
         print(f"  {name:<32} trip count {trip_s:>5} × {per:>5} launches/iteration")
+
+    # the suspect: jax.scipy.linalg.expm (BiLipschitzLinear's rotations) is a 16-step
+    # scan of lax.cond; time one 2×2 expm against the closed-form rotation
+    a = jax.device_put(jnp.array([[0.0, -0.3], [0.3, 0.0]]), device)
+    expm = jax.jit(jax.scipy.linalg.expm)
+
+    def rotation(m):
+        c, s = jnp.cos(m[1, 0]), jnp.sin(m[1, 0])
+        return jnp.array([[c, -s], [s, c]])
+
+    rot = jax.jit(rotation)
+
+    def ms(fn, n=100) -> tuple[float, float]:
+        fn(a).block_until_ready()
+        t0 = time.perf_counter()
+        for _ in range(n):
+            out = fn(a)
+        t1 = time.perf_counter()
+        out.block_until_ready()
+        return 1e3 * (t1 - t0) / n, 1e3 * (time.perf_counter() - t0) / n
+
+    for name, fn in [("expm (2×2)", expm), ("closed-form rotation", rot)]:
+        d, t = ms(fn)
+        print(f"  {name:<32} dispatch {d:7.3f} ms   total {t:7.3f} ms per call")
 
 
 def main() -> None:
@@ -381,7 +414,7 @@ def main() -> None:
     # interleaved repeats
     time_steps(trainer, state, cycle(resident), 5)
     if args.hlo_stats:
-        report_hlo_stats(trainer, state, resident[0])
+        report_hlo_stats(trainer, state, resident[0], device)
     time_floor(cycle(resident), 5)
     floor: dict[str, list[float]] = {"committed": [], "uncommitted": [], "numpy": []}
     fetch: dict[str, list[float]] = {name: [] for name, _ in fetch_rows}
