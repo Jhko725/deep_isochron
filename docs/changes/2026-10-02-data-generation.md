@@ -526,17 +526,17 @@ Review round 3:
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/deep_isochron/systems/normal_forms/base.py`: `to_polar`/`from_polar`; `_log_growth_rate_sq`/`_angular_rate_sq`; `default_integration = "closed_form"`; `flow(integration=None)` | | |
-| `src/deep_isochron/systems/normal_forms/{hopf,bautin,integration}.py`: renamed hooks and chart calls | | |
-| `src/deep_isochron/data/generate.py`, `configs/data/*.yaml`: default integration from the system | | |
-| `src/deep_isochron/data/windows.py`: `categorical(rng, weights)` | | |
-| `src/deep_isochron/model/base.py`: `AbstractPhaseAmplitudeModel` (new) | | |
-| `src/deep_isochron/model/conjugacy.py`: implements the contract; `latent_dynamics: AbstractNormalForm`; no `return_latent_trajectory` | | |
-| `src/deep_isochron/model/autoencoder.py`, `model/__init__.py`: implements the contract; exports | | |
-| `tests/helpers.py`: `SOLVERS` with reasons; `Tsit5` | | |
-| `tests/test_{systems,normal_forms,data}.py`: use `SOLVERS`; default-integration and `categorical` tests | | |
-| `tests/test_models.py`: new (4 tests) | | |
-| `prototype.ipynb`: `to_polar` | | |
-| `docs/design/normal-forms.md`: inline math unwrapped; status line; §9 hook names | | |
-| `docs/index.md` (new), frontmatter on all `docs/`, `CLAUDE.md`: OKF-lite; Markdown rule | | |
-| `docs/architecture.md`, `docs/roadmap.md`, `docs/decisions/0007-…`: round 3 | | |
+| `src/deep_isochron/systems/normal_forms/base.py`: `to_polar`/`from_polar`; `_log_growth_rate_sq`/`_angular_rate_sq`; `default_integration = "closed_form"`; `flow(integration=None)` | Looks good. Also confirmed the closed form integrations work by running the first few cells of `prototype.ipynb`. | Added `.ys` in parts of `prototype.ipynb` (due to the changed return signature of the `flow` method) and formatted the imports. |
+| `src/deep_isochron/systems/normal_forms/{hopf,bautin,integration}.py`: renamed hooks and chart calls | Simple changes. | None |
+| `src/deep_isochron/data/generate.py`, `configs/data/*.yaml`: default integration from the system | Looks good. | None |
+| `src/deep_isochron/data/windows.py`: `categorical(rng, weights)` | Looks good. | None |
+| `src/deep_isochron/model/base.py`: `AbstractPhaseAmplitudeModel` (new) | Looks good. | None |
+| `src/deep_isochron/model/conjugacy.py`: implements the contract; `latent_dynamics: AbstractNormalForm`; no `return_latent_trajectory` | Looks good. | None |
+| `src/deep_isochron/model/autoencoder.py`, `model/__init__.py`: implements the contract; exports | Looks good. | None |
+| `tests/helpers.py`: `SOLVERS` with reasons; `Tsit5` | Looks good. | None |
+| `tests/test_{systems,normal_forms,data}.py`: use `SOLVERS`; default-integration and `categorical` tests | Confirmed. | None |
+| `tests/test_models.py`: new (4 tests) | Looks good, but will further scrutinize later. ty flass code is unreachable for `test_phase_amplitude_contract`, starting from the line `assert model.amplitude(x).shape == ()`. Is this a problem? | Deferred to Claude. |
+| `prototype.ipynb`: `to_polar` | Confirmed. | None |
+| `docs/design/normal-forms.md`: inline math unwrapped; status line; §9 hook names | Code renders cleanly in VS code, but some parts break in GitHub. Unavoidable, or can be fixed? Will supply the offending lines as screenshots to Claude in the next discussion session. | Deferred to the next discussion with Claude. |
+| `docs/index.md` (new), frontmatter on all `docs/`, `CLAUDE.md`: OKF-lite; Markdown rule | Confirmed. | None. |
+| `docs/architecture.md`, `docs/roadmap.md`, `docs/decisions/0007-…`: round 3 | Overall looks good. For `roadmap.md`, though, organize the done table in chronological order. Fix the ordering this time, and for all future edits, always append at the end. (May want to supply this append-at-the-end rule to CLAUDE.md as well.) | Deferred to Claude. |
