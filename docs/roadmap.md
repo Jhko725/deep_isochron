@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-04
+updated: 2026-10-05
 sources: [joon, claude]
 ---
 
@@ -37,7 +37,7 @@ this order:
 | B11 | `AbstractNormalForm` reimplemented against the design document §9 (`_sq` hooks, API in `r`, `κ = ρ'(1)`, `Ψ` normalized, `eigenvalues_origin`, `(Θ, Ψ)` chart with differentiable `Ψ⁻¹`, `ClosedFormIntegration`); tests per §10; ADR-0007 amended | — | *done 2026-10-03* |
 | B12 | Yawata et al. (Chaos 34, 063111, 2024) baseline per `docs/design/normal-forms.md` §5.3: `PhaseAmplitudeLatentDynamics(omega, kappa)` (replaces `LinearLatentDynamics`), `PhaseAmplitudeAutoencoder` with unit-circle normalization, `phase`/`phase_sensitivity`; `PhaseAutoencoderLoss` (Eqs. (21)–(26), `α_k` and weight schedules); `OnCycleGaussian` sampler; `tests/test_baseline.py` against the exact chart + a `slow` training test on Hopf (Θ asserted up to a constant; Ψ, κ reported) | the paper's baseline; §5.4 says what it learns | *done 2026-10-03* |
 
-## Phase C — `trainer` (current; C1–C6 landed 2026-10-04; review round 1 applied)
+## Phase C — `trainer` (current; C1–C7 landed 2026-10-05; review round 2 in progress)
 
 Decisions taken with Joon on 2026-10-04 (ADR-0009): step-dependent loss weights for
 curricula; the one-step-delayed logging kept as a `DelayedLogger` adapter (JAX cookbook
@@ -54,7 +54,8 @@ checkpoint directories owned by the caller (Hydra in D3); `scripts/training/` de
 | C4 | `OrbaxCheckpointer(directory, save_every, metric, custom_metadata)`: whole `TrainerState`, `FixedInterval` + `Any([LatestN(1), BestN])`, `restore(template, step)`, resume | *done 2026-10-04* |
 | C5 | `tests/test_training.py` (15 tests); the slow B12 test runs through the trainer | *done 2026-10-04* |
 | C6 | `scripts/training/` deleted; notebook on the new API; ADR-0009; architecture | *done 2026-10-04* |
-| C7 | Data-pipeline prefetch. `data.to_device` is the training-run path; **found**: grain's default 16 reader threads (bare `iter(MapDataset)` / default `to_iter_dataset()`) contend with the loop for the GIL — 6× slower dispatch on CPU; fixed with a single reader (`single_threaded`). `scripts/bench_dataloader.py` now reports dispatch vs total, a dispatch floor and committed/uncommitted inputs, interleaved; `--device` required. Remaining: the V100 run (resident batches slowest) with the new script, then close with numbers | pending GPU numbers |
+| C7 | Data-pipeline prefetch. `data.to_device(dataset, device)` is the training-run path; **found**: grain's default 16 reader threads (bare `iter(MapDataset)` / default `to_iter_dataset()`) contend with the loop for the GIL — 6× slower dispatch on CPU; fixed with a single reader (`single_threaded`). V100 (2026-10-05): `to_device` 94 ms/step vs 92 device-resident, dispatch floors 0.8 ms for committed/uncommitted/NumPy (no state commit needed); NumPy-in-loop 488, `mp_prefetch(4)+to_device` 464 — both rejected | *done 2026-10-05* |
+| C8 | *Proposed.* The step is host-bound on the V100 at ~92 ms (batch 512 × 50) with the data already on the device: dispatch ≈ total while the dispatch floor is 0.8 ms. Leading reading: launch-bound by `_radius_from_isostable`'s 64 + 48 serialized `fori_loop` iterations (with `jax.grad` inside, differentiated in reverse) under `vmap`. Decide with `bench_dataloader.py --batch 64/2048` (flat dispatch → launch-bound) and `--profile`; then fewer iterations / `unroll` / fusing the root solve, or accept and train with larger batches | dispatch ≪ total, or a documented decision to live with it |
 
 ## Phase D — `experiment-config`
 
@@ -135,3 +136,4 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-10-04 | `data-generation` | Review round 4: design-document math made GitHub-safe (standalone `$$` blocks; no backslash-punctuation escapes, `*`, `\\` or emphasis-forming `_` inside inline math) with `scripts/check_md_math.py`; Done ledger chronological; ty-unreachable asserts fixed | `docs/changes/2026-10-02-data-generation.md` |
 | 2026-10-04 | `trainer` | C1–C6: `Trainer`/`TrainerState` with injected `Logger`/`Checkpointer` and `DelayedLogger`; `AbstractLoss` weighted terms + building blocks; schedules (`Constant`, `StepSchedule`, `ThresholdSwitch`) in the state; `Evaluator`; `OrbaxCheckpointer` (whole state, resume); `test_training.py`; `scripts/training/` deleted | `docs/changes/2026-10-04-trainer.md`, ADR-0009 |
 | 2026-10-04 | `trainer` | Review round 1: loader-side transfer (`data.to_device`), `validation_windows` + `Evaluator` over a finite dataset with streamed statistics, logger/checkpointer context managers, loss `terms`/`aux` split, typed schedule state, `circular_std` rationale, American English | `docs/changes/2026-10-04-trainer.md`, ADR-0009 |
+| 2026-10-05 | `trainer` | Review round 2: `Logger`/`Checkpointer` base classes; grain single-reader rule (`single_threaded`, `to_device(dataset, device)`); lazy `_shift` (no JAX at import); `scripts/bench_dataloader.py` redesigned; C7 closed on V100 numbers (`to_device`; `mp_prefetch` rejected; no state commit) | `docs/changes/2026-10-04-trainer.md`, ADR-0009 |

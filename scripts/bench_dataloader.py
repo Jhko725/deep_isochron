@@ -283,9 +283,10 @@ def main() -> None:
     for name, _ in step_rows:
         print(f"{name:<48}{cell(dispatch[name]):>18}{cell(total[name]):>18}")
     print(
-        "\nRead: dispatch ≈ total → the host is the bottleneck (Python dispatch, GIL); "
-        "dispatch ≪ total → the device is.\nA dispatch floor of the order of the step "
-        "means handing the pytrees to JAX dominates, whatever the loader does.\n"
+        "\nRead: dispatch ≈ total → the host is the bottleneck: Python dispatch / GIL "
+        "if the floor is of the order of the step, otherwise kernel launches or a sync "
+        "inside the executable (launch-bound dispatch is flat in --batch; device-bound "
+        "scales with it); dispatch ≪ total → the device is.\n"
         "to_device ≈ device-resident → the prefetch thread keeps up and mp_prefetch is "
         "unnecessary; to_device ≈ fetch only → the fetch is the bottleneck."
     )

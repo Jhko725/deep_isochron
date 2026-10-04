@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0009
 status: accepted; amended
-updated: 2026-10-04
+updated: 2026-10-05
 verified_by: joon (review round 1, 2026-10-04); round 2 pending
 ---
 
@@ -65,11 +65,25 @@ training loader is `to_device(windows(...).batch(B), device)`, never the `MapDat
 itself. Deduced from the measurement and grain's `ReadOptions` defaults, not from a
 documented grain recommendation.
 
-- *Pending* (GPU, C7): whether committed device-resident batches dispatch slower than
-  uncommitted ones next to an uncommitted `TrainerState` (the V100 pattern), and whether
-  `mp_prefetch` adds anything over `to_device`. The decision this gates: committing the
-  state at `Trainer.init` versus keeping loader batches uncommitted. To be filled in from
-  Joon's `scripts/bench_dataloader.py --device <n>` run.
+**GPU outcome (V100, 2026-10-05; C7 closed).** `scripts/bench_dataloader.py --device 0`,
+batch 512 × window 50, conjugacy model, 30 steps × 3 interleaved repeats: the dispatch
+floor is 0.8 ms for committed, uncommitted and NumPy batches alike, so handing the
+pytrees to JAX costs nothing and the earlier "committed inputs are slow" pattern was the
+old script's artifact — the state is **not** committed at `Trainer.init`. Device-resident
+batches step in 92 ms, `to_device` in 94 ms: the loader-side prefetch keeps up and is the
+training-run path. NumPy batches in the loop (grain's option A) take 488 ms and
+`mp_prefetch(4) + to_device` 464 ms (although the fetch alone drops 27 → 7 ms), so
+neither is used; the `mp_prefetch` slowdown is most plausibly its four worker processes
+competing for CPU with a host-bound main thread (unverified; needs the job's `nproc`).
+The step itself is host-bound (dispatch ≈ total at 92 ms with no data work), which is a
+model/XLA matter, not the loader's — recorded in the roadmap as the next performance
+item.
+
+- *Rejected*: committing the `TrainerState` to the device at `init` — the floors show no
+  committed/uncommitted difference to fix.
+- *Rejected*: `mp_prefetch` in the default pipeline — measured 5× slower end to end on
+  the V100 even though the fetch itself is faster; kept available for a loader whose
+  fetch genuinely dominates.
 
 - *Rejected*: the trainer constructing the wandb run and the run directory. Both belong to
   the experiment script (Hydra owns directories, Phase D), and tests must not need them.
