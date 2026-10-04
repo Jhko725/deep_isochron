@@ -6,7 +6,7 @@ invertible package, closing its design before the data/trainer phases build on i
 ## Summary
 
 Collapses the two hand-written coupling classes onto `CouplingFlow` via `Shift`/`Affine`
-scalar templates (A1); makes identity-at-init a universal law by initialising the linear
+scalar templates (A1); makes identity-at-init a universal law by initializing the linear
 layers to `I` and bringing `BiLipschitzLinear` into the `raw`/`constrain` shape (A2, A3);
 settles `InvertibleLinear`'s orientation (A4); documents the scalar-bijection
 implementation checklist, the `CubicBSpline` design and the package architecture (A5–A7);
@@ -40,7 +40,7 @@ removes the remaining `ty: ignore`s and moves `matplotlib` to the dev group (A8,
 - `src/deep_isochron/model/invertible/splines/cubic.py` — docstring: corrected inverse
   error-bound claim; links to ADR-0006 and the design note.
 - `docs/decisions/0006-cubic-bspline-boundary-and-inverse.md` — new ADR (A6).
-- `docs/design/cubic-bspline.md` — new math note: index conventions, parametrisation,
+- `docs/design/cubic-bspline.md` — new math note: index conventions, parametrization,
   `C²` boundary argument, pieces, inverse guarantees (A6).
 - `docs/architecture.md` — new: module map, invertible-package overview, systems/chart,
   training-step data flow, tests, ADR index (A7).
@@ -81,7 +81,7 @@ Review follow-up (commit after `2d081e6`):
 - **A1 — factory functions, not subclasses.** `AffineCoupling`/`ResidualCoupling` keep
   their names (the notebook and the registry use them) but are plain functions returning a
   `CouplingFlow`. A subclass `class AffineCoupling(CouplingFlow)` was rejected: it would
-  add a type with no behaviour of its own, and `tests/test_registry.py` would then demand
+  add a type with no behavior of its own, and `tests/test_registry.py` would then demand
   a registry entry for a class that is just a template choice. The `# noqa: N802` marks
   the deliberate CapWords on a function.
 - **A1 — `Affine` scale via `BoundedPositive(0, at_zero=1, a=clamp)`.** This is exactly
@@ -97,7 +97,7 @@ Review follow-up (commit after `2d081e6`):
   convention.
 - **A1 — `ResidualCoupling` is now identity at init.** The former class never zeroed its
   MLP's final layer, so a fresh `ResidualCoupling` was a random translation. Through
-  `CouplingFlow` it inherits the zero-initialised final layer, and `constrain(0)` of
+  `CouplingFlow` it inherits the zero-initialized final layer, and `constrain(0)` of
   `Shift` is `loc = 0` (ADR-0002).
 
 - **A4 — `InvertibleLinear` removed rather than reparametrised.** The alternative was
@@ -117,7 +117,7 @@ Review follow-up (commit after `2d081e6`):
 - **A2 — identity is the default init; rotation opt-in.** With `raw_U = raw_V = 0` and
   `raw_s = 0` (`Interval(1/L, L, at_zero=1)` puts the shift in the map, ADR-0002) the
   layer is `I`, so an INN of alternating linear and coupling layers starts as the
-  identity. The roadmap's "Parked" initialisation-strategy enum is not introduced; the
+  identity. The roadmap's "Parked" initialization-strategy enum is not introduced; the
   one `Literal["identity", "rotation"]` argument on the one class that has a choice is
   enough.
 - **A3 — three raw leaves, not one `raw` vector.** `BiLipschitzLinear` is a vector
@@ -251,7 +251,7 @@ skipped; `ty check src` clean (`--python` pointing at a venv with `wandb` instal
 | `src/.../invertible/splines/base.py`: cross-link to the checklist | Confirmed. | None |
 | `src/.../invertible/splines/cubic.py`: corrected inverse-bound claim; doc links | Doc links are  good. No need to mention bisection bounds in the doc string (its not the actual bound, so is superfluous). | Doc string changed to refer to the design docs for discussions on convergence. |
 | `docs/decisions/0006-cubic-bspline-boundary-and-inverse.md`: Greville pinning; bracketed Newton inverse | Read through. Looks good. | None |
-| `docs/design/cubic-bspline.md`: indices, parametrisation, `C²` argument, inverse guarantees | Had a cursory look for now. Will revisit in the future for in-depth scrutiny when I start heavily using `CubicBSpline` for the learned bijections. | None |
+| `docs/design/cubic-bspline.md`: indices, parametrization, `C²` argument, inverse guarantees | Had a cursory look for now. Will revisit in the future for in-depth scrutiny when I start heavily using `CubicBSpline` for the learned bijections. | None |
 | `docs/architecture.md`: module map and data flow | On a high level, good. The specifics  will change with time, but so will the document. | None |
 | `CLAUDE.md`: architecture pointer | Read through the file. Good. | None |
 | `src/deep_isochron/systems/*.py`: `dim` as static `init=False` field; `t: ArrayLike` in `rhs` | Looks good. | None |

@@ -1,13 +1,13 @@
 r"""Losses as weighted sums of named terms (roadmap C2, ADR-0009).
 
-A loss is an ``AbstractLoss``: it computes a dictionary of **terms** from a model and a
-batch, names the terms that are weighted (``weight_names``), and ``__call__`` returns
-``(Σ_i w_i · term_i, terms)``. The weights are an argument — a vector in the order of
-``weight_names`` — so that the *trainer* owns their schedule (constant, step-dependent
-curriculum, or a threshold switch; ``training/schedules.py``), the loss stays a pure
-function, and the weights can be logged next to the terms. The building blocks the two
-losses are composed of are plain functions on arrays at the top of this module, reusable
-by future losses (Phase E).
+A loss is an ``AbstractLoss``: it computes the weighted **terms** (exactly the ones
+named by ``weight_names``) and unweighted **auxiliary** diagnostics from a model and a
+batch, and ``__call__`` returns ``(Σ_i w_i · term_i, terms | aux)``. The weights are an
+argument — a vector in the order of ``weight_names`` — so that the *trainer* owns their
+schedule (constant, step-dependent curriculum, or a threshold switch;
+``training/schedules.py``), the loss stays a pure function, and the weights can be
+logged next to the terms. The building blocks the two losses are composed of are plain
+functions on arrays at the top of this module, reusable by future losses (Phase E).
 
 Batches are the data layer's dicts ``{"t": (B, L), "u": (B, L, dim)}``; a model is an
 ``AbstractPhaseAmplitudeModel`` (``model(ts, x0) -> (xt, yt)``)."""
@@ -71,21 +71,32 @@ def batch_center_of_mass(y: Float[Array, "batch 2"]) -> Float[Array, ""]:
 
 # ------------------------------------------------------------------------ contract --
 class AbstractLoss(eqx.Module):
-    """``terms(model, batch)`` → named scalars; ``__call__`` weights the ones named in
-    ``weight_names`` (in that order) by ``weights`` (``None`` → ``default_weights``,
-    which an instance may override: ``ConjugacyTrajectoryLoss(default_weights=(1,
-    0.1))``; it is an ``init=True`` static field because equinox warns about float
-    leaves in ``init=False`` fields)."""
+    """``terms(model, batch) -> (terms, aux)``: ``terms`` holds exactly the weighted
+    scalars, keyed by ``weight_names``; ``aux`` holds unweighted diagnostics that are
+    logged alongside (``final`` error, learned ``omega``/``kappa``, ...). ``__call__``
+    returns ``(Σ_i weights[i] · terms[weight_names[i]], terms | aux)``; ``weights`` is
+    ``None`` → ``default_weights``, which an instance may override:
+    ``ConjugacyTrajectoryLoss(default_weights=(1, 0.1))`` (an ``init=True`` static
+    field because equinox warns about float leaves in ``init=False`` fields)."""
 
     weight_names: eqx.AbstractVar[tuple[str, ...]]
     default_weights: eqx.AbstractVar[tuple[float, ...]]
 
     @abc.abstractmethod
-    def terms(self, model: PyTree, batch: Batch) -> dict[str, Float[Array, ""]]: ...
+    def terms(
+        self, model: PyTree, batch: Batch
+    ) -> tuple[dict[str, Float[Array, ""]], dict[str, Float[Array, ""]]]: ...
 
     @property
     def num_weights(self) -> int:
         return len(self.weight_names)
+
+    def __check_init__(self) -> None:
+        if len(self.default_weights) != len(self.weight_names):
+            raise ValueError(
+                f"{type(self).__name__}: {len(self.default_weights)} default weights "
+                f"for {len(self.weight_names)} weighted terms {self.weight_names}."
+            )
 
     def __call__(
         self,
@@ -95,18 +106,28 @@ class AbstractLoss(eqx.Module):
     ) -> tuple[Float[Array, ""], dict[str, Float[Array, ""]]]:
         w = jnp.asarray(self.default_weights if weights is None else weights)
         batch = {k: jnp.asarray(v) for k, v in batch.items()}  # NumPy batches welcome
-        terms = self.terms(model, batch)
+        terms, aux = self.terms(model, batch)
+        if set(terms) != set(self.weight_names):
+            raise ValueError(
+                f"{type(self).__name__}.terms returned {sorted(terms)}; expected "
+                f"exactly {sorted(self.weight_names)} (put diagnostics in aux)."
+            )
+        if set(aux) & set(terms):
+            raise ValueError(
+                f"aux keys {sorted(set(aux) & set(terms))} clash with terms."
+            )
         total = sum(
             (w[i] * terms[name] for i, name in enumerate(self.weight_names)),
             start=jnp.asarray(0.0, dtype=w.dtype),
         )
-        return total, terms
+        return total, {**terms, **aux}
 
 
 class ConjugacyTrajectoryLoss(AbstractLoss):
     """Trajectory MSE in data space plus, weighted by ``latent``, the MSE between the
     encoded data and the latent prediction (``w_latent = 0`` reproduces the former
-    behaviour)."""
+    behavior). Auxiliary: ``final``, the error at the window's last time (prediction
+    error grows along the window; the mean hides a frequency drift)."""
 
     weight_names: tuple[str, ...] = eqx.field(
         static=True, init=False, default=("data", "latent")
@@ -117,11 +138,8 @@ class ConjugacyTrajectoryLoss(AbstractLoss):
         t, x = batch["t"], batch["u"]
         x_pred, y_pred = eqx.filter_vmap(model)(t, x[:, 0])
         y = jax.vmap(jax.vmap(model.bijection))(x)
-        return {
-            "data": trajectory_mse(x_pred, x),
-            "latent": trajectory_mse(y_pred, y),
-            "final": final_mse(x_pred, x),
-        }
+        terms = {"data": trajectory_mse(x_pred, x), "latent": trajectory_mse(y_pred, y)}
+        return terms, {"final": final_mse(x_pred, x)}
 
 
 class PhaseAutoencoderLoss(AbstractLoss):
@@ -133,7 +151,8 @@ class PhaseAutoencoderLoss(AbstractLoss):
     weights are the paper's first stage ``(1, 0.5, 0.5, 2)``; its switch to
     ``(1, 5, 0.5, 0)`` once ``pha < 0.01`` and ``aux < 0.05`` is
     ``schedules.ThresholdSwitch(YAWATA_STAGE_1, YAWATA_STAGE_2, {"pha": 0.01,
-    "aux": 0.05})`` in the trainer. ``omega`` and ``kappa`` are reported for logging.
+    "aux": 0.05})`` in the trainer. Auxiliary: ``omega`` and ``kappa`` of the latent
+    dynamics.
     """
 
     weight_names: tuple[str, ...] = eqx.field(
@@ -163,10 +182,11 @@ class PhaseAutoencoderLoss(AbstractLoss):
             "amp": per_component[2],
             "aux": batch_center_of_mass(y[:, 0, :2]),
         }
+        aux: dict[str, Float[Array, ""]] = {}
         if isinstance(model.latent_dynamics, PhaseAmplitudeLatentDynamics):
-            terms["omega"] = model.latent_dynamics.omega
-            terms["kappa"] = model.latent_dynamics.kappa
-        return terms
+            aux["omega"] = model.latent_dynamics.omega
+            aux["kappa"] = model.latent_dynamics.kappa
+        return terms, aux
 
 
 YAWATA_STAGE_1 = (1.0, 0.5, 0.5, 2.0)

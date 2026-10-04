@@ -93,7 +93,7 @@ Tests and docs:
   `docs/decisions/0007` amended; `docs/architecture.md`, `docs/roadmap.md`.
 - B12: `src/deep_isochron/model/latent_dynamics.py` (`PhaseAmplitudeLatentDynamics`,
   `DECAY_CONSTRAINT`; `LinearLatentDynamics` and the `solve_*` helpers removed),
-  `model/autoencoder.py` (rewritten: normalised encoder, `encode`/`decode`/`phase`/
+  `model/autoencoder.py` (rewritten: normalized encoder, `encode`/`decode`/`phase`/
   `amplitude`/`cycle_point`/`phase_sensitivity`; encoder/decoder as `Callable` fields),
   `model/__init__.py` (exports), `training/losses.py` (`PhaseAutoencoderLoss`),
   `training/trainer.py` (`Self` → string annotation so the package imports under the
@@ -220,11 +220,11 @@ below is the paper's.
   paper's latent dynamics is this specific rotation ⊕ decay, and nothing else used the
   general form.
 - **`PhaseAmplitudeAutoencoder`** (`model/autoencoder.py`): MLP encoder with the first two
-  outputs normalised to the unit circle (Eqs. (15)–(16), `normalise_phase_plane`), MLP
+  outputs normalized to the unit circle (Eqs. (15)–(16), `normalize_phase_plane`), MLP
   decoder (one layer deeper, as in the paper's 2×100 / 3×100), the latent flow;
   `phase(x) = atan2(Y₂, Y₁)` (Eq. (19)), `cycle_point(θ) = f_dec(cos θ, sin θ, 0)`,
   `phase_sensitivity(θ) = ∇ₓ phase` there by `jax.grad` (Eq. (20)). Defaults follow the
-  paper (ReLU, width 100, depth 2/3); batch normalisation is omitted (open issue). The
+  paper (ReLU, width 100, depth 2/3); batch normalization is omitted (open issue). The
   encoder/decoder fields are typed `Callable` so a test can substitute the exact chart
   of a normal form with `eqx.tree_at`.
 - **`PhaseAutoencoderLoss`** (`training/losses.py`): Eqs. (21)–(26) on a window batch.
@@ -246,7 +246,7 @@ below is the paper's.
   `κ → −0.47` against the exact `−2`, and `corr(Y₃, Ψ) ≈ −0.5`. The latter two are what
   the paper reports about its `λ` and `Y₃` ("closely related, though not equivalent"),
   and are the reason the design document says the baseline learns the phase but not the
-  isostable normalisation; the test asserts `Θ` (and `|ω|` to 5 %) and prints the rest.
+  isostable normalization; the test asserts `Θ` (and `|ω|` to 5 %) and prints the rest.
 
 ## Review round 3 (2026-10-04) — what changed in response
 
@@ -276,9 +276,9 @@ considered and dropped for now (roadmap, *Parked*), the loss refactor scheduled 
   implement so that Phase C/E code treats them alike: abstract `phase`, `amplitude`,
   `cycle_point`, `__call__(ts, x0) -> (xt, yt)`; final `phase_gradient`,
   `phase_sensitivity`. `amplitude` promises only an *isostable-like* coordinate with no
-  fixed normalisation (Joon's call): the conjugacy model's is `Ψ`, the autoencoder's
+  fixed normalization (Joon's call): the conjugacy model's is `Ψ`, the autoencoder's
   `Y₃` is only up to scale, and evaluation fits the scale. Kept minimal on purpose — its
-  shape is to be finalised as the science exposes rough edges. `ConjugateLatentDynamics`
+  shape is to be finalized as the science exposes rough edges. `ConjugateLatentDynamics`
   implements it through the normal form (`Θ_NF ∘ H`, `Ψ_NF ∘ H`, `H⁻¹ ∘ limit_cycle`), so
   its `latent_dynamics` is now typed `AbstractNormalForm`; the unused
   `return_latent_trajectory` flag is gone. `PhaseAmplitudeAutoencoder` loses its own
@@ -347,7 +347,7 @@ weighted windows alongside `mix`). Points specific to this branch:
   Bautin, `h(r) = c[ln r − ½ ln((1+br²)/(1+b))]`, `ψ(r) = (1−r²)(1+br²)^b / r^{2(1+b)}`,
   `c = (w−w₀)/a`; Hopf is the `b = 0` case. The identities hold to 1e-15 under autodiff
   (`test_phase_and_isostable_identities`) and the integrated versions to 1e-6
-  (`test_phase_and_amplitude_along_the_flow`). The `(1+b)` normalisation of `h` is what
+  (`test_phase_and_amplitude_along_the_flow`). The `(1+b)` normalization of `h` is what
   makes `h(1) = 0`, i.e. the phase on the cycle equals the polar angle.
 - **`floquet_exponent` is concrete on the base class** (`2·grad(radial_rate)(1)`), and the
   subclasses' closed forms are checked against it — one less thing a new normal form can
@@ -419,7 +419,7 @@ validation; `mixed_split` interleaves in ratio and rejects splits that do not fi
 
 `tests/test_normal_forms.py` after B11 (21 tests, design document §10): defining
 identities in `r` by autodiff (`ṙ = rρ(r)`, `ω + h'·rρ = ω₁`, `Ψ'·rρ = κΨ`, `Ψ'(1) = 1`,
-`Ψ < 0` inside), also inside the outer cycle for `−1 < b < 0`; `_sq` hooks equal the `r` views; Hopf `floquet_multiplier` equals the monodromy of the radial linearisation over one period (`−2a`); `h(1) = Ψ(1) = ρ(1) = 0`; `κ` and the
+`Ψ < 0` inside), also inside the outer cycle for `−1 < b < 0`; `_sq` hooks equal the `r` views; Hopf `floquet_multiplier` equals the monodromy of the radial linearization over one period (`−2a`); `h(1) = Ψ(1) = ρ(1) = 0`; `κ` and the
 `Ψ` limits in closed form for Hopf and Bautin; `eigenvalues_origin` equals the Jacobian of
 `rhs` at `0` (Hopf explicitly `a ± iω₀`); `rhs` equals `rhs_polar` through the chart;
 `isochron`/`limit_cycle`; Hopf = Bautin(b=0); the outer cycle for `b < 0` with `Ψ`
@@ -434,7 +434,7 @@ rejected/resolved; integrations static under `filter_jit`.
 the latent flow is rotation ⊕ decay with radius preserved and is a semigroup; `kappa ≥ 0`
 rejected; the exact chart `(cos Θ, sin Θ, Ψ)` of a drawn Hopf/Bautin form, pushed through
 the latent flow with `(ω₁, κ)`, equals the chart of the normal form's `closed_form` flow
-(the §5.3 correspondence); encoder normalisation (Eqs. (15)–(16)); shapes of
+(the §5.3 correspondence); encoder normalization (Eqs. (15)–(16)); shapes of
 `encode`/`phase`/`phase_sensitivity`/`__call__`; the loss vanishes on the exact chart
 except for the center-of-mass term, detects a wrong `ω` in `pha` only, switches weights,
 and reproduces `α_k = 1/k` for a badly wrong `ω`; gradients through the MLPs are finite
@@ -466,10 +466,10 @@ Also run by hand: `scripts/generate_data.py --config-name {bautin,fhn}` writes
   the Hypothesis draw `x = (1e-12, 0)` — a point at the origin of the polar chart, where
   `Df⁻¹·Df` has a `0.36` on the angular diagonal (reproduce with
   `@reproduce_failure('6.168.3', b'AEEAQQABQQEoAAAAAAAAAAAAKD1xl5mBLeoR')`). Either the
-  `point_batches` strategy should exclude a neighbourhood of the origin for polar
+  `point_batches` strategy should exclude a neighborhood of the origin for polar
   couplings, or `PolarCouplingFlow`'s Jacobian there needs a look; it reproduces on the
   branch before this work.
-- Baseline: no batch normalisation (the paper's encoder has it); weight switch per batch
+- Baseline: no batch normalization (the paper's encoder has it); weight switch per batch
   and `α_k` per batch rather than once / per epoch — a trainer-level schedule in Phase C
   would reproduce the paper exactly; inputs are not standardised by the loss (the data
   pipeline's job); `OnCycleGaussian` for FHN waits for the numerical cycle (Phase E).
@@ -549,7 +549,7 @@ B12:
 | Change | Thoughts | Modifications |
 |---|---|---|
 | `src/deep_isochron/model/latent_dynamics.py`: `PhaseAmplitudeLatentDynamics(omega, kappa)`, `DECAY_CONSTRAINT`; `LinearLatentDynamics` removed | Looks good. | None |
-| `src/deep_isochron/model/autoencoder.py`: normalised encoder, `encode`/`decode`/`phase`/`amplitude`/`cycle_point`/`phase_sensitivity`; `Callable` fields | Looks good. But wondering - `ConjugateLatentDynamics` and `PhaseAmplitudeAutoencoder` are supposed to be two algorithms for tackling the same problem. So it makes sense that they both support a common protocol that can later be used to train and evaluate the two frameworks on the same footing. Need to extract out that protocol and make the two classes conform to it. | Deferred to the next discussion with Claude |
+| `src/deep_isochron/model/autoencoder.py`: normalized encoder, `encode`/`decode`/`phase`/`amplitude`/`cycle_point`/`phase_sensitivity`; `Callable` fields | Looks good. But wondering - `ConjugateLatentDynamics` and `PhaseAmplitudeAutoencoder` are supposed to be two algorithms for tackling the same problem. So it makes sense that they both support a common protocol that can later be used to train and evaluate the two frameworks on the same footing. Need to extract out that protocol and make the two classes conform to it. | Deferred to the next discussion with Claude |
 | `src/deep_isochron/model/__init__.py`: exports | Trivial changes. | None |
 | `src/deep_isochron/training/losses.py`: `PhaseAutoencoderLoss` (Eqs. (21)–(26)) | Both `ConjugacyTrajectoryLoss` and `PhaseautoencoderLoss` are very tightly coupled to the respective models. So is it fitting to collect them in a different submodule (`training`)? Maybe `training/losses.py` should provide reusable and composible building blocks for the spefic losses (such as autoencoder loss or trajectory losses in either the data or the latent space). | None |
 | `src/deep_isochron/training/trainer.py`: `Self` → `"TrainerState[M]"` (beartype) | Looks good | None |

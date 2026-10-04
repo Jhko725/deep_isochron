@@ -12,14 +12,14 @@ constrained values (``from_constrained``) and tests can check the image generica
 has two independent pieces of configuration: the *constrained set* (``lower`` for
 ``GreaterThan``, ``lo``/``hi`` for ``Interval``, ...) and the *point of that set that
 ``raw = 0`` maps to*, ``at_zero``. The second exists because a scalar bijection must be
-the identity at ``raw = 0`` (so that a zero-initialised conditioner is the identity
+the identity at ``raw = 0`` (so that a zero-initialized conditioner is the identity
 map), and the identity's parameter value — a scale of ``1``, a shift of ``0``, a slope
 of ``1`` — is usually not what the unshifted map (softplus, sigmoid) gives at ``0``.
 Every primitive therefore has a sensible default for ``at_zero`` (``GreaterThan``:
 ``lower + 1``; ``Interval``: the midpoint; ``BoundedPositive``: ``lower + 1``) and
 accepts an explicit value when the identity needs a different one (``CubicConjugation``
 needs ``b = 0.3`` at zero). The shift is put into the *map* rather than into the
-initialisation: shifted primitives implement the unshifted pair
+initialization: shifted primitives implement the unshifted pair
 ``_forward``/``_inverse`` once, and the shift ``_inverse(at_zero)`` is evaluated under
 ``jax.ensure_compile_time_eval`` so that it is a concrete float even when the primitive
 is constructed inside a ``jit``/``vmap`` trace.
@@ -243,8 +243,8 @@ class Widths(Constraint):
     Durkan et al. 2019). ``raw = 0`` maps to equal widths.
 
     The softmax is shift-invariant, so the inverse is defined up to a constant; the
-    gauge chosen here is **mean-zero raw** (``raw = log(rel - min_rel)`` centerd), which
-    is also the gauge in which equal widths map back to ``raw = 0``.
+    gauge chosen here is **mean-zero raw** (``raw = log(rel - min_rel)`` centered),
+    which is also the gauge in which equal widths map back to ``raw = 0``.
 
     **Arguments:**
 

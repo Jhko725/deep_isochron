@@ -1,7 +1,7 @@
 """Checkpointing of the whole ``TrainerState`` with Orbax (roadmap C4, ADR-0009).
 
 ``OrbaxCheckpointer(directory, ...)`` saves the **array leaves** of a ``TrainerState``
-(model, optimiser state, step, key, schedule state) so a run can resume, and restores
+(model, optimizer state, step, key, schedule state) so a run can resume, and restores
 them into a template state with ``eqx.combine``. Which steps are saved is Orbax's
 ``save_decision_policy`` (default: every ``save_every`` steps) and which are kept is its
 ``preservation_policy`` (default: the best by ``metric`` plus the latest). The directory
@@ -27,20 +27,34 @@ S = TypeVar("S", bound=eqx.Module)
 
 @runtime_checkable
 class Checkpointer(Protocol):
+    """``save(step, state, metrics)``; a context manager whose exit closes it."""
+
     def save(self, step: int, state: Any, metrics: Mapping[str, float]) -> None: ...
 
     def close(self) -> None: ...
 
+    def __enter__(self) -> "Checkpointer": ...
 
-class NullCheckpointer:
-    def save(self, step: int, state: Any, metrics: Mapping[str, float]) -> None:
-        pass
+    def __exit__(self, *exc: object) -> None: ...
 
+
+class _Closing:
     def close(self) -> None:
         pass
 
+    def __enter__(self):  # beartype rejects typing.Self outside @beartype classes
+        return self
 
-class OrbaxCheckpointer:
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
+
+class NullCheckpointer(_Closing):
+    def save(self, step: int, state: Any, metrics: Mapping[str, float]) -> None:
+        pass
+
+
+class OrbaxCheckpointer(_Closing):
     """See the module docstring. ``metric`` is the key of ``metrics`` the best
     checkpoint is chosen by (smaller is better unless ``maximize``)."""
 
@@ -59,7 +73,7 @@ class OrbaxCheckpointer:
             policies.append(
                 ocp.training.preservation_policies.BestN(
                     # BestN keeps the *last* n of the sorted metrics, so ascending
-                    # order (reverse=False) keeps the largest; invert for minimisation
+                    # order (reverse=False) keeps the largest; invert for minimization
                     get_metric_fn=lambda m: m[metric],
                     reverse=not maximize,
                     n=keep_best,

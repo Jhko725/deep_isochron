@@ -66,7 +66,8 @@ deep_isochron
 │   │                        generate(system, sampler, ts, n, seed=…) with
 │   │                        loud failures and config_hash
 │   └── windows.py           RandomWindow / WeightedWindow (grain RandomMap);
-│                            windows(); mixed_windows()
+│                            windows(); mixed_windows(); validation_windows() (finite,
+│                            deterministic); to_device() (grain two-stage prefetch)
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
 │                            (namespace reserved; Phase E)
 ├── training/                                                            ── ADR-0009
@@ -80,7 +81,7 @@ deep_isochron
 │   ├── schedules.py         Constant / StepSchedule (curriculum) / ThresholdSwitch
 │   ├── loggers.py           Logger protocol; Null / List / Print / Wandb; DelayedLogger
 │   ├── checkpoint.py        Checkpointer protocol; OrbaxCheckpointer (whole state)
-│   └── evaluation.py        Evaluator(val_batches, reference) on the model contract
+│   └── evaluation.py        Evaluator(val_data, reference) on the model contract
 └── misc.py                  inv_softplus, squashed_exp, polar ↔ cartesian
 
 scripts/generate_data.py + configs/data/*.yaml   Hydra entry point for data generation
@@ -106,7 +107,7 @@ instance with `raw = None` is a *template*: static configuration only. The class
 is the implementation checklist; `Affine` is the smallest example.
 
 **The rule** that ties them together is `CouplingFlow`: it stores a scalar *template*, a
-conditioner `x_const → raw` (an MLP with a zero-initialised last layer by default, a
+conditioner `x_const → raw` (an MLP with a zero-initialized last layer by default, a
 `TruncatedFourier` for the polar variant), and writes the conditioner's output straight
 into one scalar bijection per coupled coordinate through `template.from_unconstrained`.
 Because `raw` is unconstrained, any conditioner output is valid; because `constrain(0)` is
@@ -155,7 +156,7 @@ leafless modules, hence static: each traces separately and dispatch is free. All
 cartesian `.ys` in the same `Solution`, so `ConjugateLatentDynamics` never converts charts.
 
 `base.py` is the contract both approaches implement, `AbstractPhaseAmplitudeModel`:
-`phase(x)` in `(-π, π]`, `amplitude(x)` (isostable-like, no fixed normalisation),
+`phase(x)` in `(-π, π]`, `amplitude(x)` (isostable-like, no fixed normalization),
 `cycle_point(θ)`, `__call__(ts, x0) -> (xt, yt)`; `phase_gradient` and
 `phase_sensitivity` are derived once for all. Training and evaluation code takes the
 contract and never asks which model it has. For `ConjugateLatentDynamics` the contract is
@@ -167,7 +168,7 @@ autoencoder of Yawata et al. (Chaos 34, 063111, 2024), as mapped in
 `docs/design/normal-forms.md` §5.3. `PhaseAmplitudeLatentDynamics(omega, kappa)` is the
 closed-form flow on `R³` — `(Y₁, Y₂)` rotating at `omega`, `Y₃` decaying at `kappa < 0`
 (Eqs. (12)–(14)); `PhaseAmplitudeAutoencoder` is an MLP encoder whose first two outputs
-are normalised to the unit circle (Eqs. (15)–(16)), an MLP decoder, and that flow;
+are normalized to the unit circle (Eqs. (15)–(16)), an MLP decoder, and that flow;
 `phase(x) = atan2(Y₂, Y₁)` (Eq. (19)) and `phase_sensitivity(θ)` by `jax.grad` at the
 decoded cycle point (Eq. (20)). Its latent space is exactly the `(Θ, Ψ)` chart of a
 normal form (`(cos Θ, sin Θ, Ψ)`), which is what `tests/test_baseline.py` checks; the
@@ -208,7 +209,7 @@ comparison. Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
 ## Data flow of one training step
 
 ```
-loader ──► batch {t:[B,L], u:[B,L,d]}  (grain; NumPy or already on device)
+loader ──► batch {t:[B,L], u:[B,L,d]}  (grain; to_device() prefetches to the accelerator)
                  │
 Trainer.train_step(state, batch)                                  ── jitted, pure
                  ├─ weights = schedule.weights(state.schedule_state, state.step)
@@ -232,8 +233,9 @@ The model is an `AbstractPhaseAmplitudeModel` — `ConjugateLatentDynamics` (bij
 normal form, `SolverConfig`) or `PhaseAmplitudeAutoencoder`. A loss is a weighted sum of
 named terms whose weights the trainer's schedule supplies each step (ADR-0009); the
 conjugacy equation is what `data` and `latent` together enforce. Batches come from
-`windows`/`mixed_windows` over a `TimeSeriesDataSource`; validation batches are collected
-once (`collect_batches`) and evaluated by an `Evaluator`, whose `val/mse` is what the
+`windows`/`mixed_windows` over a `TimeSeriesDataSource`, transferred by the loader
+(`to_device`); validation is `validation_windows` over the held-out trajectories — finite
+and deterministic — evaluated to exhaustion by an `Evaluator`, whose `val/mse` is what the
 `OrbaxCheckpointer` keeps the best checkpoint by.
 
 ## Tests
@@ -242,7 +244,7 @@ once (`collect_batches`) and evaluated by an `Evaluator`, whose `val/mse` is wha
 `UNTESTED` with reasons) and `tests/test_registry.py` fails if a concrete bijection is
 missing from it. `tests/test_bijections.py` holds the laws every bijection satisfies (round
 trip, identity at init, orientation, finiteness, Jacobian consistency, pytree hygiene, one
-optimiser step), run through Hypothesis draws from `tests/strategies.py`. Per-family laws
+optimizer step), run through Hypothesis draws from `tests/strategies.py`. Per-family laws
 are in `test_splines.py`, `test_analytic.py`, `test_constraints.py`, `test_linear.py`;
 `test_normal_forms.py` pins the normal forms' closed forms by autodiff and the integrations,
 `test_systems.py` the flow machinery and the observed systems' facts (Langfield et al. 2014),

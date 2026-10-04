@@ -17,6 +17,7 @@
 
 import collections
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -32,9 +33,11 @@ from deep_isochron.data import (
     SolveSpec,
     SystemSpec,
     TimeSeriesDataSource,
+    to_device,
     transient_weight,
     UniformAnnulus,
     UniformBox,
+    validation_windows,
     WeightedWindow,
     windows,
 )
@@ -195,6 +198,39 @@ def test_weighted_window_frequencies_and_determinism(seed):
     ds2 = windows(src, 2, seed=seed, weight=weight)
     assert all(np.array_equal(ds[i]["u"], ds2[i]["u"]) for i in range(50))
     assert len({_start_of(ds[i], src) for i in range(50)}) > 1  # re-drawn per visit
+
+
+def test_validation_windows_are_finite_deterministic_and_complete():
+    """Every window at starts 0, stride, … of every trajectory, trajectory-major; two
+    passes give identical batches; ``stride`` defaults to ``length``."""
+    src = _source(n=3, T=10)
+    ds = validation_windows(src, 4, stride=3)  # starts 0, 3, 6
+    assert len(ds) == 3 * 3
+    first = [w for w in ds]
+    assert np.array_equal(first[0]["u"], src.ys[0, 0:4])
+    assert np.array_equal(first[1]["u"], src.ys[0, 3:7])
+    assert np.array_equal(first[3]["u"], src.ys[1, 0:4])
+    second = [w for w in ds]
+    assert all(np.array_equal(a["u"], b["u"]) for a, b in zip(first, second))
+    assert len(validation_windows(src, 4)) == 3 * 2  # non-overlapping: starts 0, 4
+    batches = list(validation_windows(src, 4).batch(4))
+    assert [b["u"].shape[0] for b in batches] == [4, 2]
+    with pytest.raises(ValueError):
+        validation_windows(src, 4, stride=0)
+    with pytest.raises(ValueError):
+        validation_windows(src, 11)
+
+
+def test_to_device_yields_device_arrays():
+    """grain's two-stage prefetch: batches arrive as JAX arrays on the device, in the
+    same order and with the same values as the host pipeline."""
+    src = _source(n=3, T=10)
+    host = list(validation_windows(src, 4).batch(2))
+    dev = list(to_device(validation_windows(src, 4).batch(2)))
+    assert len(dev) == len(host)
+    for h, d in zip(host, dev):
+        assert isinstance(d["u"], jax.Array) and d["u"].dtype == jnp.float64
+        assert np.array_equal(np.asarray(d["u"]), h["u"])
 
 
 def test_categorical_matches_the_weights_and_covers_the_support():

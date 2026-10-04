@@ -8,7 +8,7 @@ $c = (\omega_1 - \omega_0)/a$:
 
 * $\kappa = \rho'(1) = -2a$, $\mu = e^{-4\pi a/\omega_1}$;
 * $h(r) = c\ln r$;
-* $\Psi(r) = (r^2 - 1)/(2r^2) = \tfrac12(1 - r^{-2})$ — Wilson–Moehlis normalised
+* $\Psi(r) = (r^2 - 1)/(2r^2) = \tfrac12(1 - r^{-2})$ — Wilson–Moehlis normalized
   ($\partial_r\Psi(1) = 1$), range $(-\infty, \tfrac12)$, inverse
   $r = (1 - 2\Psi)^{-1/2}$;
 * explicit trajectories (§6.1): $r(t)^{-2} = 1 + (r_0^{-2} - 1)e^{-2at}$.

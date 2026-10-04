@@ -1,12 +1,12 @@
 """The training loop (roadmap C1, ADR-0009).
 
 ``Trainer(optimizer, loss, schedule)`` holds what defines a step; ``TrainerState`` holds
-everything that changes (model, optimiser state, step, key, schedule state) and is what
+everything that changes (model, optimizer state, step, key, schedule state) and is what
 checkpoints save. ``train_step`` is a pure jitted function of ``(state, batch)``;
 ``train`` is the loop:
 
     for each step: batch = next(loader); state, metrics = train_step(state, batch)
-                   logger.log(metrics, step)
+                   log.log(metrics, step)
                    every eval_every steps: evaluate(state.model) -> val metrics,
                                            logged and handed to the checkpointer
 
@@ -75,7 +75,7 @@ class TrainerState(eqx.Module, Generic[M]):
         )
 
     def take_step(self, grads: M, schedule_state: PyTree = None) -> TrainerState[M]:
-        """Apply one optimiser update from ``grads`` (filtered to the trainable
+        """Apply one optimizer update from ``grads`` (filtered to the trainable
         leaves); advance ``step`` and the key; store the schedule state."""
         grads = self.filter_trainable(grads)
         updates, opt_state = self.optimizer.update(
@@ -107,11 +107,6 @@ def check_batch_dtype(batch: Batch, *, x64_enabled: bool | None = None) -> None:
                 f"batch[{name!r}] is float64 but jax_enable_x64 is off; enable it "
                 "(jax.config.update('jax_enable_x64', True)) or generate float32 data."
             )
-
-
-def to_device(batch: Batch) -> Batch:
-    """NumPy (grain) batches to device arrays; device arrays pass through."""
-    return {k: jnp.asarray(v) for k, v in batch.items()}
 
 
 class Trainer(Generic[M]):
@@ -174,48 +169,49 @@ class Trainer(Generic[M]):
         """Run ``num_steps`` steps (fewer if the loader ends). ``evaluate(model)``
         returns validation metrics (``training.evaluation``); they are logged under
         their own keys and passed to ``checkpointer.save`` every ``eval_every`` steps
-        and at the end. Resume by passing a restored ``TrainerState``."""
+        and at the end (no intermediate checkpoints without ``evaluate``). Batches
+        are used as the loader yields them: put the transfer in the loader
+        (``data.to_device``, grain's two-stage prefetch); NumPy batches still work
+        (``jit`` transfers them, synchronously). The logger and checkpointer are
+        entered as context managers, so they close — and the ``DelayedLogger``
+        flushes — even if a step raises. Resume by passing a restored
+        ``TrainerState``."""
         if isinstance(model_or_state, TrainerState):
             state = model_or_state
         else:
             if key is None:
                 raise ValueError("key is required when starting from a model.")
             state = self.init(model_or_state, key=key)
-        logger = NullLogger() if logger is None else logger
-        checkpointer = NullCheckpointer() if checkpointer is None else checkpointer
-        if (evaluate is None) != (eval_every is None):
-            raise ValueError("evaluate and eval_every go together.")
+        if eval_every < 1:
+            raise ValueError("eval_every must be a positive integer.")
+        log: Logger = NullLogger() if logger is None else logger
+        ckpt: Checkpointer = (
+            NullCheckpointer() if checkpointer is None else checkpointer
+        )
+
+        def evaluate_and_save(step: int) -> None:
+            assert evaluate is not None
+            val_metrics = {k: float(v) for k, v in evaluate(state.model).items()}
+            log.log(val_metrics, step)
+            ckpt.save(step, state, val_metrics)
 
         batches = iter(train_loader)
         step = int(state.step)  # Python-side counter: the device value is never read
-        first = True
-        val_metrics: dict[str, float] = {}
-        try:
-            for _ in range(num_steps):
+        with log, ckpt:
+            for i in range(num_steps):
                 try:
                     batch = next(batches)
                 except StopIteration:
                     break
-                if first:
+                if i == 0:
                     check_batch_dtype(batch)
-                    first = False
-                state, metrics = self.train_step(state, to_device(batch))
+                state, metrics = self.train_step(state, batch)
                 step += 1
-                logger.log(metrics, step)
+                log.log(metrics, step)
                 if evaluate is not None and step % eval_every == 0:
-                    val_metrics = {
-                        k: float(v) for k, v in evaluate(state.model).items()
-                    }
-                    logger.log(val_metrics, step)
-                    # No intermediate checkpoints are made if evaluate=None
-                    checkpointer.save(step, state, val_metrics)
+                    evaluate_and_save(step)
             if evaluate is not None and step % eval_every != 0:
-                val_metrics = {k: float(v) for k, v in evaluate(state.model).items()}
-                logger.log(val_metrics, step)
-                checkpointer.save(step, state, val_metrics)
+                evaluate_and_save(step)
             elif evaluate is None:
-                checkpointer.save(step, state, {})
-        finally:
-            logger.close()
-            checkpointer.close()
+                ckpt.save(step, state, {})
         return state

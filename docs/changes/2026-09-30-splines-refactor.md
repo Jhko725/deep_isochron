@@ -46,7 +46,7 @@ classmethods. `knot_derivs` is optional: defined for C¹⁺ splines, used by
 the shared knot-derivative test, absent on `LinearSpline`.
 *Rejected*: a `linear_tails` flag. All three splines need identity tails
 for this project, and the boundary conditions that make the joins C¹/C² are
-baked into the parametrisation, so a flag would have no consistent meaning.
+baked into the parametrization, so a flag would have no consistent meaning.
 
 **Interpolant evaluated at the clipped input.** `__call__` is
 `where(in_range, f_in(clip(x)), x)`. With `jnp.where` (unlike `jnp.piecewise`)
@@ -67,7 +67,7 @@ guaranteed by `from_unconstrained`.
 side are pinned to their Greville abscissae, so f=id, f′=1, f″=0 at both
 range endpoints (Marsden's identity) and the identity tails join C². Cost:
 the two edge bins lose flexibility. Coefficients live in real units (no
-normalise/denormalise); knots `t_{-2}…t_{K+2}` with `t_0=a`, `t_K=b`.
+normalize/denormalise); knots `t_{-2}…t_{K+2}` with `t_0=a`, `t_K=b`.
 
 **B-spline inverse.** Bisection-safeguarded Newton (20 fixed iterations) on
 the local cubic, with a `custom_jvp` implicit rule

@@ -31,7 +31,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import pytest
-from deep_isochron.data import generate, OnCycleGaussian, windows
+from deep_isochron.data import generate, OnCycleGaussian, validation_windows, windows
 from deep_isochron.model import (
     ConjugateLatentDynamics,
     PhaseAmplitudeAutoencoder,
@@ -88,7 +88,7 @@ class LinearLoss(AbstractLoss):
 
     def terms(self, model, batch):
         pred = jax.vmap(model)(batch["u"])
-        return {"mse": jnp.mean((pred - batch["t"]) ** 2)}
+        return {"mse": jnp.mean((pred - batch["t"]) ** 2)}, {}
 
 
 W_TRUE = jnp.array([[2.0, -1.0], [0.5, 3.0]])
@@ -295,13 +295,14 @@ def test_trainer_stops_on_exhausted_loader_and_evaluates_on_schedule():
     assert len(calls) == 3  # steps 3, 6 and the final step 7
     eval_steps = [s for s, m in log.records if "val/mse" in m]
     assert eval_steps == [3, 6, 7]
-    with pytest.raises(ValueError, match="go together"):
+    with pytest.raises(ValueError, match="eval_every"):
         trainer.train(
             linear_model(),
             linear_batches(1),
             num_steps=1,
             key=jax.random.key(0),
             evaluate=evaluate,
+            eval_every=0,
         )
     with pytest.raises(ValueError, match="key"):
         trainer.train(linear_model(), linear_batches(1), num_steps=1)
@@ -363,12 +364,24 @@ def test_evaluation_on_exact_models_is_exact():
     )
     assert evaluator(wrong)["val/mse"] > 1e-2
 
-    with pytest.raises(ValueError):
-        Evaluator([])
+    with pytest.raises(ValueError, match="empty"):
+        Evaluator([])(identity)
+
+    # the intended source: a finite, deterministic dataset, re-iterated each call
+    src = generate(
+        NF,
+        OnCycleGaussian.from_normal_form(NF, 100, 0.4),
+        jnp.linspace(0, 1.5, 9),
+        6,
+        seed=0,
+    )
+    streamed = Evaluator(validation_windows(src, 5).batch(4), reference=NF)
+    first, second = streamed(identity), streamed(identity)
+    assert first == second and first["val/mse"] < TOL["flow"]
 
 
 def test_bounding_box_grid_and_circular_std():
-    pts = jnp.array([[0.0, 0.0], [2.0, 4.0]])
+    pts = jnp.array([[0.0, 0.0], [2.0, 4.0]])  # (lo, hi)
     grid = bounding_box_grid(pts, num=3, margin=0.0)
     assert grid.shape == (9, 2)
     assert_close(jnp.min(grid, axis=0), pts[0]) and assert_close(

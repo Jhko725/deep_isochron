@@ -87,8 +87,8 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
 
     Raw parameters: ``num_bins + 4`` knot widths then ``num_bins - 2`` coefficient
     increments, each block through a floored softmax (``Widths``). The knot block is
-    normalised so that the ``num_bins`` *interior* widths span the range (the four
-    exterior widths scale along; this differs from Algorithm 1, which normalises all);
+    normalized so that the ``num_bins`` *interior* widths span the range (the four
+    exterior widths scale along; this differs from Algorithm 1, which normalizes all);
     the coefficient block sums to the Greville span between the pinned ends. ``raw = 0``
     gives uniform knots and Greville coefficients: the identity.
 
@@ -140,7 +140,7 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
     def constrain(self, raw) -> BSplineParams:
         K = self.num_bins
         t_raw, a_raw = jnp.split(raw, [K + 4])
-        # Algorithm 1, lines 1-3 of [1]: floored softmax, then normalised so that the
+        # Algorithm 1, lines 1-3 of [1]: floored softmax, then normalized so that the
         # K interior widths span the range (the 4 exterior ones scale along).
         w = Widths(1.0, self.min_rel_knot_width)(t_raw)
         knot_widths = w / jnp.sum(w[2 : K + 2]) * self.range_width

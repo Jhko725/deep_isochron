@@ -16,7 +16,7 @@ Option B). Everything public is in $r$ and in **cartesian** coordinates.
 
 Closed forms a subclass supplies, in $r$: the phase shift $h(r)$ with the asymptotic
 phase $\Theta = \theta + h(r)$, $h(1) = 0$; and the isostable coordinate $\Psi(r)$ with
-$\dot\Psi = \kappa\Psi$, normalised à la Wilson & Moehlis, $\Psi(1) = 0$,
+$\dot\Psi = \kappa\Psi$, normalized à la Wilson & Moehlis, $\Psi(1) = 0$,
 $\partial_r\Psi(1) = 1$ (negative inside the cycle, §5.2). The base class derives the
 Floquet exponent $\kappa = \rho'(1)$ by autodiff (§4.2, no factor 2), the multiplier,
 the eigenvalues at the origin, the vector fields in both charts,
@@ -162,7 +162,7 @@ class AbstractNormalForm(AbstractODE):
     # ---------------------------------------------------------- phase/amplitude ----
     def phase(self, u: Float[Array, " 2"]) -> Float[Array, ""]:
         r"""Asymptotic phase $\Theta(u) \in (-\pi, \pi]$: the isochron through $u$,
-        labelled by the polar angle of the point it converges to on the cycle."""
+        labeled by the polar angle of the point it converges to on the cycle."""
         return self.to_phase_amplitude(u)[0]
 
     def amplitude(self, u: Float[Array, " 2"]) -> Float[Array, ""]:

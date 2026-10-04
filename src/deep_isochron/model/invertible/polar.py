@@ -56,7 +56,7 @@ class OffsetedBijection(AbstractScalarBijection[tuple]):
 def _scaled_polar(
     xy: Float[Array, " 2"], center, scale, eps_r: float
 ) -> tuple[Float[Array, " 2"], Float[Array, ""]]:
-    """``(x - center) * scale`` and its regularised radius ``sqrt(|.|² + eps_r²)``."""
+    """``(x - center) * scale`` and its regularized radius ``sqrt(|.|² + eps_r²)``."""
     xy_s = (xy - center) * scale
     return xy_s, jnp.sqrt(jnp.sum(xy_s**2) + eps_r**2)
 
@@ -65,7 +65,7 @@ class RadialBijection(AbstractBijection):
     """``x -> center + (g(r) / r) (x - center)`` in the metric ``scale``: a radial
     rescaling by the origin-fixing scalar bijection ``g = OffsetedBijection(f)``.
 
-    The radius is regularised as ``r = sqrt(|x_s|² + eps_r²)`` only *inside* ``g`` and
+    The radius is regularized as ``r = sqrt(|x_s|² + eps_r²)`` only *inside* ``g`` and
     the ratio ``g(r) / r``, so the origin maps to the origin exactly and the Jacobian
     there is finite. ``f`` is a standalone trainable scalar bijection.
     """
@@ -192,10 +192,10 @@ class PolarCouplingFlow(AbstractBijection):
     x_const)`` and a ``TruncatedFourier`` conditioner in place of the MLP (the angle is
     periodic, so a Fourier series is the natural conditioner). The template is wrapped
     in ``OffsetedBijection`` so that ``g_θ(0) = 0`` and ``R_+ -> R_+``. The Fourier
-    coefficients are zero-initialised, so the layer is the identity at init.
+    coefficients are zero-initialized, so the layer is the identity at init.
 
     ``center`` and ``log_scale`` set the chart's origin and metric; the radius is
-    regularised as in ``RadialBijection``. The angle is read through a ``where``-safe
+    regularized as in ``RadialBijection``. The angle is read through a ``where``-safe
     ``arctan2`` (fill ``0`` inside the ``eps_r`` disc), so the origin is a fixed point.
 
     **Regularity.** ``smoothness`` is the template's: the Fourier conditioner is C^∞ and
@@ -227,9 +227,9 @@ class PolarCouplingFlow(AbstractBijection):
         - ``bijection``: scalar template (``R -> R``); wrapped in ``OffsetedBijection``.
         - ``fourier_order``: highest harmonic of the angular conditioner.
         - ``center``, ``log_scale``: chart origin and log-metric (default: 0).
-        - ``eps_r``: radius regularisation.
+        - ``eps_r``: radius regularization.
         - ``key``: unused (kept for builder compatibility; the layer is
-        zero-initialised).
+        zero-initialized).
         """
         del key
         if not isinstance(bijection, AbstractScalarBijection):

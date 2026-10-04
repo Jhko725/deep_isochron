@@ -100,7 +100,7 @@ def _check_identities(nf, r):
 
 @given(a=st.floats(0.2, 3.0), w=st.floats(0.3, 3.0), w0=st.floats(-3.0, 3.0))
 def test_hopf_floquet_multiplier_is_the_polar_monodromy(a, w, w0):
-    """§10: the Floquet multiplier equals the monodromy of the radial linearisation
+    """§10: the Floquet multiplier equals the monodromy of the radial linearization
     integrated over one period; for Hopf ṙ = a r (1 − r²) gives δṙ = −2a δr on the
     cycle."""
     nf = HopfNormalForm(a, w, w0)
@@ -135,7 +135,7 @@ def test_normal_form_closed_forms_are_consistent(nf):
         atol=TOL["closed_form"],
     )
     assert nf.floquet_exponent() < 0
-    # Wilson–Moehlis normalisation: ∂ᵣΨ(1) = 1
+    # Wilson–Moehlis normalization: ∂ᵣΨ(1) = 1
     assert_close(jax.grad(nf.isostable)(one), 1.0, rtol=TOL["closed_form"])
     # public r-views are the _sq hooks composed with r²
     for r in (0.3, 1.0, 2.2):

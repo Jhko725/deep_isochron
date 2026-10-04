@@ -10,6 +10,9 @@ the loop never does it directly:
   are read, the current step has already been enqueued, so the device stays busy while
   the host waits and loads the next batch; ``close()`` flushes the last step.
 - ``every`` on the concrete loggers thins the stream (``log_every``).
+- every logger is a context manager (``with DelayedLogger(PrintLogger()) as log:``);
+  exit calls ``close()``, which for ``DelayedLogger`` flushes the pending step, also
+  when the loop raised.
 
 ``NullLogger`` is for tests, ``PrintLogger`` for the terminal, ``WandbLogger`` wraps a
 ``wandb`` run created by the caller (the script owns the run; Phase D)."""
@@ -27,9 +30,29 @@ Metrics = Mapping[str, Any]
 
 @runtime_checkable
 class Logger(Protocol):
+    """``log(metrics, step)``; a context manager whose exit closes it (``close`` stays
+    for callers managing the lifetime themselves)."""
+
     def log(self, metrics: Metrics, step: int) -> None: ...
 
     def close(self) -> None: ...
+
+    def __enter__(self) -> "Logger": ...
+
+    def __exit__(self, *exc: object) -> None: ...
+
+
+class _Closing:
+    """``with logger:`` → ``close()`` on exit, also on exceptions."""
+
+    def close(self) -> None:
+        pass
+
+    def __enter__(self):  # beartype rejects typing.Self outside @beartype classes
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
 
 def to_floats(metrics: Metrics) -> dict[str, float]:
@@ -37,15 +60,12 @@ def to_floats(metrics: Metrics) -> dict[str, float]:
     return {k: float(v) for k, v in metrics.items()}
 
 
-class NullLogger:
+class NullLogger(_Closing):
     def log(self, metrics: Metrics, step: int) -> None:
         pass
 
-    def close(self) -> None:
-        pass
 
-
-class ListLogger:
+class ListLogger(_Closing):
     """Keeps every ``(step, metrics)`` it receives; for tests and notebooks."""
 
     def __init__(self) -> None:
@@ -54,11 +74,8 @@ class ListLogger:
     def log(self, metrics: Metrics, step: int) -> None:
         self.records.append((step, to_floats(metrics)))
 
-    def close(self) -> None:
-        pass
 
-
-class PrintLogger:
+class PrintLogger(_Closing):
     def __init__(self, every: int = 1, keys: tuple[str, ...] | None = None) -> None:
         self.every, self.keys = every, keys
 
@@ -70,11 +87,8 @@ class PrintLogger:
         body = " | ".join(f"{k}: {values[k]:.4g}" for k in keys if k in values)
         print(f"step {step} | {body}")
 
-    def close(self) -> None:
-        pass
 
-
-class WandbLogger:
+class WandbLogger(_Closing):
     """``run.log(metrics, step=step)`` on a ``wandb`` run the caller created and will
     finish (``close`` does not finish it)."""
 
@@ -85,11 +99,8 @@ class WandbLogger:
         if step % self.every == 0:
             self.run.log(to_floats(metrics), step=step)
 
-    def close(self) -> None:
-        pass
 
-
-class DelayedLogger:
+class DelayedLogger(_Closing):
     """Forward each ``log`` call one call later (see the module docstring)."""
 
     def __init__(self, inner: Logger) -> None:

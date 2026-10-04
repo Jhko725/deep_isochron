@@ -10,7 +10,7 @@ sources: [Hong & Chun]
 
 Companion to [ADR-0006](../decisions/0006-cubic-bspline-boundary-and-inverse.md), which
 records *why* the boundary and inverse differ from Hong & Chun [1]. This note records
-*what* the code computes: index conventions, the parametrisation, the boundary argument,
+*what* the code computes: index conventions, the parametrization, the boundary argument,
 the piecewise power-basis form, and what the inverse does and does not guarantee. File:
 `src/deep_isochron/model/invertible/splines/cubic.py`.
 
@@ -57,13 +57,13 @@ width `b − a`; the four exterior widths scale by the same factor. `_knots` acc
 shifts so that `t_0 = a` exactly, and snaps `t_K = b` exactly (so the range endpoints are
 knots regardless of rounding, as nflows does).
 
-*Deviation from [1].* Lines 1–3 of Algorithm 1 normalise the whole extended width vector
+*Deviation from [1].* Lines 1–3 of Algorithm 1 normalize the whole extended width vector
 (all `s − r + 2k − 4` widths, in the paper's indexing) to sum to 1 and then place the
 knots so that `t_r = 0`. Read literally, that leaves the position of `t_s` depending on
 the exterior widths; the paper's lines 13–17 then compensate by rescaling the
 *coefficients* so that `f(1) = 1`. Normalising only the interior widths removes the need:
 `t_K = b` by construction. (This reading of lines 1–3 is deduced from the algorithm as
-summarised in [1]; the deviation itself is a design choice, not a correction.)
+summarized in [1]; the deviation itself is a design choice, not a correction.)
 
 **Coefficients.** The pinned ends are `α_{-3}, α_{-2}, α_{-1} = ξ_{-3}, ξ_{-2}, ξ_{-1}`
 and `α_{K−3}, α_{K−2}, α_{K−1} = ξ_{K−3}, ξ_{K−2}, ξ_{K−1}`. The `K − 3` free
@@ -163,7 +163,7 @@ recursively; nothing differentiates through the `fori_loop`.
 ## References
 
 [1] S. Hong and S. Y. Chun. Neural Diffeomorphic Non-uniform B-spline Flows. AAAI (2023).
-    arXiv:2304.04555. — Algorithm 1 (parametrisation), Theorem 1 (monotonicity and the
+    arXiv:2304.04555. — Algorithm 1 (parametrization), Theorem 1 (monotonicity and the
     derivative formula), Discussion (root-formula instability and the 1-in-10 outliers).
 [2] C. de Boor. A Practical Guide to Splines, revised ed. Springer (2001). — Ch. IX
     (Marsden's identity, Greville abscissae), Ch. X (derivative of a spline, eq. (X.12)).

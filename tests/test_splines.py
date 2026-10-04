@@ -184,7 +184,7 @@ def test_bspline_matches_scipy(data):
 def test_bspline_coefficients_are_increasing(data):
     """Theorem 1 of Hong & Chun: strictly increasing coefficients (with positive knot
     spacing) give a strictly increasing spline. Both premises are enforced by the
-    parametrisation."""
+    parametrization."""
     f = data.draw(
         spline_templates(CubicBSpline).flatmap(scalar_bijections), label="spline"
     )

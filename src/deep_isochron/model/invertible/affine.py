@@ -7,7 +7,7 @@ additive (NICE, [1]) and affine (RealNVP, [2]) coupling layers; ``ResidualCoupli
 standalone classes that duplicated ``CouplingFlow``'s split/flip/MLP logic.
 
 Because ``constrain(0)`` is the identity (ADR-0002) and the default conditioner is
-zero-initialised, both coupling layers are the identity map at init. (The former
+zero-initialized, both coupling layers are the identity map at init. (The former
 ``ResidualCoupling`` was not: its MLP had no zeroed final layer.)
 
 [1] L. Dinh, D. Krueger, Y. Bengio. NICE: Non-linear Independent Components Estimation.

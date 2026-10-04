@@ -94,7 +94,7 @@ def adam_step[M: eqx.Module](module: M, key: jax.Array, lr: float = 1.0) -> M:
     """One Adam step along a *random* direction for every trainable leaf.
 
     A random direction is the stronger test for parameter validity: the constrained set
-    must be preserved for any update an optimiser might take, not just the gradient of
+    must be preserved for any update an optimizer might take, not just the gradient of
     one particular loss. ``test_true_gradient_step_decreases_loss`` covers the plumbing
     (that
     gradients flow through ``constrain``)."""

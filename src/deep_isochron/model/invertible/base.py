@@ -6,10 +6,10 @@ r"""Bijection interfaces.
     $C^k$; ``None`` means $C^\infty$).
 
 ``AbstractScalarBijection``
-    $\mathbb{R}\to\mathbb{R}$ maps parametrised by a single *unconstrained* vector
+    $\mathbb{R}\to\mathbb{R}$ maps parametrized by a single *unconstrained* vector
     ``raw``, which is the only trainable leaf. Constrained parameters are computed on
     read by ``constrain(raw)`` (see ``params``); ``constrain(0)`` is the identity map.
-    This is what makes a standalone scalar bijection safe to optimise and what lets
+    This is what makes a standalone scalar bijection safe to optimize and what lets
     ``CouplingFlow`` write a conditioner's output straight into ``raw``.
 
 ``ScalarChain`` / ``SequentialINN``
@@ -73,7 +73,7 @@ B = TypeVar("B", bound="AbstractScalarBijection")
 
 
 class AbstractScalarBijection[P: tuple](AbstractBijection):
-    r"""Bijections $\mathbb{R}\rightarrow\mathbb{R}$ acting on 0-d arrays, parametrised
+    r"""Bijections $\mathbb{R}\rightarrow\mathbb{R}$ acting on 0-d arrays, parametrized
     by ``num_params`` unconstrained reals.
 
     **Implementation checklist.** A subclass is complete when it has exactly these
@@ -108,7 +108,7 @@ class AbstractScalarBijection[P: tuple](AbstractBijection):
 
     Why the shape: ``raw`` being the only leaf is what makes a conditioner's output
     writable straight into the bijection (``from_unconstrained`` is one ``tree_at``) and
-    what makes any optimiser step safe (no step can leave the constrained set). An
+    what makes any optimizer step safe (no step can leave the constrained set). An
     instance with ``raw=None`` is a *template*: static configuration only, hashable,
     zero trainable size — what ``CouplingFlow`` stores.
     """
@@ -163,7 +163,7 @@ class AbstractScalarBijection[P: tuple](AbstractBijection):
 
 class ScalarChain(AbstractScalarBijection[tuple]):
     """Composition of scalar bijections, applied left to right. Itself a scalar
-    bijection parametrised by the concatenation of its members' raw vectors, so it is a
+    bijection parametrized by the concatenation of its members' raw vectors, so it is a
     valid coupling template.
 
     The chain's ``raw`` is ``None`` by construction; members hold their own ``raw``

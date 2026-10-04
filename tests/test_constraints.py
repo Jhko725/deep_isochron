@@ -76,12 +76,12 @@ def test_inverse(name, r):
 @given(r=raw_vectors(6))
 def test_widths_inverse_in_mean_zero_gauge(name, r):
     c = PRIMITIVES[name]
-    r_centerd = r - jnp.mean(r)
+    r_centered = r - jnp.mean(r)
     tol = TOL["closed_form"]
-    assert_close(c.inverse(c(r_centerd)), r_centerd, rtol=tol, atol=tol)
+    assert_close(c.inverse(c(r_centered)), r_centered, rtol=tol, atol=tol)
     # gauge consistency: forward is invariant to the constant that inverse drops
     tol = TOL["identity"]
-    assert_close(c(r), c(r_centerd), rtol=tol, atol=tol)
+    assert_close(c(r), c(r_centered), rtol=tol, atol=tol)
 
 
 @pytest.mark.parametrize("name", ELEMENTWISE)

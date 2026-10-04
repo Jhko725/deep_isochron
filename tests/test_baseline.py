@@ -15,15 +15,14 @@ import jax
 import jax.numpy as jnp
 import optax
 import pytest
-from deep_isochron.data import generate, OnCycleGaussian, windows
+from deep_isochron.data import generate, OnCycleGaussian, validation_windows, windows
 from deep_isochron.model import (
     PhaseAmplitudeAutoencoder,
     PhaseAmplitudeLatentDynamics,
 )
-from deep_isochron.model.autoencoder import normalise_phase_plane
+from deep_isochron.model.autoencoder import normalize_phase_plane
 from deep_isochron.systems import BautinNormalForm, HopfNormalForm
 from deep_isochron.training import (
-    collect_batches,
     Evaluator,
     ListLogger,
     PhaseAutoencoderLoss,
@@ -143,15 +142,16 @@ def test_exact_chart_conjugates_the_normal_form_to_the_latent_flow(nf, r, theta)
 
 # ------------------------------------------------------------------ autoencoder ---
 @given(y=st.tuples(st.floats(-3, 3), st.floats(-3, 3), st.floats(-3, 3)))
-def test_encoder_normalisation(y):
+def test_encoder_normalization(y):
     """Eqs. (15)–(16): ``(Y1, Y2)`` on the unit circle, ``Y3`` untouched."""
     y = jnp.asarray(y)
     if y[0] ** 2 + y[1] ** 2 < 1e-6:
         return
-    z = normalise_phase_plane(y)
+    z = normalize_phase_plane(y)
     assert_close(z[0] ** 2 + z[1] ** 2, 1.0, rtol=TOL["closed_form"])
     assert z[2] == y[2]
-    assert_close(jnp.arctan2(z[1], z[0]), jnp.arctan2(y[1], y[0]), rtol=1e-12)
+    gap = jnp.arctan2(z[1], z[0]) - jnp.arctan2(y[1], y[0])
+    assert_close(jnp.arctan2(jnp.sin(gap), jnp.cos(gap)), 0.0, atol=1e-12)  # mod 2π
 
 
 def test_autoencoder_shapes_and_derived_quantities():
@@ -272,9 +272,7 @@ def test_phase_autoencoder_learns_the_hopf_phase():
         seed=0,
     )
     train_src, val_src = source.split_trajectories(0.125, seed=0)
-    evaluator = Evaluator(
-        collect_batches(windows(val_src, length, seed=1).batch(128), 4), reference=nf
-    )
+    evaluator = Evaluator(validation_windows(val_src, length).batch(128), reference=nf)
     trainer = Trainer(
         optax.adam(1e-3),
         PhaseAutoencoderLoss(),

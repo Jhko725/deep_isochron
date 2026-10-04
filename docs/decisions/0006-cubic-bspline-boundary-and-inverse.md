@@ -16,7 +16,7 @@ verified_by: joon
 the `AbstractSpline` frame: a strictly increasing map that is a spline on `xy_range = [a, b]`
 and the identity outside it. Two places in that port deviate from the reference algorithm,
 and the reasons were recorded only in the branch's change document. This ADR makes them
-decisions. The mathematics (index conventions, the derivative recursion, the normalisation,
+decisions. The mathematics (index conventions, the derivative recursion, the normalization,
 the inverse's guarantees) is in `docs/design/cubic-bspline.md`.
 
 Two requirements drive both deviations:
@@ -55,7 +55,7 @@ at `b`) hold for every value of the free coefficients. The derivation is in the 
 
 Cost: `K − 3` free coefficients instead of `K + 1`, i.e. reduced flexibility in the two
 edge bins; `num_params = 2K + 2` rather than the paper's count. Coefficients live in real
-units (no normalise/denormalise to `[0, 1]`), so the pinned values are the Greville
+units (no normalize/denormalise to `[0, 1]`), so the pinned values are the Greville
 abscissae themselves and the free ones are strictly increasing increments between the
 pinned ends (`Widths` with `total` = the Greville span).
 

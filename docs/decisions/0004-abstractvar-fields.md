@@ -18,7 +18,7 @@ ordinary instance attribute. This is [equinox issue #1256](https://github.com/pa
 the annotation is stripped at runtime but looks like a dataclass field to a checker, so it
 becomes a phantom required `__init__` argument in subclasses; the maintainer's position is that
 Python has no static spelling for "accessible attribute, not an init field". The `init=False`
-override below is that spelling *for the subclass*, which is where the phantom argument appears. Verified behaviour (equinox 0.13.8, ty 0.0.84, pyright 1.1):
+override below is that spelling *for the subclass*, which is where the phantom argument appears. Verified behavior (equinox 0.13.8, ty 0.0.84, pyright 1.1):
 
 | subclass implementation | runtime | type checkers |
 |---|---|---|

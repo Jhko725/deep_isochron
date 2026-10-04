@@ -6,7 +6,7 @@ evaluation code treats them on the same footing.
 The contract is deliberately minimal and will grow as the science finds its rough edges.
 What it promises: a **phase** ``Θ(x)`` in ``(-π, π]``; an **amplitude** ``A(x)`` that is
 *isostable-like* — zero on the limit cycle, with the sign of the deviation and decaying
-along the flow — but with **no fixed normalisation** (the conjugacy model's is the
+along the flow — but with **no fixed normalization** (the conjugacy model's is the
 Wilson–Moehlis ``Ψ`` of ``docs/design/normal-forms.md`` §5.2; the autoencoder's ``Y₃``
 is determined only up to scale, §5.4), so evaluations compare amplitudes up to a scale
 fitted on the data; a point of the learned **limit cycle** at a given phase; and the
@@ -30,7 +30,7 @@ class AbstractPhaseAmplitudeModel(eqx.Module):
     @abc.abstractmethod
     def amplitude(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
         """Isostable-like coordinate: zero on the cycle, decaying along the flow;
-        normalisation is the model's own."""
+        normalization is the model's own."""
 
     @abc.abstractmethod
     def cycle_point(self, theta: Float[Array, ""]) -> Float[Array, " obs_dim"]:

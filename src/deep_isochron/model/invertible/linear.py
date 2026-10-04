@@ -4,16 +4,16 @@ r"""The linear layer of the INN vocabulary.
 in ``SO(dim)`` (matrix exponentials of skew-symmetric generators) and singular values
 ``s`` in ``(1/L, L)``. Every point of the parameter space is therefore an
 orientation-preserving linear map with condition number below ``L²``, and the
-unconstrained leaves can be optimised freely. An unconstrained matrix ``W`` (the former
+unconstrained leaves can be optimized freely. An unconstrained matrix ``W`` (the former
 ``InvertibleLinear``) can cross ``det W = 0`` during training, and with it both
 invertibility and orientation; nothing an INN of conjugacies needs is lost by removing
 it, since ``L`` can be made as large as wanted. See the change document
 ``docs/changes/2026-10-02-invertible-cleanup.md`` (A4).
 
-The parametrisation follows ADR-0001 in spirit: the leaves ``raw_U``, ``raw_V``,
+The parametrization follows ADR-0001 in spirit: the leaves ``raw_U``, ``raw_V``,
 ``raw_s`` are unconstrained, and the constrained ``LinearParams(U, V, s)`` are computed
 on read by ``params``. All-zero leaves give ``U = V = I``, ``s = 1``: the identity map
-(ADR-0002), which is the default initialisation.
+(ADR-0002), which is the default initialization.
 """
 
 import math
@@ -50,7 +50,7 @@ class BiLipschitzLinear(AbstractBijection):
     - ``init``: ``"identity"`` (default; all raw leaves zero, so the layer is the
       identity map) or ``"rotation"`` (Gaussian skew generators of scale
       ``1/sqrt(dim)``, giving random rotations ``U``, ``V``; ``s = 1``). The rotation is
-      *not* Haar-distributed; it is the former default initialisation, kept for
+      *not* Haar-distributed; it is the former default initialization, kept for
       experiments that want a random orthogonal mixing at init.
     - ``dtype``, ``use_bias``, ``key``: as in ``eqx.nn.Linear``. ``key`` is only drawn
       from for ``init="rotation"`` but is always required, for a uniform constructor

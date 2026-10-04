@@ -6,14 +6,14 @@
   4. finiteness        f, f⁻¹ finite on the working domain
   5. jacobian          Df⁻¹(f(x)) · Df(x) == I
   6. pytree hygiene    partition/combine round trip; num_trainable_params
-  7. trainability      one aggressive optimiser step keeps every law (raw leaves are
+  7. trainability      one aggressive optimizer step keeps every law (raw leaves are
                        unconstrained, so no step can leave the constrained set)
 
 What gets tested is declared in ``tests/registry.py``; how instances are drawn is
 in ``tests/strategies.py``.  Two test styles are used deliberately:
 
 * ``@pytest.mark.parametrize(name) + @given(st.data())`` — one pytest ID per
-  bijection, draws labelled.  Needed because ``@given`` binds its strategy at
+  bijection, draws labeled.  Needed because ``@given`` binds its strategy at
   decoration time while ``name`` only exists at collection time (same shape as
   TFP's ``testBijector``).
 * ``@given(f=any_scalar_bijection())`` + ``@example(...)`` — for laws on

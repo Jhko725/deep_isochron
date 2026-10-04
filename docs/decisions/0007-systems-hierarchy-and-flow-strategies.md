@@ -10,7 +10,7 @@ verified_by: joon
 
 **Status**: accepted (2026-10-02); amended 2026-10-03 after review (names: *integration* not *strategy*; `flow` returns the `diffrax.Solution`; `params()` added to the `AbstractODE` contract; `GreaterThan`); amended 2026-10-03 (B11) and 2026-10-04 (review round 3: `to_polar`, `_sq` hooks
 underscored, `default_integration`, `AbstractPhaseAmplitudeModel`): the mathematics lives in
-`docs/design/normal-forms.md`, which is authoritative for every symbol and normalisation
+`docs/design/normal-forms.md`, which is authoritative for every symbol and normalization
 below — where this ADR and the design document disagree, the design document wins.
 
 ## Context
@@ -35,7 +35,7 @@ target: planar, with a stable cycle at `r = 1`, written through two rates `ρ(r)
 growth rate, `ṙ = rρ(r)`) and `ω(r)` (`θ̇ = ω(r)`), and carrying in **closed form** what
 the observed systems cannot: `period`, `floquet_exponent` (`κ = ρ'(1)`, by autodiff of
 `log_growth_rate`), `eigenvalues_origin`, `phase` (asymptotic phase `Θ = θ + h(r)`),
-`amplitude` (isostable coordinate `Ψ(r)`, normalised `∂ᵣΨ(1) = 1`, `Ψ < 0` inside),
+`amplitude` (isostable coordinate `Ψ(r)`, normalized `∂ᵣΨ(1) = 1`, `Ψ < 0` inside),
 `limit_cycle`, `isochron`, the polar chart `to_polar`/`from_polar` and the phase–amplitude
 chart `to_phase_amplitude`/`from_phase_amplitude` (named after their targets since review
 round 3; `to_chart` was ambiguous once there were two charts). Subclasses implement the defining data
@@ -119,7 +119,7 @@ imaginary part at the origin).
   parameters, returns `nan` for `Ψ` outside the range (`Ψ ≥ Ψ(∞)` for `b > 0`), and handles
   the basin edge for `−1 < b < 0`.
 - Both models implement `model/base.py: AbstractPhaseAmplitudeModel` (review round 3):
-  `phase`, `amplitude` (isostable-like, *no fixed normalisation* — the conjugacy model's
+  `phase`, `amplitude` (isostable-like, *no fixed normalization* — the conjugacy model's
   is `Ψ`, the autoencoder's `Y₃` is only up to scale), `cycle_point`, `__call__`;
   `phase_gradient`/`phase_sensitivity` derived. Minimal on purpose; it grows with the
   science. `ConjugateLatentDynamics.latent_dynamics` is typed `AbstractNormalForm`

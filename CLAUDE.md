@@ -63,6 +63,8 @@ branch, and never edits *Review notes* except when asked to.
   with a frontmatter block (`type`, `status`, `updated`, plus
   `verified_by`/`sources`/`id` where relevant; see `docs/index.md`), updated in the
   same commit as the document.
+- American English throughout (code, docstrings, documents): *center*, *normalize*,
+  *optimizer*, *behavior*, *initialization*. Identifiers follow (`normalize_phase_plane`).
 - `docs/roadmap.md` is the single, current plan. Finished items move to its
   *Done* ledger (not deleted), which is chronological: new rows are always
   appended at the end, never inserted; it is updated in the same commit as the

@@ -21,7 +21,7 @@ conditioner regenerates them from a flat unconstrained vector on every call.
 Two earlier designs each satisfied one use only. Constrained values as properties computed
 from raw fields (first version) trained safely but duplicated the softplus/sigmoid formulas
 in a `from_unnormalized_params` classmethod. Constrained values as leaves (splines branch)
-made `num_trainable_params == num_params` and simplified the coupling path, but an optimiser
+made `num_trainable_params == num_params` and simplified the coupling path, but an optimizer
 step on a standalone instance could leave the constrained set — `__check_init__` runs at
 construction only, and `eqx.apply_updates` bypasses `__init__` — which forced an
 `_identity` helper and a second kind of object in the tests.

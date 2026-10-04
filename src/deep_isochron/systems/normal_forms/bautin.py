@@ -1,4 +1,4 @@
-r"""The Bautin (generalised Hopf) normal form (design document §3):
+r"""The Bautin (generalized Hopf) normal form (design document §3):
 $\rho(r) = a(1 - r^2)(1 + b r^2)$, $\omega(r) = \omega_0 + (\omega_1 - \omega_0) r^2$.
 
 The quintic factor makes the radial contraction depend on $r$, decoupling the cycle's
@@ -7,7 +7,7 @@ Floquet exponent from the focus's instability: with $c = (\omega_1 - \omega_0)/a
 * $\kappa = \rho'(1) = -2a(1 + b)$, $\mu = e^{-4\pi a(1+b)/\omega_1}$;
 * $h(r) = c\,[\ln r - \tfrac12\ln((1 + b r^2)/(1 + b))]$;
 * $\Psi(r) = \dfrac{(r^2 - 1)(1 + b r^2)^b}{2(1 + b)^b\, r^{2(1+b)}}$ — Wilson–Moehlis
-  normalised ($\partial_r\Psi(1) = 1$); $\Psi \to \tfrac12(b/(1+b))^b$ as $r \to \infty$
+  normalized ($\partial_r\Psi(1) = 1$); $\Psi \to \tfrac12(b/(1+b))^b$ as $r \to \infty$
   for $b \ge 0$.
 
 For $b \ge 0$ the cycle attracts $\mathbb R^2 \setminus \{0\}$. For $-1 < b < 0$ there

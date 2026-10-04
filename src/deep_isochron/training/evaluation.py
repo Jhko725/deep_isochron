@@ -1,6 +1,6 @@
 """Held-out evaluation against the model contract (roadmap C3, ADR-0009).
 
-``Evaluator(val_batches, reference=…)`` is a callable ``model -> {name: float}`` for
+``Evaluator(val_data, reference=…)`` is a callable ``model -> {name: float}`` for
 ``Trainer.train(evaluate=…)``; it works on any ``AbstractPhaseAmplitudeModel`` and adds
 what each model kind can report:
 
@@ -16,7 +16,7 @@ what each model kind can report:
 - **against a reference** normal form, when the data were generated from one
   (``reference=nf``, the design document's §7 chart as ground truth):
   ``phase/circ_std``, the circular standard deviation of ``Θ_model − Θ_exact`` over the
-  validation points, minimised over the two orientations (a phase is learned up to a
+  validation points, minimized over the two orientations (a phase is learned up to a
   constant and a sign), and ``amplitude/corr``, ``|corr(A_model, Ψ_exact)|`` (an
   amplitude is learned up to scale, so correlation is the scale-free comparison).
 
@@ -26,7 +26,7 @@ learned period are what is reported."""
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 import equinox as eqx
@@ -45,24 +45,23 @@ from .losses import Batch, final_mse, trajectory_mse
 
 
 def bounding_box_grid(
-    points: Float[Array, "n dim"], num: int = 32, margin: float = 0.05
+    bounds: Float[Array, "2 dim"], num: int = 32, margin: float = 0.05
 ) -> Float[Array, "m dim"]:
-    """A regular grid over the axis-aligned bounding box of ``points`` (``num`` per axis
+    """A regular grid over the axis-aligned box ``bounds = (lo, hi)`` (``num`` per axis
     for planar data, ``8`` beyond), widened by ``margin`` of each side's extent."""
-    lo, hi = jnp.min(points, axis=0), jnp.max(points, axis=0)
+    lo, hi = bounds[0], bounds[1]
     pad = margin * (hi - lo)
     lo, hi = lo - pad, hi + pad
-    per_axis = num if points.shape[1] <= 2 else 8
-    axes = [jnp.linspace(lo[i], hi[i], per_axis) for i in range(points.shape[1])]
-    return jnp.stack(jnp.meshgrid(*axes, indexing="ij"), axis=-1).reshape(
-        -1, points.shape[1]
-    )
+    dim = bounds.shape[1]
+    per_axis = num if dim <= 2 else 8
+    axes = [jnp.linspace(lo[i], hi[i], per_axis) for i in range(dim)]
+    return jnp.stack(jnp.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, dim)
 
 
 def circular_std(angles: Float[Array, " n"]) -> Float[Array, ""]:
-    """``sqrt(-2 ln R)`` with ``R`` the mean resultant length."""
-    r = jnp.abs(jnp.mean(jnp.exp(1j * angles)))
-    return jnp.sqrt(-2.0 * jnp.log(jnp.clip(r, 1e-300, 1.0)))
+    """``sqrt(-2 ln R̄)`` with ``R̄`` the mean resultant length (see
+    ``phase_amplitude_agreement`` for why this is the right spread of angles)."""
+    return circular_std_from_resultant(jnp.abs(jnp.mean(jnp.exp(1j * angles))))
 
 
 @eqx.filter_jit
@@ -73,21 +72,57 @@ def prediction_errors(model, batch: Batch) -> tuple[Float[Array, ""], Float[Arra
 
 
 @eqx.filter_jit
-def phase_amplitude_agreement(
+def phase_amplitude_sums(
     model: AbstractPhaseAmplitudeModel,
     reference: AbstractNormalForm,
     points: Float[Array, "n dim"],
-) -> tuple[Float[Array, ""], Float[Array, ""]]:
-    """``(circ_std of Θ_model − Θ_ref, |corr(A_model, Ψ_ref)|)``; the phase difference
-    is taken for both orientations and the smaller spread kept."""
+) -> dict[str, Array]:
+    """Sufficient statistics of one batch for the phase and amplitude agreement:
+    ``Σ exp(i(±Θ_model − Θ_ref))`` for both orientations and the moments of
+    ``(A_model, Ψ_ref)``; summed over batches by ``Evaluator``."""
     theta = jax.vmap(model.phase)(points)
     amp = jax.vmap(model.amplitude)(points)
     exact = jax.vmap(reference.to_phase_amplitude)(points)
+    psi = exact[:, 1]
+    return {
+        "n": jnp.asarray(points.shape[0], dtype=theta.dtype),
+        "z_plus": jnp.sum(jnp.exp(1j * (theta - exact[:, 0]))),
+        "z_minus": jnp.sum(jnp.exp(1j * (-theta - exact[:, 0]))),
+        "a": jnp.sum(amp),
+        "p": jnp.sum(psi),
+        "aa": jnp.sum(amp * amp),
+        "pp": jnp.sum(psi * psi),
+        "ap": jnp.sum(amp * psi),
+    }
+
+
+def phase_amplitude_agreement(sums: dict[str, Array]) -> tuple[Array, Array]:
+    """``(circ_std, |corr|)`` from summed ``phase_amplitude_sums``.
+
+    Why the circular standard deviation rather than an MSE of the angle difference: the
+    learned phase is determined only up to a constant (design document §5.4), so the
+    difference ``Δ = Θ_model − Θ_ref`` has an unknown mean, and ``Δ`` lives on the
+    circle, so a model right to 0.01 rad can show ``|Δ| ≈ 2π`` near ``±π``. The circular
+    standard deviation ``sqrt(−2 ln R̄)``, ``R̄ = |mean exp(iΔ)|`` (Mardia & Jupp,
+    *Directional Statistics*, 1999; SciPy's ``circstd``), is invariant to the offset and
+    to wrapping, and for small spread equals the ordinary standard deviation of ``Δ``
+    after removing its mean — the RMS phase error in radians. The better of the two
+    orientations is kept (a phase is learned up to a sign too). The amplitude is learned
+    up to scale, so ``|corr(A_model, Ψ_ref)|`` is its scale-free comparison."""
+    n = sums["n"]
     spread = jnp.minimum(
-        circular_std(theta - exact[:, 0]), circular_std(-theta - exact[:, 0])
+        circular_std_from_resultant(jnp.abs(sums["z_plus"]) / n),
+        circular_std_from_resultant(jnp.abs(sums["z_minus"]) / n),
     )
-    corr = jnp.corrcoef(amp, exact[:, 1])[0, 1]
+    cov = sums["ap"] / n - (sums["a"] / n) * (sums["p"] / n)
+    var_a = sums["aa"] / n - (sums["a"] / n) ** 2
+    var_p = sums["pp"] / n - (sums["p"] / n) ** 2
+    corr = cov / jnp.sqrt(jnp.maximum(var_a * var_p, 1e-300))
     return spread, jnp.abs(corr)
+
+
+def circular_std_from_resultant(r: Array) -> Array:
+    return jnp.sqrt(-2.0 * jnp.log(jnp.clip(r, 1e-300, 1.0)))
 
 
 @eqx.filter_jit
@@ -134,51 +169,64 @@ def learned_physics(model: AbstractPhaseAmplitudeModel) -> dict[str, Array]:
 
 @dataclass
 class Evaluator:
-    """``evaluate(model)`` over a fixed, finite collection of validation batches
-    (build it once with ``collect_batches``, so every evaluation sees the same
-    windows)."""
+    """``evaluate(model)`` over a **finite, re-iterable** collection of validation
+    batches — a ``validation_windows(...).batch(B)`` dataset (the intended source), or
+    a list from ``collect_batches``. It is iterated to exhaustion on every call, so each
+    evaluation sees the same windows and the metric is comparable across steps
+    (levanter's eval-loop shape; ADR-0009). The bounding-box grid for the bijection
+    diagnostics is taken from the data on the first pass."""
 
-    val_batches: Sequence[dict[str, Array | np.ndarray]]
+    val_data: Iterable[dict[str, Array | np.ndarray]]
     reference: AbstractNormalForm | None = None
     grid_points: int = 32
-    _batches: list[Batch] = field(default_factory=list, init=False, repr=False)
     _grid: Array | None = field(default=None, init=False, repr=False)
-    _points: Array | None = field(default=None, init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        self._batches = [
-            {k: jnp.asarray(v) for k, v in b.items()} for b in self.val_batches
-        ]
-        if not self._batches:
-            raise ValueError("val_batches is empty.")
-
-    @property
-    def points(self) -> Float[Array, "n dim"]:
-        """Every state in the validation windows, flattened."""
-        if self._points is None:
-            self._points = jnp.concatenate(
-                [b["u"].reshape(-1, b["u"].shape[-1]) for b in self._batches]
-            )
-        return self._points
 
     @property
     def grid(self) -> Float[Array, "m dim"]:
         if self._grid is None:
-            self._grid = bounding_box_grid(self.points, self.grid_points)
+            self._grid = bounding_box_grid(self._bounds(), self.grid_points)
         return self._grid
 
+    def _bounds(self) -> Float[Array, "2 dim"]:
+        lo = hi = None
+        for batch in self.val_data:
+            u = np.asarray(batch["u"]).reshape(-1, np.shape(batch["u"])[-1])
+            lo = u.min(0) if lo is None else np.minimum(lo, u.min(0))
+            hi = u.max(0) if hi is None else np.maximum(hi, u.max(0))
+        if lo is None:
+            raise ValueError("val_data is empty.")
+        return jnp.stack((jnp.asarray(lo), jnp.asarray(hi)))
+
     def __call__(self, model: AbstractPhaseAmplitudeModel) -> dict[str, float]:
-        errors = [prediction_errors(model, b) for b in self._batches]
+        mse_sum = final_sum = count = 0.0
+        sums: dict[str, Array] | None = None
+        for batch in self.val_data:
+            n = np.shape(batch["u"])[0]
+            mse, final = prediction_errors(model, batch)
+            mse_sum, final_sum, count = (
+                mse_sum + n * mse,
+                final_sum + n * final,
+                count + n,
+            )
+            if self.reference is not None:
+                u = jnp.asarray(batch["u"])
+                part = phase_amplitude_sums(
+                    model, self.reference, u.reshape(-1, u.shape[-1])
+                )
+                sums = part if sums is None else {k: sums[k] + part[k] for k in part}
+        if count == 0:
+            raise ValueError("val_data is empty.")
         out: dict[str, Array] = {
-            "val/mse": jnp.mean(jnp.stack([e[0] for e in errors])),
-            "val/final_mse": jnp.mean(jnp.stack([e[1] for e in errors])),
+            "val/mse": jnp.asarray(mse_sum / count),
+            "val/final_mse": jnp.asarray(final_sum / count),
         }
         out.update(learned_physics(model))
         if isinstance(model, ConjugateLatentDynamics):
             out.update(bijection_grid_metrics(model.bijection, self.grid))
-        if self.reference is not None:
-            spread, corr = phase_amplitude_agreement(model, self.reference, self.points)
-            out["phase/circ_std"], out["amplitude/corr"] = spread, corr
+        if sums is not None:
+            out["phase/circ_std"], out["amplitude/corr"] = phase_amplitude_agreement(
+                sums
+            )
         return {k: float(v) for k, v in out.items()}
 
 

@@ -1,7 +1,7 @@
 r"""Integration methods for ``AbstractNormalForm.flow``.
 
 The same normal form can be integrated in different coordinates; which one is best
-(accuracy near the origin, cost, behaviour under ``vmap``) is an experimental question,
+(accuracy near the origin, cost, behavior under ``vmap``) is an experimental question,
 so the choice is an object passed to ``flow(..., integration=...)`` — the diffrax
 pattern of passing a solver instance. Each integration is an ``eqx.Module`` with no
 array leaves, hence static under ``eqx.filter_jit``/``filter_vmap``: every integration

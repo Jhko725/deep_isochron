@@ -48,7 +48,7 @@ class PhaseAmplitudeLatentDynamics(AbstractLatentDynamics):
 
     with $R$ the rotation matrix. ``omega`` is free (its sign is the orientation of the
     cycle in the latent plane); ``kappa < 0`` through ``DECAY_CONSTRAINT``. The rotation
-    is linear, so a non-normalised ``y0`` keeps its radius; the encoder normalises.
+    is linear, so a non-normalized ``y0`` keeps its radius; the encoder normalizes.
     """
 
     omega: Float[Array, ""]
