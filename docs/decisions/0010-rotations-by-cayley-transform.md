@@ -12,6 +12,9 @@ verified_by: pending (Joon); V100 confirmation 2026-10-05 — step 88 → 33 ms
 
 ## Context
 
+Background on asynchronous dispatch, launch-bound steps and why a GPU `conditional` is a
+host-device round trip: `docs/design/training-step-performance.md` (§1, §5.2–5.3).
+
 `BiLipschitzLinear` parametrizes `U, V ∈ SO(d)` from unconstrained leaves as
 `expm(raw − rawᵀ)`. Benchmarking the training step on a V100 (`scripts/bench_dataloader.py
 --hlo-stats`, change document 2026-10-04 round 2) found the step host-bound at ≈ 90 ms with

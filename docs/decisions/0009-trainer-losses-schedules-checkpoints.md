@@ -53,7 +53,8 @@ auto-selection on a shared cluster); the trainer accepts whatever the loader yie
 (NumPy batches still work: `jit` transfers them synchronously, which is fine for tests).
 
 **Loaders must not start grain's default reader pool** (review round 2, measured on CPU
-in `scripts/bench_dataloader.py`). The training loop is host-sensitive: its cost per
+in `scripts/bench_dataloader.py`; the mechanics — asynchronous dispatch, the GIL, the
+benchmark's rows — are explained in `docs/design/training-step-performance.md`). The training loop is host-sensitive: its cost per
 step is the Python dispatch of one jitted call, ≈15 ms here. Iterating a `MapDataset`
 directly, or `to_iter_dataset()` with default `ReadOptions`, starts 16 reader threads
 and a 500-element prefetch buffer; those threads contend with the loop for the GIL and
