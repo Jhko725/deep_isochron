@@ -117,6 +117,9 @@ batch of 512, measured). It is still a *source* — the data are batches of wind
   `mixed_window_batches`), `num_windows` of them per epoch, so `len` means the same amount
   of data in every mode. The marginals equal `WeightedWindow`'s and `mixed_windows`'s
   (tests compare them); `grain.MapDataset.mix` of two pipelines is no longer needed.
+- Measured on the V100 (2026-10-05): fetch 88.5 → 0.7 ms per batch of 512; `to_device`
+  32.6 ms per step against 31.0 with device-resident batches — the loader is no longer
+  measurable next to the step.
 - `windows`/`mixed_windows` (Decision 2) stay as the per-element reference and for
   `validation_windows`, which keeps the per-element `_FixedWindows` source (an occasional
   pass; the same gather with a stride would speed it up if it ever matters).

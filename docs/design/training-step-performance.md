@@ -319,8 +319,9 @@ dev container.
    hide the step behind the fetch but not the fetch behind the step. The same batches from a
    cache run at 33 ms. Fixed by C9: `WindowBatchSource`, a source whose element is a whole
    batch built by one fancy-indexed gather — 0.6 ms against 49 ms per batch on the dev CPU
-   **[measured]**, with an epoch defined as every window once (ADR-0008 Decision 3). The
-   V100 `to_device` row is expected to drop to the step's 33 ms.
+   **[measured]**, with an epoch defined as every window once (ADR-0008 Decision 3). On the
+   V100: fetch 88.5 → 0.7 ms, `to_device` 32.6 ms against 31.0 device-resident
+   **[measured]** — the loader is out of the picture; the step (§5.2) is what remains.
 
 Two hypotheses were raised and refuted on the way, and are kept as negative results: that
 *committed* batches dispatch slower than uncommitted ones (§2; floors and steps identical),
