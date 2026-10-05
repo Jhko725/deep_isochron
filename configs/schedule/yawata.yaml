@@ -1,0 +1,7 @@
+# Yawata et al.'s once-and-for-all switch (Sec. IV.A), for the autoencoder loss.
+_target_: deep_isochron.training.ThresholdSwitch
+before: [1.0, 0.5, 0.5, 2.0]
+after: [1.0, 5.0, 0.5, 0.0]
+thresholds:
+  pha: 0.01
+  aux: 0.05

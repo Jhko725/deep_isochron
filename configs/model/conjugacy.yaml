@@ -1,0 +1,23 @@
+# ConjugateLatentDynamics: an INN conjugating the data to a learnable normal form.
+kind: conjugacy
+latent_dynamics:
+  _target_: deep_isochron.systems.BautinNormalForm
+  a: 1.0
+  b: 0.5
+  w: 0.6283185307179586
+  w0: 1.2566370614359172
+inn:
+  blocks: 8      # each block = linear + coupling, couplings alternate `flip`
+  linear:
+    _target_: deep_isochron.model.invertible.BiLipschitzLinear
+    dim: 2
+    max_lipschitz: 2.0
+  coupling:
+    _target_: deep_isochron.model.invertible.CouplingFlow
+    dim: 2
+    bijection:
+      _target_: deep_isochron.model.invertible.MonotonicRQSpline
+      num_bins: 9
+      xy_range: [-4.0, 4.0]
+    mlp_width: 32
+    mlp_depth: 2

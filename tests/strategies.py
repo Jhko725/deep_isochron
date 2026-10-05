@@ -58,7 +58,14 @@ def magnitudes(lo: float, hi: float) -> st.SearchStrategy[float]:
 
 
 raw_params: st.SearchStrategy[float] = floats_in(-RAW_BOUND, RAW_BOUND)
-domain_points: st.SearchStrategy[float] = floats_in(-5.0, 5.0)
+DOMAIN_MIN_MAGNITUDE = 1e-9
+"""Points are exactly ``0`` or at least this far from it. The polar couplings
+regularize the origin inside a disc of radius ``eps_r = 1e-12`` (a fixed fill angle, so
+the map is a constant rotation there); a point *on* that disc's boundary can be outside
+for the forward map and, after rounding, inside for the inverse, and no pointwise law
+holds across the seam. ``1e-9`` keeps the laws' domain clear of every regularization
+radius in the vocabulary; the origin itself is tested exactly."""
+domain_points: st.SearchStrategy[float] = magnitudes(DOMAIN_MIN_MAGNITUDE, 5.0)
 seeds: st.SearchStrategy[int] = st.integers(0, 2**31 - 1)
 
 

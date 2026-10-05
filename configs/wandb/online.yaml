@@ -1,0 +1,4 @@
+mode: online
+project: deep_isochron
+entity: null
+every: 50          # log to wandb every n steps

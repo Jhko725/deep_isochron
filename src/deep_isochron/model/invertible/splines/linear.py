@@ -1,6 +1,7 @@
 """Monotone piecewise linear spline (C^0). This is the simplest implementation of an
 ``AbstractSpline``."""
 
+from collections.abc import Sequence
 from typing import NamedTuple
 
 import equinox as eqx
@@ -34,7 +35,7 @@ class LinearSpline(AbstractSpline[LinearSplineParams]):
     def __init__(
         self,
         num_bins: int,
-        xy_range: tuple[float, float] = (-1.0, 1.0),
+        xy_range: Sequence[float] = (-1.0, 1.0),
         *,
         raw: Float[Array, " {self.num_params}"] | None = None,
         min_rel_width: float = 1e-3,

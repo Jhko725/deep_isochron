@@ -194,6 +194,20 @@ def window_batches(
     return grain.MapDataset.source(src)
 
 
+def mixed_ranges(
+    source: TimeSeriesDataSource, length: int, split_idx: int
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """The two start ranges of the ``mixed_windows`` design: windows that start before
+    ``ts[split_idx]`` and windows that start at or after it."""
+    T = source.trajectory_length
+    if not length <= split_idx <= T - length:
+        raise ValueError(
+            "split_idx must leave at least one window on each side: "
+            f"{length} <= split_idx <= {T - length}."
+        )
+    return (0, split_idx - length + 1), (split_idx, T - length + 1)
+
+
 def mixed_window_batches(
     source: TimeSeriesDataSource,
     length: int,
@@ -209,13 +223,6 @@ def mixed_window_batches(
     with probability ``weights[0] / sum(weights)``, otherwise at or after it, both
     uniform within their range — a per-window draw instead of ``grain.MapDataset.mix``
     of two pipelines, the same marginal ratio."""
-    T = source.trajectory_length
-    if not length <= split_idx <= T - length:
-        raise ValueError(
-            "split_idx must leave at least one window on each side: "
-            f"{length} <= split_idx <= {T - length}."
-        )
-    ranges = ((0, split_idx - length + 1), (split_idx, T - length + 1))
     src = WindowBatchSource(
         source,
         length,
@@ -223,7 +230,7 @@ def mixed_window_batches(
         seed=seed,
         epochs=epochs,
         num_steps=num_steps,
-        ranges=ranges,
+        ranges=mixed_ranges(source, length, split_idx),
         range_weights=weights,
     )
     return grain.MapDataset.source(src)

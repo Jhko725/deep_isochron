@@ -1,0 +1,51 @@
+# One training run. Compose: `uv run python scripts/train.py data=bautin model=conjugacy`.
+# The `data` group is the generation config (shared with scripts/generate_data.py): the
+# dataset file is located by the hash of that config and must already exist.
+defaults:
+  - data: bautin
+  - model: conjugacy
+  - loss: conjugacy
+  - schedule: constant
+  - optimizer: adam
+  - wandb: "off"
+  - _self_
+
+seed: 0            # model init; the trainer's key is derived from it
+device: null       # index into jax.devices(); null -> data.resolve_device() (scheduler-scoped default)
+x64: true
+
+num_steps: 5000    # the run's length in steps; the loader is sized to cover it (epochs logged)
+windows:
+  length: 50
+  batch: 2048
+  seed: 0
+  sampling:
+    kind: uniform  # uniform | weighted | mixed
+    start_range: null          # uniform: [lo, hi) of start indices, null = every start
+    boost: 4.0                 # weighted: transient_weight(boost, tau)
+    tau: 20.0
+    split_idx: null            # mixed: windows start before / at-or-after ts[split_idx]
+    weights: [1.0, 1.0]        # mixed: early : late ratio
+validation:
+  fraction: 0.1    # held-out trajectories (split_trajectories)
+  seed: 0
+  batch: 512
+  stride: null     # validation_windows stride; null = non-overlapping
+
+eval_every: 500
+log_every: 50
+checkpoint:
+  every: 500
+  metric: val/mse
+  keep_best: 1
+
+resume: null       # a run directory: restore its latest checkpoint and continue the stream
+
+hydra:
+  run:
+    dir: runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: runs/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.num}
+  job:
+    chdir: false

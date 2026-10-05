@@ -27,12 +27,21 @@ S = TypeVar("S", bound=eqx.Module)
 
 
 class Checkpointer(abc.ABC):
-    """Base class: subclasses implement ``save(step, state, metrics)``. Every
-    checkpointer is a context manager whose exit calls ``close()`` (a no-op unless
-    overridden), also when the loop raised."""
+    """Base class: subclasses implement ``save(step, state, metrics, force=False) ->
+    saved``, returning whether a checkpoint was written (a save policy may decline;
+    ``force`` overrides it — the trainer forces the final step). Every checkpointer is a
+    context manager whose exit calls ``close()`` (a no-op unless overridden), also when
+    the loop raised."""
 
     @abc.abstractmethod
-    def save(self, step: int, state: Any, metrics: Mapping[str, float]) -> None: ...
+    def save(
+        self,
+        step: int,
+        state: Any,
+        metrics: Mapping[str, float],
+        *,
+        force: bool = False,
+    ) -> bool: ...
 
     def close(self) -> None:
         pass
@@ -45,8 +54,15 @@ class Checkpointer(abc.ABC):
 
 
 class NullCheckpointer(Checkpointer):
-    def save(self, step: int, state: Any, metrics: Mapping[str, float]) -> None:
-        pass
+    def save(
+        self,
+        step: int,
+        state: Any,
+        metrics: Mapping[str, float],
+        *,
+        force: bool = False,
+    ) -> bool:
+        return False
 
 
 class OrbaxCheckpointer(Checkpointer):
@@ -91,7 +107,16 @@ class OrbaxCheckpointer(Checkpointer):
             custom_metadata=dict(custom_metadata) if custom_metadata else None,
         )
 
-    def save(self, step: int, state: Any, metrics: Mapping[str, float]) -> None:
+    def save(
+        self,
+        step: int,
+        state: Any,
+        metrics: Mapping[str, float],
+        *,
+        force: bool = False,
+    ) -> bool:
+        """Save under the ``save_every`` policy, or regardless of it with ``force``
+        (the run's final step); ``True`` if a checkpoint was written."""
         if self.metric is not None and self.metric not in metrics:
             raise KeyError(
                 f"checkpoint metric {self.metric!r} missing from metrics "
@@ -99,7 +124,10 @@ class OrbaxCheckpointer(Checkpointer):
             )
         arrays = eqx.filter(state, eqx.is_array)
         json_metrics = cast(dict[str, Any], {k: float(v) for k, v in metrics.items()})
-        self._ckptr.save_async(step, arrays, metrics=json_metrics)
+        response = self._ckptr.save_async(
+            step, arrays, metrics=json_metrics, force=force
+        )
+        return response is not None
 
     def restore(self, template: S, step: int | None = None) -> S:
         """The state at ``step`` (latest if ``None``) with ``template``'s static
@@ -118,6 +146,21 @@ class OrbaxCheckpointer(Checkpointer):
     def steps(self) -> list[int]:
         self._ckptr.wait()
         return sorted(c.step for c in self._ckptr.checkpoints)
+
+    @property
+    def latest_step(self) -> int | None:
+        """The most recent saved step, ``None`` when the directory holds none."""
+        self._ckptr.wait()
+        latest = self._ckptr.latest
+        return None if latest is None else int(latest.step)
+
+    @property
+    def custom_metadata(self) -> dict[str, Any]:
+        """The ``custom_metadata`` the directory was created with (``{}`` if none) — the
+        resolved config of the run, for ``experiment.load_run``."""
+        raw = self._ckptr.root_metadata().custom_metadata
+        meta = cast(Mapping[str, Any] | None, raw)
+        return dict(meta) if meta else {}
 
     def close(self) -> None:
         self._ckptr.close()

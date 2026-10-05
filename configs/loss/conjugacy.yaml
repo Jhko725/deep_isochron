@@ -1,0 +1,2 @@
+_target_: deep_isochron.training.ConjugacyTrajectoryLoss
+default_weights: [1.0, 0.0]   # (data, latent)

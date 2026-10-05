@@ -35,6 +35,7 @@ it to check the C^1 join.
 """
 
 import abc
+from collections.abc import Sequence
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -48,7 +49,10 @@ class AbstractSpline[P: tuple](AbstractScalarBijection[P]):
     num_bins: eqx.AbstractVar[int]
 
     @staticmethod
-    def _check_range(xy_range: tuple[float, float]) -> tuple[float, float]:
+    def _check_range(xy_range: Sequence[float]) -> tuple[float, float]:
+        """``(lo, hi)`` as floats from any two-element sequence (configs give lists)."""
+        if len(xy_range) != 2:
+            raise ValueError("xy_range must have two entries, (lo, hi).")
         lo, hi = float(xy_range[0]), float(xy_range[1])
         if not lo < hi:
             raise ValueError("xy_range must satisfy lo < hi.")

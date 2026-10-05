@@ -1,0 +1,9 @@
+# Yawata et al. (2024) phase autoencoder baseline.
+kind: autoencoder
+obs_dim: 2
+latent_dynamics:
+  _target_: deep_isochron.model.PhaseAmplitudeLatentDynamics
+  omega: 1.0
+  kappa: -0.5
+mlp_depth: 2
+mlp_width: 100

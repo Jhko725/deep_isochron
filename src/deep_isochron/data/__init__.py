@@ -15,6 +15,7 @@ from .device import (
 from .generate import (
     dataset_path as dataset_path,
     generate as generate,
+    generation_metadata as generation_metadata,
 )
 from .initial_conditions import (
     AbstractICSampler as AbstractICSampler,

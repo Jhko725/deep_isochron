@@ -1,0 +1,3 @@
+# Constant weights; null = the loss's default_weights.
+_target_: deep_isochron.training.Constant
+values: null

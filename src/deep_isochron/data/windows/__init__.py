@@ -17,6 +17,7 @@ draw). How either is consumed next to JAX — ``single_threaded``, ``to_device``
 """
 
 from .batched import (
+    mixed_ranges as mixed_ranges,
     mixed_window_batches as mixed_window_batches,
     window_batches as window_batches,
     WindowBatchSource as WindowBatchSource,

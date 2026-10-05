@@ -18,7 +18,13 @@ outputs/
 multirun/
 
 # Wandb
-wandb/
+/wandb/
 
 # Results (checkpoints, etc.)
 results/
+
+# Phase D runs and datasets (scripts/train.py, scripts/generate_data.py)
+runs/
+data/*.nc
+ci-data/
+ci-run/

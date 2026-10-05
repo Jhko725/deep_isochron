@@ -359,6 +359,10 @@ launches, ≈ 17 µs per launch) and nearly flat in batch size.
   `tests/test_data.py` pins it. ADR-0005 amended.
 - Before believing a table: interleaved repeats, min and median, dispatch and total, the
   floor, and the loop census — `scripts/bench_dataloader.py` is the instrument.
+- A training run is `scripts/train.py` over `configs/train.yaml` (ADR-0011): `x64` and the
+  device are set before anything is built, the loader is `to_device(window_batches)`, the
+  final step is always checkpointed, and `bench_dataloader.py --config …` measures the
+  very pipeline and model a config will train.
 
 ## References
 

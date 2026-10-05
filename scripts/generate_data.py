@@ -5,15 +5,15 @@
 
 The file lands at ``<out_dir>/<name>-<config_hash>.nc``; the hash is over the
 generation-defining fields, so re-running an unchanged config overwrites the same file
-and a changed one gets a new name. The resolved config is stored in the file's
+and a changed one gets a new name, and a training run with the same ``data`` config
+finds it (``experiment.build_source``). The resolved config is stored in the file's
 ``extra`` metadata.
 """
 
 import hydra
 import jax
-import jax.numpy as jnp
-from deep_isochron.data import dataset_path, generate
-from omegaconf import DictConfig, OmegaConf
+from deep_isochron.experiment import generate_dataset
+from omegaconf import DictConfig
 
 
 jax.config.update("jax_enable_x64", True)
@@ -21,23 +21,8 @@ jax.config.update("jax_enable_x64", True)
 
 @hydra.main(version_base=None, config_path="../configs/data", config_name="fhn")
 def main(cfg: DictConfig) -> None:
-    system = hydra.utils.instantiate(cfg.system)
-    ic_sampler = hydra.utils.instantiate(cfg.ic_sampler)
-    config = hydra.utils.instantiate(cfg.solver)
-    ts = jnp.linspace(cfg.time.t0, cfg.time.t1, cfg.time.n)
-    source = generate(
-        system,
-        ic_sampler,
-        ts,
-        cfg.n_trajectories,
-        seed=cfg.seed,
-        config=config,
-        integration=cfg.integration,
-        extra={"config": OmegaConf.to_container(cfg, resolve=True)},
-    )
-    assert source.metadata is not None
-    path = source.save(dataset_path(cfg.out_dir, cfg.name, source.metadata))
-    print(f"wrote {path}  ({source})")
+    path = generate_dataset(cfg)
+    print(f"wrote {path}")
 
 
 if __name__ == "__main__":

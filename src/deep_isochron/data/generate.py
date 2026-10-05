@@ -93,6 +93,16 @@ def generate(
     ts = jnp.asarray(ts)
     u0 = ic_sampler(jax.random.key(seed), n_trajectories)
     config = copy.replace(config, throw=False)
+    meta = generation_metadata(
+        system,
+        ic_sampler,
+        ts,
+        n_trajectories,
+        seed=seed,
+        config=config,
+        integration=integration,
+        extra=extra,
+    )
 
     if isinstance(system, AbstractNormalForm):
         method = resolve_integration(integration or system.default_integration)
@@ -101,16 +111,11 @@ def generate(
             sol = system.flow(ts, u, config=config, integration=method)
             return sol.ys, sol.result
 
-        integration_name = type(method).__name__
     else:
-        if integration is not None:
-            raise ValueError("integration applies to AbstractNormalForm systems only.")
 
         def flow(u):
             sol = system.flow(ts, u, config=config)
             return sol.ys, sol.result
-
-        integration_name = ""
 
     ys, result = eqx.filter_vmap(flow)(u0)
     ok = np.asarray(result == dfx.RESULTS.successful)
@@ -123,13 +128,8 @@ def generate(
         )
 
     sha, dirty = _git_state()
-    meta = DatasetMetadata(
-        system=SystemSpec(type(system).__name__, system.params()),
-        sampling=SamplingSpec(
-            type(ic_sampler).__name__, ic_sampler.params(), seed, n_trajectories
-        ),
-        grid=GridSpec(float(ts[0]), float(ts[-1]), int(ts.shape[0])),
-        solve=SolveSpec(**config.params(), integration=integration_name),
+    meta = copy.replace(
+        meta,
         provenance=Provenance(
             created=datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
             git_sha=sha,
@@ -137,9 +137,43 @@ def generate(
             package_version=_package_version(),
             dtype=str(ys.dtype),
         ),
-        extra=extra or {},
     )
     return TimeSeriesDataSource(np.asarray(ts), np.asarray(ys), meta)
+
+
+def generation_metadata(
+    system: AbstractODE,
+    ic_sampler: AbstractICSampler,
+    ts: Float[Array, " time"],
+    n_trajectories: int,
+    *,
+    seed: int,
+    config: SolverConfig = DEFAULT_SOLVER_CONFIG,
+    integration: AbstractFlowIntegration | str | None = None,
+    extra: dict[str, Any] | None = None,
+) -> DatasetMetadata:
+    """The metadata ``generate`` would record for these arguments, **without
+    generating** — provenance left at its defaults. Its ``config_hash`` is the one the
+    generated file carries, so ``dataset_path(root, name, generation_metadata(...))`` is
+    where a dataset of this configuration lives (``experiment.build_source``)."""
+    ts = jnp.asarray(ts)
+    config = copy.replace(config, throw=False)
+    if isinstance(system, AbstractNormalForm):
+        method = resolve_integration(integration or system.default_integration)
+        integration_name = type(method).__name__
+    else:
+        if integration is not None:
+            raise ValueError("integration applies to AbstractNormalForm systems only.")
+        integration_name = ""
+    return DatasetMetadata(
+        system=SystemSpec(type(system).__name__, system.params()),
+        sampling=SamplingSpec(
+            type(ic_sampler).__name__, ic_sampler.params(), seed, n_trajectories
+        ),
+        grid=GridSpec(float(ts[0]), float(ts[-1]), int(ts.shape[0])),
+        solve=SolveSpec(**config.params(), integration=integration_name),
+        extra=extra or {},
+    )
 
 
 def dataset_path(root: str | Path, name: str, meta: DatasetMetadata) -> Path:

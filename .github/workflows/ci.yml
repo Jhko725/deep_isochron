@@ -1,0 +1,58 @@
+# Phase D6. Two jobs: the quick suite on every push (lint, types, Markdown math, the
+# hypothesis `ci` profile with the slow tests deselected) and a `slow` job with the full
+# training tests and a 20-step end-to-end run of scripts/train.py on a tiny generated
+# Bautin dataset (CPU). ruff and ty run through uvx so the lock file stays as it is.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  JAX_PLATFORMS: cpu
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --group dev
+      - run: uvx ruff check src tests scripts
+      - run: uvx ruff format --check src tests scripts --exclude src/deep_isochron/model/fourier.py
+      - run: uvx ty check src
+      - run: uv run python scripts/check_md_math.py
+      - run: uv run pytest --hypothesis-profile=ci -n 4 -m "not slow"
+
+  slow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --group dev
+      - run: uv run pytest --hypothesis-profile=ci -n 2 -m slow
+      - name: end-to-end smoke run (generate + 20 training steps + reopen)
+        run: |
+          uv run python scripts/generate_data.py --config-name bautin \
+            n_trajectories=16 time.n=81 time.t1=16.0 out_dir=ci-data
+          uv run python scripts/train.py \
+            data.n_trajectories=16 data.time.n=81 data.time.t1=16.0 data.out_dir=ci-data \
+            model.inn.blocks=2 windows.length=20 windows.batch=32 validation.fraction=0.25 \
+            validation.batch=16 num_steps=20 eval_every=10 log_every=5 checkpoint.every=10 \
+            hydra.run.dir=ci-run
+          uv run python -c "
+          from deep_isochron.experiment import load_run
+          cfg, state = load_run('ci-run')
+          assert int(state.step) == 20, int(state.step)
+          print('reopened run at step', int(state.step))
+          "

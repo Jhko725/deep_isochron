@@ -5,6 +5,7 @@ join C^2.
     AAAI (2023).
 """
 
+from collections.abc import Sequence
 from functools import partial
 from typing import NamedTuple
 
@@ -116,7 +117,7 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
     def __init__(
         self,
         num_bins: int,
-        xy_range: tuple[float, float] = (-1.0, 1.0),
+        xy_range: Sequence[float] = (-1.0, 1.0),
         *,
         raw: Float[Array, " {self.num_params}"] | None = None,
         min_rel_knot_width: float = 1e-3,

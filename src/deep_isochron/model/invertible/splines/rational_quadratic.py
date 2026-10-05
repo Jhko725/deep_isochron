@@ -6,6 +6,7 @@ unconstrained parameters.
 [2] https://github.com/bayesiains/nflows/blob/master/nflows/transforms/splines/rational_quadratic.py
 """
 
+from collections.abc import Sequence
 from typing import NamedTuple
 
 import equinox as eqx
@@ -45,7 +46,7 @@ class MonotonicRQSpline(AbstractSpline[RQSplineParams]):
     def __init__(
         self,
         num_bins: int,
-        xy_range: tuple[float, float] = (-1.0, 1.0),
+        xy_range: Sequence[float] = (-1.0, 1.0),
         *,
         raw: Float[Array, " {self.num_params}"] | None = None,
         min_rel_width: float = 1e-3,

@@ -437,6 +437,34 @@ def test_orbax_checkpointer_round_trip(tmp_path):
     assert int(more.step) == 23
 
 
+def test_final_step_is_checkpointed_regardless_of_the_save_policy(tmp_path):
+    """``save_every=2`` and a 3-step run: step 2 by policy, step 3 forced at the end;
+    the final state is what ``restore()`` (latest) returns. A run whose last step the
+    loop already saved is not saved twice."""
+    trainer = Trainer(optax.adam(0.05), LinearLoss())
+    ck = OrbaxCheckpointer(tmp_path / "a", save_every=2, metric="val/mse")
+    evaluate = lambda model: {"val/mse": jnp.asarray(1.0)}  # noqa: E731
+    state = trainer.train(
+        linear_model(),
+        linear_batches(3),
+        key=jax.random.key(0),
+        checkpointer=ck,
+        evaluate=evaluate,
+        eval_every=1,
+    )
+    assert ck.steps == [3] or ck.steps == [2, 3]  # latest kept; best may be 2
+    template = trainer.init(linear_model(), key=jax.random.key(1))
+    assert int(ck.restore(template).step) == 3
+    ck.close()
+    ck2 = OrbaxCheckpointer(tmp_path / "b", save_every=2, metric=None)
+    trainer.train(
+        linear_model(), linear_batches(4), key=jax.random.key(0), checkpointer=ck2
+    )
+    assert ck2.steps == [4]  # no evaluate: the final step only
+    ck2.close()
+    assert eqx.tree_equal(state.step, jnp.asarray(3))
+
+
 def test_trainer_runs_the_phase_autoencoder_pipeline():
     """The Hopf baseline through the trainer (short; the long version is the ``slow``
     test in ``test_baseline``): schedule, evaluation with a reference and logging."""

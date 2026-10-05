@@ -89,11 +89,23 @@ deep_isochron
 │   ├── loggers.py           Logger base class; Null / List / Print / Wandb; DelayedLogger
 │   ├── checkpoint.py        Checkpointer base class; OrbaxCheckpointer (whole state)
 │   └── evaluation.py        Evaluator(val_data, reference) on the model contract
+├── experiment/              configs -> a run                                 ── ADR-0011
+│   ├── instantiate.py       `_target_` instantiation with YAML lists as tuples
+│   ├── data.py              dataset_file / build_source (never generates) / generate_dataset;
+│   │                        build_window_source / build_loaders (resume = slice)
+│   ├── model.py             build_model (`_target_` layers + per-layer keys + flip)
+│   ├── training.py          build_loss / build_schedule / build_optimizer / build_trainer
+│   ├── logging.py           build_logger: PrintLogger (+ WandbLogger online/offline), epochs
+│   └── run.py               train(cfg, run_dir); load_run / load_model from a run directory
 └── misc.py                  inv_softplus, squashed_exp, polar ↔ cartesian
 
-scripts/generate_data.py + configs/data/*.yaml   Hydra entry point for data generation
+configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment
+scripts/train.py                                Hydra entry point: one training run
+scripts/generate_data.py (+ configs/data/)      Hydra entry point for data generation
 scripts/check_md_math.py                        GitHub-safe Markdown math check
-scripts/bench_dataloader.py                     data-pipeline vs training-step benchmark (C7)
+scripts/bench_dataloader.py                     data-pipeline vs training-step benchmark
+                                                (also --config <overrides>: a config's own run)
+.github/workflows/ci.yml                        lint · ty · math · tests; slow + end-to-end run
 ```
 
 ## The invertible package
@@ -218,6 +230,23 @@ transient). The per-element **grain transforms** `RandomWindow`/`WeightedWindow`
 `windows()`/`mixed_windows()` remain the reference semantics (tests compare marginals) and
 serve `validation_windows` (`data/windows/elementwise.py`). Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
 
+## From a config to a run
+
+```
+configs/train.yaml ──compose──► cfg          (Hydra groups; `_target_` leaves; tests use hydra.compose)
+        │
+        ├─ configure_jax: x64, resolve_device(cfg.device) → jax_default_device
+        ├─ build_source(cfg.data): <out_dir>/<name>-<hash>.nc  (hash = generation_metadata; no generation)
+        ├─ build_trainer(cfg): loss, schedule (Constant ← default_weights), optimizer
+        ├─ build_model(cfg.model, key(seed)) → trainer.init  — or OrbaxCheckpointer(resume).restore
+        ├─ build_loaders(cfg, source, device, start_step): split_trajectories; WindowBatchSource
+        │        (num_steps → epochs); [start_step:]; to_device; validation_windows().batch
+        ├─ run_dir/config.yaml, metadata.json; build_logger (Print, wandb?) → DelayedLogger
+        └─ Trainer.train(state, loader, num_steps, logger, OrbaxCheckpointer(run_dir/checkpoints,
+                 custom_metadata), Evaluator(val, reference_normal_form(cfg.data)), eval_every)
+                 └─ final step always checkpointed → load_run(run_dir) / load_model(run_dir)
+```
+
 ## Data flow of one training step
 
 ```
@@ -264,7 +293,9 @@ are in `test_splines.py`, `test_analytic.py`, `test_constraints.py`, `test_linea
 `test_windows.py` both windowing paths and their agreement, `test_baseline.py` the phase autoencoder
 against the exact chart (plus one `slow` training test on Hopf data), `test_models.py`
 the `AbstractPhaseAmplitudeModel` contract on both models, `test_training.py` the losses,
-schedules, loggers, trainer loop, evaluation and Orbax round trip. Solver configurations used by
+schedules, loggers, trainer loop, evaluation and Orbax round trip, `test_experiment.py` the
+experiment layer — every shipped config composes, tiny runs train end to end, reopen and
+resume. Solver configurations used by
 tests are named in `tests/helpers.SOLVERS` with their reasons, like `TOL`. Shape
 annotations are checked at runtime by the jaxtyping/beartype import hook (`conftest.py`).
 
@@ -282,3 +313,4 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0008](decisions/0008-dataset-format-and-sampling.md) | one netCDF4 file per dataset via xarray; weighted windows alongside `mix`; batched window source for training runs |
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 | [0010](decisions/0010-rotations-by-cayley-transform.md) | `BiLipschitzLinear` rotations by Cayley transform, not `expm` |
+| [0011](decisions/0011-experiment-layer.md) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit generation, forced final checkpoint |

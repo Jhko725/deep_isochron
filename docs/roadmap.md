@@ -58,19 +58,24 @@ checkpoint directories owned by the caller (Hydra in D3); `scripts/training/` de
 | C8 | The step was host-bound on the V100 (88 ms at batch 512, dispatch ≈ total): `bench_dataloader.py --hlo-stats` found ≈ 1 700 conditionals per step from `jax.scipy.linalg.expm`'s 16-step scan of `lax.cond` in `BiLipschitzLinear` (0.649 ms per 2×2 call measured; each conditional a device-to-host round trip on GPU). **Fixed and confirmed**: Cayley transforms (ADR-0010) — 0 conditionals, step 88 → 33 ms. Remaining step: ≈ 20 ms fixed (≈ 1 900 launches) + ≈ 10.7 ms device work per 512 windows (31 ms at 512, 63 at 2 048); the root solve's 112 serialized iterations per point are the lever for both — fewer iterations / `unroll`, Phase D | *done 2026-10-05* |
 | C9 | The fetch was the bound after C8 (grain per-element pipeline: 89 ms per batch of 512 on the V100 host vs a 33 ms step). **Done**: `WindowBatchSource` — a `RandomAccessDataSource` whose element is a whole batch, one vectorized gather (0.6–0.9 ms per batch on the dev CPU vs 50), epochs of every window once with a fresh permutation each, concrete `len`, resumable by slicing; `window_batches`/`mixed_window_batches`; `Trainer.train(num_steps=None)` runs the finite loader to its end (ADR-0008 Decision 3). V100: fetch 88.5 → 0.7 ms per batch, `to_device` 32.6 ms per step vs 31.0 device-resident | *done 2026-10-05* |
 
-## Phase D — `experiment-config`
+## Phase D — `experiment-config` (current; D1–D4, D6–D8 landed 2026-10-05; D5 Joon's)
 
-- D1 Structured configs (`config.py` dataclasses + `ConfigStore`); `seed: int` in config, keys
-  split in `build_model(cfg, key)`.
-- D2 `build_model`/`build_data`/`build_optimizer`; coupling registry replacing the notebook's
-  `make_invertible_block` variants.
-- D3 `scripts/train.py`: Hydra-owned run dir, `OmegaConf.to_container(resolve=True,
-  throw_on_missing=True)` → `wandb.init(config=…, dir=out_dir)`, Orbax dir inside, `run.save(
-  .hydra/config.yaml)`, `wandb.group` for multirun, `configs/wandb/offline.yaml`.
-- D4 `load_model(run_dir, step)` from `root_metadata().custom_metadata`.
-- D5 Notebook via `hydra.compose` + the same `build_*` functions.
-- D6 CI: `uv sync --group dev`, `pytest --hypothesis-profile=ci -n 4 -m "not slow"`, separate
-  `slow` job with a 20-step end-to-end smoke test.
+Decisions taken with Joon on 2026-10-05 (ADR-0011): YAML + `_target_` configs (no
+dataclass schema for now); builders in `deep_isochron.experiment`; `PrintLogger` default
+with wandb `online`/`offline` as config groups; `num_steps` as the run's unit with epochs
+logged; training never generates data (the file must exist); the pre-existing red test
+fixed by keeping bijection-law points off the regularization radius instead of `xfail`.
+
+| # | Item | Done when |
+|---|---|---|
+| D1 | Config layout: `configs/train.yaml` composing `data/` (the generation configs), `model/{conjugacy,autoencoder}`, `loss/`, `schedule/{constant,yawata}`, `optimizer/adam`, `wandb/{off,online,offline}`; `windows.sampling` uniform / weighted / mixed; `validation`; `checkpoint`; `resume` | *done 2026-10-05* |
+| D2 | Builders: `experiment.instantiate` (lists → tuples), `build_source` (file by generation hash, no generation), `build_window_source`/`build_loaders` (resume slice), `build_model` (`_target_` layers + keys + `flip`), `build_loss`/`build_schedule`/`build_optimizer`/`build_trainer`, `build_logger` | *done 2026-10-05* |
+| D3 | `scripts/train.py`: Hydra run dir, `resolve_device`, x64, config/metadata/checkpoints in the run dir, final step always checkpointed, `resume=` continues the same stream, multirun group for wandb | *done 2026-10-05* |
+| D4 | `load_run(run_dir, step)` / `load_model` from the checkpoint's `custom_metadata` (config) | *done 2026-10-05* |
+| D5 | Notebook on `hydra.compose` + the builders (Joon, as Phase E runs start) | pending |
+| D6 | CI: `.github/workflows/ci.yml` — ruff, ty, `check_md_math`, `pytest --hypothesis-profile=ci -n 4 -m "not slow"`; `slow` job + 20-step end-to-end `train.py` run; the `circular_rq (K=8)` failure fixed (test domain off the `eps_r` disc) | *done 2026-10-05* (first green run on GitHub pending) |
+| D7 | `scripts/bench_dataloader.py --config <overrides>` benchmarks a training config's own pipeline, model and loss | *done 2026-10-05* |
+| D8 | ADR-0011; `docs/architecture.md` (`experiment/`, scripts, config→run data flow); change document; design doc §7 | *done 2026-10-05* |
 
 ## Phase E — science
 
@@ -140,3 +145,4 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-10-05 | `trainer` | Review round 2: `Logger`/`Checkpointer` base classes; grain single-reader rule (`single_threaded`, `to_device(dataset, device)`); lazy `_shift` (no JAX at import); `scripts/bench_dataloader.py` redesigned; C7 closed on V100 numbers (`to_device`; `mp_prefetch` rejected; no state commit) | `docs/changes/2026-10-04-trainer.md`, ADR-0009 |
 | 2026-10-05 | `trainer` | C8: `BiLipschitzLinear` rotations by Cayley transform instead of `expm` — the V100 step's ≈ 1 700 per-step conditionals (device-to-host round trips) removed; `cayley`, two tests, ADR-0010 | `docs/changes/2026-10-04-trainer.md`, ADR-0010 |
 | 2026-10-05 | `trainer` | C9: `WindowBatchSource` / `window_batches` / `mixed_window_batches` — batched window source for training runs (epochs of every window once, one gather per batch, finite loader); `Trainer.train(num_steps=None)`; `resolve_device`; ADR-0008 Decision 3 | `docs/changes/2026-10-04-trainer.md`, ADR-0008 |
+| 2026-10-05 | `experiment-config` | D1–D4, D6–D8: `configs/train.yaml` and groups; `deep_isochron.experiment` (`instantiate`, builders, `run.train`/`load_run`/`load_model`); `scripts/train.py`; forced final checkpoint; `generation_metadata`; CI workflow; benchmark on configs; `circular_rq` test domain fixed; ADR-0011 | `docs/changes/2026-10-05-experiment-config.md`, ADR-0011 |

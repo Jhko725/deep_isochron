@@ -32,6 +32,7 @@ machine where several accelerators are visible and unassigned)::
     uv run python scripts/bench_dataloader.py --device 0 --model ae --batch 2048
     uv run python scripts/bench_dataloader.py --device 0 --data data/fhn-<hash>.nc
     uv run python scripts/bench_dataloader.py --device 0 --hlo-stats --no-mp
+    uv run python scripts/bench_dataloader.py --config data=fhn windows.batch=4096
     uv run python scripts/bench_dataloader.py --device 0 --profile /tmp/trace --no-mp
 
 Reading the table: ``dispatch ≈ total`` means the host is the bottleneck — Python
@@ -106,6 +107,15 @@ def parse_args() -> argparse.Namespace:
         "device visible or CUDA_VISIBLE_DEVICES set) and refuses otherwise",
     )
     p.add_argument("--data", type=Path, help=".nc dataset; default: generate Bautin")
+    p.add_argument(
+        "--config",
+        nargs="*",
+        metavar="OVERRIDE",
+        help="benchmark a training config instead of the built-in model/data: compose "
+        "configs/train.yaml with these Hydra overrides (e.g. --config data=fhn "
+        "model=conjugacy windows.batch=4096); --batch/--length/--model/--blocks/--data "
+        "are then taken from the config",
+    )
     p.add_argument("--model", choices=["conjugacy", "ae"], default="conjugacy")
     p.add_argument("--batch", type=int, default=512)
     p.add_argument("--length", type=int, default=50, help="window length")
@@ -337,26 +347,62 @@ def main() -> None:
     jax.config.update("jax_enable_x64", True)
     device = resolve_device(args.device)
     jax.config.update("jax_default_device", device)  # model and state live there too
-    source = make_source(args)
-    model, loss = make_model_and_loss(args, source.ys.shape[-1])
-    trainer = Trainer(optax.adam(1e-3), loss)
+    if args.config is not None:
+        # the pipeline, model and loss of an actual training config (D7)
+        import hydra
+        from deep_isochron.experiment import (
+            build_model,
+            build_source,
+            build_trainer,
+            build_window_source,
+        )
+
+        with hydra.initialize_config_dir(
+            version_base=None, config_dir=str(Path("configs").resolve())
+        ):
+            cfg = hydra.compose("train", overrides=args.config)
+        source = build_source(cfg.data)
+        train_source, _ = source.split_trajectories(
+            cfg.validation.fraction, seed=cfg.validation.seed
+        )
+        trainer = build_trainer(cfg)
+        model = build_model(cfg.model, jax.random.key(cfg.seed))
+        args.batch, args.length, args.model = (
+            cfg.windows.batch,
+            cfg.windows.length,
+            cfg.model.kind,
+        )
+        wsrc = build_window_source(cfg, train_source)
+        described = f"config {' '.join(args.config) or '(defaults)'}"
+    else:
+        source = make_source(args)
+        train_source = source
+        model, loss = make_model_and_loss(args, source.ys.shape[-1])
+        trainer = Trainer(optax.adam(1e-3), loss)
+        wsrc = None
+        described = f"model {args.model}"
     state = trainer.init(model, key=jax.random.key(1))
     print(
         f"device: {device.platform}:{device.id} ({device.device_kind}"
         f"{', --device' if args.device is not None else ', default'}); "
         f"{len(source)} trajectories × {source.trajectory_length} steps; batch "
-        f"{args.batch} × window {args.length}; model {args.model}; "
+        f"{args.batch} × window {args.length}; {described}; "
         f"{args.steps} steps × {args.repeats} repeats, interleaved\n"
         f"host: {cpu_allowance()}; jax {jax.__version__}"
     )
 
     def pipeline() -> grain.MapDataset:
-        # the training loader (C9): one vectorized gather per batch
-        return window_batches(source, args.length, args.batch, seed=0, epochs=1000)
+        # the training loader (C9): one vectorized gather per batch — the config's own
+        # window source when --config is given
+        if wsrc is not None:
+            return grain.MapDataset.source(wsrc)
+        return window_batches(
+            train_source, args.length, args.batch, seed=0, epochs=1000
+        )
 
     def per_element_pipeline() -> grain.MapDataset:
         # the per-element reference: shuffle, random_map, batch — what C9 replaced
-        return windows(source, args.length, seed=0).batch(
+        return windows(train_source, args.length, seed=0).batch(
             args.batch, drop_remainder=True
         )
 

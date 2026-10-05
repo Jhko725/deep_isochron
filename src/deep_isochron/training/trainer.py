@@ -173,8 +173,9 @@ class Trainer(Generic[M]):
         given, which is an upper bound: a loader that ends first stops the run with a
         warning. ``evaluate(model)``
         returns validation metrics (``training.evaluation``); they are logged under
-        their own keys and passed to ``checkpointer.save`` every ``eval_every`` steps
-        and at the end (no intermediate checkpoints without ``evaluate``). Batches
+        their own keys and passed to ``checkpointer.save`` every ``eval_every`` steps,
+        and the final step is evaluated and checkpointed regardless of the save policy
+        (no intermediate checkpoints without ``evaluate``). Batches
         are used as the loader yields them: put the transfer in the loader
         (``data.to_device``, grain's two-stage prefetch); NumPy batches still work
         (``jit`` transfers them, synchronously). The logger and checkpointer are
@@ -194,11 +195,15 @@ class Trainer(Generic[M]):
             NullCheckpointer() if checkpointer is None else checkpointer
         )
 
-        def evaluate_and_save(step: int) -> None:
+        saved_step = int(state.step) if isinstance(model_or_state, TrainerState) else -1
+
+        def evaluate_and_save(step: int, *, force: bool = False) -> None:
+            nonlocal saved_step
             assert evaluate is not None
             val_metrics = {k: float(v) for k, v in evaluate(state.model).items()}
             log.log(val_metrics, step)
-            ckpt.save(step, state, val_metrics)
+            if ckpt.save(step, state, val_metrics, force=force):
+                saved_step = step
 
         if num_steps is not None and num_steps < 0:
             raise ValueError("num_steps must be non-negative or None.")
@@ -224,8 +229,11 @@ class Trainer(Generic[M]):
                 log.log(metrics, step)
                 if evaluate is not None and step % eval_every == 0:
                     evaluate_and_save(step)
-            if evaluate is not None and step % eval_every != 0:
-                evaluate_and_save(step)
-            elif evaluate is None:
-                ckpt.save(step, state, {})
+            # the final state is always evaluated and checkpointed (``force`` overrides
+            # the save policy), unless the loop's last step already did both
+            if step != saved_step:
+                if evaluate is not None:
+                    evaluate_and_save(step, force=True)
+                else:
+                    ckpt.save(step, state, {}, force=True)
         return state
