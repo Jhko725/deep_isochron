@@ -198,9 +198,9 @@ the run it is meant to explain.
 | Regime | Signature in the table | Where the time goes | Remedy |
 |---|---|---|---|
 | Python-bound (§5.1) | dispatch ≈ total; **floor ≈ step** | the loop's own Python per call | fewer leaves, bigger batches, less filtering |
-| Launch-bound (§5.2) | dispatch ≈ total; floor small; step **flat in batch size**; launch count × ~5–20 µs ≈ step | the calling thread enqueueing thousands of small kernels | remove or unroll loops, closed forms, command buffers, larger batches |
+| Launch-bound (§5.2) | dispatch ≈ total; floor small; step **flat in batch size** (fit `fixed + slope · batch`: the fixed part); launch count × ~5–20 µs ≈ fixed | the calling thread enqueueing thousands of small kernels | remove or unroll loops, closed forms, command buffers, larger batches |
 | Synchronized (§5.3) | dispatch ≈ total; floor small; conditionals in the census; not explained by launch count | host waits for a predicate from the device at every `conditional` / unknown-trip `while` | remove `lax.cond` / dynamic `while` from the hot path |
-| Device-bound (§5.4) | **dispatch ≪ total**; total scales with batch | the accelerator | the ordinary ones; this is the regime to be in |
+| Device-bound (§5.4) | total **scales with batch** (the slope of the fit); dispatch ≪ total unless the launch queue is saturated (§5.2 caveat) | the accelerator | the ordinary ones; this is the regime to be in |
 | Fetch-bound (§5.5) | `to_device` ≈ *fetch only* while *cached* ≈ resident | the loader's Python, one batch at a time | faster sampler (vectorize), then worker processes |
 
 Each regime leaves a distinct signature because the rows were chosen to make it so. *Floor*
@@ -225,6 +225,18 @@ microsecond scale – which are now becoming significant" **[cited: NVIDIA, *CUD
 blog; it measures 9.6 µs per short kernel including overheads]**. Signature: dispatch ≈
 total, floor small, and the step **nearly flat in batch size** — a kernel over 2 048 points
 launches as fast as one over 512. The `--hlo-stats` census (§4) counts the launches.
+
+A caveat on reading dispatch ≈ total: it says the host could not run ahead, not *why*. A
+program of thousands of launches per step fills the device's command queue as soon as the
+device falls behind, and the launching thread then blocks on every further launch until a
+slot frees — so once the device's own work exceeds the launch cost, dispatch still tracks
+total, with the device now the bottleneck **[deduced: the 512 → 2 048 pair below; CUDA's
+launch queue is finite, depth unspecified]**. The batch-size scan is therefore the honest
+test: fit `step = fixed + per_sample · batch`; the fixed part is launches, the slope is
+the device. For this project after ADR-0010: 31 ms at 512 and 63 ms at 2 048 give ≈ 20 ms
+fixed and ≈ 10.7 ms per 512 windows **[measured, V100]** — launch cost and device work of
+the same order, so a 4× batch buys 2× throughput and the next lever is the device work per
+window (the root solve's 112 serialized iterations per point), not the launch count alone.
 
 Where do thousands of launches come from in a model with a dozen layers? From **loops**. A
 `lax.fori_loop`/`lax.scan` becomes an XLA `while`; on the GPU backend the runtime executes
@@ -319,8 +331,9 @@ dev container.
    hide the step behind the fetch but not the fetch behind the step. The same batches from a
    cache run at 33 ms. Fixed by C9: `WindowBatchSource`, a source whose element is a whole
    batch built by one fancy-indexed gather — 0.6 ms against 49 ms per batch on the dev CPU
-   **[measured]**, with an epoch defined as every window once (ADR-0008 Decision 3). The
-   V100 `to_device` row is expected to drop to the step's 33 ms.
+   **[measured]**, with an epoch defined as every window once (ADR-0008 Decision 3). On the
+   V100: fetch 88.5 → 0.7 ms, `to_device` 32.6 ms against 31.0 device-resident
+   **[measured]** — the loader is out of the picture; the step (§5.2) is what remains.
 
 Two hypotheses were raised and refuted on the way, and are kept as negative results: that
 *committed* batches dispatch slower than uncommitted ones (§2; floors and steps identical),
