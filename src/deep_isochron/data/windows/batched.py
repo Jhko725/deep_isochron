@@ -1,10 +1,10 @@
 """The batched window source for training runs (ADR-0008 Decision 3, roadmap C9):
 ``WindowBatchSource`` is a ``RandomAccessDataSource`` whose element ``i`` is the
 ``i``-th **batch** of windows of the run, built by one vectorized gather — the
-performant counterpart of ``per_element``, with the same start distributions and a
+performant counterpart of ``elementwise``, with the same start distributions and a
 concrete length (epochs of every window once). ``window_batches`` /
 ``mixed_window_batches`` wrap it in a ``grain.MapDataset``; follow with
-``device.to_device``.
+``data.device.to_device``.
 """
 
 import math

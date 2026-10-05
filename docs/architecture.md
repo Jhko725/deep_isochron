@@ -65,15 +65,16 @@ deep_isochron
 │   ├── generate.py          IC samplers (UniformBox, UniformAnnulus, OnCycleGaussian);
 │   │                        generate(system, sampler, ts, n, seed=…) with
 │   │                        loud failures and config_hash
+│   ├── device.py            consuming any pipeline next to JAX: single_threaded();
+│   │                        to_device(ds, device); resolve_device()
 │   └── windows/             two ways to cut windows (ADR-0008 D2, D3) — see its __init__
 │       ├── common.py        Element/Batch/WeightFn, range checks, transient_weight,
 │       │                    categorical, start_weights (shared)
-│       ├── per_element.py   RandomWindow / WeightedWindow (grain RandomMap); windows();
+│       ├── elementwise.py   RandomWindow / WeightedWindow (grain RandomMap); windows();
 │       │                    mixed_windows(); validation_windows() — the reference
-│       ├── batched.py       WindowBatchSource (batches by one gather, epochs of every
-│       │                    window once); window_batches(); mixed_window_batches() — the
-│       │                    training-run path
-│       └── device.py        single_threaded(); to_device(ds, device); resolve_device()
+│       └── batched.py       WindowBatchSource (batches by one gather, epochs of every
+│                            window once); window_batches(); mixed_window_batches() — the
+│                            training-run path
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
 │                            (namespace reserved; Phase E)
 ├── training/                                                            ── ADR-0009
@@ -215,7 +216,7 @@ start_range=…)` and `mixed_window_batches(…, split_idx, weights)` build it; 
 mixed starts are draws with replacement (`transient_weight(boost, tau)` oversamples the
 transient). The per-element **grain transforms** `RandomWindow`/`WeightedWindow` behind
 `windows()`/`mixed_windows()` remain the reference semantics (tests compare marginals) and
-serve `validation_windows` (`data/windows/per_element.py`). Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
+serve `validation_windows` (`data/windows/elementwise.py`). Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
 
 ## Data flow of one training step
 
@@ -259,7 +260,8 @@ optimizer step), run through Hypothesis draws from `tests/strategies.py`. Per-fa
 are in `test_splines.py`, `test_analytic.py`, `test_constraints.py`, `test_linear.py`;
 `test_normal_forms.py` pins the normal forms' closed forms by autodiff and the integrations,
 `test_systems.py` the flow machinery and the observed systems' facts (Langfield et al. 2014),
-`test_data.py` the data layer end to end, `test_baseline.py` the phase autoencoder
+`test_data.py` the data layer end to end (source, metadata, disk, device, generation),
+`test_windows.py` both windowing paths and their agreement, `test_baseline.py` the phase autoencoder
 against the exact chart (plus one `slow` training test on Hopf data), `test_models.py`
 the `AbstractPhaseAmplitudeModel` contract on both models, `test_training.py` the losses,
 schedules, loggers, trainer loop, evaluation and Orbax round trip. Solver configurations used by

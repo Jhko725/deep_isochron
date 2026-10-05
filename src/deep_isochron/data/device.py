@@ -1,7 +1,6 @@
-"""Where the data run: reading a grain dataset next to JAX without a reader pool
-(``single_threaded``), the prefetching transfer to the accelerator (``to_device``), and
-the one sanctioned way to pick the device (``resolve_device``). Serves both the
-per-element pipeline and the batched source. Background:
+"""Consuming a grain pipeline next to JAX, whatever it yields: reading without a reader
+pool (``single_threaded``), the prefetching transfer to the accelerator (``to_device``),
+and the one sanctioned way to pick the device (``resolve_device``). Background:
 ``docs/design/training-step-performance.md``."""
 
 import os

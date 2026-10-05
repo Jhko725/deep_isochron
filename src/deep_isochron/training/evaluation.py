@@ -36,7 +36,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
 
-from ..data.windows import single_threaded
+from ..data.device import single_threaded
 from ..model.autoencoder import PhaseAmplitudeAutoencoder
 from ..model.base import AbstractPhaseAmplitudeModel
 from ..model.conjugacy import ConjugateLatentDynamics

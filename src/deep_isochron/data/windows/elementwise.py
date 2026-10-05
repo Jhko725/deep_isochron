@@ -1,4 +1,4 @@
-"""The per-element pipeline: whole trajectories from ``TimeSeriesDataSource``, one
+"""The elementwise pipeline: whole trajectories from ``TimeSeriesDataSource``, one
 window cut per element by a ``grain.transforms.RandomMap`` after ``.shuffle().repeat()``
 (ADR-0008 Decision 2). This is the **reference** implementation — short, and what the
 tests check the batched source (``batched``) against — and the path of

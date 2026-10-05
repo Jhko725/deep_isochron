@@ -1,6 +1,6 @@
 """Shared pieces of the windowing package: element/batch types, start-range
 validation, the weight functions and the NumPy categorical draw. Used by both the
-per-element pipeline (``per_element``) and the batched source (``batched``)."""
+elementwise pipeline (``elementwise``) and the batched source (``batched``)."""
 
 from collections.abc import Callable
 

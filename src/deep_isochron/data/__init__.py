@@ -7,6 +7,11 @@ from .dataset import (
     SystemSpec as SystemSpec,
     TimeSeriesDataSource as TimeSeriesDataSource,
 )
+from .device import (
+    resolve_device as resolve_device,
+    single_threaded as single_threaded,
+    to_device as to_device,
+)
 from .generate import (
     dataset_path as dataset_path,
     generate as generate,
@@ -21,9 +26,6 @@ from .windows import (
     mixed_window_batches as mixed_window_batches,
     mixed_windows as mixed_windows,
     RandomWindow as RandomWindow,
-    resolve_device as resolve_device,
-    single_threaded as single_threaded,
-    to_device as to_device,
     transient_weight as transient_weight,
     validation_windows as validation_windows,
     WeightedWindow as WeightedWindow,
