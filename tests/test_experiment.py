@@ -16,7 +16,6 @@ import json
 from pathlib import Path
 
 import equinox as eqx
-import hydra
 import jax
 import numpy as np
 import pytest
@@ -25,6 +24,7 @@ from deep_isochron.experiment import (
     build_model,
     build_source,
     build_trainer,
+    compose,
     dataset_file,
     generate_dataset,
     load_model,
@@ -35,8 +35,6 @@ from deep_isochron.model import ConjugateLatentDynamics, PhaseAmplitudeAutoencod
 from deep_isochron.training import ConjugacyTrajectoryLoss, PhaseAutoencoderLoss
 from omegaconf import DictConfig
 
-
-CONFIGS = str(Path(__file__).resolve().parents[1] / "configs")
 
 TINY_DATA = ["data.n_trajectories=12", "data.time.n=61", "data.time.t1=12.0"]
 TINY_RUN = [
@@ -49,11 +47,6 @@ TINY_RUN = [
     "log_every=1",
     "checkpoint.every=2",
 ]
-
-
-def compose(*overrides: str) -> DictConfig:
-    with hydra.initialize_config_dir(version_base=None, config_dir=CONFIGS):
-        return hydra.compose("train", overrides=list(overrides))
 
 
 @pytest.fixture(scope="module")
@@ -145,6 +138,12 @@ def test_train_writes_a_run_and_load_model_reads_it_back(data_dir, tmp_path):
     assert (run_dir / "config.yaml").exists()
     meta = json.loads((run_dir / "metadata.json").read_text())
     assert meta["dataset"]["trajectories"] == 12 and meta["batches_per_epoch"] > 0
+    # the whole composed config is in the metadata (and in wandb's config): model,
+    # loss, schedule, optimizer, data and the top-level fields
+    assert meta["config"]["model"]["inn"]["blocks"] == 2
+    assert meta["config"]["loss"]["_target_"].endswith("ConjugacyTrajectoryLoss")
+    assert set(meta["config"]) >= {"data", "model", "loss", "schedule", "optimizer"}
+    assert "sha" in meta["git"]
     model = load_model(run_dir)
     assert eqx.tree_equal(model, state.model)
     loaded_cfg, loaded_state = load_run(run_dir)

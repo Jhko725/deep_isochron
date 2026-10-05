@@ -4,9 +4,13 @@
 ``build_trainer`` (``training``), ``build_logger`` (``logging``) are pure functions of
 the composed config; ``run.train(cfg, run_dir)`` strings them together and
 ``run.load_run`` / ``run.load_model`` reopen a run directory. ``scripts/train.py`` is
-the Hydra entry point; notebooks compose the same configs with ``hydra.compose``.
+the Hydra entry point; notebooks and tests use ``compose(*overrides)`` and call
+``train`` or the builders directly. The package only parses configs and instantiates
+objects — anything with its own logic lives in the module it belongs to
+(``training.loggers``, ``provenance``, ``data``).
 """
 
+from .compose import compose as compose, CONFIG_DIR as CONFIG_DIR
 from .data import (
     build_loaders as build_loaders,
     build_source as build_source,

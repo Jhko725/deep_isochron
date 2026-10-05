@@ -13,7 +13,6 @@ slice of the deterministic batched dataset (ADR-0008 Decision 3).
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,7 @@ from omegaconf import DictConfig, OmegaConf
 
 from ..data import resolve_device
 from ..model import AbstractPhaseAmplitudeModel
+from ..provenance import git_state
 from ..training import Evaluator, OrbaxCheckpointer, TrainerState
 from .data import build_loaders, build_source, reference_normal_form
 from .logging import build_logger
@@ -31,17 +31,6 @@ from .training import build_trainer, resolved
 
 CHECKPOINT_DIR = "checkpoints"
 CONFIG_FILE = "config.yaml"
-
-
-def _git_sha() -> str:
-    try:
-        return subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            text=True,
-            stderr=subprocess.DEVNULL,
-        ).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return ""
 
 
 def configure_jax(cfg: DictConfig) -> jax.Device:
@@ -103,7 +92,7 @@ def train(
             "trajectories": source.num_trajectories,
         },
         "x64": bool(cfg.x64),
-        "git_sha": _git_sha(),
+        "git": dict(zip(("sha", "dirty"), git_state())),
         "batches_per_epoch": loaders.batches_per_epoch,
     }
     (run_dir / CONFIG_FILE).write_text(OmegaConf.to_yaml(cfg, resolve=True))

@@ -86,23 +86,27 @@ deep_isochron
 │   │                        weighted named terms; ConjugacyTrajectoryLoss,
 │   │                        PhaseAutoencoderLoss
 │   ├── schedules.py         Constant / StepSchedule (curriculum) / ThresholdSwitch
-│   ├── loggers.py           Logger base class; Null / List / Print / Wandb; DelayedLogger
+│   ├── loggers.py           Logger base class; Null / List / Print / Wandb; DelayedLogger;
+│   │                        MultiLogger; EpochLogger
 │   ├── checkpoint.py        Checkpointer base class; OrbaxCheckpointer (whole state)
 │   └── evaluation.py        Evaluator(val_data, reference) on the model contract
-├── experiment/              configs -> a run                                 ── ADR-0011
+├── experiment/              configs -> a run (config parsing + instantiation only) ── ADR-0011
+│   ├── compose.py           compose(*overrides): the train config as train.py sees it
 │   ├── instantiate.py       `_target_` instantiation with YAML lists as tuples
 │   ├── data.py              dataset_file / build_source (never generates) / generate_dataset;
 │   │                        build_window_source / build_loaders (resume = slice)
 │   ├── model.py             build_model (`_target_` layers + per-layer keys + flip)
 │   ├── training.py          build_loss / build_schedule / build_optimizer / build_trainer
-│   ├── logging.py           build_logger: PrintLogger (+ WandbLogger online/offline), epochs
+│   ├── logging.py           build_logger: Print (+ Wandb online/offline) → Epoch → Delayed
 │   └── run.py               train(cfg, run_dir); load_run / load_model from a run directory
+├── provenance.py            git_state(), package_version() — for dataset and run metadata
 └── misc.py                  inv_softplus, squashed_exp, polar ↔ cartesian
 
 configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment
 scripts/train.py                                Hydra entry point: one training run
 scripts/generate_data.py (+ configs/data/)      Hydra entry point for data generation
 scripts/check_md_math.py                        GitHub-safe Markdown math check
+scripts/README.md                               what each script does and how to call it
 scripts/bench_dataloader.py                     data-pipeline vs training-step benchmark
                                                 (also --config <overrides>: a config's own run)
 .github/workflows/ci.yml                        lint · ty · math · tests; slow + end-to-end run

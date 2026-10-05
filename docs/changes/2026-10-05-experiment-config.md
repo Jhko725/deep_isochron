@@ -1,6 +1,6 @@
 ---
 type: change
-status: implemented (D1–D4, D6–D8); review pending; D5 (notebook) is Joon's
+status: review round 1 applied; D5 (notebook) is Joon's
 updated: 2026-10-05
 branch: experiment-config
 ---
@@ -41,9 +41,13 @@ Also: the one pre-existing red test is fixed, and CI is added.
 - `src/deep_isochron/experiment/training.py` — `build_loss`, `build_schedule`
   (`Constant` with `values: null` → the loss's defaults), `build_optimizer`,
   `build_trainer`, `resolved`.
-- `src/deep_isochron/experiment/logging.py` — `MultiLogger`, `EpochLogger` (adds
-  `epoch`), `build_logger` (PrintLogger + optional `WandbLogger`, wrapped in
-  `DelayedLogger`).
+- `src/deep_isochron/experiment/logging.py` — `build_logger` (PrintLogger + optional
+  `WandbLogger`, then `EpochLogger`, then `DelayedLogger`).
+- `src/deep_isochron/experiment/compose.py` — `compose(*overrides)` (review round 1).
+- `src/deep_isochron/training/loggers.py` — `MultiLogger`, `EpochLogger` (review round 1).
+- `src/deep_isochron/provenance.py` — new: `git_state`, `package_version` (from
+  `data/generate.py`'s private helpers; review round 1).
+- `scripts/README.md` — new (review round 1).
 - `src/deep_isochron/experiment/run.py` — `configure_jax`, `train(cfg, run_dir, group)`,
   `load_run`, `load_model`.
 - `scripts/train.py` — new Hydra entry point (quiets absl/jax INFO logging; multirun →
@@ -71,6 +75,34 @@ Also: the one pre-existing red test is fixed, and CI is added.
 - `docs/decisions/0011-experiment-layer.md` — new ADR. `docs/architecture.md`
   (`experiment/`, scripts, "From a config to a run"), `docs/index.md`, `docs/roadmap.md`
   (Phase D rewritten, ledger), `docs/design/training-step-performance.md` §7.
+
+## Review round 1 (2026-10-05) — what changed in response
+
+- **What `resolved(cfg)` records** (question on `training.py`): the *whole* composed
+  config — `data`, `model`, `loss`, `schedule`, `optimizer`, `wandb` and the top-level
+  fields — as a plain resolved dict; it goes verbatim into `wandb.init(config=…)`, the
+  checkpoint's `custom_metadata` and `metadata.json`. Model configs are in, so wandb can
+  compare runs by `model.inn.blocks`, `model.latent_dynamics.a`, etc. (wandb flattens
+  nested dicts with dots). `test_train_writes_a_run_and_load_model_reads_it_back` now
+  asserts the model and loss entries are present.
+- **`MultiLogger` and `EpochLogger` moved to `training/loggers.py`** (exported from
+  `training`); `experiment/logging.py` keeps only `build_logger`. `EpochLogger` is
+  general — any loop that knows its batches per epoch can use it — so it belongs with
+  the other loggers.
+- **`git_state` is shared**: new `deep_isochron/provenance.py` (`git_state`,
+  `package_version`), used by `data.generate` (as before, renamed from the private
+  helpers) and by `experiment.run` for `metadata.json["git"] = {sha, dirty}`; the
+  duplicate `_git_sha` is gone. **Scope rule** recorded in ADR-0011 §2: `experiment` only
+  parses configs and instantiates; logic lives in its own module.
+- **`compose(*overrides)`** moved from the test module into
+  `experiment/compose.py` (exported): `hydra.compose` over the checkout's `configs/`,
+  for notebooks and tests alike; `CONFIG_DIR` is `<repo>/configs`.
+- **`force` on `Checkpointer.save`** is per call, not a mode: the policy decides every
+  offered step, `force=True` writes that one call regardless, and the trainer passes it
+  exactly once, for the final step. The name stays (it mirrors Orbax's `force`); the
+  class and method docstrings now say so explicitly.
+- **`scripts/README.md`**: one table row per script (what it does, typical calls) and a
+  snippet for reopening runs from Python.
 
 ## Design
 
@@ -155,3 +187,15 @@ The full suite is green for the first time since Phase B: 471 passed, 1 xfail.
 | `tests/test_experiment.py` (new), `tests/test_training.py` (+1) | Looks good, but the `compose` function may be useful for notebook execution as well. If so, move to under `experiments`: `experiments/utils.py` for example?| None |
 | `.github/workflows/ci.yml`, `.gitignore` | Confirmed | None |
 | ADR-0011; `docs/architecture.md`; `docs/index.md`; `docs/roadmap.md` (Phase D, ledger); design doc §7 | Looks good. Will later need to be expanded on how to also run experiments in Jupyter notebook (for quick prototyping runs) | None |
+
+### Review round 1
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `src/deep_isochron/training/loggers.py`: `MultiLogger`, `EpochLogger` (from `experiment/logging.py`); `training/__init__.py` exports | | |
+| `src/deep_isochron/provenance.py` (new): `git_state`, `package_version`; `data/generate.py` and `experiment/run.py` use it (`metadata.json["git"]`) | | |
+| `src/deep_isochron/experiment/compose.py` (new): `compose(*overrides)`, `CONFIG_DIR`; `tests/test_experiment.py` uses it | | |
+| `src/deep_isochron/training/checkpoint.py`: `force` semantics documented (per call; the trainer's final step) | | |
+| `scripts/README.md` (new) | | |
+| `tests/test_experiment.py`: metadata holds the whole config (model, loss) | | |
+| ADR-0011 §2 scope rule; `docs/architecture.md` (tree); this document | | |

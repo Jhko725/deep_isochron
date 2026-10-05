@@ -10,6 +10,8 @@ the loop never does it directly:
   are read, the current step has already been enqueued, so the device stays busy while
   the host waits and loads the next batch; ``close()`` flushes the last step.
 - ``every`` on the concrete loggers thins the stream (``log_every``).
+- ``MultiLogger`` fans out to several loggers, ``EpochLogger`` adds the epoch to each
+  record;
 - every logger is a context manager (``with DelayedLogger(PrintLogger()) as log:``);
   exit calls ``close()``, which for ``DelayedLogger`` flushes the pending step, also
   when the loop raised.
@@ -109,6 +111,38 @@ class DelayedLogger(Logger):
         if self._pending is not None:
             self.inner.log(*self._pending)
             self._pending = None
+        self.inner.close()
+
+
+class MultiLogger(Logger):
+    """Fan out to several loggers (``MultiLogger(PrintLogger(), WandbLogger(run))``);
+    closes all of them."""
+
+    def __init__(self, *loggers: Logger) -> None:
+        self.loggers = loggers
+
+    def log(self, metrics: Metrics, step: int) -> None:
+        for logger in self.loggers:
+            logger.log(metrics, step)
+
+    def close(self) -> None:
+        for logger in self.loggers:
+            logger.close()
+
+
+class EpochLogger(Logger):
+    """Adds ``epoch = step / batches_per_epoch`` to every record before forwarding —
+    the run's unit is the step (ADR-0011 §4), the epoch is reported alongside."""
+
+    def __init__(self, inner: Logger, batches_per_epoch: int) -> None:
+        if batches_per_epoch < 1:
+            raise ValueError("batches_per_epoch must be positive.")
+        self.inner, self.batches_per_epoch = inner, batches_per_epoch
+
+    def log(self, metrics: Metrics, step: int) -> None:
+        self.inner.log({**metrics, "epoch": step / self.batches_per_epoch}, step)
+
+    def close(self) -> None:
         self.inner.close()
 
 

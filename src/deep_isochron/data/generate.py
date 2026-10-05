@@ -12,8 +12,6 @@ from __future__ import annotations
 
 import copy
 import datetime
-import importlib.metadata
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +22,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
 
+from ..provenance import git_state, package_version
 from ..systems.base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
 from ..systems.normal_forms import (
     AbstractFlowIntegration,
@@ -43,34 +42,6 @@ from .initial_conditions import AbstractICSampler
 
 
 # ------------------------------------------------------------------- provenance ---
-def _git_state() -> tuple[str, bool]:
-    """``(sha, dirty)`` of the checkout this package is imported from (not the cwd)."""
-    here = Path(__file__).resolve().parent
-    try:
-        sha = subprocess.run(
-            ["git", "-C", str(here), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-        dirty = subprocess.run(
-            ["git", "-C", str(here), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-        return sha, bool(dirty)
-    except (OSError, subprocess.CalledProcessError):
-        return "", False
-
-
-def _package_version() -> str:
-    try:
-        return importlib.metadata.version("deep-isochron")
-    except importlib.metadata.PackageNotFoundError:
-        return ""
-
-
 # --------------------------------------------------------------------- generate ---
 def generate(
     system: AbstractODE,
@@ -127,14 +98,14 @@ def generate(
             "initial-condition sampler."
         )
 
-    sha, dirty = _git_state()
+    sha, dirty = git_state()
     meta = copy.replace(
         meta,
         provenance=Provenance(
             created=datetime.datetime.now(datetime.UTC).isoformat(timespec="seconds"),
             git_sha=sha,
             git_dirty=dirty,
-            package_version=_package_version(),
+            package_version=package_version(),
             dtype=str(ys.dtype),
         ),
     )

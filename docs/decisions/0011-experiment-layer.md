@@ -43,6 +43,13 @@ CI. `scripts/generate_data.py` had already set a configuration style — Hydra Y
 
 ### 2. Builders are pure functions of the config, in `deep_isochron.experiment`
 
+**Scope rule** (review round 1): the package only parses configs and instantiates
+objects. Anything with logic of its own lives in the module it belongs to —
+`MultiLogger`/`EpochLogger` in `training.loggers`, `git_state` in `provenance` (shared
+with `data.generate`), the window source in `data.windows`. `compose(*overrides)` is the
+one convenience the package adds for notebooks and tests: the config exactly as
+`scripts/train.py` composes it.
+
 `build_source(cfg.data)`, `build_loaders(cfg, source, device, start_step)`,
 `build_model(cfg.model, key)`, `build_trainer(cfg)` (loss, schedule, optimizer),
 `build_logger(cfg, …)`; `run.train(cfg, run_dir)` strings them together, and

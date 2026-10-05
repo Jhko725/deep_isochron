@@ -28,10 +28,17 @@ S = TypeVar("S", bound=eqx.Module)
 
 class Checkpointer(abc.ABC):
     """Base class: subclasses implement ``save(step, state, metrics, force=False) ->
-    saved``, returning whether a checkpoint was written (a save policy may decline;
-    ``force`` overrides it — the trainer forces the final step). Every checkpointer is a
-    context manager whose exit calls ``close()`` (a no-op unless overridden), also when
-    the loop raised."""
+    saved``.
+
+    ``save`` is *offered* a state at every evaluation step; a checkpointer's save policy
+    (``OrbaxCheckpointer(save_every=...)``) decides whether to write it, and the return
+    value says whether it did. ``force=True`` writes **this** call's checkpoint whatever
+    the policy says — it is per call, not a mode: ``Trainer.train`` passes it exactly
+    once, for the run's final step, so that a run always ends with its last state on
+    disk (``restore()`` with no step is then the trained state) whatever ``save_every``
+    is.
+    Every checkpointer is a context manager whose exit calls ``close()`` (a no-op unless
+    overridden), also when the loop raised."""
 
     @abc.abstractmethod
     def save(
@@ -115,8 +122,11 @@ class OrbaxCheckpointer(Checkpointer):
         *,
         force: bool = False,
     ) -> bool:
-        """Save under the ``save_every`` policy, or regardless of it with ``force``
-        (the run's final step); ``True`` if a checkpoint was written."""
+        """Offer ``state`` at ``step``: written if ``step`` is a multiple of
+        ``save_every`` (Orbax's ``FixedIntervalPolicy``), or unconditionally with
+        ``force`` — this one call only; the trainer uses it for the final step. Returns
+        whether a checkpoint was written. Which checkpoints are *kept* afterwards is the
+        preservation policy (the latest, plus the best ``keep_best`` by ``metric``)."""
         if self.metric is not None and self.metric not in metrics:
             raise KeyError(
                 f"checkpoint metric {self.metric!r} missing from metrics "

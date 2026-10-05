@@ -6,8 +6,10 @@ from .checkpoint import (
 from .evaluation import collect_batches as collect_batches, Evaluator as Evaluator
 from .loggers import (
     DelayedLogger as DelayedLogger,
+    EpochLogger as EpochLogger,
     ListLogger as ListLogger,
     Logger as Logger,
+    MultiLogger as MultiLogger,
     NullLogger as NullLogger,
     PrintLogger as PrintLogger,
     WandbLogger as WandbLogger,
