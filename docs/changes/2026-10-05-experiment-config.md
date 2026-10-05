@@ -140,18 +140,18 @@ The full suite is green for the first time since Phase B: 471 passed, 1 xfail.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `configs/train.yaml` and the `model/`, `loss/`, `schedule/`, `optimizer/`, `wandb/` groups | | |
-| `src/deep_isochron/experiment/instantiate.py`: `_target_` instantiation with lists → tuples | | |
-| `src/deep_isochron/experiment/data.py`: `dataset_file`, `build_source`, `generate_dataset`, `reference_normal_form`, `build_window_source`, `build_loaders`, `Loaders` | | |
-| `src/deep_isochron/experiment/model.py`: `build_inn`, `build_model` | | |
-| `src/deep_isochron/experiment/training.py`: `build_loss`/`build_schedule`/`build_optimizer`/`build_trainer`, `resolved` | | |
-| `src/deep_isochron/experiment/logging.py`: `MultiLogger`, `EpochLogger`, `build_logger` | | |
-| `src/deep_isochron/experiment/run.py`: `configure_jax`, `train`, `load_run`, `load_model` | | |
-| `scripts/train.py` (new), `scripts/generate_data.py` (thin), `scripts/bench_dataloader.py --config` | | |
-| `src/deep_isochron/data/generate.py`: `generation_metadata`; `data/windows/batched.py`: `mixed_ranges` | | |
-| `src/deep_isochron/model/invertible/splines/*`: `xy_range: Sequence[float]` | | |
-| `src/deep_isochron/training/checkpoint.py` (`save -> bool`, `force`, `latest_step`, `custom_metadata`), `training/trainer.py` (final step forced) | | |
-| `tests/strategies.py`: `domain_points` off the regularization radius (fixes `circular_rq`) | | |
-| `tests/test_experiment.py` (new), `tests/test_training.py` (+1) | | |
-| `.github/workflows/ci.yml`, `.gitignore` | | |
-| ADR-0011; `docs/architecture.md`; `docs/index.md`; `docs/roadmap.md` (Phase D, ledger); design doc §7 | | |
+| `configs/train.yaml` and the `model/`, `loss/`, `schedule/`, `optimizer/`, `wandb/` groups | Confirmed. Whether and how these will need to be modified will clarify as experiments progress. | None |
+| `src/deep_isochron/experiment/instantiate.py`: `_target_` instantiation with lists → tuples | Confirmed. | None |
+| `src/deep_isochron/experiment/data.py`: `dataset_file`, `build_source`, `generate_dataset`, `reference_normal_form`, `build_window_source`, `build_loaders`, `Loaders` | Had a lookthrough. Looks good. | None |
+| `src/deep_isochron/experiment/model.py`: `build_inn`, `build_model` | Looks good. | None |
+| `src/deep_isochron/experiment/training.py`: `build_loss`/`build_schedule`/`build_optimizer`/`build_trainer`, `resolved` | What is the metadata that is saved to Wandb and the checkpoint via `resolved`? Looks like perhaps the model configs are not going in, which may hinder comparisons between the dmoels in Wandb. | Deferred to discussions with Claude. |
+| `src/deep_isochron/experiment/logging.py`: `MultiLogger`, `EpochLogger`, `build_logger` | `MultiLogger` and perhaps `EpochLogger` look like the should belong in `training/loggers.py` | Deferred to Claude for restructuring / need to discuss to determine where is more appropriate for `EpochLogger`. |
+| `src/deep_isochron/experiment/run.py`: `configure_jax`, `train`, `load_run`, `load_model` | Looks okay, but isn't there git_sha related functionality in `deep_isochron/data/generate.py` (`_git_state` function)? Overall, need to make sure `experiment` subpackage is only dealing with config parsing and object instantiation. Any lower level functionalities should be in the other relevant modules. | Deferred to discussion with Claude regarding the scope of the `experiment` module. |
+| `scripts/train.py` (new), `scripts/generate_data.py` (thin), `scripts/bench_dataloader.py --config` | Looks good. But now with the increasing number of scripts, we need a Readme.md in the /scripts directory detailing what each script does and how to use them. | Deferred to Claude for readme generation. |
+| `src/deep_isochron/data/generate.py`: `generation_metadata`; `data/windows/batched.py`: `mixed_ranges` | Looks good. | None |
+| `src/deep_isochron/model/invertible/splines/*`: `xy_range: Sequence[float]` | Simple change to appease the type checker. | None |
+| `src/deep_isochron/training/checkpoint.py` (`save -> bool`, `force`, `latest_step`, `custom_metadata`), `training/trainer.py` (final step forced) | Refine documentation of the `Checkpointer` class regarding `force`. Does it force saving for all save steps, or just the final save. If the latter, it may be better to rename it to something like `(force_)save_final`.| Deferred to discussions with Claude. |
+| `tests/strategies.py`: `domain_points` off the regularization radius (fixes `circular_rq`) | Confirmed. | None |
+| `tests/test_experiment.py` (new), `tests/test_training.py` (+1) | Looks good, but the `compose` function may be useful for notebook execution as well. If so, move to under `experiments`: `experiments/utils.py` for example?| None |
+| `.github/workflows/ci.yml`, `.gitignore` | Confirmed | None |
+| ADR-0011; `docs/architecture.md`; `docs/index.md`; `docs/roadmap.md` (Phase D, ledger); design doc §7 | Looks good. Will later need to be expanded on how to also run experiments in Jupyter notebook (for quick prototyping runs) | None |
