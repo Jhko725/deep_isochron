@@ -3,7 +3,7 @@ type: decision
 id: ADR-0010
 status: accepted
 updated: 2026-10-05
-verified_by: pending (Joon; measured basis 2026-10-05 on a V100)
+verified_by: pending (Joon); V100 confirmation 2026-10-05 — step 88 → 33 ms
 ---
 
 # ADR-0010 — Rotations in `BiLipschitzLinear` are Cayley transforms, not matrix exponentials
@@ -11,6 +11,9 @@ verified_by: pending (Joon; measured basis 2026-10-05 on a V100)
 **Status**: accepted (2026-10-05, branch `trainer`, Joon: "let's resolve this now").
 
 ## Context
+
+Background on asynchronous dispatch, launch-bound steps and why a GPU `conditional` is a
+host-device round trip: `docs/design/training-step-performance.md` (§1, §5.2–5.3).
 
 `BiLipschitzLinear` parametrizes `U, V ∈ SO(d)` from unconstrained leaves as
 `expm(raw − rawᵀ)`. Benchmarking the training step on a V100 (`scripts/bench_dataloader.py
@@ -75,6 +78,12 @@ values in `(1/L, L)`) cover the rest.
   change do not reproduce the same rotations. None exist yet.
 - The roadmap's parked note on `SO(d)` parametrizations is resolved; reinstating
   `InvertibleLinear` for speed is off the table.
-- `scripts/bench_dataloader.py --hlo-stats` on CPU, 8 blocks: 3 `while` loops, 0
-  conditionals, ≈ 4 100 launches (from 7 / 40 / ≈ 2 000 with 2 blocks before). The V100
-  figure is recorded in the change document when measured.
+- Measured on the V100 (2026-10-05, batch 512 × 50, 8 blocks): the compiled step has 2
+  `while` loops (the root solve's 64 × 4 and 48 × 4), 0 conditionals, ≈ 1 900 launches;
+  the device-resident step went from **88 ms to 33 ms**, still with dispatch ≈ total — now
+  ≈ 17 µs per launch, i.e. launch-bound on the remaining root-solve iterations, which are
+  the next lever (`unroll`, fewer iterations; larger batches are nearly free).
+- The step is no longer what bounds training: a batch of 512 windows takes 89 ms to slice
+  in grain's per-element pipeline on that host (0.17 ms per window), so `to_device` runs at
+  the fetch rate (93 ms). Vectorizing the window sampler at batch level (one fancy-indexed
+  gather per batch; 0.85 ms vs 50 ms per batch measured on the dev CPU) is roadmap C9.
