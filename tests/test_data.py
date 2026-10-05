@@ -453,6 +453,9 @@ def test_window_batches_num_steps_slicing_and_pickling():
     assert np.array_equal(ds[5:][0]["u"], ds[5]["u"])  # resume at step 5
     with pytest.raises(ValueError, match="exactly one"):
         window_batches(src, 3, 8, seed=0)
+    with pytest.raises(ValueError, match="exactly one"):
+        WindowBatchSource(src, 3, 8, seed=0, epochs=1, num_steps=5)
+    assert WindowBatchSource(src, 3, 8, seed=0, num_steps=5).epochs == 2
     wsrc = WindowBatchSource(src, 3, 8, seed=0, epochs=1)
     clone = pickle.loads(pickle.dumps(wsrc))
     assert np.array_equal(clone[2]["u"], wsrc[2]["u"])

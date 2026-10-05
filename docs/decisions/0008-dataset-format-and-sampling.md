@@ -91,6 +91,19 @@ Two transforms implement transient oversampling, kept side by side for compariso
 
 ## Decision 3 — training runs read batches from a `WindowBatchSource` (2026-10-05, roadmap C9)
 
+**In one paragraph: there are two ways to get batched windows out of a
+`TimeSeriesDataSource`, and both are kept on purpose.** The *per-element* way (Decision 2;
+`data/windows/per_element.py`: `windows()`, `mixed_windows()`, `validation_windows()`) is
+grain's idiom — one trajectory per element, a `RandomMap` cuts one window, `.batch(B)`
+stacks. It is short, easy to see to be correct, and the reference the tests compare
+against; it is also slow, ≈ 0.1–0.2 ms of grain overhead per window, 50–90 ms per batch
+of 512. The *batched* way (this decision; `data/windows/batched.py`: `window_batches()`,
+`mixed_window_batches()`) serves whole batches from a `WindowBatchSource` by one
+vectorized gather, ≈ 1 ms per batch, with the same start distributions and a concrete
+epoch structure. **Training runs use the batched way; validation and tests use the
+per-element way.** `data/windows/common.py` holds what both share, `data/windows/device.py`
+what both are consumed through.
+
 Decision 2's pipeline costs grain one Python `__getitem__` round per *element* — index
 mapping, shuffle, a per-element `np.random.Generator`, the RandomMap call, then
 `batch`'s stack — ≈ 0.1–0.17 ms per window, i.e. 50–90 ms per batch of 512. Once the
@@ -123,6 +136,10 @@ batch of 512, measured). It is still a *source* — the data are batches of wind
 - `windows`/`mixed_windows` (Decision 2) stay as the per-element reference and for
   `validation_windows`, which keeps the per-element `_FixedWindows` source (an occasional
   pass; the same gather with a stride would speed it up if it ever matters).
+- `num_steps` is a constructor argument of `WindowBatchSource`, mutually exclusive with
+  `epochs` (`epochs = ceil(num_steps / batches_per_epoch)`); review round on C9.
+- `data/windows.py` became the package `data/windows/` (`common`, `per_element`,
+  `batched`, `device`), so the file structure says which code serves which way.
 
 - *Rejected*: a `RandomMap` on a `range` source that holds the arrays and gathers (first
   proposal). Same speed, but a transform that *injects* data blurs the transform/source

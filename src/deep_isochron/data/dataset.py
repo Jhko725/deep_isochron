@@ -4,7 +4,7 @@
 time, dim)`` and a ``DatasetMetadata``. It is a grain random-access source over *whole
 trajectories* — ``len`` is the number of trajectories and ``source[i]`` is
 ``{"t": ts, "u": ys[i]}`` — and nothing more: windowing, weighting and mixing are grain
-transforms in ``data/windows.py`` (the swirl-dynamics pattern), so the source has no
+transforms in ``data/windows/`` (the swirl-dynamics pattern), so the source has no
 window bookkeeping. Splits (``split_time``, ``split_trajectories``) are ``copy.replace``
 with sliced arrays; ``dataset`` builds the ``xarray.Dataset`` view on demand.
 
@@ -145,7 +145,7 @@ class TimeSeriesDataSource:
 
     **Fields:** ``ts (time,)``, ``ys (trajectory, time, dim)``, optional ``metadata``.
     Elements are ``{"t": ts, "u": ys[i]}``; windowing is done by the transforms in
-    ``data/windows.py``.
+    ``data/windows/``.
     """
 
     ts: Float[np.ndarray, " time"]

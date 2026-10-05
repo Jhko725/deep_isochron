@@ -65,14 +65,15 @@ deep_isochron
 │   ├── generate.py          IC samplers (UniformBox, UniformAnnulus, OnCycleGaussian);
 │   │                        generate(system, sampler, ts, n, seed=…) with
 │   │                        loud failures and config_hash
-│   └── windows.py           WindowBatchSource — batches of windows by one gather, epochs
-│                            of every window once; window_batches() / mixed_window_batches()
-│                            (the training loader); RandomWindow / WeightedWindow (grain
-│                            RandomMap), windows(), mixed_windows() (per-element reference);
-│                            validation_windows() (finite, deterministic);
-│                            single_threaded(); to_device(ds, device)
-│                            (grain two-stage prefetch, one reader thread);
-│                            resolve_device() (JAX's default only when scoped to a card)
+│   └── windows/             two ways to cut windows (ADR-0008 D2, D3) — see its __init__
+│       ├── common.py        Element/Batch/WeightFn, range checks, transient_weight,
+│       │                    categorical, start_weights (shared)
+│       ├── per_element.py   RandomWindow / WeightedWindow (grain RandomMap); windows();
+│       │                    mixed_windows(); validation_windows() — the reference
+│       ├── batched.py       WindowBatchSource (batches by one gather, epochs of every
+│       │                    window once); window_batches(); mixed_window_batches() — the
+│       │                    training-run path
+│       └── device.py        single_threaded(); to_device(ds, device); resolve_device()
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
 │                            (namespace reserved; Phase E)
 ├── training/                                                            ── ADR-0009
@@ -205,8 +206,8 @@ conditions from an `AbstractICSampler` (`UniformBox`, `UniformAnnulus`), vmaps `
 `throw=False`, and raises naming any failed indices. `scripts/generate_data.py` is the Hydra
 entry point over `configs/data/*.yaml`.
 
-Training runs read **batches of windows** from a `WindowBatchSource` (`data/windows.py`,
-ADR-0008 Decision 3): element `i` is the `i`-th batch of the run, one vectorized gather,
+Training runs read **batches of windows** from a `WindowBatchSource`
+(`data/windows/batched.py`, ADR-0008 Decision 3): element `i` is the `i`-th batch of the run, one vectorized gather,
 an epoch being every window of every trajectory once (fresh permutation per epoch, remainder
 dropped), so the loader is finite and `len = epochs · batches_per_epoch`.
 `window_batches(source, length, batch, seed=…, epochs=… | num_steps=…, weight=… |
@@ -214,7 +215,7 @@ start_range=…)` and `mixed_window_batches(…, split_idx, weights)` build it; 
 mixed starts are draws with replacement (`transient_weight(boost, tau)` oversamples the
 transient). The per-element **grain transforms** `RandomWindow`/`WeightedWindow` behind
 `windows()`/`mixed_windows()` remain the reference semantics (tests compare marginals) and
-serve `validation_windows`. Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
+serve `validation_windows` (`data/windows/per_element.py`). Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
 
 ## Data flow of one training step
 
