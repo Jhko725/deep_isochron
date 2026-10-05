@@ -18,6 +18,8 @@ script (Phase D) wires wandb, Orbax and Hydra's run directory."""
 
 from __future__ import annotations
 
+import itertools
+import warnings
 from collections.abc import Callable, Iterable, Mapping
 from copy import replace
 from functools import cached_property
@@ -159,14 +161,17 @@ class Trainer(Generic[M]):
         model_or_state: M | TrainerState[M],
         train_loader: Iterable[Batch],
         *,
-        num_steps: int,
+        num_steps: int | None = None,
         key: PRNGKeyArray | None = None,
         logger: Logger | None = None,
         checkpointer: Checkpointer | None = None,
         evaluate: Callable[[M], Mapping[str, Any]] | None = None,
         eval_every: int = 1,
     ) -> TrainerState[M]:
-        """Run ``num_steps`` steps (fewer if the loader ends). ``evaluate(model)``
+        """Run until the loader ends — a ``data.window_batches`` loader is finite and
+        epoch-structured, so the data define the run — or for ``num_steps`` steps if
+        given, which is an upper bound: a loader that ends first stops the run with a
+        warning. ``evaluate(model)``
         returns validation metrics (``training.evaluation``); they are logged under
         their own keys and passed to ``checkpointer.save`` every ``eval_every`` steps
         and at the end (no intermediate checkpoints without ``evaluate``). Batches
@@ -195,13 +200,22 @@ class Trainer(Generic[M]):
             log.log(val_metrics, step)
             ckpt.save(step, state, val_metrics)
 
+        if num_steps is not None and num_steps < 0:
+            raise ValueError("num_steps must be non-negative or None.")
         batches = iter(train_loader)
         step = int(state.step)  # Python-side counter: the device value is never read
         with log, ckpt:
-            for i in range(num_steps):
+            for i in itertools.count():
+                if num_steps is not None and i >= num_steps:
+                    break
                 try:
                     batch = next(batches)
                 except StopIteration:
+                    if num_steps is not None:
+                        warnings.warn(
+                            f"the loader ended after {i} of {num_steps} steps.",
+                            stacklevel=2,
+                        )
                     break
                 if i == 0:
                     check_batch_dtype(batch)

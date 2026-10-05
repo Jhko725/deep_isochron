@@ -65,9 +65,12 @@ deep_isochron
 │   ├── generate.py          IC samplers (UniformBox, UniformAnnulus, OnCycleGaussian);
 │   │                        generate(system, sampler, ts, n, seed=…) with
 │   │                        loud failures and config_hash
-│   └── windows.py           RandomWindow / WeightedWindow (grain RandomMap);
-│                            windows(); mixed_windows(); validation_windows() (finite,
-│                            deterministic); single_threaded(); to_device(ds, device)
+│   └── windows.py           WindowBatchSource — batches of windows by one gather, epochs
+│                            of every window once; window_batches() / mixed_window_batches()
+│                            (the training loader); RandomWindow / WeightedWindow (grain
+│                            RandomMap), windows(), mixed_windows() (per-element reference);
+│                            validation_windows() (finite, deterministic);
+│                            single_threaded(); to_device(ds, device)
 │                            (grain two-stage prefetch, one reader thread);
 │                            resolve_device() (JAX's default only when scoped to a card)
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
@@ -202,14 +205,16 @@ conditions from an `AbstractICSampler` (`UniformBox`, `UniformAnnulus`), vmaps `
 `throw=False`, and raises naming any failed indices. `scripts/generate_data.py` is the Hydra
 entry point over `configs/data/*.yaml`.
 
-Windows are **grain transforms** (`data/windows.py`), applied after `.shuffle().repeat()`
-so that every visit of a trajectory cuts a fresh window: `RandomWindow(length,
-start_range)` (uniform start) and `WeightedWindow(length, weight)` (start drawn ∝
-`weight(t_start)`; `transient_weight(boost, tau)` oversamples the transient).
-`windows(source, length, seed=…, weight=… | start_range=…)` wires a source into one
-pipeline; `mixed_windows(source, length, split_idx, weights, seed)` interleaves an early
-and a late `RandomWindow` through `grain.MapDataset.mix` — the two-loader design, kept for
-comparison. Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
+Training runs read **batches of windows** from a `WindowBatchSource` (`data/windows.py`,
+ADR-0008 Decision 3): element `i` is the `i`-th batch of the run, one vectorized gather,
+an epoch being every window of every trajectory once (fresh permutation per epoch, remainder
+dropped), so the loader is finite and `len = epochs · batches_per_epoch`.
+`window_batches(source, length, batch, seed=…, epochs=… | num_steps=…, weight=… |
+start_range=…)` and `mixed_window_batches(…, split_idx, weights)` build it; weighted and
+mixed starts are draws with replacement (`transient_weight(boost, tau)` oversamples the
+transient). The per-element **grain transforms** `RandomWindow`/`WeightedWindow` behind
+`windows()`/`mixed_windows()` remain the reference semantics (tests compare marginals) and
+serve `validation_windows`. Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`.
 
 ## Data flow of one training step
 
@@ -238,8 +243,8 @@ The model is an `AbstractPhaseAmplitudeModel` — `ConjugateLatentDynamics` (bij
 normal form, `SolverConfig`) or `PhaseAmplitudeAutoencoder`. A loss is a weighted sum of
 named terms whose weights the trainer's schedule supplies each step (ADR-0009); the
 conjugacy equation is what `data` and `latent` together enforce. Batches come from
-`windows`/`mixed_windows` over a `TimeSeriesDataSource`, transferred by the loader
-(`to_device`); validation is `validation_windows` over the held-out trajectories — finite
+`window_batches`/`mixed_window_batches` over a `TimeSeriesDataSource` — finite, the data
+define the run — transferred by the loader (`to_device`); validation is `validation_windows` over the held-out trajectories — finite
 and deterministic — evaluated to exhaustion by an `Evaluator`, whose `val/mse` is what the
 `OrbaxCheckpointer` keeps the best checkpoint by.
 
@@ -271,6 +276,6 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0005](decisions/0005-constraint-primitives.md) | constraint primitives are plain objects created inside `constrain` |
 | [0006](decisions/0006-cubic-bspline-boundary-and-inverse.md) | `CubicBSpline`: Greville-pinned boundary; bracketed Newton inverse |
 | [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | `AbstractODE` / `AbstractNormalForm`; `SolverConfig`; flow integrations as objects |
-| [0008](decisions/0008-dataset-format-and-sampling.md) | one netCDF4 file per dataset via xarray; weighted windows alongside `mix` |
+| [0008](decisions/0008-dataset-format-and-sampling.md) | one netCDF4 file per dataset via xarray; weighted windows alongside `mix`; batched window source for training runs |
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 | [0010](decisions/0010-rotations-by-cayley-transform.md) | `BiLipschitzLinear` rotations by Cayley transform, not `expm` |

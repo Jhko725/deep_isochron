@@ -2,7 +2,7 @@
 type: design
 status: tentative
 updated: 2026-10-05
-verified_by: pending (Joon)
+verified_by: joon (2026-10-05; §6.3 C9 update pending)
 sources: [JAX docs (async dispatch, data placement, profiling), XLA GPU runtime source, grain source and tutorial, CPython docs, NVIDIA CUDA Graphs blog, Serino et al. 2025]
 ---
 
@@ -317,8 +317,10 @@ dev container.
    pipeline takes 0.17 ms per window (`shuffle` → `random_map`, which constructs an
    `np.random.Generator` per element → `batch`'s `np.stack`), and the prefetch thread can
    hide the step behind the fetch but not the fetch behind the step. The same batches from a
-   cache run at 33 ms. A batch-level sampler — one fancy-indexed gather per batch, 0.85 ms
-   against 50 ms per batch on the dev CPU **[measured]** — is roadmap C9.
+   cache run at 33 ms. Fixed by C9: `WindowBatchSource`, a source whose element is a whole
+   batch built by one fancy-indexed gather — 0.6 ms against 49 ms per batch on the dev CPU
+   **[measured]**, with an epoch defined as every window once (ADR-0008 Decision 3). The
+   V100 `to_device` row is expected to drop to the step's 33 ms.
 
 Two hypotheses were raised and refuted on the way, and are kept as negative results: that
 *committed* batches dispatch slower than uncommitted ones (§2; floors and steps identical),
@@ -330,8 +332,9 @@ launches, ≈ 17 µs per launch) and nearly flat in batch size.
 
 - The loop never reads device values; loggers do (`to_floats`), one step late
   (`DelayedLogger`). ADR-0009 §1–2.
-- The training loader is `to_device(windows(...).batch(B), device)`; a grain dataset is
-  never iterated bare in the training process, and the `Evaluator` reads through
+- The training loader is `to_device(window_batches(...), device)` — a batch-level source,
+  so grain does no per-element work; a grain dataset is never iterated bare in the
+  training process, and the `Evaluator` reads through
   `single_threaded`. No Python thread but `to_device`'s prefetch thread runs beside the
   launching thread; `mp_prefetch` is not in the default pipeline. ADR-0009 §1.
 - The device is chosen by the caller, once; nothing auto-selects a GPU.

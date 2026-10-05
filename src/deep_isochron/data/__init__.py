@@ -18,6 +18,7 @@ from .initial_conditions import (
     UniformBox as UniformBox,
 )
 from .windows import (
+    mixed_window_batches as mixed_window_batches,
     mixed_windows as mixed_windows,
     RandomWindow as RandomWindow,
     resolve_device as resolve_device,
@@ -26,5 +27,7 @@ from .windows import (
     transient_weight as transient_weight,
     validation_windows as validation_windows,
     WeightedWindow as WeightedWindow,
+    window_batches as window_batches,
+    WindowBatchSource as WindowBatchSource,
     windows as windows,
 )

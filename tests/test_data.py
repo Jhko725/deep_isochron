@@ -28,6 +28,7 @@ from deep_isochron.data import (
     DatasetMetadata,
     generate,
     GridSpec,
+    mixed_window_batches,
     mixed_windows,
     Provenance,
     RandomWindow,
@@ -41,6 +42,8 @@ from deep_isochron.data import (
     UniformBox,
     validation_windows,
     WeightedWindow,
+    window_batches,
+    WindowBatchSource,
     windows,
 )
 from deep_isochron.data.windows import categorical
@@ -352,6 +355,118 @@ def test_generate_fhn_and_failure():
             seed=0,
             config=SolverConfig(max_steps=4),
         )
+
+
+# --------------------------------------------------- batched windows (C9) ----------
+def _starts_of(batch, src):
+    return np.rint(batch["t"][:, 0] * (src.trajectory_length - 1)).astype(int)
+
+
+def test_window_batches_shapes_length_and_determinism():
+    src = _source(n=4, T=10, dim=2)  # 4 · (10 − 3 + 1) = 32 windows of length 3
+    ds = window_batches(src, 3, 8, seed=0, epochs=2)
+    assert len(ds) == 2 * 4  # 32 // 8 batches per epoch
+    b = ds[0]
+    assert b["t"].shape == (8, 3) and b["u"].shape == (8, 3, 2)
+    assert b["u"].dtype == src.ys.dtype
+    # each window is a contiguous slice of its trajectory, and t is the shared grid
+    for k in range(8):
+        traj = int(b["u"][k, 0, 0] // (10 * 2))
+        start = _starts_of(b, src)[k]
+        assert np.array_equal(b["u"][k], src.ys[traj, start : start + 3])
+        assert np.array_equal(b["t"][k], src.ts[start : start + 3])
+    ds2 = window_batches(src, 3, 8, seed=0, epochs=2)
+    assert all(np.array_equal(ds[i]["u"], ds2[i]["u"]) for i in range(len(ds)))
+    assert not np.array_equal(
+        window_batches(src, 3, 8, seed=1, epochs=1)[0]["u"], ds[0]["u"]
+    )
+
+
+def test_window_batches_epoch_is_every_window_once_then_reshuffled():
+    src = _source(n=4, T=10)
+    wsrc = WindowBatchSource(src, 3, 8, seed=0, epochs=2)
+    assert wsrc.num_windows == 32 and wsrc.batches_per_epoch == 4
+
+    def windows_of(epoch):
+        out = []
+        for j in range(wsrc.batches_per_epoch):
+            traj, start = wsrc._draw(epoch * wsrc.batches_per_epoch + j)
+            out += list(zip(traj.tolist(), start.tolist()))
+        return out
+
+    first, second = windows_of(0), windows_of(1)
+    all_windows = {(i, k) for i in range(4) for k in range(8)}
+    assert set(first) == all_windows and len(first) == 32  # once each
+    assert set(second) == all_windows and first != second  # same set, new order
+
+
+def test_window_batches_drop_remainder_and_too_large_batch():
+    src = _source(n=3, T=10)  # 24 windows of length 3
+    wsrc = WindowBatchSource(src, 3, 10, seed=0, epochs=1)
+    assert wsrc.batches_per_epoch == 2 and len(wsrc) == 2  # 4 windows dropped
+    seen = set()
+    for j in range(2):
+        traj, start = wsrc._draw(j)
+        seen |= set(zip(traj.tolist(), start.tolist()))
+    assert len(seen) == 20  # 20 distinct windows used, 4 dropped
+    with pytest.raises(ValueError, match="exceeds"):
+        WindowBatchSource(src, 3, 25, seed=0, epochs=1)
+    with pytest.raises(IndexError):
+        wsrc[2]
+
+
+def test_window_batches_start_range_weight_and_mix():
+    src = _source(n=1, T=5)  # 4 valid starts for L = 2
+    ranged = WindowBatchSource(src, 2, 2, seed=0, epochs=3, start_range=(1, 3))
+    assert ranged.num_windows == 2 and len(ranged) == 3
+    starts = np.concatenate([_starts_of(ranged[i], src) for i in range(len(ranged))])
+    assert set(starts.tolist()) == {1, 2}
+    # weighted: frequencies over 4000 draws match the weights (same law as
+    # WeightedWindow); draws differ between batches
+    weight = lambda t: np.array([4.0, 2.0, 1.0, 1.0])  # noqa: E731
+    weighted = window_batches(src, 2, 4, seed=0, epochs=1000, weight=weight)
+    starts = np.concatenate([_starts_of(weighted[i], src) for i in range(1000)])
+    freq = np.bincount(starts, minlength=4) / starts.size
+    assert_close(freq, np.array([0.5, 0.25, 0.125, 0.125]), atol=0.03)
+    first, second = _starts_of(weighted[0], src), _starts_of(weighted[1], src)
+    assert not np.array_equal(first, second)
+    # mixed: the early/late ratio per window
+    src2 = _source(n=2, T=12)
+    mixed = mixed_window_batches(src2, 3, 16, 6, weights=(1.0, 3.0), seed=0, epochs=40)
+    starts = np.concatenate([_starts_of(mixed[i], src2) for i in range(40)])
+    assert abs(np.mean(starts < 6) - 0.25) < 0.06
+    assert set(starts.tolist()) <= set(range(0, 10))
+    with pytest.raises(ValueError, match="alternatives"):
+        WindowBatchSource(
+            src, 2, 2, seed=0, epochs=1, weight=weight, start_range=(0, 2)
+        )
+    with pytest.raises(ValueError, match="split_idx"):
+        mixed_window_batches(src2, 3, 2, 1, seed=0, epochs=1)
+
+
+def test_window_batches_num_steps_slicing_and_pickling():
+    import pickle
+
+    src = _source(n=4, T=10)  # 4 batches of 8 per epoch
+    ds = window_batches(src, 3, 8, seed=0, num_steps=10)
+    assert len(ds) == 12  # ceil(10 / 4) = 3 epochs
+    assert np.array_equal(ds[5:][0]["u"], ds[5]["u"])  # resume at step 5
+    with pytest.raises(ValueError, match="exactly one"):
+        window_batches(src, 3, 8, seed=0)
+    wsrc = WindowBatchSource(src, 3, 8, seed=0, epochs=1)
+    clone = pickle.loads(pickle.dumps(wsrc))
+    assert np.array_equal(clone[2]["u"], wsrc[2]["u"])
+
+
+def test_window_batches_feed_to_device_and_the_trainer():
+    """The batched loader is what training runs consume: through ``to_device`` on the
+    default device, shapes and values intact, and the trainer runs it to the end."""
+    src = _source(n=4, T=10)
+    ds = window_batches(src, 3, 8, seed=0, epochs=1)
+    dev = list(to_device(ds, jax.devices()[0]))
+    assert len(dev) == 4 and all(isinstance(b["u"], jax.Array) for b in dev)
+    for i, d in enumerate(dev):
+        assert np.array_equal(np.asarray(d["u"]), ds[i]["u"])
 
 
 def test_resolve_device_explicit_index_and_cpu_default():

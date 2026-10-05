@@ -273,6 +273,13 @@ def test_trainer_state_is_deterministic_and_respects_the_trainable_filter():
     assert int(after.step) == 1
 
 
+def test_trainer_runs_to_loader_end_without_num_steps(recwarn):
+    trainer = Trainer(optax.adam(0.05), LinearLoss())
+    state = trainer.train(linear_model(), linear_batches(5), key=jax.random.key(0))
+    assert int(state.step) == 5
+    assert not [w for w in recwarn if issubclass(w.category, UserWarning)]
+
+
 def test_trainer_stops_on_exhausted_loader_and_evaluates_on_schedule():
     trainer = Trainer(optax.adam(0.05), LinearLoss())
     calls: list[int] = []
@@ -282,15 +289,16 @@ def test_trainer_stops_on_exhausted_loader_and_evaluates_on_schedule():
         return {"val/mse": jnp.asarray(0.5)}
 
     log = ListLogger()
-    state = trainer.train(
-        linear_model(),
-        linear_batches(7),
-        num_steps=100,
-        key=jax.random.key(0),
-        logger=log,
-        evaluate=evaluate,
-        eval_every=3,
-    )
+    with pytest.warns(UserWarning, match="ended after 7 of 100"):
+        state = trainer.train(
+            linear_model(),
+            linear_batches(7),
+            num_steps=100,
+            key=jax.random.key(0),
+            logger=log,
+            evaluate=evaluate,
+            eval_every=3,
+        )
     assert int(state.step) == 7  # the loader ended first
     assert len(calls) == 3  # steps 3, 6 and the final step 7
     eval_steps = [s for s, m in log.records if "val/mse" in m]

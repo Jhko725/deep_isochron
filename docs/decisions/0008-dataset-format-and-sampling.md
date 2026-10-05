@@ -2,13 +2,13 @@
 type: decision
 id: ADR-0008
 status: accepted; amended
-updated: 2026-10-03
-verified_by: joon
+updated: 2026-10-05
+verified_by: joon (through 2026-10-03); Decision 3 pending review
 ---
 
 # ADR-0008 — Datasets are one netCDF4 file via xarray; transient oversampling by weighted windows (and `mix`, for comparison)
 
-**Status**: accepted (2026-10-02); amended 2026-10-03 after review — metadata grouped; the source holds whole trajectories and windowing is a grain transform (Decision 2 rewritten).
+**Status**: accepted (2026-10-02); amended 2026-10-03 after review — metadata grouped; the source holds whole trajectories and windowing is a grain transform (Decision 2 rewritten); amended 2026-10-05 — training runs read from a *batched* window source (Decision 3), the per-element transforms remaining the reference semantics.
 
 ## Context
 
@@ -89,13 +89,57 @@ Two transforms implement transient oversampling, kept side by side for compariso
   sampler; tf.data `sample_from_datasets` and HF `interleave_datasets(probabilities)` are
   `mix`-shaped; torch `WeightedRandomSampler` is `weighted_windows`-shaped.
 
+## Decision 3 — training runs read batches from a `WindowBatchSource` (2026-10-05, roadmap C9)
+
+Decision 2's pipeline costs grain one Python `__getitem__` round per *element* — index
+mapping, shuffle, a per-element `np.random.Generator`, the RandomMap call, then
+`batch`'s stack — ≈ 0.1–0.17 ms per window, i.e. 50–90 ms per batch of 512. Once the
+training step itself came down to 33 ms on a V100 (ADR-0010) the fetch was the bound:
+`to_device` ran at the fetch rate, 93 ms per step (change document 2026-10-04, round 2).
+
+Training runs therefore read from **`WindowBatchSource(source, length, batch, seed=,
+epochs=)`**, a `RandomAccessDataSource` whose element `i` is the `i`-th *batch* of the run,
+built by one vectorized gather `ys[traj[:, None], start[:, None] + arange(L)]` (≈ 1 ms per
+batch of 512, measured). It is still a *source* — the data are batches of windows, and
+`__getitem__(i)` is a pure function of `(seed, i)` — not a transform that injects data:
+
+- **An epoch is every window once.** `num_windows = N · (hi − lo)` over the valid starts;
+  `batches_per_epoch = num_windows // batch` (the remainder is dropped — different windows
+  each epoch since the permutation differs, and uniform batch shapes for `jit`);
+  `len = epochs · batches_per_epoch`. Batch `i` is the `j`-th slice of a fresh permutation
+  of epoch `e = i // batches_per_epoch` (`rng([seed, e])`). This is the original
+  "enumerate all windows" semantics rather than Decision 2's "one window per trajectory
+  visit", and the loader is **finite**: the data define the run (`Trainer.train(num_steps=
+  None)`), `window_batches(..., num_steps=)` sizes it in steps, and resuming at step `s` is
+  the slice `[s:]`.
+- **Weighted and mixed starts are draws with replacement** (a trajectory uniformly, the
+  start by inverse-CDF on `weight` or a Bernoulli between the two ranges of
+  `mixed_window_batches`), `num_windows` of them per epoch, so `len` means the same amount
+  of data in every mode. The marginals equal `WeightedWindow`'s and `mixed_windows`'s
+  (tests compare them); `grain.MapDataset.mix` of two pipelines is no longer needed.
+- `windows`/`mixed_windows` (Decision 2) stay as the per-element reference and for
+  `validation_windows`, which keeps the per-element `_FixedWindows` source (an occasional
+  pass; the same gather with a stride would speed it up if it ever matters).
+
+- *Rejected*: a `RandomMap` on a `range` source that holds the arrays and gathers (first
+  proposal). Same speed, but a transform that *injects* data blurs the transform/source
+  distinction grain is built on, and it cannot see the epoch (it gets a per-element rng,
+  not the global index), so epochs become i.i.d. draws.
+- *Rejected*: a custom `MapDataset.batch` node that reaches past its parent into the
+  arrays — only works with one specific parent; the blur moves one level.
+- *Rejected*: a nominal huge `len` with `repeat()`. grain's `RepeatMapDataset` hands the
+  source `i % len`, so the source cannot see the epoch and every epoch would replay the same
+  batches; the epoch count belongs in the source, where it also makes `len` concrete.
+
 ## Consequences
 
 - `xarray` and `h5netcdf` become runtime dependencies.
 - `TimeSeriesDataSource.split(idx)` is now `split_time(idx)`; `split_trajectories(frac,
   seed)` added for held-out validation; both are `copy.replace` on the frozen dataclass.
-- Batches are dicts `{"t": (B, L), "u": (B, L, dim)}`; `ConjugacyTrajectoryLoss` reads
-  them by key.
+- Batches are dicts `{"t": (B, L), "u": (B, L, dim)}` from either path;
+  `ConjugacyTrajectoryLoss` reads them by key.
+- Training loaders are finite (Decision 3); `Trainer.train`'s `num_steps` is optional and
+  an upper bound.
 - A per-trajectory settling time (`t_settle`, from the normal form's `amplitude` or a
   numerical distance to the cycle) is a natural extra variable for the file and a better
   basis for weights than wall-clock start time; parked until the analysis module exists.

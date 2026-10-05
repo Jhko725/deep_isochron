@@ -74,6 +74,7 @@ from deep_isochron.data import (  # noqa: E402
     single_threaded,
     TimeSeriesDataSource,
     to_device,
+    window_batches,
     windows,
 )
 from deep_isochron.model import (  # noqa: E402
@@ -350,6 +351,11 @@ def main() -> None:
     )
 
     def pipeline() -> grain.MapDataset:
+        # the training loader (C9): one vectorized gather per batch
+        return window_batches(source, args.length, args.batch, seed=0, epochs=1000)
+
+    def per_element_pipeline() -> grain.MapDataset:
+        # the per-element reference: shuffle, random_map, batch — what C9 replaced
         return windows(source, args.length, seed=0).batch(
             args.batch, drop_remainder=True
         )
@@ -369,6 +375,10 @@ def main() -> None:
 
     fetch_rows: list[tuple[str, Callable[[], Iterable]]] = [
         ("fetch only (host, 1 reader thread)", lambda: single_threaded(pipeline())),
+        (
+            "fetch only, per-element windows().batch()",
+            lambda: single_threaded(per_element_pipeline()),
+        ),
     ]
     step_rows: list[tuple[str, Callable[[], Iterable]]] = [
         ("step, device-resident (committed) batches", lambda: cycle(resident)),
