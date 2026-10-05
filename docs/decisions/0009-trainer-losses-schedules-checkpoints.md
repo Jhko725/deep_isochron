@@ -49,7 +49,9 @@ The loop does **not** move batches to the device. grain's JAX training tutorial 
 receives data", and recommends its option C, `grain.experimental.device_put` — a CPU
 prefetch thread, the transfer, and a device-side buffer — "for real training".
 `data.to_device(dataset, device)` wraps that, with the device given by the caller (no
-auto-selection on a shared cluster); the trainer accepts whatever the loader yields
+auto-selection on a shared cluster — `data.resolve_device()` is the one sanctioned default:
+JAX's own `jax.devices()[0]` when the scheduler scoped the process to a card, a refusal
+otherwise; review round 2); the trainer accepts whatever the loader yields
 (NumPy batches still work: `jit` transfers them synchronously, which is fine for tests).
 
 **Loaders must not start grain's default reader pool** (review round 2, measured on CPU

@@ -352,3 +352,31 @@ def test_generate_fhn_and_failure():
             seed=0,
             config=SolverConfig(max_steps=4),
         )
+
+
+def test_resolve_device_explicit_index_and_cpu_default():
+    from deep_isochron.data import resolve_device
+
+    assert resolve_device(0) == jax.devices()[0]
+    assert resolve_device() == jax.devices()[0]  # one device / CPU: JAX's default
+    with pytest.raises(IndexError):
+        resolve_device(len(jax.devices()))
+
+
+def test_resolve_device_refuses_unassigned_accelerators(monkeypatch):
+    """Several accelerators visible and no ``*_VISIBLE_DEVICES`` variable: no silent
+    pick. (The fakes cannot pass the return annotation's runtime check, so the
+    scheduler-scoped branch is covered by the CPU test above: one device → index 0.)"""
+    from deep_isochron.data import resolve_device
+
+    class Fake:
+        platform, device_kind = "gpu", "fake"
+
+        def __init__(self, i):
+            self.id = i
+
+    monkeypatch.setattr(jax, "devices", lambda backend=None: [Fake(0), Fake(1)])
+    for var in ("CUDA_VISIBLE_DEVICES", "HIP_VISIBLE_DEVICES", "ROCR_VISIBLE_DEVICES"):
+        monkeypatch.delenv(var, raising=False)
+    with pytest.raises(ValueError, match="2 accelerators"):
+        resolve_device()

@@ -29,6 +29,7 @@ dynamics. Two ways to oversample them, kept side by side so they can be compared
 ``to_device`` the prefetching transfer to the accelerator for training runs.
 """
 
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -230,4 +231,39 @@ def to_device(
         device,
         cpu_buffer_size=cpu_buffer_size,
         device_buffer_size=device_buffer_size,
+    )
+
+
+_VISIBLE_DEVICES_VARS = (
+    "CUDA_VISIBLE_DEVICES",
+    "HIP_VISIBLE_DEVICES",
+    "ROCR_VISIBLE_DEVICES",
+)
+
+
+def resolve_device(index: int | None = None) -> jax.Device:
+    """The device a run should use, chosen so that nothing ever grabs an accelerator the
+    scheduler did not assign.
+
+    - ``index`` given: ``jax.devices()[index]`` — the explicit choice always wins.
+    - One device visible (a CPU-only machine, or a job the scheduler scoped to one
+      card), or several visible but a ``*_VISIBLE_DEVICES`` variable set (Slurm's
+      ``--gpus`` / ``--gres`` export ``CUDA_VISIBLE_DEVICES`` into the job): JAX's own
+      default device, ``jax.devices()[0]`` — the first device of the default backend,
+      where uncommitted arrays and jitted computations land anyway, so the loader's
+      batches and the model agree without any further configuration.
+    - Several accelerators visible and no such variable — a login node, an interactive
+      shell on a shared machine: refuse, with the list, rather than pick one."""
+    devices = jax.devices()
+    if index is not None:
+        return devices[index]
+    if len(devices) == 1 or devices[0].platform == "cpu":
+        return devices[0]
+    if any(os.environ.get(v) for v in _VISIBLE_DEVICES_VARS):
+        return devices[0]
+    visible = [f"{d.platform}:{d.id} {d.device_kind}" for d in devices]
+    raise ValueError(
+        f"{len(devices)} accelerators are visible and none of {_VISIBLE_DEVICES_VARS} "
+        "is set, so no scheduler scoped this process to a card; pass the device index "
+        f"explicitly. Visible: {visible}"
     )

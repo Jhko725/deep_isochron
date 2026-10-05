@@ -23,7 +23,10 @@ or worker process competes with the host thread that launches the step's kernels
 one-core allocation serializes them all.
 
 Usage (from the repository root, with the dev environment; ``--device`` is the index
-into ``jax.devices()`` and is required — the script never picks a GPU on its own)::
+into ``jax.devices()``; without it ``data.resolve_device`` uses JAX's default device
+when the scheduler has scoped the process to one card — one device visible, or
+``CUDA_VISIBLE_DEVICES`` set, as in an ``srun`` shell with a GPU — and refuses on a
+machine where several accelerators are visible and unassigned)::
 
     uv run python scripts/bench_dataloader.py --device 0
     uv run python scripts/bench_dataloader.py --device 0 --model ae --batch 2048
@@ -67,6 +70,7 @@ from absl import flags  # noqa: E402
 from deep_isochron.data import (  # noqa: E402
     generate,
     OnCycleGaussian,
+    resolve_device,
     single_threaded,
     TimeSeriesDataSource,
     to_device,
@@ -96,8 +100,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--device",
         type=int,
-        required=True,
-        help="index into jax.devices(); the script never chooses a GPU by itself",
+        help="index into jax.devices(); without it, data.resolve_device picks JAX's "
+        "default device only when the scheduler scoped the process to a card (one "
+        "device visible or CUDA_VISIBLE_DEVICES set) and refuses otherwise",
     )
     p.add_argument("--data", type=Path, help=".nc dataset; default: generate Bautin")
     p.add_argument("--model", choices=["conjugacy", "ae"], default="conjugacy")
@@ -329,14 +334,15 @@ def main() -> None:
     args = parse_args()
     flags.FLAGS(sys.argv[:1])  # grain's multiprocessing reads absl flags
     jax.config.update("jax_enable_x64", True)
-    device = jax.devices()[args.device]
+    device = resolve_device(args.device)
     jax.config.update("jax_default_device", device)  # model and state live there too
     source = make_source(args)
     model, loss = make_model_and_loss(args, source.ys.shape[-1])
     trainer = Trainer(optax.adam(1e-3), loss)
     state = trainer.init(model, key=jax.random.key(1))
     print(
-        f"device: {device.platform}:{device.id} ({device.device_kind}); "
+        f"device: {device.platform}:{device.id} ({device.device_kind}"
+        f"{', --device' if args.device is not None else ', default'}); "
         f"{len(source)} trajectories × {source.trajectory_length} steps; batch "
         f"{args.batch} × window {args.length}; model {args.model}; "
         f"{args.steps} steps × {args.repeats} repeats, interleaved\n"

@@ -68,7 +68,8 @@ deep_isochron
 │   └── windows.py           RandomWindow / WeightedWindow (grain RandomMap);
 │                            windows(); mixed_windows(); validation_windows() (finite,
 │                            deterministic); single_threaded(); to_device(ds, device)
-│                            (grain two-stage prefetch, one reader thread)
+│                            (grain two-stage prefetch, one reader thread);
+│                            resolve_device() (JAX's default only when scoped to a card)
 ├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
 │                            (namespace reserved; Phase E)
 ├── training/                                                            ── ADR-0009

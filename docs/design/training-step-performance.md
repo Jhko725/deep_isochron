@@ -74,9 +74,19 @@ V100 table was that handing committed inputs to a jitted function next to an unc
 state cost host time. It does not: the dispatch floors are 0.7 ms for both and the steps are
 identical (33.4 ms each on the V100, 2026-10-05) **[measured]**. The pair stays in the
 script as a guard. Two practical rules survive: the device is chosen once, by the caller
-(the script's `--device`, `to_device(dataset, device)` — never auto-selected on a shared
-cluster), and the model and state are created under `jax_default_device` set to the same
-card so nothing is moved implicitly.
+(`to_device(dataset, device)` takes it explicitly), and the model and state are created
+under `jax_default_device` set to the same card so nothing is moved implicitly.
+
+*Which default, then?* `jax.devices()[0]` is JAX's own default device — the first device of
+the default backend, "generally `'gpu'` or `'tpu'` if available, otherwise `'cpu'`"
+**[cited: JAX, `jax.devices`]** — and it is the right choice exactly when the visible devices
+are the right ones: a CPU machine, tests, or a job whose scheduler set
+`CUDA_VISIBLE_DEVICES` (Slurm's `--gpus`/`--gres` do), so that the one visible card is the
+assigned one. It is the wrong choice on a shared node where several cards are visible and
+none assigned. `data.resolve_device(index=None)` encodes this: an explicit index wins;
+otherwise JAX's default when one device is visible, the backend is CPU, or a
+`*_VISIBLE_DEVICES` variable is set; otherwise a refusal listing the devices. The benchmark
+script and the notebook go through it.
 
 ## 3. Threads, processes and the GIL
 

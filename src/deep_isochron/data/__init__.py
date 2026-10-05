@@ -20,6 +20,7 @@ from .initial_conditions import (
 from .windows import (
     mixed_windows as mixed_windows,
     RandomWindow as RandomWindow,
+    resolve_device as resolve_device,
     single_threaded as single_threaded,
     to_device as to_device,
     transient_weight as transient_weight,
