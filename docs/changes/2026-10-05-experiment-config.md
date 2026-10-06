@@ -1,6 +1,6 @@
 ---
 type: change
-status: review round 1 applied; D5 (notebook) is Joon's
+status: review round 2 applied (utils/, validation split); D5 (notebook) done by Joon
 updated: 2026-10-05
 branch: experiment-config
 ---
@@ -48,6 +48,10 @@ Also: the one pre-existing red test is fixed, and CI is added.
 - `src/deep_isochron/provenance.py` — new: `git_state`, `package_version` (from
   `data/generate.py`'s private helpers; review round 1).
 - `scripts/README.md` — new (review round 1).
+- Review round 2: `src/deep_isochron/utils/{__init__,numerics,provenance}.py` (from
+  `misc.py`, `provenance.py`); `training/evaluation.py` (`prediction_sums`, `t_split`);
+  `experiment/data.py` (`validation_t_split`), `experiment/run.py`, `configs/train.yaml`
+  (`validation.t_split`); `docs/design/validation-split.md` (new); ADR-0009 §5; tests.
 - `src/deep_isochron/experiment/run.py` — `configure_jax`, `train(cfg, run_dir, group)`,
   `load_run`, `load_model`.
 - `scripts/train.py` — new Hydra entry point (quiets absl/jax INFO logging; multirun →
@@ -103,6 +107,30 @@ Also: the one pre-existing red test is fixed, and CI is added.
   class and method docstrings now say so explicitly.
 - **`scripts/README.md`**: one table row per script (what it does, typical calls) and a
   snippet for reopening runs from Python.
+
+## Review round 2 (2026-10-06) — `utils/` and the validation split
+
+- **`deep_isochron/utils/`**: `misc.py` → `utils/numerics.py` (`squashed_exp`,
+  `inv_softplus`, polar ↔ Cartesian — used by `model/invertible/constraints.py` *and*
+  `systems/normal_forms/base.py`, so it could not move into `model/`), `provenance.py` →
+  `utils/provenance.py`. Not `math.py`: shadowing a stdlib name inside a package invites a
+  wrong import one day. Three import sites and one test updated.
+- **Validation split by window start** (design document `validation-split.md`, ADR-0009 §5
+  amended): `Evaluator(t_split=…)` reports `val/mse_early` / `val/mse_late` (windows
+  starting before / at-or-after `t_split`), `val/n_early` / `val/n_late`; `val/mse`
+  unchanged (the overall mean). Implemented as a jitted `prediction_sums` whose per-batch
+  sums the `Evaluator` accumulates, like the phase statistics. An empty bucket is `NaN`.
+  Config: `validation.t_split` (a time, or `null` = the `mixed` sampler's `ts[split_idx]`
+  when that sampler is used, else no split — `experiment.validation_t_split`);
+  `checkpoint.metric: val/mse_early` selects on the transient.
+- Tests: `test_evaluator_splits_the_prediction_error_by_window_start` (counts,
+  recombination to the overall mean, empty bucket, a model wrong only on late windows
+  caught only there via `prediction_sums`); `test_validation_split_follows_the_mixed_sampler`
+  (resolution rule; a run with `checkpoint.metric=val/mse_early`).
+- Answers recorded for the other round-2 questions (wandb run ownership and directory,
+  train-then-continue with a new loader, the `Evaluator`'s host sync, winding direction →
+  Phase E `analysis`) are in the conversation summary of the Project doc; the winding
+  direction and a far-from-cycle validation set are Phase E items in the roadmap.
 
 ## Design
 
@@ -201,3 +229,13 @@ The full suite is green for the first time since Phase B: 471 passed, 1 xfail.
 | ADR-0011 §2 scope rule; `docs/architecture.md` (tree); this document | Looks good. | None |
 | `prototype.ipynb` | Revised to test out the developed machinery, confirmed that training runs in the notebook with `PrintLogger`| None |
 | Additional comments | <ul><li>Currently, the dataloader owns the total number of training steps. Is it possible to train and save a model using n steps, then load the model from checkpoint, then train the model further with a new dataloader for m steps? (Should be possible). This is not the same as running the model for (n+m) steps, though correct? <li> Is it better to log Wandb and orbax checkpoint in the same directory, or should log dir and ckpt dir be separate? <li> Currently, `DelayedLogger` allows the accelerator to run ahead. However, the `Evaluator` doesn't have a functionality like that, so in practice, the training loop cannot run ahead, correct? Can this be remedied? <li>The validation trajectories should be sampled similar on and off the limit cycle; otherwise the saving will be biased towards getting the limit cycle correct only. Potential remedies. <li>The rotation direction of the trajectories (clock/counter-clockwise) is needed to properly initialize `w` and `w0` of the normal forms. Need algorithm to determine the winding direction from data. This algorithm would belong in the `analysis` submodule. <ul> | Deferred to further discussions with Claude |
+
+### Review round 2
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `src/deep_isochron/utils/numerics.py` (from `misc.py`), `utils/provenance.py` (from `provenance.py`), `utils/__init__.py`; imports in `constraints.py`, `normal_forms/base.py`, `data/generate.py`, `experiment/run.py`, `tests/test_constraints.py` | | |
+| `src/deep_isochron/training/evaluation.py`: `prediction_sums`; `Evaluator(t_split)` → `val/mse_early`, `val/mse_late`, `val/n_early`, `val/n_late` | | |
+| `src/deep_isochron/experiment/data.py`: `validation_t_split`; `experiment/run.py` passes it; `configs/train.yaml`: `validation.t_split` | | |
+| `docs/design/validation-split.md` (new); ADR-0009 §5 amended; `docs/index.md`; `docs/architecture.md`; roadmap Phase E items | | |
+| `tests/test_training.py`: `test_evaluator_splits_the_prediction_error_by_window_start`; `tests/test_experiment.py`: `test_validation_split_follows_the_mixed_sampler` | | |

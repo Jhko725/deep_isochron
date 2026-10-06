@@ -102,6 +102,19 @@ def reference_normal_form(data_cfg: DictConfig) -> AbstractNormalForm | None:
     return system if isinstance(system, AbstractNormalForm) else None
 
 
+def validation_t_split(cfg: DictConfig, source: TimeSeriesDataSource) -> float | None:
+    """``validation.t_split`` as a time: the configured value; or, when it is ``null``
+    and the training sampler is ``mixed``, the sampler's own boundary ``ts[split_idx]``
+    so training and validation agree on what the transient is; else ``None``."""
+    v = cfg.validation
+    if v.t_split is not None:
+        return float(v.t_split)
+    s = cfg.windows.sampling
+    if s.kind == "mixed" and s.split_idx is not None:
+        return float(source.ts[int(s.split_idx)])
+    return None
+
+
 @dataclass(frozen=True)
 class Loaders:
     """What ``build_loaders`` returns. ``train`` is the device-prefetched stream the

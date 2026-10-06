@@ -89,18 +89,21 @@ deep_isochron
 │   ├── loggers.py           Logger base class; Null / List / Print / Wandb; DelayedLogger;
 │   │                        MultiLogger; EpochLogger
 │   ├── checkpoint.py        Checkpointer base class; OrbaxCheckpointer (whole state)
-│   └── evaluation.py        Evaluator(val_data, reference) on the model contract
+│   └── evaluation.py        Evaluator(val_data, reference, t_split) on the model contract;
+│                            val/mse_early | late by window start (design: validation-split)
 ├── experiment/              configs -> a run (config parsing + instantiation only) ── ADR-0011
 │   ├── compose.py           compose(*overrides): the train config as train.py sees it
 │   ├── instantiate.py       `_target_` instantiation with YAML lists as tuples
 │   ├── data.py              dataset_file / build_source (never generates) / generate_dataset;
-│   │                        build_window_source / build_loaders (resume = slice)
+│   │                        build_window_source / build_loaders (resume = slice);
+│   │                        validation_t_split
 │   ├── model.py             build_model (`_target_` layers + per-layer keys + flip)
 │   ├── training.py          build_loss / build_schedule / build_optimizer / build_trainer
 │   ├── logging.py           build_logger: Print (+ Wandb online/offline) → Epoch → Delayed
 │   └── run.py               train(cfg, run_dir); load_run / load_model from a run directory
-├── provenance.py            git_state(), package_version() — for dataset and run metadata
-└── misc.py                  inv_softplus, squashed_exp, polar ↔ cartesian
+└── utils/                   shared helpers
+    ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian (constraints, normal forms)
+    └── provenance.py        git_state(), package_version() — for dataset and run metadata
 
 configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment
 scripts/train.py                                Hydra entry point: one training run

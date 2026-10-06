@@ -34,7 +34,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Complex, Float
 
-from ...misc import cartesian_to_polar, polar_to_cartesian
+from ...utils.numerics import cartesian_to_polar, polar_to_cartesian
 from ..base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
 
 

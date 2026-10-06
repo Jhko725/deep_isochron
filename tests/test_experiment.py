@@ -164,6 +164,30 @@ def test_resume_continues_steps_and_stream(data_dir, tmp_path):
     assert np.array_equal(resumed.train_batches[0]["u"], full.train_batches[3]["u"])
 
 
+def test_validation_split_follows_the_mixed_sampler(data_dir, tmp_path):
+    """``validation.t_split`` null: no split for uniform sampling, the sampler's own
+    boundary for ``mixed``; an explicit value wins; the run logs the split metrics."""
+    from deep_isochron.experiment import validation_t_split
+
+    source = build_source(tiny(data_dir).data)
+    assert validation_t_split(tiny(data_dir), source) is None
+    mixed = tiny(
+        data_dir, "windows.sampling.kind=mixed", "windows.sampling.split_idx=30"
+    )
+    assert validation_t_split(mixed, source) == float(source.ts[30])
+    explicit = tiny(data_dir, "validation.t_split=2.5")
+    assert validation_t_split(explicit, source) == 2.5
+    log_run = tiny(
+        data_dir,
+        "validation.t_split=2.0",
+        "checkpoint.metric=val/mse_early",
+        "num_steps=2",
+        "eval_every=2",
+    )
+    state = train(log_run, tmp_path / "split")
+    assert int(state.step) == 2  # the checkpoint metric val/mse_early existed
+
+
 def test_autoencoder_run(data_dir, tmp_path):
     cfg = tiny(data_dir, "model=autoencoder", "loss=autoencoder", "schedule=yawata")
     state = train(cfg, tmp_path / "ae")

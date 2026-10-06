@@ -9,14 +9,13 @@ primitive in ``PRIMITIVES``:
 ``is_constrained`` is part of the ``Constraint`` contract, so adding a primitive means
 adding one line to ``PRIMITIVES`` and nothing else here.
 
-Also pins ``misc.squashed_exp`` / ``inv_squashed_exp`` as mutual inverses for every
-``a`` (the ``a`` argument used to be ignored).
+Also pins ``utils.numerics.squashed_exp`` / ``inv_squashed_exp`` as mutual inverses for
+each ``a`` (the ``a`` argument used to be ignored).
 """
 
 import jax
 import jax.numpy as jnp
 import pytest
-from deep_isochron.misc import inv_squashed_exp, squashed_exp
 from deep_isochron.model.invertible.constraints import (
     arcsinh,
     BoundedPositive,
@@ -26,6 +25,7 @@ from deep_isochron.model.invertible.constraints import (
     Positive,
     Widths,
 )
+from deep_isochron.utils.numerics import inv_squashed_exp, squashed_exp
 from hypothesis import given, strategies as st
 
 from tests.helpers import assert_close, TOL
@@ -143,7 +143,7 @@ def test_primitive_construction_is_traceable():
     assert_close(jax.jit(jax.vmap(f))(r), jax.vmap(f)(r), rtol=tol, atol=tol)
 
 
-# ------------------------------------------------------------ misc.squashed_exp ---
+# ------------------------------------------------- utils.numerics.squashed_exp ---
 @pytest.mark.parametrize("a", [1.0, 2.0, 3.0])
 @given(x=raw_vectors(8))
 def test_squashed_exp_inverse(a, x):

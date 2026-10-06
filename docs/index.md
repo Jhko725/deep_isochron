@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-05
+updated: 2026-10-06
 ---
 
 # `deep_isochron` documentation — index
@@ -28,6 +28,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 |---|---|---|
 | [`normal-forms.md`](design/normal-forms.md) | agreed; §5.3–5.4 tentative | Θ/Ψ conventions, Hopf and Bautin closed forms, the (Θ, Ψ) chart, the implementation contract (§9) and the tests it implies (§10); relation to Yawata et al. and Kvalheim & Revzen |
 | [`cubic-bspline.md`](design/cubic-bspline.md) | agreed | the `CubicBSpline` boundary treatment and inverse error bound |
+| [`validation-split.md`](design/validation-split.md) | tentative | why `val/mse` is a near-cycle metric and the early/late split by window start (`t_split`); how to choose the threshold; what it does not do |
 | [`training-step-performance.md`](design/training-step-performance.md) | tentative | where a JAX training step spends its time: asynchronous dispatch, committed/uncommitted placement, the GIL and grain's threads, what `bench_dataloader.py` measures, the bottleneck taxonomy, and the Phase C case history |
 
 ## Decision records (`decisions/`)

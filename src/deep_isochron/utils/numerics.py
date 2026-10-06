@@ -1,3 +1,6 @@
+"""Numerical helpers shared by the invertible constraints and the normal forms:
+bounded positive scale transforms and the polar ↔ Cartesian change of coordinates."""
+
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 

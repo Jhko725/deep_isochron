@@ -7,7 +7,7 @@ the composed config; ``run.train(cfg, run_dir)`` strings them together and
 the Hydra entry point; notebooks and tests use ``compose(*overrides)`` and call
 ``train`` or the builders directly. The package only parses configs and instantiates
 objects — anything with its own logic lives in the module it belongs to
-(``training.loggers``, ``provenance``, ``data``).
+(``training.loggers``, ``utils.provenance``, ``data``).
 """
 
 from .compose import compose as compose, CONFIG_DIR as CONFIG_DIR
@@ -19,6 +19,7 @@ from .data import (
     generate_dataset as generate_dataset,
     Loaders as Loaders,
     reference_normal_form as reference_normal_form,
+    validation_t_split as validation_t_split,
 )
 from .logging import build_logger as build_logger
 from .model import build_inn as build_inn, build_model as build_model

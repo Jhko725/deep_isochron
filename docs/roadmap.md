@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-05
+updated: 2026-10-06
 sources: [joon, claude]
 ---
 
@@ -78,6 +78,12 @@ fixed by keeping bijection-law points off the regularization radius instead of `
 | D8 | ADR-0011; `docs/architecture.md` (`experiment/`, scripts, config→run data flow); change document; design doc §7 | *done 2026-10-05* |
 
 ## Phase E — science
+
+First `analysis` items, from the Phase D review (2026-10-06): the winding direction of the
+data's rotation (sign of the mean signed angular velocity about the cycle's centroid over
+the late trajectory segments) to initialize the signs of `w`, `w0` in `build_model`; a
+far-from-cycle validation dataset (`UniformAnnulus` initial conditions, its own `data`
+config) complementing the `val/mse_early` split (design document `validation-split.md`).
 
 `deep_isochron.analysis` (namespace reserved; algorithms chosen as the research dictates):
 numerical limit cycle, monodromy/Floquet exponents, asymptotic phase by long integration,

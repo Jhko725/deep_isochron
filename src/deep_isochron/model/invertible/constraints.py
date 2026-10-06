@@ -35,7 +35,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Bool, Float
 
-from ...misc import inv_softplus, inv_squashed_exp, squashed_exp
+from ...utils.numerics import inv_softplus, inv_squashed_exp, squashed_exp
 
 
 class Constraint(abc.ABC):

@@ -22,13 +22,13 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
 
-from ..provenance import git_state, package_version
 from ..systems.base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
 from ..systems.normal_forms import (
     AbstractFlowIntegration,
     AbstractNormalForm,
     resolve_integration,
 )
+from ..utils.provenance import git_state, package_version
 from .dataset import (
     DatasetMetadata,
     GridSpec,

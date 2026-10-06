@@ -31,7 +31,12 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 import pytest
-from deep_isochron.data import generate, OnCycleGaussian, validation_windows, windows
+from deep_isochron.data import (
+    generate,
+    OnCycleGaussian,
+    validation_windows,
+    windows,
+)
 from deep_isochron.model import (
     ConjugateLatentDynamics,
     PhaseAmplitudeAutoencoder,
@@ -54,7 +59,11 @@ from deep_isochron.training import (
     ThresholdSwitch,
     Trainer,
 )
-from deep_isochron.training.evaluation import bounding_box_grid, circular_std
+from deep_isochron.training.evaluation import (
+    bounding_box_grid,
+    circular_std,
+    prediction_sums,
+)
 from deep_isochron.training.losses import (
     alpha_schedule,
     batch_center_of_mass,
@@ -386,6 +395,52 @@ def test_evaluation_on_exact_models_is_exact():
     streamed = Evaluator(validation_windows(src, 5).batch(4), reference=NF)
     first, second = streamed(identity), streamed(identity)
     assert first == second and first["val/mse"] < TOL["flow"]
+    assert "val/mse_early" not in first  # no t_split: no split
+
+
+def test_evaluator_splits_the_prediction_error_by_window_start():
+    """``t_split`` buckets windows by their start time: counts add up, early / late
+    means recombine to the overall mean, an empty bucket is NaN, and (through
+    ``prediction_sums``) a model wrong only on late windows is caught only there."""
+    L = 4  # 13 times on [0, 1.5]: starts 0, 4, 8 → t = 0, 0.5, 1.0
+    src = generate(
+        NF,
+        OnCycleGaussian.from_normal_form(NF, 100, 0.4),
+        jnp.linspace(0, 1.5, 13),
+        5,
+        seed=0,
+    )
+    ys = np.asarray(src.ys)
+    windows_ds = validation_windows(src, L).batch(5)
+    identity = ConjugateLatentDynamics(
+        NF, BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=jax.random.key(0))
+    )
+
+    # the exact model through the Evaluator: counts, recombination, empty bucket
+    split = Evaluator(windows_ds, t_split=0.75)(identity)
+    assert split["val/n_early"] == 10 and split["val/n_late"] == 5  # starts 0, 4 | 8
+    assert split["val/mse_early"] < TOL["flow"] and split["val/mse_late"] < TOL["flow"]
+    none_early = Evaluator(windows_ds, t_split=-1.0)(identity)
+    assert np.isnan(none_early["val/mse_early"]) and none_early["val/n_early"] == 0
+    assert "val/mse_early" not in Evaluator(windows_ds)(identity)
+
+    # the sums: a model that predicts zero on early windows and one on late ones
+    def oracle(t, x0):
+        return jnp.zeros((t.shape[0], 2)) + jnp.where(t[0] < 0.75, 0.0, 1.0), None
+
+    total = None
+    for batch in windows_ds:
+        part = prediction_sums(oracle, batch, jnp.asarray(0.75))
+        total = part if total is None else {k: total[k] + part[k] for k in part}
+    assert total is not None and total["n"] == 15 and total["n_early"] == 10
+    mean_sq = lambda sel: float(np.mean(np.sum(sel**2, -1)))  # noqa: E731
+    early = np.stack([ys[:, s : s + L] for s in (0, 4)], 1).reshape(-1, L, 2)
+    late = ys[:, 8 : 8 + L]
+    assert_close(total["mse_early"] / total["n_early"], mean_sq(early), rtol=1e-9)
+    late_mean = (total["mse"] - total["mse_early"]) / (total["n"] - total["n_early"])
+    assert_close(late_mean, mean_sq(late - 1.0), rtol=1e-9)
+    overall = (10 * mean_sq(early) + 5 * mean_sq(late - 1.0)) / 15
+    assert_close(total["mse"] / total["n"], overall, rtol=1e-9)
 
 
 def test_bounding_box_grid_and_circular_std():

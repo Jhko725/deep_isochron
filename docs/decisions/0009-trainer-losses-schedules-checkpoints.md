@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0009
 status: accepted; amended
-updated: 2026-10-05
+updated: 2026-10-06
 verified_by: joon (review round 1, 2026-10-04); round 2 pending
 ---
 
@@ -163,6 +163,12 @@ so nothing is held in memory and the grid's bounding box comes from a first pass
   different windows each time, so `BestN` would select on sampling noise.
 - *Rejected*: a list of batches collected once (round 1) — correct but holds the set in
   memory and bypasses the pipeline; kept only as `collect_batches` for convenience.
+
+- *Amended 2026-10-06*: `Evaluator(t_split=…)` additionally reports `val/mse_early` /
+  `val/mse_late` — the same error over windows starting before / at-or-after `t_split` —
+  because the overall mean is dominated by near-cycle windows and selects for the cycle;
+  `checkpoint.metric` can point at `val/mse_early`. Design document
+  `validation-split.md`.
 
 **Why the circular standard deviation for the phase.** The learned phase is determined
 up to a constant (design document §5.4) and the difference lives on the circle, so an MSE

@@ -4,8 +4,12 @@
 ``Trainer.train(evaluate=…)``; it works on any ``AbstractPhaseAmplitudeModel`` and adds
 what each model kind can report:
 
-- **prediction**: ``val/mse`` (trajectory MSE over the validation windows — the quantity
-  the checkpointer selects on) and ``val/final_mse`` (error at the window's last time);
+- **prediction**: ``val/mse`` (trajectory MSE over the validation windows — the default
+  checkpoint-selection metric) and ``val/final_mse`` (error at the window's last time);
+  with ``t_split``, also ``val/mse_early`` / ``val/mse_late`` — the same error over the
+  windows that start before / at-or-after ``t_split``, so the transient's fit is not
+  drowned by the many near-periodic windows (``docs/design/validation-split.md``); the
+  checkpointer can select on ``val/mse_early``;
 - **learned physics**, both kinds: ``period`` and ``kappa`` (the normal form's closed
   forms for the conjugacy model; ``2π/|ω|`` and ``κ`` of
   ``PhaseAmplitudeLatentDynamics`` for the autoencoder); the conjugacy model also
@@ -71,6 +75,28 @@ def prediction_errors(model, batch: Batch) -> tuple[Float[Array, ""], Float[Arra
     t, x = jnp.asarray(batch["t"]), jnp.asarray(batch["u"])
     x_pred, _ = eqx.filter_vmap(model)(t, x[:, 0])
     return trajectory_mse(x_pred, x), final_mse(x_pred, x)
+
+
+@eqx.filter_jit
+def prediction_sums(
+    model, batch: Batch, t_split: Float[Array, ""]
+) -> dict[str, Float[Array, ""]]:
+    """Sufficient statistics of one batch for the prediction metrics: sums over windows
+    of the per-window trajectory MSE and final error, the window count, and the same
+    sums restricted to windows that **start before** ``t_split`` (the transient bucket;
+    design document ``validation-split.md``). Summed over batches by ``Evaluator``."""
+    t, x = jnp.asarray(batch["t"]), jnp.asarray(batch["u"])
+    x_pred, _ = eqx.filter_vmap(model)(t, x[:, 0])
+    per_window = eqx.filter_vmap(trajectory_mse)(x_pred, x)
+    per_window_final = eqx.filter_vmap(final_mse)(x_pred, x)
+    early = t[:, 0] < t_split
+    return {
+        "n": jnp.asarray(x.shape[0], dtype=per_window.dtype),
+        "mse": jnp.sum(per_window),
+        "final": jnp.sum(per_window_final),
+        "n_early": jnp.sum(early).astype(per_window.dtype),
+        "mse_early": jnp.sum(jnp.where(early, per_window, 0.0)),
+    }
 
 
 @eqx.filter_jit
@@ -181,6 +207,10 @@ class Evaluator:
     val_data: Iterable[dict[str, Array | np.ndarray]]
     reference: AbstractNormalForm | None = None
     grid_points: int = 32
+    t_split: float | None = None
+    """Split the prediction error by window start: windows starting before ``t_split``
+    (the transient) give ``val/mse_early``, the rest ``val/mse_late``; ``val/mse`` stays
+    the overall mean. ``None``: no split. See ``docs/design/validation-split.md``."""
     _grid: Array | None = field(default=None, init=False, repr=False)
 
     def _batches(self) -> Iterable[dict[str, Array | np.ndarray]]:
@@ -207,28 +237,38 @@ class Evaluator:
         return jnp.stack((jnp.asarray(lo), jnp.asarray(hi)))
 
     def __call__(self, model: AbstractPhaseAmplitudeModel) -> dict[str, float]:
-        mse_sum = final_sum = count = 0.0
+        t_split = jnp.asarray(-jnp.inf if self.t_split is None else self.t_split)
+        pred: dict[str, Array] | None = None
         sums: dict[str, Array] | None = None
         for batch in self._batches():
-            n = np.shape(batch["u"])[0]
-            mse, final = prediction_errors(model, batch)
-            mse_sum, final_sum, count = (
-                mse_sum + n * mse,
-                final_sum + n * final,
-                count + n,
-            )
+            part_p = prediction_sums(model, batch, t_split)
+            pred = part_p if pred is None else {k: pred[k] + part_p[k] for k in part_p}
             if self.reference is not None:
                 u = jnp.asarray(batch["u"])
                 part = phase_amplitude_sums(
                     model, self.reference, u.reshape(-1, u.shape[-1])
                 )
                 sums = part if sums is None else {k: sums[k] + part[k] for k in part}
-        if count == 0:
+        if pred is None:
             raise ValueError("val_data is empty.")
+        n = pred["n"]
         out: dict[str, Array] = {
-            "val/mse": jnp.asarray(mse_sum / count),
-            "val/final_mse": jnp.asarray(final_sum / count),
+            "val/mse": pred["mse"] / n,
+            "val/final_mse": pred["final"] / n,
         }
+        if self.t_split is not None:
+            n_early, n_late = pred["n_early"], n - pred["n_early"]
+            # an empty bucket is reported as NaN rather than hidden or faked
+            out["val/mse_early"] = jnp.where(
+                n_early > 0, pred["mse_early"] / jnp.maximum(n_early, 1), jnp.nan
+            )
+            out["val/mse_late"] = jnp.where(
+                n_late > 0,
+                (pred["mse"] - pred["mse_early"]) / jnp.maximum(n_late, 1),
+                jnp.nan,
+            )
+            out["val/n_early"] = n_early
+            out["val/n_late"] = n_late
         out.update(learned_physics(model))
         if isinstance(model, ConjugateLatentDynamics):
             out.update(bijection_grid_metrics(model.bijection, self.grid))

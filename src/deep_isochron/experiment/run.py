@@ -21,9 +21,14 @@ from omegaconf import DictConfig, OmegaConf
 
 from ..data import resolve_device
 from ..model import AbstractPhaseAmplitudeModel
-from ..provenance import git_state
 from ..training import Evaluator, OrbaxCheckpointer, TrainerState
-from .data import build_loaders, build_source, reference_normal_form
+from ..utils.provenance import git_state
+from .data import (
+    build_loaders,
+    build_source,
+    reference_normal_form,
+    validation_t_split,
+)
 from .logging import build_logger
 from .model import build_model
 from .training import build_trainer, resolved
@@ -110,7 +115,11 @@ def train(
     logger, wandb_run = build_logger(
         cfg, run_dir, config, loaders.batches_per_epoch, group=group
     )
-    evaluator = Evaluator(loaders.val, reference=reference_normal_form(cfg.data))
+    evaluator = Evaluator(
+        loaders.val,
+        reference=reference_normal_form(cfg.data),
+        t_split=validation_t_split(cfg, source),
+    )
     try:
         state = trainer.train(
             state,
