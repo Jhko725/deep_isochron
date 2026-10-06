@@ -4,8 +4,8 @@ latent_dynamics:
   _target_: deep_isochron.systems.BautinNormalForm
   a: 1.0
   b: 0.5
-  w: 0.6283185307179586
-  w0: 1.2566370614359172
+  w: -0.6283185307179586
+  w0: -1.2566370614359172
 inn:
   blocks: 8      # each block = linear + coupling, couplings alternate `flip`
   linear:

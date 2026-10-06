@@ -192,10 +192,12 @@ The full suite is green for the first time since Phase B: 471 passed, 1 xfail.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/deep_isochron/training/loggers.py`: `MultiLogger`, `EpochLogger` (from `experiment/logging.py`); `training/__init__.py` exports | | |
-| `src/deep_isochron/provenance.py` (new): `git_state`, `package_version`; `data/generate.py` and `experiment/run.py` use it (`metadata.json["git"]`) | | |
-| `src/deep_isochron/experiment/compose.py` (new): `compose(*overrides)`, `CONFIG_DIR`; `tests/test_experiment.py` uses it | | |
-| `src/deep_isochron/training/checkpoint.py`: `force` semantics documented (per call; the trainer's final step) | | |
-| `scripts/README.md` (new) | | |
-| `tests/test_experiment.py`: metadata holds the whole config (model, loss) | | |
-| ADR-0011 §2 scope rule; `docs/architecture.md` (tree); this document | | |
+| `src/deep_isochron/training/loggers.py`: `MultiLogger`, `EpochLogger` (from `experiment/logging.py`); `training/__init__.py` exports | Confirmed. Looks good. Not related to this change, but it seems that `WandbLogger` receives a wandb run. Would it be worth adding additional initialization strategy that either runs `wandb.init` or reuse `run` depending on what is given? This would allow the trainer to manage wandb log outputs and the checkpoints in the same directory (or do we not want this?) | None |
+| `src/deep_isochron/provenance.py` (new): `git_state`, `package_version`; `data/generate.py` and `experiment/run.py` use it (`metadata.json["git"]`) | Confirmed. Unrelated to this change, but maybe the top level `misc.py` belongs more in `models`? Or it is better to create a `utils` or `misc` submodule and place `provenance.py` and `misc.py` (maybe change name to something more descriptive... `math.py`? ) there? | Deferred to discussions with Claude. |
+| `src/deep_isochron/experiment/compose.py` (new): `compose(*overrides)`, `CONFIG_DIR`; `tests/test_experiment.py` uses it | Confirmed. | None |
+| `src/deep_isochron/training/checkpoint.py`: `force` semantics documented (per call; the trainer's final step) | Looks good. | None |
+| `scripts/README.md` (new) | Like the readme. Good. | None |
+| `tests/test_experiment.py`: metadata holds the whole config (model, loss) | Looks good. | None |
+| ADR-0011 §2 scope rule; `docs/architecture.md` (tree); this document | Looks good. | None |
+| `prototype.ipynb` | Revised to test out the developed machinery, confirmed that training runs in the notebook with `PrintLogger`| None |
+| Additional comments | <ul><li>Currently, the dataloader owns the total number of training steps. Is it possible to train and save a model using n steps, then load the model from checkpoint, then train the model further with a new dataloader for m steps? (Should be possible). This is not the same as running the model for (n+m) steps, though correct? <li> Is it better to log Wandb and orbax checkpoint in the same directory, or should log dir and ckpt dir be separate? <li> Currently, `DelayedLogger` allows the accelerator to run ahead. However, the `Evaluator` doesn't have a functionality like that, so in practice, the training loop cannot run ahead, correct? Can this be remedied? <li>The validation trajectories should be sampled similar on and off the limit cycle; otherwise the saving will be biased towards getting the limit cycle correct only. Potential remedies. <li>The rotation direction of the trajectories (clock/counter-clockwise) is needed to properly initialize `w` and `w0` of the normal forms. Need algorithm to determine the winding direction from data. This algorithm would belong in the `analysis` submodule. <ul> | Deferred to further discussions with Claude |
