@@ -77,26 +77,32 @@ fixed by keeping bijection-law points off the regularization radius instead of `
 | D7 | `scripts/bench_dataloader.py --config <overrides>` benchmarks a training config's own pipeline, model and loss | *done 2026-10-05* |
 | D8 | ADR-0011; `docs/architecture.md` (`experiment/`, scripts, config→run data flow); change document; design doc §7 | *done 2026-10-05* |
 
-## Phase E — science
+## Phase E — `analysis`, then science (current; planned 2026-10-06)
 
-First `analysis` items, from the Phase D review (2026-10-06): the winding direction of the
-data's rotation (sign of the mean signed angular velocity about the cycle's centroid over
-the late trajectory segments) to initialize the signs of `w`, `w0` in `build_model`; a
-far-from-cycle validation dataset (`UniformAnnulus` initial conditions, its own `data`
-config) complementing the `val/mse_early` split (design document `validation-split.md`).
+Decisions taken with Joon on 2026-10-06: `deep_isochron.analysis` has two halves —
+**`analysis.data`** (from sampled, possibly noisy trajectories; the priority, and what real
+data will need) and **`analysis.ode`** (from a known vector field; the ground truth the
+learned models are compared against) — sharing one **`Cycle`** object (a closed curve as a
+Fourier series, its period and centroid, with `distance`, `contains`, `winding`). The
+data-driven cycle estimate is self-contained (it works on trajectory *tails*, needing no
+settling time), the settling time is a function of *a* `Cycle` from either half, and a
+refinement alternates the two; neither needs the other to run. **Each analysis function
+lands in its own commit, preceded by a literature survey** recorded in the design document
+(what exists, what we credit, what we do differently and why).
 
-`deep_isochron.analysis` (namespace reserved; algorithms chosen as the research dictates):
-numerical limit cycle, monodromy/Floquet exponents, asymptotic phase by long integration,
-isochrons by the BVP continuation of Langfield, Krauskopf & Osinga (2014) — the ground
-truth for the learned FitzHugh–Nagumo isochrons; `t_settle` per trajectory in the dataset
-once the normal-form `amplitude` or these tools provide it; `floquet_multipliers(ode,
-cycle)` by the variational equation over one period — the computation
-`test_hopf_floquet_multiplier_is_the_polar_monodromy` does by hand for Hopf (review round
-3), and the FHN cycle points for `OnCycleGaussian`. Evaluation works through
-`AbstractPhaseAmplitudeModel` (phase up to a constant, amplitude up to a fitted scale). Pushforward loss with oversampling near the repelling slow manifold; curvature-matching
-(Hessian) loss; INN depth 8–12; Jacobian-anisotropy diagnostics (`diagnostics/`); endpoint
-handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a C¹
-`CircularMonotonicRQCoupling`). As `LossConfig`/`INNConfig` entries once Phase D is in.
+| # | Item | Depends on | Oracle / done when |
+|---|---|---|---|
+| E1 | `analysis.Cycle` + `analysis.data.estimate_cycle(trajectories, tail_periods)`: Poincaré-section return times on the tails → period; phase-aligned least-squares Fourier closed curve; self-consistency check of the fit residual against the noise floor; one or many trajectories | — | Bautin radius and period to tolerance; with measurement noise the error shrinks as `1/sqrt(N)` |
+| E2 | `analysis.data.settling_time(trajectory, cycle, …)`: distance to the cycle `d(t)`, threshold with persistence or a robust fit of `log d(t)` (shared with E4); `estimate_cycle_and_transient` refinement; `t_settle` in dataset metadata; default for `validation.t_split` | a `Cycle` (E1 or E5) | `t_settle = ln(d_0 / eps) / abs(kappa)` for the normal forms |
+| E3 | `Cycle.winding` (signed area) and `Cycle.contains(points)` (winding number of the curve about each point, vectorized) | `Cycle` | sign of `w`; `r < r_*` on a grid |
+| E4 | `analysis.data.floquet_multiplier(trajectories, cycle)`: slope of the planar return map at its fixed point from successive section-crossing deviations, cross-checked by the slope of `log d(t)` (`kappa = ln(lambda) / T`) | E1, E2 | `exp(kappa T)` for the normal forms; graceful degradation with noise |
+| E5 | `analysis.ode`: periodic orbit by Newton on the Poincaré map (polish) and period; multiplier by `exp(∫ div f dt)` (planar, Liouville) and by the monodromy matrix; asymptotic phase by long integration; isochrons / isostables by Fourier–Laplace averages (Mauroy & Mezić 2012; Mauroy, Mezić & Moehlis 2013); Langfield, Krauskopf & Osinga (2014) as the published FHN comparison | `Cycle` | the normal forms' exact chart; FHN against Langfield et al. |
+| E6 | Wiring: `build_model` sets the signs of `w`, `w0` from `Cycle.winding`; `generate` records `t_settle` and the cycle estimate; `OnCycleGaussian` for FHN from the cycle; a far-from-cycle validation `data` config (`UniformAnnulus`); `Evaluator` reference for FHN from E5 | E1–E5 | `train.py data=fhn` reports every metric the Bautin runs have |
+| E7 | Experiments: Bautin → identity sanity; FHN conjugacy with `mixed` / `weighted` sampling and `val/mse_early` selection; the Yawata autoencoder baseline on both; learned FHN isochrons against E5 / Langfield. Losses and diagnostics from the earlier list (pushforward near the slow manifold, Hessian matching, Jacobian anisotropy, INN depth 8–12, periodic spline endpoints) only as the runs demand, each as a config group | E6 | figures and tables; the research questions answered or sharpened |
+| E8 | Docs: design document `analysis.md` (per algorithm: literature survey, method, oracle, noise model; the E1/E2 bootstrap), ADR-0012 (`analysis` data/ode split, `Cycle` as the shared object), architecture, change document, CI | — | — |
+
+Order: E1 → E3 → E2 → E4 on branch `analysis` (the data-driven half; every test runs with
+and without measurement noise from the start), then E5 and E6, then E7.
 
 ## Parked (with reason)
 
