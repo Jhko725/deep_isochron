@@ -234,8 +234,8 @@ The full suite is green for the first time since Phase B: 471 passed, 1 xfail.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/deep_isochron/utils/numerics.py` (from `misc.py`), `utils/provenance.py` (from `provenance.py`), `utils/__init__.py`; imports in `constraints.py`, `normal_forms/base.py`, `data/generate.py`, `experiment/run.py`, `tests/test_constraints.py` | | |
-| `src/deep_isochron/training/evaluation.py`: `prediction_sums`; `Evaluator(t_split)` → `val/mse_early`, `val/mse_late`, `val/n_early`, `val/n_late` | | |
-| `src/deep_isochron/experiment/data.py`: `validation_t_split`; `experiment/run.py` passes it; `configs/train.yaml`: `validation.t_split` | | |
-| `docs/design/validation-split.md` (new); ADR-0009 §5 amended; `docs/index.md`; `docs/architecture.md`; roadmap Phase E items | | |
-| `tests/test_training.py`: `test_evaluator_splits_the_prediction_error_by_window_start`; `tests/test_experiment.py`: `test_validation_split_follows_the_mixed_sampler` | | |
+| `src/deep_isochron/utils/numerics.py` (from `misc.py`), `utils/provenance.py` (from `provenance.py`), `utils/__init__.py`; imports in `constraints.py`, `normal_forms/base.py`, `data/generate.py`, `experiment/run.py`, `tests/test_constraints.py` | Looks good. | None |
+| `src/deep_isochron/training/evaluation.py`: `prediction_sums`; `Evaluator(t_split)` → `val/mse_early`, `val/mse_late`, `val/n_early`, `val/n_late` | Looks good. | None |
+| `src/deep_isochron/experiment/data.py`: `validation_t_split`; `experiment/run.py` passes it; `configs/train.yaml`: `validation.t_split` | Looks good. | None |
+| `docs/design/validation-split.md` (new); ADR-0009 §5 amended; `docs/index.md`; `docs/architecture.md`; roadmap Phase E items | Looks good for now. | None |
+| `tests/test_training.py`: `test_evaluator_splits_the_prediction_error_by_window_start`; `tests/test_experiment.py`: `test_validation_split_follows_the_mixed_sampler` | Looks good. | None |
