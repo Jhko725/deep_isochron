@@ -34,6 +34,15 @@ TOL = {
     # two numerical integrations of the same ODE at tight tolerance (rtol 1e-10), or an
     # integrated closed-form identity (phase, isostable) against the integrator's error
     "flow": 1e-6,
+    # analysis (Phase E). ``Cycle`` point queries: a dense search plus one Newton step
+    "cycle_query": 1e-6,
+    # ``estimate_cycle`` on noise-free normal-form data: the period from interpolated
+    # crossing times (relative), the curve and center (absolute), the phase against the
+    # true one (peak-to-peak spread of the offset) — limited by the time grid (100 steps
+    # per period) and the truncated density expansion, not by round-off
+    "cycle_period": 1e-6,
+    "cycle_curve": 2e-3,
+    "cycle_phase": 2e-2,
 }
 
 

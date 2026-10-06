@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-05
+updated: 2026-10-06
 sources: [code]
 ---
 
@@ -75,8 +75,14 @@ deep_isochron
 │       └── batched.py       WindowBatchSource (batches by one gather, epochs of every
 │                            window once); window_batches(); mixed_window_batches() — the
 │                            training-run path
-├── analysis/                numerical limit cycle / monodromy / phase for any AbstractODE
-│                            (namespace reserved; Phase E)
+├── analysis/                the limit cycle and its neighborhood, numerically  ── ADR-0012
+│   ├── cycle.py             Cycle: planar closed curve as a Fourier series in a phase
+│   │                        uniform in time, + period; from_points, circle, distance,
+│   │                        nearest_phase (shared by both halves; design: analysis.md)
+│   ├── data/                from sampled, possibly noisy trajectories (host-side NumPy)
+│   │   └── cycle.py         estimate_cycle (E1): tails → polar protophase → Kralemann
+│   │                        PTP phase → period by regression → Fourier curve → converged
+│   └── ode/                 from an AbstractODE: periodic orbit, monodromy, isochrons (E5)
 ├── training/                                                            ── ADR-0009
 │   ├── trainer.py           TrainerState (model · opt_state · step · key · schedule
 │   │                        state); Trainer(optimizer, loss, schedule): jitted
@@ -176,7 +182,7 @@ the cartesian `rhs` (smooth at the origin), `rhs_polar`, `period`, `floquet_expo
 the explicit inverse, as Hopf does). The mathematics and the implementation contract are
 `docs/design/normal-forms.md` (§9). **The rule**: a class carries only what is available analytically; anything
 numerical — locating a limit cycle, monodromy, asymptotic phase of FitzHugh–Nagumo — is a
-function over `AbstractODE` in `analysis/` (Phase E). Everything public is cartesian.
+function over `AbstractODE` in `analysis/ode` (Phase E, E5). Everything public is cartesian.
 
 **Integrations** (`normal_forms/integration.py`) are objects in the diffrax style — pass an
 instance, or one of `"cartesian" | "polar" | "r_squared" | "closed_form"` for the
@@ -297,7 +303,9 @@ are in `test_splines.py`, `test_analytic.py`, `test_constraints.py`, `test_linea
 `test_normal_forms.py` pins the normal forms' closed forms by autodiff and the integrations,
 `test_systems.py` the flow machinery and the observed systems' facts (Langfield et al. 2014),
 `test_data.py` the data layer end to end (source, metadata, disk, device, generation),
-`test_windows.py` both windowing paths and their agreement, `test_baseline.py` the phase autoencoder
+`test_windows.py` both windowing paths and their agreement, `test_analysis.py` the analysis
+functions against the normal forms and Langfield et al.'s FitzHugh–Nagumo facts (with and
+without measurement noise), `test_baseline.py` the phase autoencoder
 against the exact chart (plus one `slow` training test on Hopf data), `test_models.py`
 the `AbstractPhaseAmplitudeModel` contract on both models, `test_training.py` the losses,
 schedules, loggers, trainer loop, evaluation and Orbax round trip, `test_experiment.py` the
@@ -321,3 +329,4 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 | [0010](decisions/0010-rotations-by-cayley-transform.md) | `BiLipschitzLinear` rotations by Cayley transform, not `expm` |
 | [0011](decisions/0011-experiment-layer.md) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit generation, forced final checkpoint |
+| [0012](decisions/0012-analysis-layout.md) | `analysis`: data-driven and ODE halves sharing `Cycle`; E1 self-contained; host-side NumPy; one commit per function |

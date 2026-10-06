@@ -77,7 +77,7 @@ fixed by keeping bijection-law points off the regularization radius instead of `
 | D7 | `scripts/bench_dataloader.py --config <overrides>` benchmarks a training config's own pipeline, model and loss | *done 2026-10-05* |
 | D8 | ADR-0011; `docs/architecture.md` (`experiment/`, scripts, config→run data flow); change document; design doc §7 | *done 2026-10-05* |
 
-## Phase E — `analysis`, then science (current; planned 2026-10-06)
+## Phase E — `analysis`, then science (current; planned 2026-10-06; E1 landed 2026-10-06)
 
 Decisions taken with Joon on 2026-10-06: `deep_isochron.analysis` has two halves —
 **`analysis.data`** (from sampled, possibly noisy trajectories; the priority, and what real
@@ -92,7 +92,7 @@ lands in its own commit, preceded by a literature survey** recorded in the desig
 
 | # | Item | Depends on | Oracle / done when |
 |---|---|---|---|
-| E1 | `analysis.Cycle` + `analysis.data.estimate_cycle(trajectories, tail_periods)`: Poincaré-section return times on the tails → period; phase-aligned least-squares Fourier closed curve; self-consistency check of the fit residual against the noise floor; one or many trajectories | — | Bautin radius and period to tolerance; with measurement noise the error shrinks as `1/sqrt(N)` |
+| E1 | `analysis.Cycle` + `analysis.data.estimate_cycle(trajectories, tail_periods)`: tails → polar protophase → Kralemann et al. protophase-to-phase (density as a time integral over whole revolutions) → period from the slope of the unwrapped phase → least-squares Fourier curve → `converged` (earlier revolutions against the last revolution's own fit); one or many trajectories; `winding` reported | — | *done 2026-10-06*: Bautin/Hopf radius, center, period and phase to 1e-8; FHN period 11.2279 (Langfield et al.) clockwise; noise σ = 0.05: residual at the noise level, curve error 0.018 → 0.008 from 4 to 16 trajectories |
 | E2 | `analysis.data.settling_time(trajectory, cycle, …)`: distance to the cycle `d(t)`, threshold with persistence or a robust fit of `log d(t)` (shared with E4); `estimate_cycle_and_transient` refinement; `t_settle` in dataset metadata; default for `validation.t_split` | a `Cycle` (E1 or E5) | `t_settle = ln(d_0 / eps) / abs(kappa)` for the normal forms |
 | E3 | `Cycle.winding` (signed area) and `Cycle.contains(points)` (winding number of the curve about each point, vectorized) | `Cycle` | sign of `w`; `r < r_*` on a grid |
 | E4 | `analysis.data.floquet_multiplier(trajectories, cycle)`: slope of the planar return map at its fixed point from successive section-crossing deviations, cross-checked by the slope of `log d(t)` (`kappa = ln(lambda) / T`) | E1, E2 | `exp(kappa T)` for the normal forms; graceful degradation with noise |
@@ -158,3 +158,4 @@ and without measurement noise from the start), then E5 and E6, then E7.
 | 2026-10-05 | `trainer` | C8: `BiLipschitzLinear` rotations by Cayley transform instead of `expm` — the V100 step's ≈ 1 700 per-step conditionals (device-to-host round trips) removed; `cayley`, two tests, ADR-0010 | `docs/changes/2026-10-04-trainer.md`, ADR-0010 |
 | 2026-10-05 | `trainer` | C9: `WindowBatchSource` / `window_batches` / `mixed_window_batches` — batched window source for training runs (epochs of every window once, one gather per batch, finite loader); `Trainer.train(num_steps=None)`; `resolve_device`; ADR-0008 Decision 3 | `docs/changes/2026-10-04-trainer.md`, ADR-0008 |
 | 2026-10-05 | `experiment-config` | D1–D4, D6–D8: `configs/train.yaml` and groups; `deep_isochron.experiment` (`instantiate`, builders, `run.train`/`load_run`/`load_model`); `scripts/train.py`; forced final checkpoint; `generation_metadata`; CI workflow; benchmark on configs; `circular_rq` test domain fixed; ADR-0011 | `docs/changes/2026-10-05-experiment-config.md`, ADR-0011 |
+| 2026-10-06 | `analysis` | E1: `analysis.Cycle` (Fourier closed curve in a phase uniform in time) and `analysis.data.estimate_cycle` (tails, polar protophase, Kralemann PTP, regression period, self-consistency check); literature survey in `docs/design/analysis.md` §1; ADR-0012; `tests/test_analysis.py` | `docs/changes/2026-10-06-analysis.md`, ADR-0012 |

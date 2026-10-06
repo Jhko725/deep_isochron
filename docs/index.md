@@ -29,6 +29,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`normal-forms.md`](design/normal-forms.md) | agreed; §5.3–5.4 tentative | Θ/Ψ conventions, Hopf and Bautin closed forms, the (Θ, Ψ) chart, the implementation contract (§9) and the tests it implies (§10); relation to Yawata et al. and Kvalheim & Revzen |
 | [`cubic-bspline.md`](design/cubic-bspline.md) | agreed | the `CubicBSpline` boundary treatment and inverse error bound |
 | [`validation-split.md`](design/validation-split.md) | tentative | why `val/mse` is a near-cycle metric and the early/late split by window start (`t_split`); how to choose the threshold; what it does not do |
+| [`analysis.md`](design/analysis.md) | tentative | the `Cycle` representation; per analysis function (E1 so far): literature survey with cited/deduced claims, method, oracles, limits |
 | [`training-step-performance.md`](design/training-step-performance.md) | tentative | where a JAX training step spends its time: asynchronous dispatch, committed/uncommitted placement, the GIL and grain's threads, what `bench_dataloader.py` measures, the bottleneck taxonomy, and the Phase C case history |
 
 ## Decision records (`decisions/`)
@@ -46,6 +47,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | accepted; amended (review round 2 pending) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 | [0010](decisions/0010-rotations-by-cayley-transform.md) | accepted | `BiLipschitzLinear` rotations by Cayley transform, not `expm` (GPU conditionals) |
 | [0011](decisions/0011-experiment-layer.md) | accepted (review pending) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit data generation, forced final checkpoint |
+| [0012](decisions/0012-analysis-layout.md) | accepted (review pending) | `analysis`: data-driven and ODE halves sharing `Cycle`; `estimate_cycle` self-contained, `settling_time` takes a cycle; host-side NumPy; one commit per function after a literature survey |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 
@@ -57,3 +59,4 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | `data-generation` | [`2026-10-02-data-generation.md`](changes/2026-10-02-data-generation.md) |
 | `trainer` | [`2026-10-04-trainer.md`](changes/2026-10-04-trainer.md) |
 | `experiment-config` | [`2026-10-05-experiment-config.md`](changes/2026-10-05-experiment-config.md) |
+| `analysis` | [`2026-10-06-analysis.md`](changes/2026-10-06-analysis.md) |
