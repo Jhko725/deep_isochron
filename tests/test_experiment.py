@@ -10,6 +10,12 @@ and resumed.
 4. run             ``train`` for a few steps writes config, metadata and checkpoints;
                    ``load_model`` returns the final model; a resumed run continues the
                    step count and the data stream
+5. Run / setup     the notebook path: ``setup`` then a hand-rolled ``trainer.train``,
+                   ``run.checkpointer()`` reopens with ``load_run``; a hand-built model
+                   reopens through ``template``; ``Run.create`` refuses an existing run;
+                   ``setup(resume=True)`` continues in place and records config changes;
+                   ``load_or_generate_source`` generates once; ``build_logger`` takes an
+                   existing wandb run
 """
 
 import json
@@ -20,7 +26,9 @@ import jax
 import numpy as np
 import pytest
 from deep_isochron.experiment import (
+    build_evaluator,
     build_loaders,
+    build_logger,
     build_model,
     build_source,
     build_trainer,
@@ -28,11 +36,19 @@ from deep_isochron.experiment import (
     dataset_file,
     generate_dataset,
     load_model,
+    load_or_generate_source,
     load_run,
+    Run,
+    setup,
     train,
 )
 from deep_isochron.model import ConjugateLatentDynamics, PhaseAmplitudeAutoencoder
-from deep_isochron.training import ConjugacyTrajectoryLoss, PhaseAutoencoderLoss
+from deep_isochron.training import (
+    ConjugacyTrajectoryLoss,
+    ListLogger,
+    OrbaxCheckpointer,
+    PhaseAutoencoderLoss,
+)
 from omegaconf import DictConfig
 
 
@@ -192,3 +208,128 @@ def test_autoencoder_run(data_dir, tmp_path):
     cfg = tiny(data_dir, "model=autoencoder", "loss=autoencoder", "schedule=yawata")
     state = train(cfg, tmp_path / "ae")
     assert int(state.step) == 3
+
+
+# ------------------------------------------------------------- 5. Run / setup -----
+def test_setup_then_manual_training_loop_reopens_with_load_run(data_dir, tmp_path):
+    """The notebook path: ``setup`` builds the objects and the run directory; the loop
+    is the caller's, with ``exp.run.checkpointer()`` and any logger; ``load_run`` then
+    finds the config in the directory."""
+    exp = setup(tiny(data_dir), tmp_path / "nb")
+    assert (exp.run.dir / "config.yaml").exists() and exp.start_step == 0
+    assert exp.run.metadata["batches_per_epoch"] > 0
+    logger = ListLogger()
+    state = exp.trainer.train(
+        exp.state,
+        exp.loaders.train,
+        num_steps=3,
+        logger=logger,
+        checkpointer=exp.run.checkpointer(save_every=1, metric="val/mse"),
+        evaluate=exp.evaluator,
+        eval_every=2,
+    )
+    assert int(state.step) == 3 and logger.records
+    cfg, loaded = load_run(exp.run.dir)
+    assert cfg.num_steps == 3 and eqx.tree_equal(loaded.model, state.model)
+    assert Run.open(exp.run.dir).latest_step() == 3
+
+
+def test_hand_built_model_reopens_through_a_template(data_dir, tmp_path):
+    """A model built without any config, checkpointed by a bare ``OrbaxCheckpointer``:
+    ``load_run(template=...)`` restores it, and reports no config."""
+    cfg = tiny(data_dir)
+    exp = setup(cfg, tmp_path / "run")  # only for the loaders and evaluator
+    trainer = build_trainer(cfg)
+    state0 = trainer.init(
+        build_model(cfg.model, jax.random.key(7)), key=jax.random.key(8)
+    )
+    ckpt_dir = tmp_path / "bare-ckpt"
+    with OrbaxCheckpointer(ckpt_dir, save_every=1, metric="val/mse") as ckpt:
+        state = trainer.train(
+            state0,
+            exp.loaders.train,
+            num_steps=2,
+            checkpointer=ckpt,
+            evaluate=exp.evaluator,
+            eval_every=2,
+        )
+    cfg_found, loaded = load_run(ckpt_dir, template=state0)
+    assert cfg_found is None and eqx.tree_equal(loaded.model, state.model)
+    assert eqx.tree_equal(load_model(ckpt_dir, template=state0), state.model)
+    with pytest.raises(FileNotFoundError, match="template"):
+        load_run(ckpt_dir)
+
+
+def test_run_create_refuses_an_existing_run_and_resume_is_explicit(data_dir, tmp_path):
+    cfg = tiny(data_dir)
+    run_dir = tmp_path / "run"
+    (run_dir / ".hydra").mkdir(parents=True)  # Hydra makes the directory first: fine
+    train(cfg, run_dir)
+    with pytest.raises(FileExistsError, match="resume"):
+        setup(cfg, run_dir)
+    with pytest.raises(FileExistsError, match="resume"):
+        train(cfg, run_dir)
+    # continuing in place: more steps, a changed learning rate, both on record
+    cfg_more = tiny(data_dir, "num_steps=5", "optimizer.learning_rate=2e-3")
+    state = train(cfg_more, run_dir, resume=True)
+    assert int(state.step) == 5
+    run = Run.open(run_dir)
+    assert run.cfg.num_steps == 5
+    changes = run.metadata["resumed"]["config_changes"]
+    assert changes["num_steps"] == [3, 5]
+    assert changes["optimizer.learning_rate"][1] == 2e-3
+    assert run.metadata["resumed"]["from_step"] == 3
+    assert len(run.metadata["resumed"]["history"]) == 1
+    # resume=True and cfg.resume together is a contradiction
+    with pytest.raises(ValueError, match="not both"):
+        setup(tiny(data_dir, f"resume={run_dir}"), run_dir, resume=True)
+    # and a resume needs a checkpoint to continue from
+    with pytest.raises(FileNotFoundError):
+        setup(cfg, tmp_path / "nowhere", resume=True)
+
+
+def test_warm_start_from_another_run_is_recorded(data_dir, tmp_path):
+    cfg = tiny(data_dir)
+    train(cfg, tmp_path / "first")
+    state = train(
+        tiny(data_dir, f"resume={tmp_path / 'first'}", "num_steps=5"),
+        tmp_path / "second",
+    )
+    assert int(state.step) == 5
+    meta = Run.open(tmp_path / "second").metadata
+    assert meta["resumed_from"]["step"] == 3 and meta["resumed_from"]["run"].endswith(
+        "first"
+    )
+
+
+def test_load_or_generate_source_generates_once(tmp_path):
+    cfg = compose(*TINY_DATA, f"data.out_dir={tmp_path}")
+    assert not dataset_file(cfg.data).exists()
+    source = load_or_generate_source(cfg.data)
+    assert dataset_file(cfg.data).exists() and source.num_trajectories == 12
+    mtime = dataset_file(cfg.data).stat().st_mtime_ns
+    load_or_generate_source(cfg.data)
+    assert dataset_file(cfg.data).stat().st_mtime_ns == mtime  # loaded, not regenerated
+
+
+def test_build_logger_takes_an_existing_wandb_run(data_dir, tmp_path):
+    class FakeRun:
+        def __init__(self):
+            self.logged = []
+
+        def log(self, metrics, step):
+            self.logged.append((step, metrics))
+
+    cfg = tiny(data_dir)  # wandb=off: without a run no wandb logger would be made
+    fake = FakeRun()
+    logger, run = build_logger(cfg, tmp_path, {}, 4, wandb_run=fake)
+    assert run is fake
+    with logger:
+        logger.log({"loss": 1.0}, 0)
+        logger.log({"loss": 0.7}, 1)  # thinned by wandb.every = 50
+        logger.log({"loss": 0.5}, 50)
+    assert [s for s, _ in fake.logged] == [0, 50] and "epoch" in fake.logged[0][1]
+    # and the evaluator builder matches what setup uses
+    source = build_source(cfg.data)
+    loaders = build_loaders(cfg, source, jax.devices()[0])
+    assert build_evaluator(cfg, source, loaders).t_split is None

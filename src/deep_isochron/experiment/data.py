@@ -28,6 +28,7 @@ from ..data import (
 )
 from ..data.windows import mixed_ranges, WindowBatchSource
 from ..systems.normal_forms import AbstractNormalForm
+from ..training import Evaluator
 from .instantiate import instantiate
 
 
@@ -93,6 +94,15 @@ def build_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
             "(with the same overrides) first."
         )
     return TimeSeriesDataSource.load(path)
+
+
+def load_or_generate_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
+    """For notebooks: ``build_source`` if the dataset file exists, else
+    ``generate_dataset`` first. Training runs (``setup``/``train``) still never generate
+    (ADR-0011): this is the explicit opt-in."""
+    if not dataset_file(data_cfg).exists():
+        generate_dataset(data_cfg)
+    return build_source(data_cfg)
 
 
 def reference_normal_form(data_cfg: DictConfig) -> AbstractNormalForm | None:
@@ -205,4 +215,17 @@ def build_loaders(
         num_windows=wsrc.num_windows,
         train_source=train_source,
         val_source=val_source,
+    )
+
+
+def build_evaluator(
+    cfg: DictConfig, source: TimeSeriesDataSource, loaders: Loaders
+) -> Evaluator:
+    """The run's ``Evaluator``: the validation dataset, the generating normal form as
+    reference when there is one, and ``validation.t_split`` resolved against the
+    sampler."""
+    return Evaluator(
+        loaders.val,
+        reference=reference_normal_form(cfg.data),
+        t_split=validation_t_split(cfg, source),
     )

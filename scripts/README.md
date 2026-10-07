@@ -10,13 +10,29 @@ Hydra scripts take `key=value` overrides and `--config-name`; see `configs/`.
 | `bench_dataloader.py` | Times the data pipeline against the training step on the device you name (`--device`, else `resolve_device`): fetch rows, the dispatch floor, dispatch vs total for several loaders, `--hlo-stats` (loop/launch/conditional census of the compiled step), `--profile DIR`. `--config <overrides>` benchmarks a training config's own pipeline, model and loss. How to read the table: `docs/design/training-step-performance.md` §4–5. | `uv run python scripts/bench_dataloader.py --device 0 --hlo-stats --no-mp` <br> `uv run python scripts/bench_dataloader.py --config data=fhn windows.batch=4096` |
 | `check_md_math.py` | Emulates GitHub's Markdown-before-MathJax rendering over `docs/**/*.md` and reports constructs that break there (`CLAUDE.md` rules). Must report 0 problems before a Markdown commit. | `uv run python scripts/check_md_math.py` |
 
-Reopening a run from Python (notebooks, analysis):
+Runs from Python (notebooks, analysis). `setup` builds what the script builds and owns
+the run directory; the loop is yours or the default:
 
 ```python
-from deep_isochron.experiment import compose, load_model, load_run, train
+from deep_isochron.experiment import compose, load_model, load_or_generate_source, load_run, setup, train
 
-cfg = compose("model=autoencoder", "loss=autoencoder", "num_steps=200")  # as train.py sees it
-state = train(cfg, "runs/notebook/try-1")                                 # a short run in place
-cfg, state = load_run("runs/2026-10-05/12-00-00")                         # any run directory
-model = load_model("runs/2026-10-05/12-00-00", step=5000)                 # a particular step
+cfg = compose("data=fhn", "data.n_trajectories=500", "model=conjugacy", "num_steps=2500")
+load_or_generate_source(cfg.data)            # notebooks may generate; setup/train never do
+exp = setup(cfg, "runs/notebook/try-1")      # refuses a directory that already holds a run
+state = exp.trainer.train(                   # your loop, your logger …
+    exp.state, exp.loaders.train,
+    logger=DelayedLogger(WandbLogger(wandb.init(entity="jhko725", project="isochron"), every=25)),
+    checkpointer=exp.run.checkpointer(save_every=200),   # … but the run's checkpointer
+    evaluate=exp.evaluator, eval_every=200,
+)
+state = exp.train()                          # or the default loop (Print + wandb per config)
+state = train(cfg, "runs/notebook/try-2")    # = setup(...).train()
+
+cfg, state = load_run("runs/notebook/try-1")             # any run directory, latest step
+model = load_model("runs/2026-10-05/12-00-00", step=5000)
+cfg, state = load_run("results/bare-ckpt", template=my_state)  # a model built without a config
+
+cfg_more = compose(..., "num_steps=5000")
+state = train(cfg_more, "runs/notebook/try-1", resume=True)   # continue in place: explicit; the
+                                                              # config change is recorded
 ```

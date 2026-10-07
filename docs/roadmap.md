@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-06
+updated: 2026-10-07
 sources: [joon, claude]
 ---
 
@@ -72,7 +72,7 @@ fixed by keeping bijection-law points off the regularization radius instead of `
 | D2 | Builders: `experiment.instantiate` (lists → tuples), `build_source` (file by generation hash, no generation), `build_window_source`/`build_loaders` (resume slice), `build_model` (`_target_` layers + keys + `flip`), `build_loss`/`build_schedule`/`build_optimizer`/`build_trainer`, `build_logger` | *done 2026-10-05* |
 | D3 | `scripts/train.py`: Hydra run dir, `resolve_device`, x64, config/metadata/checkpoints in the run dir, final step always checkpointed, `resume=` continues the same stream, multirun group for wandb | *done 2026-10-05* |
 | D4 | `load_run(run_dir, step)` / `load_model` from the checkpoint's `custom_metadata` (config) | *done 2026-10-05* |
-| D5 | Notebook on `hydra.compose` + the builders (Joon, as Phase E runs start) | pending |
+| D5 | Notebook on `hydra.compose` + the builders (Joon, as Phase E runs start). 2026-10-07: the notebook's hand-rolled loop could not be reopened → `Run`/`setup`/explicit resume (branch `run-layout`, ADR-0011 §6 amended); the notebook moves onto `setup` | in progress |
 | D6 | CI: `.github/workflows/ci.yml` — ruff, ty, `check_md_math`, `pytest --hypothesis-profile=ci -n 4 -m "not slow"`; `slow` job + 20-step end-to-end `train.py` run; the `circular_rq (K=8)` failure fixed (test domain off the `eps_r` disc) | *done 2026-10-05* (first green run on GitHub pending) |
 | D7 | `scripts/bench_dataloader.py --config <overrides>` benchmarks a training config's own pipeline, model and loss | *done 2026-10-05* |
 | D8 | ADR-0011; `docs/architecture.md` (`experiment/`, scripts, config→run data flow); change document; design doc §7 | *done 2026-10-05* |
@@ -152,3 +152,4 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-10-05 | `trainer` | C8: `BiLipschitzLinear` rotations by Cayley transform instead of `expm` — the V100 step's ≈ 1 700 per-step conditionals (device-to-host round trips) removed; `cayley`, two tests, ADR-0010 | `docs/changes/2026-10-04-trainer.md`, ADR-0010 |
 | 2026-10-05 | `trainer` | C9: `WindowBatchSource` / `window_batches` / `mixed_window_batches` — batched window source for training runs (epochs of every window once, one gather per batch, finite loader); `Trainer.train(num_steps=None)`; `resolve_device`; ADR-0008 Decision 3 | `docs/changes/2026-10-04-trainer.md`, ADR-0008 |
 | 2026-10-05 | `experiment-config` | D1–D4, D6–D8: `configs/train.yaml` and groups; `deep_isochron.experiment` (`instantiate`, builders, `run.train`/`load_run`/`load_model`); `scripts/train.py`; forced final checkpoint; `generation_metadata`; CI workflow; benchmark on configs; `circular_rq` test domain fixed; ADR-0011 | `docs/changes/2026-10-05-experiment-config.md`, ADR-0011 |
+| 2026-10-07 | `run-layout` | `experiment.Run` (the run directory; `create` refuses an existing run, `resume` explicit with recorded config changes), `setup(cfg, run_dir) -> Experiment`, `train = setup().train()`, `load_run(template=)` for configless models, `build_evaluator`, `build_logger(wandb_run=)`, `load_or_generate_source`; ADR-0011 §6 amended | `docs/changes/2026-10-07-run-layout.md`, ADR-0011 |

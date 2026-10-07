@@ -1,4 +1,4 @@
 mode: offline      # same as online but written under the run directory; `wandb sync` later
-project: deep_isochron
+project: isochron
 entity: null
 every: 50

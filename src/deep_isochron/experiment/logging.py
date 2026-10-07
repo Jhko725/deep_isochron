@@ -20,18 +20,19 @@ def build_logger(
     batches_per_epoch: int,
     *,
     group: str | None = None,
+    wandb_run: Any = None,
 ) -> tuple[Logger, Any]:
     """``(logger, wandb_run_or_None)``. The returned logger is one-step delayed
-    (``DelayedLogger``) so the host never waits on the current step."""
+    (``DelayedLogger``) so the host never waits on the current step. An existing
+    ``wandb_run`` (``wandb.init(...)`` done by the caller, e.g. in a notebook) is logged
+    to as it is, whatever ``wandb.mode`` says, and is the caller's to finish."""
     loggers: list[Logger] = [
         PrintLogger(every=cfg.log_every, keys=("loss", "val/mse", "period", "epoch"))
     ]
-    run = None
+    run = wandb_run
     mode = cfg.wandb.mode
-    if mode != "disabled":
+    if run is None and mode != "disabled":
         import wandb  # optional at runtime; only imported when asked for
-
-        from ..training import WandbLogger
 
         run = wandb.init(
             mode=mode,
@@ -41,6 +42,9 @@ def build_logger(
             config=config,
             group=group,
         )
+    if run is not None:
+        from ..training import WandbLogger
+
         loggers.append(WandbLogger(run, every=cfg.wandb.every))
     logger = EpochLogger(MultiLogger(*loggers), batches_per_epoch)
     return DelayedLogger(logger), run

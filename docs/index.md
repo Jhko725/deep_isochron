@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 # `deep_isochron` documentation — index
@@ -45,7 +45,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [0008](decisions/0008-dataset-format-and-sampling.md) | accepted; amended (Decision 3 review pending) | netCDF4 datasets via xarray; weighted windows alongside `mix`; batched `WindowBatchSource` for training runs |
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | accepted; amended (review round 2 pending) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 | [0010](decisions/0010-rotations-by-cayley-transform.md) | accepted | `BiLipschitzLinear` rotations by Cayley transform, not `expm` (GPU conditionals) |
-| [0011](decisions/0011-experiment-layer.md) | accepted (review pending) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit data generation, forced final checkpoint |
+| [0011](decisions/0011-experiment-layer.md) | accepted; amended 2026-10-07 (§6 `Run`/`setup`, explicit resume) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit data generation, forced final checkpoint |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 
@@ -57,3 +57,4 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | `data-generation` | [`2026-10-02-data-generation.md`](changes/2026-10-02-data-generation.md) |
 | `trainer` | [`2026-10-04-trainer.md`](changes/2026-10-04-trainer.md) |
 | `experiment-config` | [`2026-10-05-experiment-config.md`](changes/2026-10-05-experiment-config.md) |
+| `run-layout` | [`2026-10-07-run-layout.md`](changes/2026-10-07-run-layout.md) |
