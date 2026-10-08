@@ -23,14 +23,14 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
-from .base import AbstractNormalForm
+from .base import AbstractEvenNormalForm
 
 
 A_CONSTRAINT = GreaterThan(0.0)
 """``a > 0``; ``raw = 0`` ↦ ``a = 1`` (the default ``at_zero = lower + 1``)."""
 
 
-class HopfNormalForm(AbstractNormalForm):
+class HopfNormalForm(AbstractEvenNormalForm):
     r"""$\dot r = a r (1 - r^2)$,
     $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$."""
 

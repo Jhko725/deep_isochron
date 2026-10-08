@@ -1,21 +1,21 @@
 ---
 type: design
-status: agreed; §5.3–5.4 tentative
-updated: 2026-10-04
-verified_by: joon (2026-10-03; §5.3–5.4 pending)
-sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014]
+status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative
+updated: 2026-10-08
+verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
+sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014, Langfield et al. 2025]
 ---
 
 # Normal forms — conventions, derivations, and the API they imply
 
-**Status: agreed (roadmap B10), 2026-10-03; implemented in B11 (2026-10-03).** Amended 2026-10-03: §5.1 corollary sign (confirmed); §5.3 Yawata paragraph rewritten from the paper's equations and §5.4 (Kvalheim & Revzen) added — both *tentative*, to be revisited by Joon as the claims are checked. This document merges the
+**Status: agreed (roadmap B10), 2026-10-03; implemented in B11 (2026-10-03).** Amended 2026-10-03: §5.1 corollary sign (confirmed); §5.3 Yawata paragraph rewritten from the paper's equations and §5.4 (Kvalheim & Revzen) added — both *tentative*, to be revisited by Joon as the claims are checked. **Amended 2026-10-08 (ADR-0013, branch `normal-forms-basin`)**: evenness in $r$ is demoted from a requirement on every normal form to the defining property of the *even family* (`AbstractEvenNormalForm`: Hopf, Bautin); the basin is an annulus $(r_{\rm in}, r_{\rm out})$ with a possibly non-trivial phaseless set inside; §3.3 adds Winfree's model with a hole (Langfield et al. 2025), whose $\rho$ and $\omega$ are not even. This document merges the
 B10 design note with Joon's earlier derivation notes (LaTeX, "Tractable periodic
 dynamics") and resolves the conflicts between them. It is the single reference for the
 mathematics of the analytic base systems; `systems/normal_forms/` is implemented against
 it (B11), and ADR-0007 points here. All design decisions are settled
 and listed in §11; §9 is the implementation contract.
 
-Companion files: `systems/normal_forms/{base,hopf,bautin,integration}.py`;
+Companion files: `systems/normal_forms/{base,hopf,bautin,winfree,integration}.py`;
 `tests/test_normal_forms.py`. Related: ADR-0007 (hierarchy, `SolverConfig`, integrations
 as objects).
 
@@ -34,9 +34,10 @@ $\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motion
 | symbol | meaning | convention |
 |---|---|---|
 | $r \ge 0$, $\theta \in (-\pi, \pi]$ | polar coordinates about the origin | `to_polar(u) = (r, θ)`, $\theta = \mathrm{atan2}(y, x)$; $\theta$ is *unwrapped* ($\in\mathbb{R}$) whenever it is integrated |
-| $\rho(r)$ | **log growth rate** of the radius, $\rho = \dot r/r = \tfrac{d}{dt}\ln r$ | even in $r$; $\rho(1) = 0$, $\rho'(1) < 0$ |
-| $\omega(r)$ | **angular rate**, $\dot\theta = \omega(r)$ | even in $r$; $\omega(1) =: \omega_1 \ne 0$ |
+| $\rho(r)$ | **log growth rate** of the radius, $\rho = \dot r/r = \tfrac{d}{dt}\ln r$ | $\rho(1) = 0$, $\rho'(1) < 0$; even in $r$ for the *even family* (§3, §9) |
+| $\omega(r)$ | **angular rate**, $\dot\theta = \omega(r)$ | $\omega(1) =: \omega_1 \ne 0$; even in $r$ for the even family |
 | $\Gamma$ | the limit cycle $r = 1$ | the only attracting cycle |
+| $(r_{\rm in}, r_{\rm out})$ | the **basin** of $\Gamma$, an open annulus (`basin_radii`) | $r_{\rm in} = 0$ when the enclosed fixed point is the only phaseless point, else the radius of an inner repelling cycle; $r_{\rm out} = \infty$ or an outer repelling cycle. $\Theta$, $\Psi$ exist on the basin only |
 | $T = 2\pi/\omega_1$ | period | sign of $\omega_1$ is the sense of rotation |
 | $\kappa = \rho'(1) < 0$ | non-trivial **Floquet exponent** | **[decided]** no factor 2 — see §4.2 |
 | $\mu = e^{\kappa T}$ | non-trivial **Floquet multiplier** | $0 < \mu < 1$ |
@@ -54,8 +55,12 @@ we use radians, $\Theta = 2\pi\vartheta$.
 
 "Even in $r$" means $\rho(r) = \tilde\rho(r^2)$ for a smooth $\tilde\rho$ — equivalently,
 $\rho$ has only even powers in its Taylor expansion at $0$. This is what makes the
-cartesian vector field smooth at the origin (§2) and is a *requirement* on the defining
-data, not a convenience.
+cartesian vector field smooth at the origin (§2). Until 2026-10-08 it was a requirement
+on every normal form; it is now the defining property of the **even family**
+(`AbstractEvenNormalForm`, §9), because a normal form whose basin excludes the origin —
+Winfree's model with a hole, §3.3 — has nothing to be smooth *at*, and its $\rho$, $\omega$
+are not even. Outside the even family the cartesian field is as smooth as $\rho(|\mathbf u|)$,
+$\omega(|\mathbf u|)$ are for $|\mathbf u| > 0$.
 
 **Why these quantities.** Isochrons are the level sets of $\Theta$ and isostables the
 level sets of $\Psi$; the infinitesimal phase and amplitude response curves are
@@ -140,7 +145,9 @@ with $b = 0$ for Hopf.
 
 ---
 
-## 3. The two concrete forms
+## 3. The concrete forms
+
+### 3.1–3.2 Hopf and Bautin (the even family)
 
 Both have $\omega(r) = \omega_0 + (\omega_1 - \omega_0)\thinspace r^2$, so $\omega(1) = \omega_1$,
 $\omega(0) = \omega_0$. Write $c := (\omega_1 - \omega_0)/a$.
@@ -188,6 +195,61 @@ Outside it $\rho > 0$ and $r\to\infty$ in finite time (quintic growth, $\dot r \
 As a conjugacy target $b \ge 0$ is used (`learnings`: $b$ decouples the fixed-point
 instability $a$ from the cycle's contraction $\kappa = -2a(1+b)$, which is why Bautin was
 chosen over cubic Hopf). Hopf is Bautin with $b = 0$ throughout.
+
+### 3.3 Winfree's model with a hole (not even; a phaseless disk)
+
+Langfield, Krauskopf, Lee & Osinga (2025, §4.1, Eqs. (10)–(13); after Winfree 1980) study
+
+$$
+\dot r = (1 - r)(r - a)\thinspace r, \qquad \dot\psi = -\bigl(1 + \omega (1 - r)\bigr),
+$$
+
+with $(a, \omega) = (0.25, -0.5)$. *Cited*: the unit circle is the attracting periodic
+orbit $\Gamma$ with period $2\pi$; the circle $r = a$ is a repelling periodic orbit
+$\Gamma_u$ forming the boundary of the basin of attraction; the closed disk $r \le a$ is
+the phaseless set; the origin is a stable equilibrium; and the isochron of phase
+$\vartheta \in [0, 1)$ is, for $r > a$,
+
+$$
+\psi(r) = 2\pi\left(\frac{\omega}{2\pi a}\left[\ln\frac{r}{r-a} - \ln\frac{1}{1-a}\right] - \vartheta\right)
+\qquad\text{(their Eq. (12)).}
+$$
+
+In our symbols (*deduced* from §5.1–5.2; every identity checked by autodiff and the
+isochron against Eq. (12) numerically, `tests/test_normal_forms.py` §4), with the model's
+$\omega$ written `w` to keep $\omega(r)$ for the angular rate:
+
+| | Winfree ($0 \le a < 1$) |
+|---|---|
+| $\rho(r)$ | $(1 - r)(r - a) = -a + (1 + a) r - r^2$ — **not even** |
+| $\omega(r)$ | $-(1 + w(1 - r))$ — not even; $\omega_1 = -1$ (clockwise, $T = 2\pi$; the signed `period()` is $-2\pi$) |
+| $\kappa = \rho'(1)$ | $a - 1$ |
+| inner cycle $\Gamma_u$ | $r = a$, exponent $\kappa_u = a\thinspace\rho'(a) = a(1 - a) > 0$ (`inner_floquet_exponent`) |
+| $h(r)$ | $\dfrac{w}{a}\left[\ln\dfrac{r - a}{r} - \ln(1 - a)\right]$, from $h' = (\omega_1 - \omega)/(r\rho) = w/(r(r - a))$; $h \to +\infty$ as $r \to a^+$ — every isochron spirals infinitely often into the hole (their Fig. 4(a)) |
+| $\Psi(r)$ | $\dfrac{r - 1}{r}\left(\dfrac{(1 - a) r}{r - a}\right)^{1/a}$, from $\tfrac{1}{r(1-r)(r-a)} = -\tfrac{1}{a r} + \tfrac{1}{(1-a)(1-r)} + \tfrac{1}{a(1-a)(r-a)}$; $-\infty$ at $r \to a^+$, saturating at $(1 - a)^{1/a}$ as $r \to \infty$ |
+| basin | $a < r < \infty$; `basin_radii() = (a, ∞)` |
+| eigenvalues at $0$ | $-a \pm i(1 + w)$ — a *stable* focus **outside** the basin: not a conjugacy invariant of $\Gamma$ (hence `eigenvalues_origin` belongs to the even family only) |
+
+Equivalence with Eq. (12): on the isochron $\Theta_0$, $\theta = \Theta_0 - h(r)$; with
+$\Theta_0 = -2\pi\vartheta$ (on $\Gamma$, $\Theta = \theta$ and $\dot\Theta = \omega_1 = -1$,
+so the point of period-fraction $\vartheta$ along the flow sits at angle $-2\pi\vartheta$)
+this is exactly $\psi(r)$ above.
+
+**The $a = 0$ member** (the one the experiments will mostly use): the hole closes to the
+origin, $\dot r = r^2(1 - r)$, so the origin is a *non-hyperbolic* repelling point
+(trajectories leave it algebraically, not exponentially); the closed forms become the
+limits $h = w(1 - 1/r)$ and $\Psi = \tfrac{r-1}{r}\thinspace e^{1/r - 1}$ — an essential
+singularity at the origin where Bautin has a power law, $\Psi \sim -e^{1/r}/r$. The root
+solve of §7 handles both regimes (the probe beyond the inner edge is `nan`, which the
+bracket expansion treats as "overshot"; the closed forms are made `nan` for $r \le a$
+explicitly, since for integer $1/a$ the power of a negative base would otherwise be finite
+garbage).
+
+**Why this system.** It is the planar case with closed-form isochrons *and* a non-trivial
+phaseless set, the paper's testbed for critical isochrons; for us it is a target with
+exactly known $\Theta$, $\Psi$ to compare a learned conjugacy against, and the simplest
+system on which the question "what does a planar diffeomorphism do with a phaseless
+disk it cannot map to a point" can be asked (roadmap Phase E).
 
 ---
 
@@ -674,7 +736,10 @@ from_phase_amplitude(Θ, Ψ)  = (r(Ψ) cos(Θ − h(r)), r(Ψ) sin(Θ − h(r)))
 ```
 
 With $r(\Psi)$ in hand, `from_phase_amplitude` and `ClosedFormIntegration` are the same
-code.
+code. The chart is defined on the basin $r_{\rm in} < r < r_{\rm out}$ only:
+`to_phase_amplitude` (hence `phase`, `amplitude`, the closed-form flow and `isochron`)
+returns `nan` outside it, and `in_basin(u)` is the test; `data.generate` uses it to reject
+or resample initial conditions (`outside_basin`).
 
 $(\cos\Theta, \sin\Theta, \Psi)$ is the latent space of the phase autoencoder of
 Yawata et al. (2024); see §5.3.
@@ -692,34 +757,43 @@ reports the constrained values. $b > -1$ is exactly the stability condition $\rh
 
 ---
 
-## 9. API implied (for B11)
+## 9. API implied (for B11; amended 2026-10-08)
 
-**Decided: Option B.** The defining data are even functions of $r$, which is enforced
-*by construction* by having subclasses supply them as smooth functions of $s = r^2$; the
-public API is entirely in $r$. The $s$-chart appears in exactly two places: the abstract
-`*_sq` hooks and the `r_squared` integration.
+**Decided 2026-10-03: Option B** — the defining data are even functions of $r$, enforced
+*by construction* by having subclasses supply them as smooth functions of $s = r^2$.
+**Amended 2026-10-08 (ADR-0013):** that is now the contract of the *even family*
+`AbstractEvenNormalForm`; the base `AbstractNormalForm` takes its data in $r$ on a declared
+basin, so that Winfree's model (§3.3) fits. The public API is entirely in $r$ either way;
+the $s$-chart appears in exactly two places: the even family's `*_sq` hooks and the
+`r_squared` integration (which refuses other forms).
 
 ```python
 class AbstractNormalForm(AbstractODE):
-    # defining data — abstract, in s = r²  (ρ̃(s) = ρ(√s), ω̃(s) = ω(√s))
-    def _log_growth_rate_sq(self, s): ...   # ρ̃(s): ṙ = r ρ̃(r²); ρ̃(1) = 0, ρ̃'(1) < 0
-    def _angular_rate_sq(self, s):    ...   # ω̃(s): θ̇ = ω̃(r²)
-    def phase_shift(self, r):        ...   # h(r), h(1) = 0            (closed form, in r)
-    def isostable(self, r):          ...   # Ψ(r), Ψ(1) = 0, Ψ'(1) = 1 (closed form, in r)
-
-    # public r-chart views of the defining data (final)
-    def log_growth_rate(self, r): return self._log_growth_rate_sq(r * r)   # ρ(r)
-    def angular_rate(self, r):    return self._angular_rate_sq(r * r)      # ω(r)
+    # defining data — abstract, in r, on the basin
+    def log_growth_rate(self, r): ...     # ρ(r) = ṙ/r;  ρ(1) = 0, ρ'(1) < 0
+    def angular_rate(self, r):    ...     # ω(r) = θ̇
+    def phase_shift(self, r):     ...     # h(r), h(1) = 0            (closed form, in r; nan outside)
+    def isostable(self, r):       ...     # Ψ(r), Ψ(1) = 0, Ψ'(1) = 1 (closed form, in r; nan outside)
+    def basin_radii(self):  return (0.0, inf)   # (r_in, r_out), Python floats; override for a hole
+    in_basin(u)                                  # r_in < |u| < r_out
 
     # derived (final)
     omega() = angular_rate(1.0)      period()
     floquet_exponent() = grad(log_growth_rate)(1.0)      floquet_multiplier() = exp(κ T)
-    eigenvalues_origin() = _log_growth_rate_sq(0.0) ± i _angular_rate_sq(0.0)
-    rhs(t, u)      # s = u·u;  _log_growth_rate_sq(s) * u + _angular_rate_sq(s) * J u
+    rhs(t, u)      # ρ(|u|) u + ω(|u|) J u, |u| by a safe sqrt (derivative 0 at exactly u = 0)
     rhs_polar(t, (r, θ))
-    phase(u)  amplitude(u)  limit_cycle(Θ)  isochron(Θ, r)
+    phase(u)  amplitude(u)  limit_cycle(Θ)  isochron(Θ, r)      # nan outside the basin
     to_polar / from_polar (polar);  to_phase_amplitude / from_phase_amplitude (§7)
-    flow(ts, u0, *, config, integration="r_squared")
+    flow(ts, u0, *, config, integration)
+
+class AbstractEvenNormalForm(AbstractNormalForm):          # Hopf, Bautin
+    def _log_growth_rate_sq(self, s): ...   # ρ̃(s): ṙ = r ρ̃(r²); ρ̃(1) = 0, ρ̃'(1) < 0
+    def _angular_rate_sq(self, s):    ...   # ω̃(s): θ̇ = ω̃(r²)
+    log_growth_rate(r) = _log_growth_rate_sq(r * r)   (final)   angular_rate likewise
+    eigenvalues_origin() = _log_growth_rate_sq(0.0) ± i _angular_rate_sq(0.0)
+    rhs(t, u)      # s = u·u;  _log_growth_rate_sq(s) * u + _angular_rate_sq(s) * J u  (smooth at 0)
+
+class WinfreeNormalForm(AbstractNormalForm):               # §3.3; basin_radii = (a, ∞)
 ```
 
 - **Names.** `log_growth_rate` is $\rho = \dot r/r = d\ln r/dt$; the literature names its
@@ -729,7 +803,7 @@ class AbstractNormalForm(AbstractODE):
   and $\dot r/r$) and `growth_rate` (invites the $\dot r$ reading) are rejected.
   `angular_rate` is $\omega(r)$; "frequency" is avoided because of the $\omega$ vs
   $\omega/2\pi$ ambiguity. The `_sq` suffix marks the $s$-chart hooks.
-- **Why the data live in $s$.** With $\tilde\rho,\tilde\omega$ smooth in $s$, the cartesian
+- **Why the even family's data live in $s$.** With $\tilde\rho,\tilde\omega$ smooth in $s$, the cartesian
   field $\tilde\rho(|\mathbf u|^2)\thinspace\mathbf u + \tilde\omega(|\mathbf u|^2)\thinspace\mathsf J\mathbf u$
   is smooth at the origin with no $\sqrt{}$ anywhere: for Hopf/Bautin it is literally a
   polynomial in $(x,y)$, and *all* its derivatives at the origin are exact under autodiff.
@@ -740,7 +814,12 @@ class AbstractNormalForm(AbstractODE):
   supplying a non-even $\rho$ and silently producing a non-smooth field. Away from the
   origin the two are identical. Nothing in the project evaluates the base field at exactly
   the origin, so the practical difference is small; the structural guarantee is the
-  reason for B.
+  reason for B *within the even family*. The base class uses the safe-$\sqrt{}$ form
+  because for a form with a hole the origin is not in the basin and the field there
+  (§3.3: $C^1$, flowing to a stable focus) is correct but not smooth — there is no
+  guarantee to give.
+- **`basin_radii` are Python floats** (static): they drive `jnp.where` masks and the
+  initial-condition samplers, never gradients.
 - **Factor 2.** `floquet_exponent` is `grad(log_growth_rate)(1.0)` — the $r$-chart
   derivative, $\kappa = \rho'(1)$, by §4.2. Autodiff through `r * r` supplies
   $\rho'(1) = 2\tilde\rho'(1)$; no manual factor anywhere. Concrete on the base class, with
@@ -778,6 +857,15 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
   the explicit $r(t)$ of §6.1;
 - the $r\to\infty$ limit of $\Psi$ (table in §3), and $\Psi\to+\infty$ at the outer cycle
   for $b < 0$.
+- (2026-10-08) The shared laws above run over the even forms *and* Winfree (radii clamped
+  into the basin); the `_sq` views, the origin's Jacobian and eigenvalues and `r_squared`
+  over the even family only. Winfree: $T = -2\pi$, $\kappa = a - 1$, $\kappa_u = a(1-a)$,
+  $\Psi \to -\infty$ at $a^+$ and $\to (1-a)^{1/a}$ at $\infty$, `nan` outside the basin
+  (`phase`, `amplitude`, `isostable`, `isochron`) while `rhs` stays finite; the isochron
+  equals Eq. (12) of Langfield et al. (2025) for $(a, w) = (0.25, -0.5)$; the $a = 0$
+  formulas are the $a \to 0$ limits; `r_squared` refuses it. `data.generate`: initial
+  conditions in the hole raise, or are resampled with a warning, the count recorded and
+  the mode hashed (`test_data.py`).
 
 ---
 
@@ -804,11 +892,21 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
 - Defining data in $s$ with the public API in $r$ (**Option B**, §9); Option A and its
   safe-$\sqrt{}$ device are rejected.
 
-Nothing remains open. Changes to any of the above go through this document first.
+**Amended 2026-10-08 (ADR-0013).** Option B is the contract of the even family; the base
+class takes data in $r$ on a declared basin $(r_{\rm in}, r_{\rm out})$, and uses the
+safe-$\sqrt{}$ form for `rhs`. `eigenvalues_origin` moves to the even family. Winfree's
+model with a hole (§3.3) is the first non-even member; its parameters are plain floats
+(an observed system). Initial conditions outside a basin: `generate(outside_basin=
+"error" | "resample")`. Decided with Joon 2026-10-08; the experiments will mostly use
+$a = 0$ (phaseless set a point), with $a > 0$ to see what the INN does with the disk.
+
+Nothing else remains open. Changes to any of the above go through this document first.
 
 ---
 
 ## References
+
+- Langfield, P., Krauskopf, B., Lee, K. H. & Osinga, H. M. (2025). The global geometry of phase-resetting surfaces: the role of critical level sets and isochrons. *Commun. Nonlinear Sci. Numer. Simul.* **151**, 109043. (§3.3: Eqs. (10)–(13), Fig. 4.)
 
 - A. T. Winfree, *The Geometry of Biological Time*, 2nd ed., Springer (2001) — isochrons,
   asymptotic phase.

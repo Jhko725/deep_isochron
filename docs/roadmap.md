@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-06
+updated: 2026-10-08
 sources: [joon, claude]
 ---
 
@@ -98,6 +98,11 @@ cycle)` by the variational equation over one period — the computation
 handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a C¹
 `CircularMonotonicRQCoupling`). As `LossConfig`/`INNConfig` entries once Phase D is in.
 
+Reference systems with *analytic* isochrons (2026-10-08, ADR-0013): Winfree's model with a
+hole (Langfield et al. 2025 §4.1) is a normal form now, with its exact chart as the
+`Evaluator` reference; experiments first with `a = 0` (phaseless set a point), then
+`a > 0` to see what a planar INN does with a phaseless disk it cannot map to a point.
+
 ## Parked (with reason)
 
 - Optimistix for `radius_from_isostable` (and other hand-rolled solves) — dropped for now
@@ -152,3 +157,4 @@ handling on `AbstractSpline` (periodic / free boundary derivatives, needed for a
 | 2026-10-05 | `trainer` | C8: `BiLipschitzLinear` rotations by Cayley transform instead of `expm` — the V100 step's ≈ 1 700 per-step conditionals (device-to-host round trips) removed; `cayley`, two tests, ADR-0010 | `docs/changes/2026-10-04-trainer.md`, ADR-0010 |
 | 2026-10-05 | `trainer` | C9: `WindowBatchSource` / `window_batches` / `mixed_window_batches` — batched window source for training runs (epochs of every window once, one gather per batch, finite loader); `Trainer.train(num_steps=None)`; `resolve_device`; ADR-0008 Decision 3 | `docs/changes/2026-10-04-trainer.md`, ADR-0008 |
 | 2026-10-05 | `experiment-config` | D1–D4, D6–D8: `configs/train.yaml` and groups; `deep_isochron.experiment` (`instantiate`, builders, `run.train`/`load_run`/`load_model`); `scripts/train.py`; forced final checkpoint; `generation_metadata`; CI workflow; benchmark on configs; `circular_rq` test domain fixed; ADR-0011 | `docs/changes/2026-10-05-experiment-config.md`, ADR-0011 |
+| 2026-10-08 | `normal-forms-basin` | Normal forms take their data in `r` on a declared basin (`basin_radii`, `in_basin`, `nan` outside); evenness is the `AbstractEvenNormalForm` subfamily (Hopf, Bautin); `WinfreeNormalForm` (Langfield et al. 2025 §4.1, closed-form isochrons, phaseless disk; `a = 0` allowed); `generate(outside_basin=error\|resample)`; design document §3.3/§9 amended; ADR-0013 | `docs/changes/2026-10-08-normal-forms-basin.md`, ADR-0013 |

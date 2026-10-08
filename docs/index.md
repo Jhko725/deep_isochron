@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-06
+updated: 2026-10-08
 ---
 
 # `deep_isochron` documentation — index
@@ -26,7 +26,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 
 | Document | Status | Covers |
 |---|---|---|
-| [`normal-forms.md`](design/normal-forms.md) | agreed; §5.3–5.4 tentative | Θ/Ψ conventions, Hopf and Bautin closed forms, the (Θ, Ψ) chart, the implementation contract (§9) and the tests it implies (§10); relation to Yawata et al. and Kvalheim & Revzen |
+| [`normal-forms.md`](design/normal-forms.md) | agreed; §5.3–5.4 and the 2026-10-08 amendment (§3.3 Winfree, basins) tentative | Θ/Ψ conventions, Hopf and Bautin closed forms, the (Θ, Ψ) chart, the implementation contract (§9) and the tests it implies (§10); relation to Yawata et al. and Kvalheim & Revzen |
 | [`cubic-bspline.md`](design/cubic-bspline.md) | agreed | the `CubicBSpline` boundary treatment and inverse error bound |
 | [`validation-split.md`](design/validation-split.md) | tentative | why `val/mse` is a near-cycle metric and the early/late split by window start (`t_split`); how to choose the threshold; what it does not do |
 | [`training-step-performance.md`](design/training-step-performance.md) | tentative | where a JAX training step spends its time: asynchronous dispatch, committed/uncommitted placement, the GIL and grain's threads, what `bench_dataloader.py` measures, the bottleneck taxonomy, and the Phase C case history |
@@ -41,11 +41,12 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [0004](decisions/0004-abstractvar-fields.md) | accepted | `AbstractVar` as `eqx.field(static=True, init=False)` |
 | [0005](decisions/0005-constraint-primitives.md) | accepted; amended | constraint primitives created inside `constrain`; shift computed lazily (no JAX at import) |
 | [0006](decisions/0006-cubic-bspline-boundary-and-inverse.md) | accepted | `CubicBSpline` boundary and inverse |
-| [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | accepted; amended | `AbstractODE`/`AbstractNormalForm`, `SolverConfig`, integrations as objects |
+| [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | accepted; amended (ADR-0013: basins, even subfamily) | `AbstractODE`/`AbstractNormalForm`, `SolverConfig`, integrations as objects |
 | [0008](decisions/0008-dataset-format-and-sampling.md) | accepted; amended (Decision 3 review pending) | netCDF4 datasets via xarray; weighted windows alongside `mix`; batched `WindowBatchSource` for training runs |
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | accepted; amended (review round 2 pending) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 | [0010](decisions/0010-rotations-by-cayley-transform.md) | accepted | `BiLipschitzLinear` rotations by Cayley transform, not `expm` (GPU conditionals) |
 | [0011](decisions/0011-experiment-layer.md) | accepted (review pending) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit data generation, forced final checkpoint |
+| [0013](decisions/0013-normal-form-basins.md) | accepted (review pending) | normal forms take their data in `r` on a declared basin; evenness is the `AbstractEvenNormalForm` subfamily (Hopf, Bautin); Winfree's model with a hole; `nan` outside the basin; `generate(outside_basin=error\|resample)` |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 
@@ -57,3 +58,4 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | `data-generation` | [`2026-10-02-data-generation.md`](changes/2026-10-02-data-generation.md) |
 | `trainer` | [`2026-10-04-trainer.md`](changes/2026-10-04-trainer.md) |
 | `experiment-config` | [`2026-10-05-experiment-config.md`](changes/2026-10-05-experiment-config.md) |
+| `normal-forms-basin` | [`2026-10-08-normal-forms-basin.md`](changes/2026-10-08-normal-forms-basin.md) |

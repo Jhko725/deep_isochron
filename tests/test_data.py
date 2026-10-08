@@ -27,6 +27,7 @@ from deep_isochron.data import (
     dataset_path,
     DatasetMetadata,
     generate,
+    generation_metadata,
     GridSpec,
     Provenance,
     SamplingSpec,
@@ -38,7 +39,12 @@ from deep_isochron.data import (
     UniformBox,
     validation_windows,
 )
-from deep_isochron.systems import BautinNormalForm, FitzhughNagumo, SolverConfig
+from deep_isochron.systems import (
+    BautinNormalForm,
+    FitzhughNagumo,
+    SolverConfig,
+    WinfreeNormalForm,
+)
 
 from tests.helpers import assert_close, SOLVERS, TOL
 
@@ -228,6 +234,39 @@ def test_generate_fhn_and_failure():
             seed=0,
             config=SolverConfig(max_steps=4),
         )
+
+
+def test_generate_handles_initial_conditions_outside_the_basin():
+    """Winfree's model has a phaseless disk r <= a: initial conditions drawn there are
+    an error by default, or are replaced by further draws with ``outside_basin=
+    "resample"`` (warning; count in the provenance; the mode is hashed)."""
+    nf = WinfreeNormalForm(a=0.5)
+    ts = jnp.linspace(0.0, 1.0, 4)
+    sampler = UniformAnnulus(0.1, 2.0)  # 0.1 < r < 0.5 is the hole
+    with pytest.raises(ValueError, match="outside the basin"):
+        generate(nf, sampler, ts, 20, seed=0, config=SOLVERS["data"])
+    with pytest.warns(UserWarning, match="rejected and replaced"):
+        src = generate(
+            nf,
+            sampler,
+            ts,
+            20,
+            seed=0,
+            config=SOLVERS["data"],
+            outside_basin="resample",
+        )
+    assert src.ys.shape == (20, 4, 2)
+    assert np.all(np.linalg.norm(src.u0, axis=-1) > 0.5)
+    assert src.metadata.provenance.rejected_ics > 0
+    assert src.metadata.sampling.outside_basin == "resample"
+    strict = generation_metadata(nf, sampler, ts, 20, seed=0, config=SOLVERS["data"])
+    assert strict.config_hash != src.metadata.config_hash
+    # nothing to reject: no warning, no count, FHN's basin is the whole plane
+    fine = generate(nf, UniformAnnulus(0.6, 2.0), ts, 4, seed=0, config=SOLVERS["data"])
+    assert fine.metadata.provenance.rejected_ics == 0
+    assert bool(FitzhughNagumo().in_basin(jnp.zeros(2)))
+    # (an unknown mode is rejected by the Literal annotation under the test hook and by
+    # the explicit check otherwise)
 
 
 def test_resolve_device_explicit_index_and_cpu_default():

@@ -17,8 +17,14 @@ parameters (Hypothesis draws both forms). The tests implement §10 of
                   origin; Hopf closed_form equals the explicit r(t) of §6.1; cartesian
                   is finite at the origin; unknown name rejected; each integration is
                   static under filter_jit (one trace each)
+4. basins         Winfree's model with a hole (Langfield et al. 2025, §4.1): not even in
+                  r, basin (a, ∞); its closed forms satisfy the identities (via the
+                  shared tests) and its isochrons are the paper's Eq. (12); nan outside
+                  the basin; the a → 0 limits; r_squared refuses non-even forms
 
-Facts about specific observed systems are in ``test_systems.py``.
+The shared laws run over ``all_normal_forms`` (even forms and Winfree); laws that need
+the even family's ``_sq`` data or the origin run over ``normal_forms`` only. Facts about
+specific observed systems are in ``test_systems.py``.
 """
 
 import diffrax as dfx
@@ -27,9 +33,11 @@ import jax
 import jax.numpy as jnp
 import pytest
 from deep_isochron.systems import (
+    AbstractEvenNormalForm,
     BautinNormalForm,
     HopfNormalForm,
     INTEGRATIONS,
+    WinfreeNormalForm,
 )
 from hypothesis import given, settings, strategies as st
 
@@ -54,6 +62,15 @@ normal_forms = st.one_of(
 """Both normal forms with drawn parameters (``w0 != w`` gives sheared isochrons);
 ``b >= 0`` so that the cycle attracts the whole plane (see ``BautinNormalForm``)."""
 
+winfree_forms = st.builds(
+    WinfreeNormalForm,
+    a=st.one_of(st.just(0.0), st.floats(0.05, 0.6)),
+    w=st.floats(-2.0, 2.0),
+)
+"""Winfree's model with a hole of radius ``a`` (``a = 0`` closes it); not even in r."""
+
+all_normal_forms = st.one_of(normal_forms, winfree_forms)
+
 radii = st.floats(0.15, 2.5)
 angles = st.floats(-3.1, 3.1)
 
@@ -62,9 +79,16 @@ def _point(r, theta):
     return jnp.array([r * jnp.cos(theta), r * jnp.sin(theta)])
 
 
+def _in_basin(nf, r):
+    """Clamp a drawn radius into the basin (Winfree's hole excludes r <= a)."""
+    r_in, _ = nf.basin_radii()
+    return max(r, r_in + 0.1)
+
+
 # ------------------------------------------------------- 1. normal-form structure --
-@given(nf=normal_forms, r=radii)
+@given(nf=all_normal_forms, r=radii)
 def test_phase_and_isostable_identities(nf, r):
+    r = _in_basin(nf, r)
     """Exact (autodiff) form of dΘ/dt = ω₁ and dΨ/dt = κΨ along the flow:
     ω(r) + h'(r) r ρ(r) == ω₁  and  Ψ'(r) r ρ(r) == κ Ψ(r)  (design document §4, §5)."""
     _check_identities(nf, jnp.asarray(r))
@@ -121,7 +145,7 @@ def test_hopf_floquet_multiplier_is_the_polar_monodromy(a, w, w0):
     assert_close(nf.floquet_exponent(), -2 * a, rtol=TOL["closed_form"])
 
 
-@given(nf=normal_forms)
+@given(nf=all_normal_forms)
 def test_normal_form_closed_forms_are_consistent(nf):
     one = jnp.asarray(1.0)
     assert_close(nf.phase_shift(one), 0.0, atol=TOL["identity"])
@@ -137,7 +161,23 @@ def test_normal_form_closed_forms_are_consistent(nf):
     assert nf.floquet_exponent() < 0
     # Wilson–Moehlis normalization: ∂ᵣΨ(1) = 1
     assert_close(jax.grad(nf.isostable)(one), 1.0, rtol=TOL["closed_form"])
-    # public r-views are the _sq hooks composed with r²
+    assert_close(nf.period(), 2 * jnp.pi / nf.omega(), rtol=TOL["identity"])
+    assert_close(
+        nf.floquet_multiplier(),
+        jnp.exp(nf.floquet_exponent() * nf.period()),
+        rtol=TOL["identity"],
+    )
+    # isostable sign convention (§5.2): negative inside the cycle, positive outside
+    inner = jnp.asarray(_in_basin(nf, 0.5))
+    assert nf.isostable(inner) < 0 < nf.isostable(jnp.asarray(1.5))
+
+
+@given(nf=normal_forms)
+def test_even_forms_r_views_and_origin(nf):
+    """The even family: public r-views are the _sq hooks composed with r²; eigenvalues
+    at the origin are ρ(0) ± i ω(0); the basin starts at the origin."""
+    assert isinstance(nf, AbstractEvenNormalForm)
+    assert nf.basin_radii()[0] == 0.0
     for r in (0.3, 1.0, 2.2):
         r = jnp.asarray(r)
         assert_close(
@@ -146,15 +186,6 @@ def test_normal_form_closed_forms_are_consistent(nf):
         assert_close(
             nf.angular_rate(r), nf._angular_rate_sq(r * r), rtol=TOL["identity"]
         )
-    assert_close(nf.period(), 2 * jnp.pi / nf.omega(), rtol=TOL["identity"])
-    assert_close(
-        nf.floquet_multiplier(),
-        jnp.exp(nf.floquet_exponent() * nf.period()),
-        rtol=TOL["identity"],
-    )
-    # isostable sign convention (§5.2): negative inside the cycle, positive outside
-    assert nf.isostable(jnp.asarray(0.5)) < 0 < nf.isostable(jnp.asarray(1.5))
-    # eigenvalues at the origin: ρ(0) ± i ω(0)
     lam = nf.eigenvalues_origin()
     zero = jnp.asarray(0.0)
     assert_close(
@@ -223,9 +254,9 @@ def test_hopf_jacobian_explicit(a, w, w0, x, y):
     assert_close(jac, expected, rtol=TOL["closed_form"], atol=TOL["closed_form"])
 
 
-@given(nf=normal_forms, r=radii, theta=angles)
+@given(nf=all_normal_forms, r=radii, theta=angles)
 def test_cartesian_rhs_is_polar_rhs_in_the_chart(nf, r, theta):
-    u = _point(r, theta)
+    u = _point(_in_basin(nf, r), theta)
     pushed = jax.jvp(
         nf.from_polar, (nf.to_polar(u),), (nf.rhs_polar(0.0, nf.to_polar(u)),)
     )[1]
@@ -240,13 +271,16 @@ def test_cartesian_rhs_is_polar_rhs_in_the_chart(nf, r, theta):
     )
 
 
-@given(nf=normal_forms, r=radii, theta=angles)
+@given(nf=all_normal_forms, r=radii, theta=angles)
 def test_phase_and_amplitude_along_the_flow(nf, r, theta):
     """Integrated version: phase(u(t)) - phase(u0) == w t (mod 2pi) and
     amplitude(u(t)) == amplitude(u0) exp(kappa t)."""
     ts = jnp.linspace(0.0, 1.5, 7)
     ys = nf.flow(
-        ts, _point(r, theta), config=SOLVERS["tight"], integration="cartesian"
+        ts,
+        _point(_in_basin(nf, r), theta),
+        config=SOLVERS["tight"],
+        integration="cartesian",
     ).ys
     dphi = jax.vmap(nf.phase)(ys) - nf.phase(ys[0]) - nf.omega() * ts
     dphi = jnp.arctan2(jnp.sin(dphi), jnp.cos(dphi))  # mod 2pi
@@ -256,9 +290,9 @@ def test_phase_and_amplitude_along_the_flow(nf, r, theta):
     assert_close(amp, expected, rtol=TOL["flow"], atol=TOL["flow"])
 
 
-@given(nf=normal_forms, phi=angles, r=radii)
+@given(nf=all_normal_forms, phi=angles, r=radii)
 def test_isochron_and_limit_cycle(nf, phi, r):
-    pts = nf.isochron(phi, jnp.array([r, 1.0]))
+    pts = nf.isochron(phi, jnp.array([_in_basin(nf, r), 1.0]))
     assert_close(jax.vmap(nf.phase)(pts), jnp.full(2, phi), atol=TOL["closed_form"])
     assert_close(pts[1], nf.limit_cycle(jnp.asarray(phi)), atol=TOL["closed_form"])
     assert_close(
@@ -308,8 +342,9 @@ def test_bautin_rejects_unstable_cycle():
 
 
 # ------------------------------------------------------------------- 2. charts -----
-@given(nf=normal_forms, r=radii, theta=angles)
+@given(nf=all_normal_forms, r=radii, theta=angles)
 def test_phase_amplitude_chart_round_trip(nf, r, theta):
+    r = _in_basin(nf, r)
     u = _point(r, theta)
     z = nf.to_phase_amplitude(u)
     assert bool(jnp.abs(z[0]) <= jnp.pi)
@@ -323,10 +358,11 @@ def test_phase_amplitude_chart_round_trip(nf, r, theta):
     )
 
 
-@given(nf=normal_forms, r=radii)
+@given(nf=all_normal_forms, r=radii)
 def test_radius_from_isostable_is_differentiable(nf, r):
     """Implicit-function JVP: dr/dΨ = 1/Ψ'(r); and the parameter derivative matches
     finite differences (Bautin's b enters Ψ)."""
+    r = _in_basin(nf, r)
     psi = nf.isostable(jnp.asarray(r))
     assert_close(
         jax.grad(nf.radius_from_isostable)(psi)
@@ -355,15 +391,16 @@ def test_radius_from_isostable_unreachable_and_basin_edge():
 
 
 # ------------------------------------------------------------- 3. integrations -----
-@given(nf=normal_forms, r=radii, theta=angles)
+@given(nf=all_normal_forms, r=radii, theta=angles)
 @settings(deadline=None)
 def test_integrations_agree(nf, r, theta):
     ts = jnp.linspace(0.0, 2.0, 9)
-    u0 = _point(r, theta)
+    u0 = _point(_in_basin(nf, r), theta)
     ref = nf.flow(ts, u0, integration="closed_form").ys  # exact (§6)
     assert nf.default_integration == "closed_form"
     assert_close(nf.flow(ts, u0).ys, ref, rtol=TOL["identity"])  # the default
-    for name in ("cartesian", "polar", "r_squared"):
+    even = isinstance(nf, AbstractEvenNormalForm)
+    for name in ("cartesian", "polar") + (("r_squared",) if even else ()):
         ys = nf.flow(ts, u0, config=SOLVERS["tight"], integration=name).ys
         assert_close(ys, ref, rtol=TOL["flow"], atol=TOL["flow"], msg=name)
         assert_close(ys[0], u0, atol=TOL["closed_form"], msg=f"{name}: y(0) != u0")
@@ -422,3 +459,72 @@ def test_integrations_are_static_under_filter_jit():
         flow(jnp.array([0.5, 0.2]), s)
         flow(jnp.array([0.7, -0.1]), s)
     assert sorted(traces) == sorted(type(s).__name__ for s in INTEGRATIONS.values())
+
+
+# ------------------------------------------------------------------ 4. basins -----
+@given(a=st.one_of(st.just(0.0), st.floats(0.05, 0.6)), w=st.floats(-2.0, 2.0))
+def test_winfree_structure(a, w):
+    """Langfield et al. (2025) §4.1 (*cited*): unit circle attracting with period 2π,
+    clockwise; r = a a repelling cycle, the closed disk r <= a phaseless. *Deduced*:
+    κ = a − 1, κᵤ = a(1 − a); Ψ → −∞ at the inner edge and saturates at (1 − a)^{1/a}
+    outside; nan outside the basin."""
+    nf = WinfreeNormalForm(a, w)
+    assert not isinstance(nf, AbstractEvenNormalForm)
+    assert nf.basin_radii() == (a, float("inf"))
+    assert_close(nf.period(), -2 * jnp.pi, rtol=TOL["identity"])  # clockwise
+    assert_close(nf.floquet_exponent(), a - 1.0, rtol=TOL["closed_form"])
+    assert_close(nf.inner_floquet_exponent(), a * (1 - a), atol=TOL["closed_form"])
+    edge = jnp.asarray(a + 1e-3)
+    assert nf.isostable(edge) < -1e3
+    far = nf.isostable(jnp.asarray(1e6))
+    assert_close(far, (1 - a) ** (1 / a) if a > 0 else jnp.e**-1, rtol=1e-4)
+    if a > 0:
+        outside = _point(0.5 * a, 0.3)
+        assert not bool(nf.in_basin(outside))
+        assert jnp.all(jnp.isnan(nf.to_phase_amplitude(outside)))
+        assert jnp.isnan(nf.isostable(jnp.asarray(0.5 * a)))
+        assert jnp.all(jnp.isnan(nf.isochron(0.1, jnp.array([0.5 * a]))))
+        # the cartesian field is still defined inside the hole (it flows to the origin)
+        assert jnp.all(jnp.isfinite(nf.rhs(0.0, outside)))
+    assert bool(nf.in_basin(_point(1.0, 0.0)))
+
+
+@given(theta=st.floats(0.0, 1.0), r=st.floats(0.3, 5.0))
+def test_winfree_isochrons_are_langfield_eq_12(theta, r):
+    """Eq. (12), a = 0.25, ω = −0.5:
+    ψ(r) = 2π( ω/(2πa) [ln(r/(r−a)) − ln(1/(1−a))] − ϑ ) is the polar angle of the
+    isochron of phase ϑ ∈ [0, 1) at radius r > a; our phase of that point is Θ = −2πϑ
+    (Θ = θ on the cycle, Θ̇ = ω₁ = −1)."""
+    a, w = 0.25, -0.5
+    nf = WinfreeNormalForm(a, w)
+    psi = (
+        2
+        * jnp.pi
+        * (w / (2 * jnp.pi * a) * (jnp.log(r / (r - a)) - jnp.log(1 / (1 - a))) - theta)
+    )
+    point = jnp.array([r * jnp.cos(psi), r * jnp.sin(psi)])
+    Theta = -2 * jnp.pi * theta
+    d = nf.phase(point) - Theta
+    assert_close(jnp.arctan2(jnp.sin(d), jnp.cos(d)), 0.0, atol=TOL["closed_form"])
+    ours = nf.isochron(Theta, jnp.array([r]))[0]
+    assert_close(ours, point, rtol=TOL["closed_form"], atol=TOL["closed_form"])
+
+
+def test_winfree_a_zero_is_the_limit_of_small_a():
+    """The explicit a = 0 formulas (h = w(1 − 1/r), Ψ = (r−1)/r e^{1/r−1}) are the
+    a → 0 limits of the general ones."""
+    small, zero = WinfreeNormalForm(1e-6, -0.5), WinfreeNormalForm(0.0, -0.5)
+    for r in (0.2, 0.7, 1.5, 3.0):
+        r = jnp.asarray(r)
+        assert_close(small.phase_shift(r), zero.phase_shift(r), rtol=1e-4, atol=1e-6)
+        assert_close(small.isostable(r), zero.isostable(r), rtol=1e-4)
+    with pytest.raises(ValueError):
+        WinfreeNormalForm(a=1.0)
+    with pytest.raises(ValueError):
+        WinfreeNormalForm(a=-0.1)
+
+
+def test_r_squared_integration_refuses_non_even_forms():
+    nf = WinfreeNormalForm()
+    with pytest.raises(TypeError, match="AbstractEvenNormalForm"):
+        nf.flow(jnp.linspace(0.0, 1.0, 3), _point(0.6, 0.0), integration="r_squared")

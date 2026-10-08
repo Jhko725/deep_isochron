@@ -55,6 +55,10 @@ class SamplingSpec:
     params: dict[str, Any]
     seed: int
     n_trajectories: int
+    outside_basin: str = "error"
+    """What ``generate`` does with initial conditions outside the system's basin
+    (``system.in_basin``): ``"error"`` or ``"resample"`` (draw again until
+    ``n_trajectories`` lie inside). Generation-defining, hence hashed."""
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,9 @@ class Provenance:
     git_dirty: bool = False
     package_version: str = ""
     dtype: str = "float64"
+    rejected_ics: int = 0
+    """Initial conditions drawn outside the basin and replaced
+    (``outside_basin="resample"``); an outcome, so not hashed."""
 
 
 _GROUPS = ("system", "sampling", "grid", "solve", "provenance")

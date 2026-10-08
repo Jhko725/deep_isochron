@@ -77,7 +77,18 @@ class PolarIntegration(AbstractFlowIntegration):
 
 
 class RadiusSquaredIntegration(AbstractFlowIntegration):
+    """Integrates $(r^2, \\theta)$ with the even family's ``*_sq`` data (no square
+    root); refuses other normal forms."""
+
     def __call__(self, normal_form, ts, u0, args, config):
+        from .base import AbstractEvenNormalForm
+
+        if not isinstance(normal_form, AbstractEvenNormalForm):
+            raise TypeError(
+                "the r_squared integration needs an AbstractEvenNormalForm (data even "
+                f"in r); got {type(normal_form).__name__}."
+            )
+
         def rhs_s(t, state, args):
             del t, args
             s, _ = state

@@ -8,11 +8,16 @@ planar ODE that in polar coordinates $(r, \theta)$ separates as
 $$\dot r = r\,\rho(r), \qquad \dot\theta = \omega(r),$$
 
 with the stable limit cycle at $r = 1$ ($\rho(1) = 0$, $\rho'(1) < 0$). $\rho$ is the
-**log growth rate** of the radius ($d\ln r/dt$) and $\omega$ the **angular rate**; both
-must be *even* functions of $r$ (design document §1), which a subclass guarantees by
-supplying them as smooth functions of $s = r^2$ through the ``*_sq`` hooks — the one
-place the $s$-chart appears in the API besides the ``r_squared`` integration (§9,
-Option B). Everything public is in $r$ and in **cartesian** coordinates.
+**log growth rate** of the radius ($d\ln r/dt$) and $\omega$ the **angular rate**,
+supplied by a subclass as functions of $r$ on the cycle's **basin**, the annulus
+$r_{\rm in} < r < r_{\rm out}$ (``basin_radii``; default $(0, \infty)$). The chart below
+exists on the basin only; outside it — the phaseless set, e.g. the closed disk bounded
+by a repelling cycle in Winfree's model (Langfield et al. 2025, §4.1) — ``phase``,
+``amplitude`` and the closed-form flow are ``nan``. Everything public is in $r$ and in
+**cartesian** coordinates. ``AbstractEvenNormalForm`` is the family whose data are
+*even* in $r$ (supplied in $s = r^2$), which makes the cartesian field smooth at the
+origin (design document §1, §9 Option B); Hopf and Bautin are of that kind, Winfree's
+model is not.
 
 Closed forms a subclass supplies, in $r$: the phase shift $h(r)$ with the asymptotic
 phase $\Theta = \theta + h(r)$, $h(1) = 0$; and the isostable coordinate $\Psi(r)$ with
@@ -32,7 +37,7 @@ import diffrax as dfx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Complex, Float
+from jaxtyping import Array, ArrayLike, Bool, Complex, Float
 
 from ...utils.numerics import cartesian_to_polar, polar_to_cartesian
 from ..base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
@@ -54,32 +59,38 @@ class AbstractNormalForm(AbstractODE):
 
     # ------------------------------------------------ defining data (abstract) ----
     @abc.abstractmethod
-    def _log_growth_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
-        r"""$\tilde\rho(s) = \rho(\sqrt s)$, with $\dot r = r\,\tilde\rho(r^2)$;
-        $\tilde\rho(1) = 0$, $\tilde\rho'(1) < 0$. Smooth in $s$."""
+    def log_growth_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
+        r"""$\rho(r) = \dot r / r$ on the basin; $\rho(1) = 0$, $\rho'(1) < 0$."""
 
     @abc.abstractmethod
-    def _angular_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
-        r"""$\tilde\omega(s) = \omega(\sqrt s)$, with $\dot\theta = \tilde\omega(r^2)$.
-        Smooth in $s$."""
+    def angular_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
+        r"""$\omega(r) = \dot\theta$ on the basin; $\omega(1) \ne 0$."""
 
     @abc.abstractmethod
     def phase_shift(self, r: Float[Array, ""]) -> Float[Array, ""]:
-        r"""$h(r)$: asymptotic phase $\Theta = \theta + h(r)$; $h(1) = 0$ (§5.1)."""
+        r"""$h(r)$: asymptotic phase $\Theta = \theta + h(r)$; $h(1) = 0$ (§5.1).
+        ``nan`` (or diverging) outside the basin."""
 
     @abc.abstractmethod
     def isostable(self, r: Float[Array, ""]) -> Float[Array, ""]:
         r"""$\Psi(r)$: $\dot\Psi = \kappa\Psi$; $\Psi(1) = 0$, $\partial_r\Psi(1) = 1$,
-        strictly increasing on the basin (§5.2)."""
+        strictly increasing on the basin, $-\infty$ at its inner edge (§5.2); ``nan``
+        outside."""
 
-    # ----------------------------------------------------- public views in r -----
-    def log_growth_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
-        r"""$\rho(r) = \dot r / r$."""
-        return self._log_growth_rate_sq(r * r)
+    # ---------------------------------------------------------------- basin -------
+    def basin_radii(self) -> tuple[float, float]:
+        r"""$(r_{\rm in}, r_{\rm out})$: the basin of the cycle is the open annulus
+        between them — $r_{\rm in} = 0$ when the enclosed fixed point is the only
+        phaseless point, the radius of the inner repelling cycle otherwise;
+        $r_{\rm out} = \infty$ or the radius of an outer repelling cycle. Python
+        floats (static), so they can drive a ``jnp.where`` or a sampler."""
+        return (0.0, float("inf"))
 
-    def angular_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
-        r"""$\omega(r) = \dot\theta$."""
-        return self._angular_rate_sq(r * r)
+    def in_basin(self, u: Float[Array, " 2"]) -> Bool[Array, ""]:
+        """``r_in < |u| < r_out``."""
+        r_in, r_out = self.basin_radii()
+        r = jnp.sqrt(jnp.sum(u * u))
+        return (r > r_in) & (r < r_out)
 
     # ------------------------------------------------------- linear invariants ----
     def omega(self) -> Float[Array, ""]:
@@ -98,12 +109,6 @@ class AbstractNormalForm(AbstractODE):
         r"""$\mu = e^{\kappa T}$."""
         return jnp.exp(self.floquet_exponent() * self.period())
 
-    def eigenvalues_origin(self) -> Complex[Array, " 2"]:
-        r"""$\rho(0) \pm i\,\omega(0)$ (design document §4.1)."""
-        zero = jnp.asarray(0.0)
-        re, im = self._log_growth_rate_sq(zero), self._angular_rate_sq(zero)
-        return jax.lax.complex(re * jnp.ones(2), im * jnp.array([1.0, -1.0]))
-
     # ------------------------------------------------------------------ charts -----
     @staticmethod
     def to_polar(u: Float[Array, " 2"]) -> Float[Array, " 2"]:
@@ -120,7 +125,13 @@ class AbstractNormalForm(AbstractODE):
         ($\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$; §7); $\Theta \in (-\pi,
         \pi]$."""
         r, theta = self.to_polar(u)
-        return jnp.stack((_wrap(theta + self.phase_shift(r)), self.isostable(r)))
+        r_in, r_out = self.basin_radii()
+        inside = (r > r_in) & (r < r_out)
+        r_safe = jnp.where(inside, r, 1.0)  # keep the closed forms off their poles
+        Theta = _wrap(theta + self.phase_shift(r_safe))
+        Psi = self.isostable(r_safe)
+        nan = jnp.asarray(jnp.nan, dtype=r.dtype)
+        return jnp.stack((jnp.where(inside, Theta, nan), jnp.where(inside, Psi, nan)))
 
     def from_phase_amplitude(self, z: Float[Array, " 2"]) -> Float[Array, " 2"]:
         r"""$(\Theta, \Psi)$ -> cartesian: $r = \Psi^{-1}(\Psi)$ by
@@ -143,11 +154,15 @@ class AbstractNormalForm(AbstractODE):
     def rhs(
         self, t: Float[ArrayLike, ""], u: Float[Array, " 2"], args: Any = None
     ) -> Float[Array, " 2"]:
-        r"""Cartesian field $\tilde\rho(|u|^2)\,u + \tilde\omega(|u|^2)\,\mathsf J u$:
-        smooth at the origin, no square root (§2, §9)."""
+        r"""Cartesian field $\rho(|u|)\,u + \omega(|u|)\,\mathsf J u$ with $|u|$ by a
+        safe square root (the derivative at exactly $u = 0$ is taken as $0$). Smooth
+        wherever $\rho$, $\omega$ are smooth in $r > 0$; ``AbstractEvenNormalForm``
+        overrides it with the square-root-free form that is smooth at the origin."""
         del t, args
         s = jnp.sum(u * u)
-        rho, w = self._log_growth_rate_sq(s), self._angular_rate_sq(s)
+        r = jnp.sqrt(jnp.where(s > 0.0, s, 1.0))
+        r = jnp.where(s > 0.0, r, 0.0)
+        rho, w = self.log_growth_rate(r), self.angular_rate(r)
         x, y = u
         return jnp.stack((rho * x - w * y, rho * y + w * x))
 
@@ -177,10 +192,13 @@ class AbstractNormalForm(AbstractODE):
     def isochron(
         self, Theta: Float[ArrayLike, ""], r: Float[Array, " n"]
     ) -> Float[Array, "n 2"]:
-        r"""The isochron $\Theta$ sampled at radii $r > 0$: cartesian points on
-        $\theta = \Theta - h(r)$ (§5.1)."""
-        theta = Theta - self.phase_shift(r)
-        return jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)), axis=-1)
+        r"""The isochron $\Theta$ sampled at radii $r$ in the basin: cartesian points
+        on $\theta = \Theta - h(r)$ (§5.1); ``nan`` at radii outside the basin."""
+        r_in, r_out = self.basin_radii()
+        inside = (r > r_in) & (r < r_out)
+        theta = Theta - self.phase_shift(jnp.where(inside, r, 1.0))
+        pts = jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)), axis=-1)
+        return jnp.where(inside[..., None], pts, jnp.nan)
 
     # ------------------------------------------------------------------- flow ------
     def flow(
@@ -205,6 +223,52 @@ class AbstractNormalForm(AbstractODE):
         return method(self, ts, u0, args, config)
 
 
+class AbstractEvenNormalForm(AbstractNormalForm):
+    r"""Normal forms whose $\rho$ and $\omega$ are **even** in $r$ — supplied as smooth
+    functions of $s = r^2$ through the ``*_sq`` hooks (design document §1, §9 Option
+    B) — so that the cartesian field $\tilde\rho(|u|^2)\,u + \tilde\omega(|u|^2)\,
+    \mathsf J u$ is smooth at the origin with no square root (for Hopf/Bautin a
+    polynomial), the origin is the enclosed fixed point of the basin (``basin_radii``
+    starts at $0$) and its eigenvalues $\rho(0) \pm i\omega(0)$ are smooth-conjugacy
+    invariants. The ``r_squared`` integration needs this family."""
+
+    @abc.abstractmethod
+    def _log_growth_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
+        r"""$\tilde\rho(s) = \rho(\sqrt s)$, with $\dot r = r\,\tilde\rho(r^2)$;
+        $\tilde\rho(1) = 0$, $\tilde\rho'(1) < 0$. Smooth in $s$."""
+
+    @abc.abstractmethod
+    def _angular_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
+        r"""$\tilde\omega(s) = \omega(\sqrt s)$, with $\dot\theta = \tilde\omega(r^2)$.
+        Smooth in $s$."""
+
+    # the r-chart views are derived (final); autodiff through r * r gives ρ'(1) = 2ρ̃'(1)
+    def log_growth_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
+        r"""$\rho(r) = \tilde\rho(r^2)$."""
+        return self._log_growth_rate_sq(r * r)
+
+    def angular_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
+        r"""$\omega(r) = \tilde\omega(r^2)$."""
+        return self._angular_rate_sq(r * r)
+
+    def eigenvalues_origin(self) -> Complex[Array, " 2"]:
+        r"""$\rho(0) \pm i\,\omega(0)$ (design document §4.1)."""
+        zero = jnp.asarray(0.0)
+        re, im = self._log_growth_rate_sq(zero), self._angular_rate_sq(zero)
+        return jax.lax.complex(re * jnp.ones(2), im * jnp.array([1.0, -1.0]))
+
+    def rhs(
+        self, t: Float[ArrayLike, ""], u: Float[Array, " 2"], args: Any = None
+    ) -> Float[Array, " 2"]:
+        r"""Cartesian field $\tilde\rho(|u|^2)\,u + \tilde\omega(|u|^2)\,\mathsf J u$:
+        smooth at the origin, no square root (§2, §9)."""
+        del t, args
+        s = jnp.sum(u * u)
+        rho, w = self._log_growth_rate_sq(s), self._angular_rate_sq(s)
+        x, y = u
+        return jnp.stack((rho * x - w * y, rho * y + w * x))
+
+
 def _wrap(angle):
     return jnp.arctan2(jnp.sin(angle), jnp.cos(angle))
 
@@ -215,8 +279,9 @@ def _radius_from_isostable(nf: AbstractNormalForm, psi):
     """Monotone root ``Ψ(e^ℓ) = psi`` in ``ℓ = ln r``.
 
     Bracket: ``ℓ = 0`` is one end (``Ψ(1) = 0``); the other is found by doubling away
-    from it until ``Ψ`` passes ``psi`` (``Ψ → -∞`` as ``r → 0`` guarantees the inside;
-    outside, ``Ψ`` may saturate below ``psi``, in which case the result is ``nan``).
+    from it until ``Ψ`` passes ``psi`` (``Ψ → -∞`` at the basin's inner edge guarantees
+    the inside; outside, ``Ψ`` may saturate below ``psi``, in which case the result is
+    ``nan``). A non-finite ``Ψ`` marks a probe beyond the basin's edge.
     Then bisection-safeguarded Newton with a fixed iteration count (reverse-mode
     friendly), as in ``CubicBSpline`` (ADR-0006). ``Ψ`` is strictly increasing on the
     basin, so the root is unique. Differentiable in ``psi`` *and* in the normal form's

@@ -57,6 +57,7 @@ def dataset_file(data_cfg: DictConfig) -> Path:
             seed=data_cfg.seed,
             config=solver,
             integration=data_cfg.integration,
+            outside_basin=data_cfg.get("outside_basin", "error"),
         )
     return dataset_path(data_cfg.out_dir, data_cfg.name, meta)
 
@@ -76,6 +77,7 @@ def generate_dataset(data_cfg: DictConfig) -> Path:
             config=solver,
             integration=data_cfg.integration,
             extra={"config": OmegaConf.to_container(data_cfg, resolve=True)},
+            outside_basin=data_cfg.get("outside_basin", "error"),
         )
     assert source.metadata is not None
     return source.save(dataset_path(data_cfg.out_dir, data_cfg.name, source.metadata))

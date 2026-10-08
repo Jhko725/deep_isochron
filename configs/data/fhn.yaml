@@ -26,4 +26,5 @@ solver:
   atol: 1.0e-10
   max_steps: 65536
 
+outside_basin: error   # initial conditions in a phaseless set: error | resample (ADR-0013)
 integration: null  # AbstractNormalForm systems only

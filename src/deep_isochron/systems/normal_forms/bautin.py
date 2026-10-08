@@ -26,7 +26,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
-from .base import AbstractNormalForm
+from .base import AbstractEvenNormalForm
 from .hopf import A_CONSTRAINT
 
 
@@ -34,7 +34,7 @@ B_CONSTRAINT = GreaterThan(-1.0)
 """``b > -1`` (stability of the cycle); ``raw = 0`` ↦ ``b = 0`` (the Hopf form)."""
 
 
-class BautinNormalForm(AbstractNormalForm):
+class BautinNormalForm(AbstractEvenNormalForm):
     r"""$\dot r = a r (1 - r^2)(1 + b r^2)$, $\dot\theta = \omega_0 + (\omega_1 -
     \omega_0) r^2$."""
 
