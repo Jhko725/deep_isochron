@@ -33,6 +33,7 @@ from deep_isochron.experiment import (
     build_source,
     build_trainer,
     compose,
+    compose_group,
     dataset_file,
     generate_dataset,
     load_model,
@@ -101,6 +102,15 @@ def tiny(data_dir: Path, *overrides: str) -> DictConfig:
 def test_shipped_configs_compose(overrides):
     cfg = compose(*overrides)
     assert cfg.num_steps > 0 and cfg.windows.batch > 0
+
+
+def test_compose_group_is_the_groups_node():
+    data = compose_group("data", "fhn", "n_trajectories=500")
+    assert data.name == "fhn" and data.n_trajectories == 500
+    full = compose("data=fhn", "data.n_trajectories=500").data
+    assert dataset_file(data) == dataset_file(full)
+    model = compose_group("model", "autoencoder")
+    assert model.kind == "autoencoder"
 
 
 # ------------------------------------------------------------------- 2. data ------

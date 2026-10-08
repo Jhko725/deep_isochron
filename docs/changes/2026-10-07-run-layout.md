@@ -35,12 +35,15 @@ discussion; C dropped, the plots module deferred until its contents are planned.
   `build_evaluator(cfg, source, loaders)` (from the inline construction in `train`).
 - `src/deep_isochron/experiment/logging.py` — `build_logger(..., wandb_run=None)`: an
   existing wandb run is used as given (and left for the caller to finish).
+- `src/deep_isochron/experiment/compose.py` — `compose_group(group, name, *overrides)`:
+  one group's config alone, overrides relative to the group, returned as that node
+  (`compose_group("data", "fhn", "n_trajectories=500")` for `load_or_generate_source`).
 - `src/deep_isochron/experiment/__init__.py` — exports `Run`, `Experiment`, `setup`,
-  `build_evaluator`, `load_or_generate_source`; module docstring.
+  `build_evaluator`, `load_or_generate_source`, `compose_group`; module docstring.
 - `configs/wandb/{online,offline}.yaml` — `project: isochron` (the project the notebook
   logs to). `configs/wandb/off.yaml` — `every: 50` (used when a run is passed in).
 - `scripts/README.md` — the Python snippet rewritten around `setup`.
-- `tests/test_experiment.py` — six new tests (section 5; see Tests).
+- `tests/test_experiment.py` — seven new tests (`test_compose_group_is_the_groups_node`; section 5; see Tests).
 - `docs/decisions/0011-experiment-layer.md` — §6 amended (Run, setup, explicit resume).
 - `docs/architecture.md` — `experiment/` tree and the "From a config to a run" diagram.
 - `docs/index.md` — ADR-0011 status, change-document row. `docs/roadmap.md` — ledger row.
@@ -80,7 +83,7 @@ split and the loaders come from one place.
 
 ## Tests
 
-`uv run pytest tests/test_experiment.py` (20 tests; the six new ones in section 5):
+`uv run pytest tests/test_experiment.py` (21 tests; `test_compose_group_is_the_groups_node` in section 1, six new in section 5):
 
 - `test_setup_then_manual_training_loop_reopens_with_load_run` — the notebook path.
 - `test_hand_built_model_reopens_through_a_template` — bare checkpoint dir + template;
@@ -110,6 +113,6 @@ split and the loaders come from one place.
 | `src/deep_isochron/experiment/run.py`: `Run` (create refuses / resume explicit / open), `Experiment`, `setup`, `train`, `load_run(template=)` | | |
 | `src/deep_isochron/experiment/data.py`: `load_or_generate_source`, `build_evaluator` | | |
 | `src/deep_isochron/experiment/logging.py`: `build_logger(wandb_run=)`; `configs/wandb/*` (`project: isochron`, `every` in `off`) | | |
-| `src/deep_isochron/experiment/__init__.py` exports; `scripts/README.md` snippet | | |
+| `src/deep_isochron/experiment/compose.py`: `compose_group`; `experiment/__init__.py` exports; `scripts/README.md` snippet | | |
 | `tests/test_experiment.py` section 5 (6 tests) | | |
 | ADR-0011 §6 amendment; `docs/architecture.md`; `docs/index.md`; `docs/roadmap.md` | | |

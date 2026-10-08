@@ -14,10 +14,11 @@ Runs from Python (notebooks, analysis). `setup` builds what the script builds an
 the run directory; the loop is yours or the default:
 
 ```python
-from deep_isochron.experiment import compose, load_model, load_or_generate_source, load_run, setup, train
+from deep_isochron.experiment import compose, compose_group, load_model, load_or_generate_source, load_run, setup, train
 
+source = load_or_generate_source(compose_group("data", "fhn", "n_trajectories=500"))  # one group alone;
+                                             # notebooks may generate, setup/train never do
 cfg = compose("data=fhn", "data.n_trajectories=500", "model=conjugacy", "num_steps=2500")
-load_or_generate_source(cfg.data)            # notebooks may generate; setup/train never do
 exp = setup(cfg, "runs/notebook/try-1")      # refuses a directory that already holds a run
 state = exp.trainer.train(                   # your loop, your logger …
     exp.state, exp.loaders.train,

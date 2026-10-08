@@ -11,7 +11,11 @@ instantiates objects — anything with its own logic lives in the module it belo
 (``training.loggers``, ``utils.provenance``, ``data``).
 """
 
-from .compose import compose as compose, CONFIG_DIR as CONFIG_DIR
+from .compose import (
+    compose as compose,
+    compose_group as compose_group,
+    CONFIG_DIR as CONFIG_DIR,
+)
 from .data import (
     build_evaluator as build_evaluator,
     build_loaders as build_loaders,
