@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0011
-status: accepted; amended 2026-10-07 (§6: Run, setup, explicit resume)
-updated: 2026-10-07
+status: accepted; amended 2026-10-07/13 (§6: Run, Experiment.from_config, explicit resume, one construction style)
+updated: 2026-10-13
 verified_by: pending (Joon; decisions taken in discussion 2026-10-05)
 ---
 
@@ -50,7 +50,7 @@ with `data.generate`), the window source in `data.windows`. `compose(*overrides)
 one convenience the package adds for notebooks and tests: the config exactly as
 `scripts/train.py` composes it.
 
-`build_source(cfg.data)`, `build_loaders(cfg, source, device, start_step)`,
+`build_source(cfg.data)`, `Loaders.from_config(cfg, source, device, start_step)`,
 `build_model(cfg.model, key)`, `build_trainer(cfg)` (loss, schedule, optimizer),
 `build_logger(cfg, …)`; `run.train(cfg, run_dir)` strings them together, and
 `scripts/train.py` is a ten-line Hydra `main` around it. Tests call `train` directly on
@@ -106,20 +106,20 @@ deterministic batched dataset (ADR-0008 D3) — writing into the new run directo
 
 **Amended 2026-10-07 (branch `run-layout`).** The layout above is now one object,
 `experiment.Run` (`config.yaml`, `metadata.json`, `checkpoints/`), and the construction
-before the loop is `Experiment.setup(cfg, run_dir)` (run, device, source, trainer,
-state, loaders, evaluator); `train(cfg, run_dir)` is `Experiment.setup(...).train()`. Reasons and
+before the loop is `Experiment.from_config(cfg, run_dir)` (run, device, source, trainer,
+state, loaders, evaluator); `train(cfg, run_dir)` is `Experiment.from_config(...).train()`. Reasons and
 rules:
 
 - *The notebook had no way to produce a reopenable run.* A hand-rolled `trainer.train`
   with a bare `OrbaxCheckpointer` stored no config, and `load_run` expected the layout. Now
-  `exp = Experiment.setup(cfg, run_dir)` gives the notebook the same objects as the script, and
+  `exp = Experiment.from_config(cfg, run_dir)` gives the notebook the same objects as the script, and
   `exp.run.checkpointer()` writes checkpoints that carry the config, so `load_run` works
   whichever loop ran. A model that never had a config reopens through
   `load_run(dir, template=state)` — the only honest option, since Orbax stores array
   leaves, not Equinox structure.
-- *Never overwrite silently, resume explicitly* (Joon). `Run.create` refuses a directory
+- *Never overwrite silently, resume explicitly* (Joon). `Run.from_config` refuses a directory
   that already holds a run (a config or checkpoints; a Hydra-created directory with only
-  `.hydra/` is not a run). Continuing a run is `Experiment.setup(cfg, run_dir, resume=True)`: it
+  `.hydra/` is not a run). Continuing a run is `Experiment.from_config(cfg, run_dir, resume=True)`: it
   restores the latest checkpoint, rewrites `config.yaml` to the given `cfg`, and records
   `resumed = {from_step, config_changes, history}` in `metadata.json`, so a raised
   `num_steps` or a changed learning rate is on record. `cfg.resume = <other run>` keeps its
@@ -128,10 +128,18 @@ rules:
 - *`config.yaml` is the latest truth.* `Run.open` reads it first and falls back to the
   checkpoints' `custom_metadata` (fixed at directory creation, so it cannot follow a
   resume).
+- *One construction style* (review round 1, 2026-10-13): objects the experiment layer
+  owns — `Run`, `Loaders`, `Experiment` — construct themselves with a `from_config`
+  classmethod (`Run.from_config(cfg, run_dir, metadata, resume=...)`,
+  `Loaders.from_config(cfg, source, device, start_step=...)`,
+  `Experiment.from_config(cfg, run_dir, resume=...)`); library objects (model, loss,
+  schedule, optimizer, evaluator, logger, source) keep the free `build_*` functions,
+  because `model`/`training`/`data` must not know configs (§2). `Run.open` reads, it does
+  not construct from a config, so it keeps its name.
 - `build_evaluator(cfg, source, loaders)` and `build_logger(..., wandb_run=...)` are
   exposed so the notebook's evaluator and logger are the script's; an existing wandb run
   is logged to as it is and is the caller's to finish. `load_or_generate_source(cfg.data)`
-  is the notebook's explicit opt-in to generation; `setup`/`train` still never generate.
+  is the notebook's explicit opt-in to generation; `Experiment.from_config`/`train` still never generate.
 
 ## Consequences
 

@@ -10,11 +10,11 @@ and resumed.
 4. run             ``train`` for a few steps writes config, metadata and checkpoints;
                    ``load_model`` returns the final model; a resumed run continues the
                    step count and the data stream
-5. Run / setup     the notebook path: ``setup`` then a hand-rolled ``trainer.train``,
-                   ``run.checkpointer()`` reopens with ``load_run``; a hand-built model
-                   reopens through ``template``; ``Run.create`` refuses an existing run;
-                   ``Experiment.setup(resume=True)`` continues in place and records
-                   config changes;
+5. from_config     the notebook path: ``Experiment.from_config`` then a hand-rolled
+                   ``trainer.train``, ``run.checkpointer()`` reopens with ``load_run``;
+                   a hand-built model reopens through ``template``; ``Run.from_config``
+                   refuses an existing run; ``resume=True`` continues in place and
+                   records config changes;
                    ``load_or_generate_source`` generates once; ``build_logger`` takes an
                    existing wandb run
 """
@@ -24,11 +24,11 @@ from pathlib import Path
 
 import equinox as eqx
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from deep_isochron.experiment import (
     build_evaluator,
-    build_loaders,
     build_logger,
     build_model,
     build_source,
@@ -41,6 +41,7 @@ from deep_isochron.experiment import (
     load_model,
     load_or_generate_source,
     load_run,
+    Loaders,
     Run,
     train,
 )
@@ -125,19 +126,22 @@ def test_loaders_shapes_and_resume_slice(data_dir):
     cfg = tiny(data_dir)
     source = build_source(cfg.data)
     dev = jax.devices()[0]
-    full = build_loaders(cfg, source, dev)
+    full = Loaders.from_config(cfg, source, dev)
     b = next(iter(full.train))
     assert b["u"].shape == (16, 10, 2) and b["t"].shape == (16, 10)
     assert full.train_source.num_trajectories == 9  # 12 − round(0.25 · 12)
     assert full.val_source.num_trajectories == 3
     assert len(full.train_batches) >= cfg.num_steps
-    later = build_loaders(cfg, source, dev, start_step=2)
+    later = Loaders.from_config(cfg, source, dev, start_step=2)
     assert np.array_equal(later.train_batches[0]["u"], full.train_batches[2]["u"])
     with pytest.raises(ValueError, match="beyond"):
-        build_loaders(cfg, source, dev, start_step=10**6)
+        Loaders.from_config(cfg, source, dev, start_step=10**6)
     for kind, extra in [("weighted", []), ("mixed", ["windows.sampling.split_idx=30"])]:
         cfg_k = tiny(data_dir, f"windows.sampling.kind={kind}", *extra)
-        assert next(iter(build_loaders(cfg_k, source, dev).train))["u"].shape[0] == 16
+        assert (
+            next(iter(Loaders.from_config(cfg_k, source, dev).train))["u"].shape[0]
+            == 16
+        )
 
 
 # ----------------------------------------------------------- 3. model/trainer -----
@@ -154,6 +158,13 @@ def test_models_and_trainers_build(data_dir):
     assert isinstance(build_trainer(cfg_ae).loss, PhaseAutoencoderLoss)
     with pytest.raises(ValueError, match="model.kind"):
         build_model(compose("model.kind=nope").model, jax.random.key(0))
+    # the shipped adamw config masks weight decay off the latent dynamics: a
+    # zero-gradient step leaves the normal form's parameters exactly where they were
+    state = trainer.init(model, key=jax.random.key(1))
+    zero = jax.tree.map(jnp.zeros_like, state.filter_trainable(model))
+    stepped = state.take_step(zero)
+    assert eqx.tree_equal(stepped.model.latent_dynamics, model.latent_dynamics)
+    assert not eqx.tree_equal(stepped.model.bijection, model.bijection)
 
 
 # -------------------------------------------------------------------- 4. run ------
@@ -186,8 +197,8 @@ def test_resume_continues_steps_and_stream(data_dir, tmp_path):
     assert int(state.step) == 5
     # the resumed run consumed batches 3 and 4 of the same deterministic stream
     source = build_source(cfg.data)
-    full = build_loaders(cfg_resume, source, jax.devices()[0])
-    resumed = build_loaders(cfg_resume, source, jax.devices()[0], start_step=3)
+    full = Loaders.from_config(cfg_resume, source, jax.devices()[0])
+    resumed = Loaders.from_config(cfg_resume, source, jax.devices()[0], start_step=3)
     assert np.array_equal(resumed.train_batches[0]["u"], full.train_batches[3]["u"])
 
 
@@ -222,11 +233,13 @@ def test_autoencoder_run(data_dir, tmp_path):
 
 
 # ------------------------------------------------------------- 5. Run / setup -----
-def test_setup_then_manual_training_loop_reopens_with_load_run(data_dir, tmp_path):
-    """The notebook path: ``setup`` builds the objects and the run directory; the loop
-    is the caller's, with ``exp.run.checkpointer()`` and any logger; ``load_run`` then
-    finds the config in the directory."""
-    exp = Experiment.setup(tiny(data_dir), tmp_path / "nb")
+def test_from_config_then_manual_training_loop_reopens_with_load_run(
+    data_dir, tmp_path
+):
+    """The notebook path: ``from_config`` builds the objects and the run directory; the
+    loop is the caller's, with ``exp.run.checkpointer()`` and any logger; ``load_run``
+    then finds the config in the directory."""
+    exp = Experiment.from_config(tiny(data_dir), tmp_path / "nb")
     assert (exp.run.dir / "config.yaml").exists() and exp.start_step == 0
     assert exp.run.metadata["batches_per_epoch"] > 0
     logger = ListLogger()
@@ -249,7 +262,9 @@ def test_hand_built_model_reopens_through_a_template(data_dir, tmp_path):
     """A model built without any config, checkpointed by a bare ``OrbaxCheckpointer``:
     ``load_run(template=...)`` restores it, and reports no config."""
     cfg = tiny(data_dir)
-    exp = Experiment.setup(cfg, tmp_path / "run")  # only for the loaders and evaluator
+    exp = Experiment.from_config(
+        cfg, tmp_path / "run"
+    )  # only for the loaders and evaluator
     trainer = build_trainer(cfg)
     state0 = trainer.init(
         build_model(cfg.model, jax.random.key(7)), key=jax.random.key(8)
@@ -277,7 +292,7 @@ def test_run_create_refuses_an_existing_run_and_resume_is_explicit(data_dir, tmp
     (run_dir / ".hydra").mkdir(parents=True)  # Hydra makes the directory first: fine
     train(cfg, run_dir)
     with pytest.raises(FileExistsError, match="resume"):
-        Experiment.setup(cfg, run_dir)
+        Experiment.from_config(cfg, run_dir)
     with pytest.raises(FileExistsError, match="resume"):
         train(cfg, run_dir)
     # continuing in place: more steps, a changed learning rate, both on record
@@ -293,10 +308,12 @@ def test_run_create_refuses_an_existing_run_and_resume_is_explicit(data_dir, tmp
     assert len(run.metadata["resumed"]["history"]) == 1
     # resume=True and cfg.resume together is a contradiction
     with pytest.raises(ValueError, match="not both"):
-        Experiment.setup(tiny(data_dir, f"resume={run_dir}"), run_dir, resume=True)
+        Experiment.from_config(
+            tiny(data_dir, f"resume={run_dir}"), run_dir, resume=True
+        )
     # and a resume needs a checkpoint to continue from
     with pytest.raises(FileNotFoundError):
-        Experiment.setup(cfg, tmp_path / "nowhere", resume=True)
+        Experiment.from_config(cfg, tmp_path / "nowhere", resume=True)
 
 
 def test_warm_start_from_another_run_is_recorded(data_dir, tmp_path):
@@ -342,5 +359,5 @@ def test_build_logger_takes_an_existing_wandb_run(data_dir, tmp_path):
     assert [s for s, _ in fake.logged] == [0, 50] and "epoch" in fake.logged[0][1]
     # and the evaluator builder matches what setup uses
     source = build_source(cfg.data)
-    loaders = build_loaders(cfg, source, jax.devices()[0])
+    loaders = Loaders.from_config(cfg, source, jax.devices()[0])
     assert build_evaluator(cfg, source, loaders).t_split is None

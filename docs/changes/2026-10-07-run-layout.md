@@ -1,6 +1,6 @@
 ---
 type: change
-status: review round 1 applied (Experiment.setup, fhn-easy parameters, matplotlib dependency); naming unification pending Joon's call
+status: review round 1 applied; from_config unification and the weight-decay mask landed 2026-10-13
 updated: 2026-10-13
 branch: run-layout
 ---
@@ -39,7 +39,9 @@ discussion; C dropped, the plots module deferred until its contents are planned.
 - `src/deep_isochron/experiment/compose.py` — `compose_group(group, name, *overrides)`:
   one group's config alone, overrides relative to the group, returned as that node
   (`compose_group("data", "fhn", "n_trajectories=500")` for `load_or_generate_source`).
-- `src/deep_isochron/experiment/__init__.py` — exports `Run`, `Experiment`, `setup`,
+- `src/deep_isochron/training/optimizers.py` — new: `decay_mask`; `training/__init__.py`
+  export; `configs/optimizer/adamw.yaml` — `weight_decay`, `mask` (review round 1).
+- `src/deep_isochron/experiment/__init__.py` — exports `Run`, `Experiment`, `Loaders`,
   `build_evaluator`, `load_or_generate_source`, `compose_group`; module docstring.
 - `configs/wandb/{online,offline}.yaml` — `project: isochron` (the project the notebook
   logs to). `configs/wandb/off.yaml` — `every: 50` (used when a run is passed in).
@@ -58,9 +60,11 @@ discussion; C dropped, the plots module deferred until its contents are planned.
 - **`train` kept**: it is the one-call form the script and the tests use, and the only
   place `group` (the multirun → wandb group) is plumbed; three lines. Drop it if you
   prefer `Experiment.setup(...).train(group=...)` spelled out in `scripts/train.py`.
-- **Unifying the construction style** (classmethods vs `build_*`): proposal below under
-  *Design*, not applied — it renames public API Joon just touched, so it waits for the
-  call.
+- **Unifying the construction style** (classmethods vs `build_*`): agreed and applied —
+  `Experiment.setup` → `Experiment.from_config`, `build_loaders` → `Loaders.from_config`,
+  `Run.create`/`Run.resume` → `Run.from_config(..., resume=)` (`Run.open` unchanged).
+  The rule is recorded in ADR-0011 §6 and the package docstring; all callers, tests and
+  docs updated.
 - `configs/data/fhn-easy.yaml` (Joon's new config, Langfield et al. 2025 §4.2) used the
   class defaults, i.e. the *same* system as `fhn.yaml` (`c = 3`, `z = −0.4`, the 2014
   slow–fast regime); it now sets `c: 1.0`, `z: -0.8` as the paper states ("c = 1 with
@@ -75,7 +79,24 @@ discussion; C dropped, the plots module deferred until its contents are planned.
   rename (`name: fitzhugh_nagumo`); `build_source`'s not-found message no longer claims the
   dataset `name` is the config file name (they differ now) and mentions
   `load_or_generate_source`.
-- Answer to the `plotting` question (rcParams): see *Design*.
+- Answer to the `plotting` question (rcParams): see *Design*; Joon edits them himself.
+- **Weight decay on the normal-form parameters** (Joon's `adam` → `adamw` switch, review
+  round 1): `optax.adamw`'s default `weight_decay = 1e-4` pulled *every* leaf toward
+  zero. For the bijection that is a prior toward the identity map (`raw = 0` is the
+  identity, ADR-0002) — acceptable; for the latent dynamics it biases quantities under
+  estimation: Bautin's `raw_a`, `raw_b` at zero are `a = 1`, `b = 0` (the Hopf form),
+  `w`, `w0` at zero a frozen oscillator, the autoencoder's `omega`/`raw_decay` likewise —
+  the estimated period and Floquet exponent would be systematically off. Fix at the
+  optimizer level, which is where decoupled decay lives in optax:
+  `training.optimizers.decay_mask(exclude=("latent_dynamics",))` returns the `mask`
+  pytree (`False` under any attribute named `latent_dynamics`, which both models use),
+  and `configs/optimizer/adamw.yaml` passes it (`weight_decay: 1e-4` made explicit).
+  Nothing is needed at the trainer level: `is_trainable` is a different question
+  (freezing), and the decay is applied inside `optimizer.update`. Tests: a zero-gradient
+  `adamw` step moves the bijection and not the dynamics with the mask, both without
+  (`test_training`); the composed config does the same through `TrainerState.take_step`
+  (`test_experiment`). A per-group learning rate (`optax.multi_transform` with the same
+  path rule) is the next step if the dynamics parameters want their own rate.
 
 ## Design
 
@@ -102,7 +123,7 @@ discussion; C dropped, the plots module deferred until its contents are planned.
   Scope rule of ADR-0011 §2 kept: `setup` composes and instantiates, nothing more.
 - **Not done, on purpose**: a `jax` memory/preallocation config (dropped), the plots
   module (planned separately; Joon started `deep_isochron.plotting` in review round 1).
-- **Proposal — one construction style (review round 1, pending).** Rule: *experiment-owned
+- **One construction style (review round 1, applied).** Rule: *experiment-owned
   classes* construct themselves from a config by a classmethod named `from_config`;
   *library* objects (model, loss, schedule, optimizer, `Evaluator`) keep the free
   `build_*` functions, because `training`/`model` must not know configs (ADR-0011 §2).
@@ -110,8 +131,7 @@ discussion; C dropped, the plots module deferred until its contents are planned.
   `build_loaders` → `Loaders.from_config(cfg, source, device, *, start_step=0)`;
   `Run.create`/`Run.resume` → `Run.from_config(cfg, run_dir, metadata, *, resume=False)`
   with `Run.open` unchanged (it reads, it does not construct from a config). `build_model`,
-  `build_trainer`, `build_evaluator`, `build_logger`, `build_source` stay. One commit, all
-  callers and docs updated, if agreed.
+  `build_trainer`, `build_evaluator`, `build_logger`, `build_source` stay.
 - **rcParams worth setting (review round 1 question).** Beyond what `configure_rcparams`
   sets: `figure.constrained_layout.use = True` (every notebook figure currently passes
   it by hand); `figure.dpi ≈ 120` for notebooks and `savefig.dpi = 200` for the
@@ -178,4 +198,5 @@ split and the loaders come from one place.
 | `configs/data/fhn-easy.yaml`: `c: 1.0`, `z: -0.8` (Langfield et al. 2025 §4.2) | | |
 | `pyproject.toml`: matplotlib → main dependencies (`uv lock` to be run by Joon) | | |
 | `experiment/data.py`: `build_source` not-found message; `tests/test_experiment.py` dataset rename | | |
-| Proposal: `from_config` classmethods for experiment-owned classes, `build_*` for library objects (not applied) | | |
+| `from_config` classmethods: `Experiment.from_config`, `Loaders.from_config`, `Run.from_config(resume=)`; ADR-0011 §6 rule; callers, tests, docs | | |
+| `training/optimizers.py` (`decay_mask`), `configs/optimizer/adamw.yaml` (`weight_decay`, `mask`); `test_training` + `test_experiment` decay tests | | |

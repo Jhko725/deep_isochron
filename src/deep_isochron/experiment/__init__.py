@@ -1,14 +1,19 @@
 """The experiment layer: from Hydra configs (``configs/``) to a training run (ADR-0011).
 
-``build_source`` / ``build_loaders`` (``data``), ``build_model`` (``model``),
+``build_source`` (``data``), ``build_model`` (``model``),
 ``build_trainer`` (``training``), ``build_logger`` (``logging``) are pure functions of
-the composed config; ``setup(cfg, run_dir)`` strings them together into an
-``Experiment`` whose ``Run`` owns the directory layout, ``train(cfg, run_dir)`` runs its
-loop, and ``load_run`` / ``load_model`` reopen a run directory. ``scripts/train.py`` is
-the Hydra entry point; notebooks and tests use ``compose(*overrides)`` and call
-``setup``/``train`` or the builders directly. The package only parses configs and
-instantiates objects — anything with its own logic lives in the module it belongs to
-(``training.loggers``, ``utils.provenance``, ``data``).
+the composed config; ``Experiment.from_config(cfg, run_dir)`` strings them together
+into an ``Experiment`` whose ``Run`` owns the directory layout, ``train(cfg, run_dir)``
+runs its loop, and ``load_run`` / ``load_model`` reopen a run directory.
+``scripts/train.py`` is the Hydra entry point; notebooks and tests use
+``compose(*overrides)`` and ``Experiment.from_config``/``train`` or the builders.
+One construction style: objects the experiment layer *owns* (``Run``, ``Loaders``,
+``Experiment``) construct themselves with a ``from_config`` classmethod; library objects
+(model, loss, schedule, optimizer, evaluator, logger, source) are built by the free
+``build_*`` functions, since ``model``/``training``/``data`` must not know configs.
+The package only parses configs and instantiates objects — anything with its own
+logic lives in the module it belongs to (``training.loggers``, ``utils.provenance``,
+``data``).
 """
 
 from .compose import (
@@ -18,7 +23,6 @@ from .compose import (
 )
 from .data import (
     build_evaluator as build_evaluator,
-    build_loaders as build_loaders,
     build_source as build_source,
     build_window_source as build_window_source,
     dataset_file as dataset_file,

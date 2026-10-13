@@ -10,16 +10,16 @@ Hydra scripts take `key=value` overrides and `--config-name`; see `configs/`.
 | `bench_dataloader.py` | Times the data pipeline against the training step on the device you name (`--device`, else `resolve_device`): fetch rows, the dispatch floor, dispatch vs total for several loaders, `--hlo-stats` (loop/launch/conditional census of the compiled step), `--profile DIR`. `--config <overrides>` benchmarks a training config's own pipeline, model and loss. How to read the table: `docs/design/training-step-performance.md` §4–5. | `uv run python scripts/bench_dataloader.py --device 0 --hlo-stats --no-mp` <br> `uv run python scripts/bench_dataloader.py --config data=fhn windows.batch=4096` |
 | `check_md_math.py` | Emulates GitHub's Markdown-before-MathJax rendering over `docs/**/*.md` and reports constructs that break there (`CLAUDE.md` rules). Must report 0 problems before a Markdown commit. | `uv run python scripts/check_md_math.py` |
 
-Runs from Python (notebooks, analysis). `setup` builds what the script builds and owns
+Runs from Python (notebooks, analysis). `Experiment.from_config` builds what the script builds and owns
 the run directory; the loop is yours or the default:
 
 ```python
 from deep_isochron.experiment import Experiment, compose, compose_group, load_model, load_or_generate_source, load_run, train
 
 source = load_or_generate_source(compose_group("data", "fhn", "n_trajectories=500"))  # one group alone;
-                                             # notebooks may generate, setup/train never do
+                                             # notebooks may generate; from_config/train never do
 cfg = compose("data=fhn", "data.n_trajectories=500", "model=conjugacy", "num_steps=2500")
-exp = Experiment.setup(cfg, "runs/notebook/try-1")   # refuses a directory that already holds a run
+exp = Experiment.from_config(cfg, "runs/notebook/try-1")   # refuses a directory that already holds a run
 state = exp.trainer.train(                   # your loop, your logger …
     exp.state, exp.loaders.train,
     logger=DelayedLogger(WandbLogger(wandb.init(entity="jhko725", project="isochron"), every=25)),
@@ -27,7 +27,7 @@ state = exp.trainer.train(                   # your loop, your logger …
     evaluate=exp.evaluator, eval_every=200,
 )
 state = exp.train()                          # or the default loop (Print + wandb per config)
-state = train(cfg, "runs/notebook/try-2")    # = Experiment.setup(...).train()
+state = train(cfg, "runs/notebook/try-2")    # = Experiment.from_config(...).train()
 
 cfg, state = load_run("runs/notebook/try-1")             # any run directory, latest step
 model = load_model("runs/2026-10-05/12-00-00", step=5000)

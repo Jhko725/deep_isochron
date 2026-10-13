@@ -1,21 +1,20 @@
-"""A training run: its directory (``Run``), its objects (``setup`` → ``Experiment``) and
+"""A training run: its directory (``Run``), its objects (``Experiment.from_config``) and
 reopening it (``load_run`` / ``load_model``).
 
 - ``Run`` is the run directory as an object — ``config.yaml``, ``metadata.json`` and
   ``checkpoints/`` under one path — and the only place that layout is spelled out.
-  ``Run.create`` **refuses** a directory that already holds a run; continuing one is the
-  explicit ``Run.resume`` (or ``Experiment.setup(..., resume=True)``). ``Run.open``
-  reads one back.
-  ``run.checkpointer()`` is an ``OrbaxCheckpointer`` in the right place carrying the
-  run's metadata, so a checkpoint written through it can always be reopened.
-- ``Experiment.setup(cfg, run_dir)`` builds everything the config describes *before*
-  the loop —
-  device, dataset, trainer, state (fresh, or restored), loaders, evaluator — and returns
-  an ``Experiment``; ``Experiment.train(...)`` is the default loop, and a notebook can
-  instead call ``trainer.train`` itself with ``exp.run.checkpointer()`` and any logger.
-  ``train(cfg, run_dir)`` is ``Experiment.setup(cfg, run_dir).train()``: what
-  ``scripts/train.py``
-  calls under Hydra and what the tests call directly.
+  ``Run.from_config`` **refuses** a directory that already holds a run; continuing one
+  is the explicit ``resume=True`` (on ``Run.from_config`` or
+  ``Experiment.from_config``). ``Run.open`` reads one back. ``run.checkpointer()`` is an
+  ``OrbaxCheckpointer`` in the right place carrying the run's metadata, so a checkpoint
+  written through it can always be reopened.
+- ``Experiment.from_config(cfg, run_dir)`` builds everything the config describes
+  *before* the loop — device, dataset, trainer, state (fresh, or restored), loaders,
+  evaluator — and returns an ``Experiment``; ``Experiment.train(...)`` is the default
+  loop, and a notebook can instead call ``trainer.train`` itself with
+  ``exp.run.checkpointer()`` and any logger. ``train(cfg, run_dir)`` is
+  ``Experiment.from_config(cfg, run_dir).train()``: what ``scripts/train.py`` calls
+  under Hydra and what the tests call directly.
 - ``load_run(run_dir)`` rebuilds the state template from the stored config and restores
   a checkpoint; ``load_run(run_dir, template=...)`` restores into a template the caller
   built, for a model that never had a config (a bare ``OrbaxCheckpointer`` directory is
@@ -23,11 +22,11 @@ reopening it (``load_run`` / ``load_model``).
 
 Two ways to continue training, both explicit: ``cfg.resume = <other run dir>``
 warm-starts a **new** run from that run's latest checkpoint (new directory, same data
-stream from ``state.step``); ``Experiment.setup(cfg, run_dir, resume=True)`` continues
-**this** run
-in place — ``config.yaml`` is rewritten to ``cfg`` and the differences from the stored
-config are recorded in ``metadata.json`` (``resumed.config_changes``), so a changed
-learning rate or a raised ``num_steps`` is on record.
+stream from ``state.step``); ``Experiment.from_config(cfg, run_dir, resume=True)``
+continues **this** run in place — ``config.yaml`` is rewritten to ``cfg`` and the
+differences from the stored config are recorded in ``metadata.json``
+(``resumed.config_changes``), so a changed learning rate or a raised ``num_steps`` is on
+record.
 
 Order of operations matters for JAX: ``x64`` and the default device are set before the
 first array exists (``configure_jax``); the loader is ``to_device(..., device)``.
@@ -54,7 +53,7 @@ from ..training import (
     TrainerState,
 )
 from ..utils.provenance import git_state
-from .data import build_evaluator, build_loaders, build_source, Loaders
+from .data import build_evaluator, build_source, Loaders
 from .logging import build_logger
 from .model import build_model
 from .training import build_trainer, resolved
@@ -103,16 +102,26 @@ class Run:
         return (d / Run.CONFIG_FILE).exists() or (d / Run.CHECKPOINT_DIR).exists()
 
     @classmethod
-    def create(
-        cls, cfg: DictConfig, run_dir: str | Path, metadata: dict[str, Any]
+    def from_config(
+        cls,
+        cfg: DictConfig,
+        run_dir: str | Path,
+        metadata: dict[str, Any],
+        *,
+        resume: bool = False,
     ) -> Run:
-        """Start a run in ``run_dir``: refuses if one is already there (``resume`` to
-        continue it, or choose another directory). Writes the config and metadata."""
+        """Start a run in ``run_dir`` — refusing if one is already there — or, with
+        ``resume=True``, continue the run there with ``cfg`` (which may differ from the
+        stored config: the differences go into ``metadata["resumed"]["config_changes"]``
+        and ``config.yaml`` is rewritten; a checkpoint must exist). Writes the config
+        and metadata either way."""
+        if resume:
+            return cls._resume(cfg, run_dir, metadata)
         d = Path(run_dir)
         if cls.exists(d):
             raise FileExistsError(
-                f"{d} already holds a run. Continue it with Run.resume / "
-                "Experiment.setup(cfg, run_dir, resume=True), or choose another "
+                f"{d} already holds a run. Continue it with resume=True "
+                "(Run.from_config / Experiment.from_config), or choose another "
                 "directory."
             )
         d.mkdir(parents=True, exist_ok=True)
@@ -121,12 +130,9 @@ class Run:
         return run
 
     @classmethod
-    def resume(
+    def _resume(
         cls, cfg: DictConfig, run_dir: str | Path, metadata: dict[str, Any]
     ) -> Run:
-        """Continue the run in ``run_dir`` with ``cfg`` (which may differ from the
-        stored config: the differences go into ``metadata["resumed"]["config_changes"]``
-        and ``config.yaml`` is rewritten). Requires a run with a checkpoint."""
         previous = cls.open(run_dir)
         step = previous.latest_step()
         if step is None:
@@ -251,8 +257,8 @@ def _template(cfg: DictConfig, trainer: Trainer) -> TrainerState:
 # ------------------------------------------------------------------- the objects ---
 @dataclass(frozen=True)
 class Experiment:
-    """Everything ``setup`` built from a config: the ``run`` directory, the ``device``,
-    the dataset ``source``, the ``trainer``, the initial (or restored) ``state`` with
+    """Everything ``from_config`` built: the ``run`` directory, the ``device``, the
+    dataset ``source``, the ``trainer``, the initial (or restored) ``state`` with
     ``start_step``, the ``loaders`` (sliced at ``start_step``) and the ``evaluator``.
     ``train()`` is the default loop; a notebook may call ``trainer.train`` itself with
     ``run.checkpointer()`` and any logger."""
@@ -311,7 +317,7 @@ class Experiment:
                 owned_wandb.finish()
 
     @classmethod
-    def setup(
+    def from_config(
         cls, cfg: DictConfig, run_dir: str | Path, *, resume: bool = False
     ) -> Experiment:
         """Build a run's objects from its config, creating the run directory (refusing
@@ -340,7 +346,7 @@ class Experiment:
                     "resume=True continues run_dir; cfg.resume names another run; "
                     "not both."
                 )
-            run = Run.resume(cfg, run_dir, metadata)
+            run = Run.from_config(cfg, run_dir, metadata, resume=True)
             state = run.restore(_template(cfg, trainer))
         elif cfg.resume:
             previous = Run.open(cfg.resume)
@@ -348,14 +354,14 @@ class Experiment:
             if step is None:
                 raise FileNotFoundError(f"no checkpoint to resume under {previous.dir}")
             metadata["resumed_from"] = {"run": str(previous.dir), "step": step}
-            run = Run.create(cfg, run_dir, metadata)
+            run = Run.from_config(cfg, run_dir, metadata)
             state = previous.restore(_template(cfg, trainer), step)
         else:
-            run = Run.create(cfg, run_dir, metadata)
+            run = Run.from_config(cfg, run_dir, metadata)
             state = _template(cfg, trainer)
         start_step = int(state.step)
 
-        loaders = build_loaders(cfg, source, device, start_step=start_step)
+        loaders = Loaders.from_config(cfg, source, device, start_step=start_step)
         run.metadata["batches_per_epoch"] = loaders.batches_per_epoch
         run._write()
         evaluator = build_evaluator(cfg, source, loaders)
@@ -387,9 +393,9 @@ def train(
     group: str | None = None,
     resume: bool = False,
 ) -> TrainerState:
-    """``Experiment.setup(cfg, run_dir, resume=resume).train(group=group)``: the whole
-    run from a config, as ``scripts/train.py`` does it."""
-    return Experiment.setup(cfg, run_dir, resume=resume).train(group=group)
+    """``Experiment.from_config(cfg, run_dir, resume=resume).train(group=group)``: the
+    whole run from a config, as ``scripts/train.py`` does it."""
+    return Experiment.from_config(cfg, run_dir, resume=resume).train(group=group)
 
 
 # ------------------------------------------------------------------- reopening -----

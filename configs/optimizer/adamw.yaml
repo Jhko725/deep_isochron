@@ -1,2 +1,6 @@
 _target_: optax.adamw
 learning_rate: 1.0e-3
+weight_decay: 1.0e-4
+mask:                     # decay the bijection (toward the identity map), never the
+  _target_: deep_isochron.training.decay_mask   # dynamics parameters under estimation
+  exclude: [latent_dynamics]
