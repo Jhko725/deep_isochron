@@ -36,7 +36,6 @@ from .run import (
     load_model as load_model,
     load_run as load_run,
     Run as Run,
-    setup as setup,
     train as train,
 )
 from .training import (

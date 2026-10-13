@@ -1,0 +1,30 @@
+# Trajectories from the FitzHugh–Nagumo system, discussed in P. Langfield et al. Commun. Nonlinear Sci. Numer. Simulat. 151, 109043 (2025).
+# Default is 500 initial conditions in a box, 50 time units.
+# Run: uv run python scripts/generate_data.py --config-name fhn-easy  [key=value overrides]
+name: fitzhugh_nagumo_easy
+out_dir: data
+seed: 0
+n_trajectories: 500
+
+system:
+  _target_: deep_isochron.systems.FitzhughNagumo
+
+ic_sampler:
+  _target_: deep_isochron.data.UniformBox
+  lo: [-3.0, -3.0]
+  hi: [3.0, 3.0]
+
+time:
+  t0: 0.0
+  t1: 50.0
+  n: 501
+
+solver:
+  _target_: deep_isochron.systems.SolverConfig
+  solver:
+    _target_: diffrax.Tsit5
+  rtol: 1.0e-8
+  atol: 1.0e-10
+  max_steps: 65536
+
+integration: null  # AbstractNormalForm systems only

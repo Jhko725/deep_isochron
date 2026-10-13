@@ -6,7 +6,7 @@ defaults:
   - model: conjugacy
   - loss: conjugacy
   - schedule: constant
-  - optimizer: adam
+  - optimizer: adamw
   - wandb: "off"
   - _self_
 

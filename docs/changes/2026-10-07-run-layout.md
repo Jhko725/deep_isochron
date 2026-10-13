@@ -110,9 +110,11 @@ split and the loaders come from one place.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/deep_isochron/experiment/run.py`: `Run` (create refuses / resume explicit / open), `Experiment`, `setup`, `train`, `load_run(template=)` | | |
-| `src/deep_isochron/experiment/data.py`: `load_or_generate_source`, `build_evaluator` | | |
-| `src/deep_isochron/experiment/logging.py`: `build_logger(wandb_run=)`; `configs/wandb/*` (`project: isochron`, `every` in `off`) | | |
-| `src/deep_isochron/experiment/compose.py`: `compose_group`; `experiment/__init__.py` exports; `scripts/README.md` snippet | | |
-| `tests/test_experiment.py` section 5 (6 tests) | | |
-| ADR-0011 §6 amendment; `docs/architecture.md`; `docs/index.md`; `docs/roadmap.md` | | |
+| `src/deep_isochron/experiment/run.py`: `Run` (create refuses / resume explicit / open), `Experiment`, `setup`, `train`, `load_run(template=)` | <ul><li>`setup` feels to generic of a name. Either renaming to `setup_experiment` or making it a classmethod of `Experiment` seems more adequate. <li>`train` is a super thin helper method over `setup`. Is it worth keeping? <li>Noticing that `Run` and `data.Loaders` are implemented in a different style. `Run` uses a classmethod to instantiate from config, `Loaders` uses the free `build_loaders` function. For an easy to expect codebase, the pattern used should be unified, and I prefer the `classmethod` based approach. Maybe name all these similar functionalities under the same name, for example `.from_config`? For run, this will require perhaps merging the functionalities of `create` and `resume` via a boolean flag `resume`.<ul>| `setup` changed to `Experiment.setup`. Docs will need updating accordingly. Rest deferred to discussions with Claude. |
+| `src/deep_isochron/experiment/data.py`: `load_or_generate_source`, `build_evaluator` | Both look good for now. | None |
+| `src/deep_isochron/experiment/logging.py`: `build_logger(wandb_run=)`; `configs/wandb/*` (`project: isochron`, `every` in `off`) | Looks good. | None |
+| `src/deep_isochron/experiment/compose.py`: `compose_group`; `experiment/__init__.py` exports; `scripts/README.md` snippet | Looks good. Minor changes in `__init__.py` to comply with my edits. | None |
+| `tests/test_experiment.py` section 5 (6 tests) | Had a cursory look. Looks good for now. | None |
+| ADR-0011 §6 amendment; `docs/architecture.md`; `docs/index.md`; `docs/roadmap.md` | Had a readthrough. Looks good. | None |
+| `prototype.ipynb`: Replaced existing code with the updated functions. | Will be migrating more stuff as I go. | None |
+| `src/deep_isochron/plotting`: Started refactoring some of the plots in `prototype.ipynb` to dedicated plotting functions. | Are there other things that might be worth setting as default rcparams? | None |

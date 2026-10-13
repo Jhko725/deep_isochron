@@ -305,71 +305,74 @@ class Experiment:
             if owned_wandb is not None and owned_wandb is not wandb_run:
                 owned_wandb.finish()
 
+    @classmethod
+    def setup(
+        cls, cfg: DictConfig, run_dir: str | Path, *, resume: bool = False
+    ) -> Experiment:
+        """Build a run's objects from its config, creating the run directory (refusing
+        an existing run) or, with ``resume=True``, continuing the run already there from
+         its latest checkpoint. ``cfg.resume`` (another run's directory) warm-starts a
+        new run from that run's latest checkpoint instead."""
+        run_dir = Path(run_dir)
+        device = configure_jax(cfg)
+        config = resolved(cfg)
+        source = build_source(cfg.data)
+        trainer = build_trainer(cfg)
+        assert source.metadata is not None
+        metadata: dict[str, Any] = {
+            "config": config,
+            "dataset": {
+                "config_hash": source.metadata.config_hash,
+                "trajectories": source.num_trajectories,
+            },
+            "x64": bool(cfg.x64),
+            "git": dict(zip(("sha", "dirty"), git_state())),
+        }
 
-def setup(cfg: DictConfig, run_dir: str | Path, *, resume: bool = False) -> Experiment:
-    """Build a run's objects from its config, creating the run directory (refusing an
-    existing run) or, with ``resume=True``, continuing the run already there from its
-    latest checkpoint. ``cfg.resume`` (another run's directory) warm-starts a new run
-    from that run's latest checkpoint instead."""
-    run_dir = Path(run_dir)
-    device = configure_jax(cfg)
-    config = resolved(cfg)
-    source = build_source(cfg.data)
-    trainer = build_trainer(cfg)
-    assert source.metadata is not None
-    metadata: dict[str, Any] = {
-        "config": config,
-        "dataset": {
-            "config_hash": source.metadata.config_hash,
-            "trajectories": source.num_trajectories,
-        },
-        "x64": bool(cfg.x64),
-        "git": dict(zip(("sha", "dirty"), git_state())),
-    }
+        if resume:
+            if cfg.resume:
+                raise ValueError(
+                    """resume=True continues run_dir; cfg.resume names another run; not
+                    both."""
+                )
+            run = Run.resume(cfg, run_dir, metadata)
+            state = run.restore(_template(cfg, trainer))
+        elif cfg.resume:
+            previous = Run.open(cfg.resume)
+            step = previous.latest_step()
+            if step is None:
+                raise FileNotFoundError(f"no checkpoint to resume under {previous.dir}")
+            metadata["resumed_from"] = {"run": str(previous.dir), "step": step}
+            run = Run.create(cfg, run_dir, metadata)
+            state = previous.restore(_template(cfg, trainer), step)
+        else:
+            run = Run.create(cfg, run_dir, metadata)
+            state = _template(cfg, trainer)
+        start_step = int(state.step)
 
-    if resume:
-        if cfg.resume:
-            raise ValueError(
-                "resume=True continues run_dir; cfg.resume names another run; not both."
-            )
-        run = Run.resume(cfg, run_dir, metadata)
-        state = run.restore(_template(cfg, trainer))
-    elif cfg.resume:
-        previous = Run.open(cfg.resume)
-        step = previous.latest_step()
-        if step is None:
-            raise FileNotFoundError(f"no checkpoint to resume under {previous.dir}")
-        metadata["resumed_from"] = {"run": str(previous.dir), "step": step}
-        run = Run.create(cfg, run_dir, metadata)
-        state = previous.restore(_template(cfg, trainer), step)
-    else:
-        run = Run.create(cfg, run_dir, metadata)
-        state = _template(cfg, trainer)
-    start_step = int(state.step)
-
-    loaders = build_loaders(cfg, source, device, start_step=start_step)
-    run.metadata["batches_per_epoch"] = loaders.batches_per_epoch
-    run._write()
-    evaluator = build_evaluator(cfg, source, loaders)
-    print(
-        f"run {run.dir}: {cfg.num_steps} steps from step {start_step}; "
-        f"{loaders.num_windows} windows per epoch in {loaders.batches_per_epoch} "
-        f"batches of {cfg.windows.batch} × {cfg.windows.length} "
-        f"(≈ {cfg.num_steps / loaders.batches_per_epoch:.2f} epochs); "
-        f"{source.num_trajectories} trajectories, "
-        f"{loaders.val_source.num_trajectories} held out; "
-        f"device {device.platform}:{device.id}"
-    )
-    return Experiment(
-        run=run,
-        device=device,
-        source=source,
-        trainer=trainer,
-        state=state,
-        start_step=start_step,
-        loaders=loaders,
-        evaluator=evaluator,
-    )
+        loaders = build_loaders(cfg, source, device, start_step=start_step)
+        run.metadata["batches_per_epoch"] = loaders.batches_per_epoch
+        run._write()
+        evaluator = build_evaluator(cfg, source, loaders)
+        print(
+            f"run {run.dir}: {cfg.num_steps} steps from step {start_step}; "
+            f"{loaders.num_windows} windows per epoch in {loaders.batches_per_epoch} "
+            f"batches of {cfg.windows.batch} × {cfg.windows.length} "
+            f"(≈ {cfg.num_steps / loaders.batches_per_epoch:.2f} epochs); "
+            f"{source.num_trajectories} trajectories, "
+            f"{loaders.val_source.num_trajectories} held out; "
+            f"device {device.platform}:{device.id}"
+        )
+        return cls(
+            run=run,
+            device=device,
+            source=source,
+            trainer=trainer,
+            state=state,
+            start_step=start_step,
+            loaders=loaders,
+            evaluator=evaluator,
+        )
 
 
 def train(
@@ -381,7 +384,7 @@ def train(
 ) -> TrainerState:
     """``setup(cfg, run_dir, resume=resume).train(group=group)``: the whole run from a
     config, as ``scripts/train.py`` does it."""
-    return setup(cfg, run_dir, resume=resume).train(group=group)
+    return Experiment.setup(cfg, run_dir, resume=resume).train(group=group)
 
 
 # ------------------------------------------------------------------- reopening -----
