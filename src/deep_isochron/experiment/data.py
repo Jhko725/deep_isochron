@@ -88,10 +88,11 @@ def build_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
     path = dataset_file(data_cfg)
     if not path.exists():
         raise FileNotFoundError(
-            f"dataset {path} not found. Training never generates data; run\n"
-            "    uv run python scripts/generate_data.py --config-name "
-            f"{data_cfg.name}\n"
-            "(with the same overrides) first."
+            f"dataset {path} (name {data_cfg.name!r}) not found. Training never "
+            "generates data; run\n"
+            "    uv run python scripts/generate_data.py --config-name <data config>\n"
+            "(with the same overrides) first, or load_or_generate_source(cfg.data) "
+            "from Python."
         )
     return TimeSeriesDataSource.load(path)
 

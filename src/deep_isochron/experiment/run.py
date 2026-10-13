@@ -4,14 +4,17 @@ reopening it (``load_run`` / ``load_model``).
 - ``Run`` is the run directory as an object — ``config.yaml``, ``metadata.json`` and
   ``checkpoints/`` under one path — and the only place that layout is spelled out.
   ``Run.create`` **refuses** a directory that already holds a run; continuing one is the
-  explicit ``Run.resume`` (or ``setup(..., resume=True)``). ``Run.open`` reads one back.
+  explicit ``Run.resume`` (or ``Experiment.setup(..., resume=True)``). ``Run.open``
+  reads one back.
   ``run.checkpointer()`` is an ``OrbaxCheckpointer`` in the right place carrying the
   run's metadata, so a checkpoint written through it can always be reopened.
-- ``setup(cfg, run_dir)`` builds everything the config describes *before* the loop —
+- ``Experiment.setup(cfg, run_dir)`` builds everything the config describes *before*
+  the loop —
   device, dataset, trainer, state (fresh, or restored), loaders, evaluator — and returns
   an ``Experiment``; ``Experiment.train(...)`` is the default loop, and a notebook can
   instead call ``trainer.train`` itself with ``exp.run.checkpointer()`` and any logger.
-  ``train(cfg, run_dir)`` is ``setup(cfg, run_dir).train()``: what ``scripts/train.py``
+  ``train(cfg, run_dir)`` is ``Experiment.setup(cfg, run_dir).train()``: what
+  ``scripts/train.py``
   calls under Hydra and what the tests call directly.
 - ``load_run(run_dir)`` rebuilds the state template from the stored config and restores
   a checkpoint; ``load_run(run_dir, template=...)`` restores into a template the caller
@@ -20,7 +23,8 @@ reopening it (``load_run`` / ``load_model``).
 
 Two ways to continue training, both explicit: ``cfg.resume = <other run dir>``
 warm-starts a **new** run from that run's latest checkpoint (new directory, same data
-stream from ``state.step``); ``setup(cfg, run_dir, resume=True)`` continues **this** run
+stream from ``state.step``); ``Experiment.setup(cfg, run_dir, resume=True)`` continues
+**this** run
 in place — ``config.yaml`` is rewritten to ``cfg`` and the differences from the stored
 config are recorded in ``metadata.json`` (``resumed.config_changes``), so a changed
 learning rate or a raised ``num_steps`` is on record.
@@ -108,7 +112,8 @@ class Run:
         if cls.exists(d):
             raise FileExistsError(
                 f"{d} already holds a run. Continue it with Run.resume / "
-                "setup(cfg, run_dir, resume=True), or choose another directory."
+                "Experiment.setup(cfg, run_dir, resume=True), or choose another "
+                "directory."
             )
         d.mkdir(parents=True, exist_ok=True)
         run = cls(d, cfg, dict(metadata))
@@ -311,7 +316,7 @@ class Experiment:
     ) -> Experiment:
         """Build a run's objects from its config, creating the run directory (refusing
         an existing run) or, with ``resume=True``, continuing the run already there from
-         its latest checkpoint. ``cfg.resume`` (another run's directory) warm-starts a
+        its latest checkpoint. ``cfg.resume`` (another run's directory) warm-starts a
         new run from that run's latest checkpoint instead."""
         run_dir = Path(run_dir)
         device = configure_jax(cfg)
@@ -332,8 +337,8 @@ class Experiment:
         if resume:
             if cfg.resume:
                 raise ValueError(
-                    """resume=True continues run_dir; cfg.resume names another run; not
-                    both."""
+                    "resume=True continues run_dir; cfg.resume names another run; "
+                    "not both."
                 )
             run = Run.resume(cfg, run_dir, metadata)
             state = run.restore(_template(cfg, trainer))
@@ -382,8 +387,8 @@ def train(
     group: str | None = None,
     resume: bool = False,
 ) -> TrainerState:
-    """``setup(cfg, run_dir, resume=resume).train(group=group)``: the whole run from a
-    config, as ``scripts/train.py`` does it."""
+    """``Experiment.setup(cfg, run_dir, resume=resume).train(group=group)``: the whole
+    run from a config, as ``scripts/train.py`` does it."""
     return Experiment.setup(cfg, run_dir, resume=resume).train(group=group)
 
 

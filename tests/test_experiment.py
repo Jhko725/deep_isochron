@@ -13,7 +13,8 @@ and resumed.
 5. Run / setup     the notebook path: ``setup`` then a hand-rolled ``trainer.train``,
                    ``run.checkpointer()`` reopens with ``load_run``; a hand-built model
                    reopens through ``template``; ``Run.create`` refuses an existing run;
-                   ``setup(resume=True)`` continues in place and records config changes;
+                   ``Experiment.setup(resume=True)`` continues in place and records
+                   config changes;
                    ``load_or_generate_source`` generates once; ``build_logger`` takes an
                    existing wandb run
 """
@@ -35,12 +36,12 @@ from deep_isochron.experiment import (
     compose,
     compose_group,
     dataset_file,
+    Experiment,
     generate_dataset,
     load_model,
     load_or_generate_source,
     load_run,
     Run,
-    setup,
     train,
 )
 from deep_isochron.model import ConjugateLatentDynamics, PhaseAmplitudeAutoencoder
@@ -106,7 +107,7 @@ def test_shipped_configs_compose(overrides):
 
 def test_compose_group_is_the_groups_node():
     data = compose_group("data", "fhn", "n_trajectories=500")
-    assert data.name == "fhn" and data.n_trajectories == 500
+    assert data.name == "fitzhugh_nagumo" and data.n_trajectories == 500
     full = compose("data=fhn", "data.n_trajectories=500").data
     assert dataset_file(data) == dataset_file(full)
     model = compose_group("model", "autoencoder")
@@ -116,7 +117,7 @@ def test_compose_group_is_the_groups_node():
 # ------------------------------------------------------------------- 2. data ------
 def test_build_source_requires_the_generated_file(tmp_path):
     cfg = compose(*TINY_DATA, f"data.out_dir={tmp_path}")
-    with pytest.raises(FileNotFoundError, match="--config-name bautin"):
+    with pytest.raises(FileNotFoundError, match="never generates"):
         build_source(cfg.data)
 
 
@@ -225,7 +226,7 @@ def test_setup_then_manual_training_loop_reopens_with_load_run(data_dir, tmp_pat
     """The notebook path: ``setup`` builds the objects and the run directory; the loop
     is the caller's, with ``exp.run.checkpointer()`` and any logger; ``load_run`` then
     finds the config in the directory."""
-    exp = setup(tiny(data_dir), tmp_path / "nb")
+    exp = Experiment.setup(tiny(data_dir), tmp_path / "nb")
     assert (exp.run.dir / "config.yaml").exists() and exp.start_step == 0
     assert exp.run.metadata["batches_per_epoch"] > 0
     logger = ListLogger()
@@ -248,7 +249,7 @@ def test_hand_built_model_reopens_through_a_template(data_dir, tmp_path):
     """A model built without any config, checkpointed by a bare ``OrbaxCheckpointer``:
     ``load_run(template=...)`` restores it, and reports no config."""
     cfg = tiny(data_dir)
-    exp = setup(cfg, tmp_path / "run")  # only for the loaders and evaluator
+    exp = Experiment.setup(cfg, tmp_path / "run")  # only for the loaders and evaluator
     trainer = build_trainer(cfg)
     state0 = trainer.init(
         build_model(cfg.model, jax.random.key(7)), key=jax.random.key(8)
@@ -276,7 +277,7 @@ def test_run_create_refuses_an_existing_run_and_resume_is_explicit(data_dir, tmp
     (run_dir / ".hydra").mkdir(parents=True)  # Hydra makes the directory first: fine
     train(cfg, run_dir)
     with pytest.raises(FileExistsError, match="resume"):
-        setup(cfg, run_dir)
+        Experiment.setup(cfg, run_dir)
     with pytest.raises(FileExistsError, match="resume"):
         train(cfg, run_dir)
     # continuing in place: more steps, a changed learning rate, both on record
@@ -292,10 +293,10 @@ def test_run_create_refuses_an_existing_run_and_resume_is_explicit(data_dir, tmp
     assert len(run.metadata["resumed"]["history"]) == 1
     # resume=True and cfg.resume together is a contradiction
     with pytest.raises(ValueError, match="not both"):
-        setup(tiny(data_dir, f"resume={run_dir}"), run_dir, resume=True)
+        Experiment.setup(tiny(data_dir, f"resume={run_dir}"), run_dir, resume=True)
     # and a resume needs a checkpoint to continue from
     with pytest.raises(FileNotFoundError):
-        setup(cfg, tmp_path / "nowhere", resume=True)
+        Experiment.setup(cfg, tmp_path / "nowhere", resume=True)
 
 
 def test_warm_start_from_another_run_is_recorded(data_dir, tmp_path):

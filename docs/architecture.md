@@ -103,7 +103,7 @@ deep_isochron
 │   ├── logging.py           build_logger: Print (+ Wandb online/offline) → Epoch → Delayed
 │   └── run.py               Run (the directory: config.yaml, metadata.json, checkpoints/;
 │                            create refuses an existing run, resume is explicit);
-│                            setup(cfg, run_dir) → Experiment; train = setup().train();
+│                            Experiment.setup(cfg, run_dir); train = Experiment.setup().train();
 │                            load_run / load_model (template= for hand-built models)
 └── utils/                   shared helpers
     ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian (constraints, normal forms)
@@ -253,13 +253,13 @@ configs/train.yaml ──compose──► cfg          (Hydra groups; `_target_`
         ├─ build_loaders(cfg, source, device, start_step): split_trajectories; WindowBatchSource
         │        (num_steps → epochs); [start_step:]; to_device; validation_windows().batch
         ├─ Run.create(cfg, run_dir, metadata): config.yaml, metadata.json  (refuses an existing run;
-        │        setup(..., resume=True) → Run.resume: restore latest, record config_changes)
-        ├─ build_evaluator(cfg, source, loaders)        ─┐ all of the above = setup(cfg, run_dir)
+        │        Experiment.setup(..., resume=True) → Run.resume: restore latest, record config_changes)
+        ├─ build_evaluator(cfg, source, loaders)        ─┐ all of the above = Experiment.setup(cfg, run_dir)
         ├─ build_logger (Print, wandb? or wandb_run=) → DelayedLogger   → Experiment
         └─ Trainer.train(state, loader, num_steps, logger, run.checkpointer()  [= Experiment.train()]
                  (OrbaxCheckpointer(run_dir/checkpoints, custom_metadata=metadata)), evaluator, eval_every)
                  └─ final step always checkpointed → load_run(run_dir) / load_model(run_dir)
-                    notebook: exp = setup(cfg, dir); trainer.train(exp.state, exp.loaders.train, logger=mine,
+                    notebook: exp = Experiment.setup(cfg, dir); trainer.train(exp.state, exp.loaders.train, logger=mine,
                     checkpointer=exp.run.checkpointer(), evaluate=exp.evaluator) → load_run(dir) works
 ```
 

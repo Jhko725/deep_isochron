@@ -14,12 +14,12 @@ Runs from Python (notebooks, analysis). `setup` builds what the script builds an
 the run directory; the loop is yours or the default:
 
 ```python
-from deep_isochron.experiment import compose, compose_group, load_model, load_or_generate_source, load_run, setup, train
+from deep_isochron.experiment import Experiment, compose, compose_group, load_model, load_or_generate_source, load_run, train
 
 source = load_or_generate_source(compose_group("data", "fhn", "n_trajectories=500"))  # one group alone;
                                              # notebooks may generate, setup/train never do
 cfg = compose("data=fhn", "data.n_trajectories=500", "model=conjugacy", "num_steps=2500")
-exp = setup(cfg, "runs/notebook/try-1")      # refuses a directory that already holds a run
+exp = Experiment.setup(cfg, "runs/notebook/try-1")   # refuses a directory that already holds a run
 state = exp.trainer.train(                   # your loop, your logger …
     exp.state, exp.loaders.train,
     logger=DelayedLogger(WandbLogger(wandb.init(entity="jhko725", project="isochron"), every=25)),
@@ -27,7 +27,7 @@ state = exp.trainer.train(                   # your loop, your logger …
     evaluate=exp.evaluator, eval_every=200,
 )
 state = exp.train()                          # or the default loop (Print + wandb per config)
-state = train(cfg, "runs/notebook/try-2")    # = setup(...).train()
+state = train(cfg, "runs/notebook/try-2")    # = Experiment.setup(...).train()
 
 cfg, state = load_run("runs/notebook/try-1")             # any run directory, latest step
 model = load_model("runs/2026-10-05/12-00-00", step=5000)

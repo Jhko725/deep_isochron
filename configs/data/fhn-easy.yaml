@@ -8,6 +8,11 @@ n_trajectories: 500
 
 system:
   _target_: deep_isochron.systems.FitzhughNagumo
+  a: 0.7
+  b: 0.8
+  c: 1.0      # Langfield et al. 2025 §4.2: "c = 1 with practically no time-scale separation"
+  z: -0.8     # "z = −0.8 so that the equilibrium is shifted": a repelling focus at ≈ (0.2729, 0.5339),
+              # period ≈ 10.8329, clockwise; the phaseless set is that single point
 
 ic_sampler:
   _target_: deep_isochron.data.UniformBox
