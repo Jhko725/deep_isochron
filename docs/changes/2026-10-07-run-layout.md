@@ -1,7 +1,7 @@
 ---
 type: change
-status: review round 1 applied; from_config unification and the weight-decay mask landed 2026-10-13
-updated: 2026-10-13
+status: review rounds 1–2 applied; optimizer group reworked 2026-10-14 (adam default, adabelief, adamw+mask, clip_norm)
+updated: 2026-10-14
 branch: run-layout
 ---
 
@@ -40,7 +40,9 @@ discussion; C dropped, the plots module deferred until its contents are planned.
   one group's config alone, overrides relative to the group, returned as that node
   (`compose_group("data", "fhn", "n_trajectories=500")` for `load_or_generate_source`).
 - `src/deep_isochron/training/optimizers.py` — new: `decay_mask`; `training/__init__.py`
-  export; `configs/optimizer/adamw.yaml` — `weight_decay`, `mask` (review round 1).
+  export; `configs/optimizer/{adam,adabelief,adamw}.yaml` (review rounds 1–2; `adam` the
+  default, `adamw` with `weight_decay` and `mask`); `configs/train.yaml` `clip_norm`;
+  `experiment/training.py` `build_optimizer(cfg, clip_norm)`.
 - `src/deep_isochron/experiment/__init__.py` — exports `Run`, `Experiment`, `Loaders`,
   `build_evaluator`, `load_or_generate_source`, `compose_group`; module docstring.
 - `configs/wandb/{online,offline}.yaml` — `project: isochron` (the project the notebook
@@ -97,6 +99,35 @@ discussion; C dropped, the plots module deferred until its contents are planned.
   (`test_training`); the composed config does the same through `TrainerState.take_step`
   (`test_experiment`). A per-group learning rate (`optax.multi_transform` with the same
   path rule) is the next step if the dynamics parameters want their own rate.
+
+## Review round 2 (2026-10-14) — optimizer group
+
+- **`adam` is the default again** (`configs/optimizer/adam.yaml`): no weight decay, as
+  in the references we build on (neural conjugate flows: "optimized with ADAM"; Zhi et
+  al. 2022: Adam, $5\times10^{-4}$; Yawata et al.: lr 0.001, optimizer unnamed; Kidger's
+  diffrax example: AdaBelief). `adamw` with $\lambda = 0$ *is* Adam — optax's `adamw` is
+  `chain(scale_by_adam, add_decayed_weights(λ, mask), scale_by_learning_rate)` and the two
+  produce bit-identical parameters — so the only question was whether to decay, and the
+  literature says no. Loshchilov & Hutter's contribution is *where* the decay is applied
+  (outside the adaptive step), not a correction to Adam's update.
+- `adabelief.yaml` added (Zhuang et al. 2020; Joon's established choice for neural ODEs);
+  `adamw.yaml` kept with the `decay_mask` and an explicit `weight_decay`, for whoever wants
+  the identity prior on the bijection.
+- **Why Joon's A/B showed no effect** (10 k steps, lr $10^{-3}$, $\lambda = 10^{-4}$, with
+  vs without decay: curves on top of each other): decoupled decay shrinks a weight by
+  $\eta\lambda = 10^{-7}$ per step, i.e. by $N\eta\lambda = 10^{-3}$ relative over the
+  whole run, while Adam moves each weight by $\sim\eta$ per step. At these settings the
+  decay is three orders of magnitude below the optimizer's own motion — invisible, for
+  the normal-form parameters too. It would show at $\lambda \sim 10^{-2}$–$10^{-1}$ or over
+  $10^5$+ steps, which is where the mask matters.
+- `clip_norm` (top-level config, default `null`): `build_optimizer(cfg, clip_norm)` wraps
+  the optimizer in `optax.chain(clip_by_global_norm, ·)`. Not on by default — the loss
+  curves show no spikes that would call for it — but one override away for the FHN
+  slow–fast runs. Learning-rate schedules and per-group rates (`optax.multi_transform`)
+  deferred until a run asks for them.
+- Tests: every shipped optimizer group composes (`optimizer=adabelief`,
+  `optimizer=adamw clip_norm=1.0`); a zero-gradient step moves nothing under the default
+  and only the bijection under `adamw`; `clip_norm` yields a two-stage chain.
 
 ## Design
 
@@ -200,3 +231,9 @@ split and the loaders come from one place.
 | `experiment/data.py`: `build_source` not-found message; `tests/test_experiment.py` dataset rename | Good. | None |
 | `from_config` classmethods: `Experiment.from_config`, `Loaders.from_config`, `Run.from_config(resume=)`; ADR-0011 §6 rule; callers, tests, docs | Confirmed. Good | None |
 | `training/optimizers.py` (`decay_mask`), `configs/optimizer/adamw.yaml` (`weight_decay`, `mask`); `test_training` + `test_experiment` decay tests | Confirmed. | Need to assess later the effect of choosing the right optimizer and its parameters. Deferred for now. |
+
+### Review round 2
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `configs/optimizer/adam.yaml` (default again), `adabelief.yaml` (new), `adamw.yaml` (mask kept); `configs/train.yaml` `clip_norm`; `build_optimizer(cfg, clip_norm)`; tests | | |

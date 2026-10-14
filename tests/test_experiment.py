@@ -99,6 +99,8 @@ def tiny(data_dir: Path, *overrides: str) -> DictConfig:
         ["wandb=offline"],
         ["windows.sampling.kind=weighted"],
         ["windows.sampling.kind=mixed", "windows.sampling.split_idx=100"],
+        ["optimizer=adabelief"],
+        ["optimizer=adamw", "clip_norm=1.0"],
     ],
 )
 def test_shipped_configs_compose(overrides):
@@ -158,13 +160,26 @@ def test_models_and_trainers_build(data_dir):
     assert isinstance(build_trainer(cfg_ae).loss, PhaseAutoencoderLoss)
     with pytest.raises(ValueError, match="model.kind"):
         build_model(compose("model.kind=nope").model, jax.random.key(0))
-    # the shipped adamw config masks weight decay off the latent dynamics: a
-    # zero-gradient step leaves the normal form's parameters exactly where they were
+    # the default optimizer is adam without decay: a zero-gradient step moves nothing;
+    # the adamw group masks its decay off the latent dynamics: the normal form's
+    # parameters stay exactly where they were while the bijection shrinks
     state = trainer.init(model, key=jax.random.key(1))
     zero = jax.tree.map(jnp.zeros_like, state.filter_trainable(model))
-    stepped = state.take_step(zero)
+    assert eqx.tree_equal(state.take_step(zero).model, model)
+    decayed = build_trainer(tiny(data_dir, "optimizer=adamw")).init(
+        model, key=jax.random.key(1)
+    )
+    stepped = decayed.take_step(zero)
     assert eqx.tree_equal(stepped.model.latent_dynamics, model.latent_dynamics)
     assert not eqx.tree_equal(stepped.model.bijection, model.bijection)
+    # clip_norm wraps the optimizer: a huge gradient moves the parameters by at most
+    # about lr per leaf element (adam) whether or not it is clipped — so check the
+    # chain is there by its state instead
+    clipped = build_trainer(tiny(data_dir, "clip_norm=1.0"))
+    assert (
+        isinstance(clipped.optimizer.init(zero), tuple)
+        and len(clipped.optimizer.init(zero)) == 2
+    )
 
 
 # -------------------------------------------------------------------- 4. run ------

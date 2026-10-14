@@ -1,0 +1,4 @@
+# Adam, no weight decay — the default in the neural-ODE / conjugacy literature (neural
+# conjugate flows; Zhi et al. 2022). Equivalent to adamw with weight_decay 0.
+_target_: optax.adam
+learning_rate: 1.0e-3
