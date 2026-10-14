@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0013
 status: accepted
-updated: 2026-10-08
+updated: 2026-10-14
 verified_by: pending (Joon; the four choices below were taken in discussion 2026-10-08)
 ---
 
@@ -72,12 +72,16 @@ conjugacy on the basin; the inner boundary's invariant is the repelling cycle's 
 $\kappa_u = a\thinspace\rho'(a)$ (`WinfreeNormalForm.inner_floquet_exponent`). Moving rather
 than generalizing keeps the method's meaning exact. Revisit if a second holed form appears.
 
-### 5. Winfree's parameters are plain floats
+### 5. Winfree's parameters are plain floats; $a < 0$ is the training member
 
 It is an observed/target system, not a latent one: no constraints, no `raw` leaves
-(ADR-0001 is about learnable bijection parameters). $a = 0$ is allowed and is the member
-the experiments will mostly use (phaseless set a point, non-hyperbolic origin); the
-$a \to 0$ limits of the closed forms are implemented explicitly.
+(ADR-0001 is about learnable bijection parameters). Any $a < 1$ is allowed: $a > 0$ the
+paper's hole, $a = 0$ the non-hyperbolic point (the $a \to 0$ limits of the closed forms
+are implemented explicitly), $a < 0$ a hyperbolic repelling focus. **Amended 2026-10-14**:
+the first runs against $a = 0$ went to `nan` — a hyperbolic latent focus cannot be
+conjugate to a non-hyperbolic point (design document §3.3) — so the default and the data
+config are $a = -0.25$, the member with closed-form isochrons *and* an origin a Bautin
+latent can match; `eigenvalues_origin` is defined on the class for that regime.
 
 ## Consequences
 

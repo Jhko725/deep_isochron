@@ -30,10 +30,17 @@ numerically; ``tests/test_normal_forms.py``):
 * $a = 0$ is allowed: the hole closes to the origin, which becomes a *non-hyperbolic*
   equilibrium ($\dot r = r^2(1 - r)$), and the limits are $h = w(1 - 1/r)$,
   $\Psi = \tfrac{r-1}{r}\,e^{1/r - 1}$ (an essential singularity at the origin
-  instead of Bautin's power law).
+  instead of Bautin's power law). **Not a conjugacy target**: a hyperbolic latent focus
+  (Hopf/Bautin, eigenvalues $a \pm i\omega_0$) cannot be conjugate to an algebraically
+  repelling point — the eigenvalues at the enclosed fixed point are the invariant.
+* $a < 0$ (*ours*, not in the paper): no hole, the origin is a **hyperbolic** repelling
+  focus with eigenvalues $-a \pm i(1 + w)$, the same closed forms hold unchanged (the
+  partial fractions never used the sign of $a$), $\Psi \to -\infty$ at the origin as a
+  power law like Bautin's. This is the member to train conjugacies against: closed-form
+  isochrons, a single phaseless point, and an origin a Bautin latent can match.
 
-``basin_radii() = (a, ∞)``. Parameters are plain floats (an observed system, not a
-latent one): no constraints, no learning.
+``basin_radii() = (max(a, 0), ∞)``. Parameters are plain floats (an observed system,
+not a latent one): no constraints, no learning.
 """
 
 from __future__ import annotations
@@ -41,22 +48,22 @@ from __future__ import annotations
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from jaxtyping import Array, Complex, Float
 
 from .base import AbstractNormalForm
 
 
 class WinfreeNormalForm(AbstractNormalForm):
-    r"""$\dot r = (1 - r)(r - a)\,r$, $\dot\theta = -(1 + w(1 - r))$; $0 \le a < 1$."""
+    r"""$\dot r = (1 - r)(r - a)\,r$, $\dot\theta = -(1 + w(1 - r))$; $a < 1$: a hole
+    of radius $a$ for $a > 0$, a non-hyperbolic point for $a = 0$, a hyperbolic focus
+    for $a < 0$ (the conjugacy target)."""
 
     a: float = eqx.field(static=True)
     w: float = eqx.field(static=True)
 
-    def __init__(self, a: float = 0.0, w: float = -0.5):
-        if not 0.0 <= a < 1.0:
-            raise ValueError(
-                "a must satisfy 0 <= a < 1 (the hole lies inside the cycle)."
-            )
+    def __init__(self, a: float = -0.25, w: float = -0.5):
+        if not a < 1.0:
+            raise ValueError("a must be < 1 (the cycle r = 1 must attract).")
         self.a = float(a)
         self.w = float(w)
 
@@ -71,21 +78,21 @@ class WinfreeNormalForm(AbstractNormalForm):
         return -(1.0 + self.w * (1.0 - r))
 
     def _on_basin(self, r, value):
-        # explicit nan outside r > a: for 1/a integer-valued the power of a negative
-        # base would be finite garbage, and the root solve relies on nan to detect the
-        # basin's edge
-        return jnp.where(r > self.a, value, jnp.nan)
+        # explicit nan outside the basin r > max(a, 0): for 1/a integer-valued the
+        # power of a negative base would be finite garbage, and the root solve relies
+        # on nan to detect the basin's edge
+        return jnp.where(r > self.basin_radii()[0], value, jnp.nan)
 
     def phase_shift(self, r):
         a, w = self.a, self.w
-        rs = jnp.where(r > a, r, 1.0)  # keep the formula off its pole
+        rs = jnp.where(r > self.basin_radii()[0], r, 1.0)  # off the formula's pole
         if a == 0.0:
             return self._on_basin(r, w * (1.0 - 1.0 / rs))
         return self._on_basin(r, (w / a) * (jnp.log((rs - a) / rs) - jnp.log(1.0 - a)))
 
     def isostable(self, r):
         a = self.a
-        rs = jnp.where(r > a, r, 1.0)
+        rs = jnp.where(r > self.basin_radii()[0], r, 1.0)
         if a == 0.0:
             return self._on_basin(r, (rs - 1.0) / rs * jnp.exp(1.0 / rs - 1.0))
         return self._on_basin(
@@ -94,7 +101,15 @@ class WinfreeNormalForm(AbstractNormalForm):
 
     # ---------------------------------------------------------------- basin -------
     def basin_radii(self) -> tuple[float, float]:
-        return (self.a, float("inf"))
+        return (max(self.a, 0.0), float("inf"))
+
+    def eigenvalues_origin(self) -> Complex[Array, " 2"]:
+        r"""$\rho(0) \pm i\,\omega(0) = -a \pm i(1 + w)$: a conjugacy invariant only for
+        $a < 0$, when the origin is the basin's enclosed (hyperbolic) fixed point; for
+        $a > 0$ it is the stable focus inside the hole, for $a = 0$ non-hyperbolic."""
+        re = jnp.asarray(-self.a)
+        im = jnp.asarray(-(1.0 + self.w))
+        return jax.lax.complex(re * jnp.ones(2), im * jnp.array([1.0, -1.0]))
 
     def inner_floquet_exponent(self) -> Float[Array, ""]:
         r"""$\kappa_u = a\,\rho'(a) = a(1 - a)$, the exponent of the repelling cycle

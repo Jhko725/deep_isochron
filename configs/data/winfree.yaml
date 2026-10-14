@@ -1,5 +1,6 @@
-# Winfree's planar model with a hole (Langfield et al. 2025, §4.1; ADR-0013): closed-form
-# isochrons and a phaseless disk r <= a. a=0 closes the hole to a (non-hyperbolic) point.
+# Winfree's planar model (Langfield et al. 2025, §4.1; ADR-0013): closed-form isochrons.
+# a > 0: a phaseless disk r <= a (the paper's a = 0.25); a = 0: a non-hyperbolic point (not
+# a conjugacy target); a < 0: a hyperbolic repelling focus, the member to train against.
 # Run:  uv run python scripts/generate_data.py --config-name winfree  [key=value overrides]
 name: winfree
 out_dir: data
@@ -8,12 +9,12 @@ n_trajectories: 256
 
 system:
   _target_: deep_isochron.systems.WinfreeNormalForm
-  a: 0.0
+  a: -0.25
   w: -0.5
 
 ic_sampler:
   _target_: deep_isochron.data.UniformAnnulus
-  r_min: 0.01           # > a: inside the basin
+  r_min: 0.2            # > max(a, 0): inside the basin, off the degenerate region
   r_max: 2.5
 
 time:

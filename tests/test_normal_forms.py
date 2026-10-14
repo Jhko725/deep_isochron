@@ -64,10 +64,11 @@ normal_forms = st.one_of(
 
 winfree_forms = st.builds(
     WinfreeNormalForm,
-    a=st.one_of(st.just(0.0), st.floats(0.05, 0.6)),
+    a=st.one_of(st.just(0.0), st.floats(0.05, 0.6), st.floats(-1.5, -0.05)),
     w=st.floats(-2.0, 2.0),
 )
-"""Winfree's model with a hole of radius ``a`` (``a = 0`` closes it); not even in r."""
+"""Winfree's model: a hole of radius ``a`` (``a > 0``), a non-hyperbolic point
+(``a = 0``) or a hyperbolic focus (``a < 0``); not even in r in any case."""
 
 all_normal_forms = st.one_of(normal_forms, winfree_forms)
 
@@ -462,7 +463,10 @@ def test_integrations_are_static_under_filter_jit():
 
 
 # ------------------------------------------------------------------ 4. basins -----
-@given(a=st.one_of(st.just(0.0), st.floats(0.05, 0.6)), w=st.floats(-2.0, 2.0))
+@given(
+    a=st.one_of(st.just(0.0), st.floats(0.05, 0.6), st.floats(-1.5, -0.05)),
+    w=st.floats(-2.0, 2.0),
+)
 def test_winfree_structure(a, w):
     """Langfield et al. (2025) §4.1 (*cited*): unit circle attracting with period 2π,
     clockwise; r = a a repelling cycle, the closed disk r <= a phaseless. *Deduced*:
@@ -470,14 +474,23 @@ def test_winfree_structure(a, w):
     outside; nan outside the basin."""
     nf = WinfreeNormalForm(a, w)
     assert not isinstance(nf, AbstractEvenNormalForm)
-    assert nf.basin_radii() == (a, float("inf"))
+    assert nf.basin_radii() == (max(a, 0.0), float("inf"))
     assert_close(nf.period(), -2 * jnp.pi, rtol=TOL["identity"])  # clockwise
     assert_close(nf.floquet_exponent(), a - 1.0, rtol=TOL["closed_form"])
     assert_close(nf.inner_floquet_exponent(), a * (1 - a), atol=TOL["closed_form"])
-    edge = jnp.asarray(a + 1e-3)
+    edge = jnp.asarray(max(a, 0.0) + 1e-3)
     assert nf.isostable(edge) < -1e3
     far = nf.isostable(jnp.asarray(1e6))
-    assert_close(far, (1 - a) ** (1 / a) if a > 0 else jnp.e**-1, rtol=1e-4)
+    assert_close(far, (1 - a) ** (1 / a) if a != 0 else jnp.e**-1, rtol=1e-4)
+    # the origin's eigenvalues −a ± i(1 + w): a conjugacy invariant for a < 0 (then the
+    # origin is a hyperbolic repelling focus and the Jacobian of rhs there agrees)
+    lam = nf.eigenvalues_origin()
+    assert_close(lam.real, jnp.full(2, -a), atol=TOL["closed_form"])
+    assert_close(jnp.abs(lam.imag), jnp.full(2, abs(1 + w)), atol=TOL["closed_form"])
+    if a < 0:
+        jac = jax.jacfwd(lambda u: nf.rhs(0.0, u))(jnp.zeros(2))
+        expected = jnp.array([[-a, 1 + w], [-(1 + w), -a]])
+        assert_close(jac, expected, atol=TOL["closed_form"])
     if a > 0:
         outside = _point(0.5 * a, 0.3)
         assert not bool(nf.in_basin(outside))
@@ -520,8 +533,7 @@ def test_winfree_a_zero_is_the_limit_of_small_a():
         assert_close(small.isostable(r), zero.isostable(r), rtol=1e-4)
     with pytest.raises(ValueError):
         WinfreeNormalForm(a=1.0)
-    with pytest.raises(ValueError):
-        WinfreeNormalForm(a=-0.1)
+    assert WinfreeNormalForm().a < 0  # the default is the conjugacy-compatible member
 
 
 def test_r_squared_integration_refuses_non_even_forms():

@@ -385,6 +385,37 @@ def test_evaluation_on_exact_models_is_exact():
     with pytest.raises(ValueError, match="empty"):
         Evaluator([])(identity)
 
+
+def test_latent_extent_reports_where_the_data_are_sent():
+    """``latent/r_min|r_max`` are the extremes of ``|H(x)|`` over the validation window
+    starts, ``latent/amp_min|amp_max`` those of the amplitude, ``latent/nonfinite`` the
+    fraction of non-finite amplitudes: the detector for a map that flings points toward
+    the latent origin or far outside the cycle."""
+    batches = _nf_batches()
+    starts = np.concatenate([np.asarray(b["u"])[:, 0] for b in batches])
+    radii = np.linalg.norm(starts, axis=-1)
+    identity = ConjugateLatentDynamics(
+        NF, BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=jax.random.key(0))
+    )
+    out = Evaluator(batches)(identity)
+    assert out["latent/r_min"] == pytest.approx(radii.min(), rel=1e-6)
+    assert out["latent/r_max"] == pytest.approx(radii.max(), rel=1e-6)
+    assert out["latent/amp_min"] == pytest.approx(float(NF.isostable(radii.min())))
+    assert out["latent/amp_max"] == pytest.approx(float(NF.isostable(radii.max())))
+    assert out["latent/nonfinite"] == 0.0
+    # a map that contracts the plane (raw_s → −∞ puts s at its floor 1/L = 0.5) sends
+    # the data toward the origin: r_min shrinks and the amplitude plunges
+    # (Ψ ~ −r^{−2(1+b)}); the autoencoder path reports the amplitude extremes only
+    scaled = eqx.tree_at(lambda m: m.bijection.raw_s, identity, -20.0 * jnp.ones(2))
+    r_scaled = float(jnp.linalg.norm(scaled.bijection(jnp.asarray(starts[0]))))
+    shrink = r_scaled / radii[0]
+    out2 = Evaluator(batches)(scaled)
+    assert shrink < 0.6
+    assert out2["latent/r_min"] == pytest.approx(radii.min() * shrink, rel=1e-6)
+    assert out2["latent/amp_min"] < out["latent/amp_min"]
+    ae = Evaluator(batches)(_exact_autoencoder(NF))
+    assert "latent/r_min" not in ae and ae["latent/nonfinite"] == 0.0
+
     # the intended source: a finite, deterministic dataset, re-iterated each call
     src = generate(
         NF,

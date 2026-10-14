@@ -1,7 +1,7 @@
 ---
 type: design
 status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative
-updated: 2026-10-08
+updated: 2026-10-14
 verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
 sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014, Langfield et al. 2025]
 ---
@@ -235,21 +235,40 @@ $\Theta_0 = -2\pi\vartheta$ (on $\Gamma$, $\Theta = \theta$ and $\dot\Theta = \o
 so the point of period-fraction $\vartheta$ along the flow sits at angle $-2\pi\vartheta$)
 this is exactly $\psi(r)$ above.
 
-**The $a = 0$ member** (the one the experiments will mostly use): the hole closes to the
-origin, $\dot r = r^2(1 - r)$, so the origin is a *non-hyperbolic* repelling point
-(trajectories leave it algebraically, not exponentially); the closed forms become the
-limits $h = w(1 - 1/r)$ and $\Psi = \tfrac{r-1}{r}\thinspace e^{1/r - 1}$ — an essential
-singularity at the origin where Bautin has a power law, $\Psi \sim -e^{1/r}/r$. The root
-solve of §7 handles both regimes (the probe beyond the inner edge is `nan`, which the
-bracket expansion treats as "overshot"; the closed forms are made `nan` for $r \le a$
-explicitly, since for integer $1/a$ the power of a negative base would otherwise be finite
-garbage).
+**Three regimes in $a$** (amended 2026-10-14 after the first training runs):
+
+- $a > 0$ — the paper's case: a hole, the phaseless disk $r \le a$, basin boundary a
+  repelling cycle.
+- $a = 0$ — the hole closes to the origin, $\dot r = r^2(1 - r)$: a *non-hyperbolic*
+  repelling point (trajectories leave it algebraically — from $r_0$ in $\approx 1/r_0$
+  time units); the closed forms are the limits $h = w(1 - 1/r)$,
+  $\Psi = \tfrac{r-1}{r}\thinspace e^{1/r - 1}$, an essential singularity where Bautin has a
+  power law. **Not a conjugacy target**: the eigenvalues at the enclosed fixed point are
+  a smooth-conjugacy invariant (§4.1), and $0 \pm i(1+w)$ cannot be matched by a
+  hyperbolic latent focus $a_{\rm NF} \pm i\omega_0$. Training a Bautin conjugacy against
+  it (2026-10-14, initial conditions down to $r = 0.01$) produced a loss spike and `nan`
+  at step $\approx 1400$: the only way for the map to imitate algebraic escape with
+  exponential latent dynamics is to send near-origin data to extreme latent radii, where
+  the chart degenerates (see `latent/*` in the Evaluator, ADR-0009 §5).
+- $a < 0$ — *ours*, not in the paper: no hole, the origin is a **hyperbolic** repelling
+  focus with eigenvalues $-a \pm i(1+w)$ (`eigenvalues_origin`, meaningful exactly in
+  this regime), the same closed forms hold unchanged (the partial fractions never used
+  the sign of $a$; identities re-verified by autodiff down to $r = 10^{-3}$), and
+  $\Psi \to -\infty$ at the origin as a power law like Bautin's. **This is the member to
+  train conjugacies against**: closed-form isochrons, a single phaseless point, an origin
+  a Bautin latent can match. The data config uses $a = -0.25$.
+
+The root solve of §7 handles all three (the probe beyond the inner edge
+$r_{\rm in} = \max(a, 0)$ is `nan`, which the bracket expansion treats as "overshot"; the
+closed forms are made `nan` for $r \le r_{\rm in}$ explicitly, since for integer $1/a$ the
+power of a negative base would otherwise be finite garbage).
 
 **Why this system.** It is the planar case with closed-form isochrons *and* a non-trivial
 phaseless set, the paper's testbed for critical isochrons; for us it is a target with
 exactly known $\Theta$, $\Psi$ to compare a learned conjugacy against, and the simplest
 system on which the question "what does a planar diffeomorphism do with a phaseless
-disk it cannot map to a point" can be asked (roadmap Phase E).
+disk it cannot map to a point" can be asked (roadmap Phase E) — with $a < 0$ as the
+control case where the conjugacy exists.
 
 ---
 

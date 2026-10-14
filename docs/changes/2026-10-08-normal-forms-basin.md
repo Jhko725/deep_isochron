@@ -1,7 +1,7 @@
 ---
 type: change
-status: ready for review
-updated: 2026-10-08
+status: review round 1 applied (a < 0 member, latent-extent diagnostic)
+updated: 2026-10-14
 branch: normal-forms-basin
 ---
 
@@ -58,6 +58,39 @@ drawn in a phaseless set. Decisions: ADR-0013; mathematics: design document §3.
   split, the $a = 0$ member, why the system), §7 chart domain, §9 API, §10 tests, §11
   decisions, reference. `docs/decisions/0013-normal-form-basins.md` — new.
   `docs/architecture.md`, `docs/index.md`, `docs/roadmap.md` (ledger).
+
+## Review round 1 (2026-10-14) — the `nan` runs
+
+Joon's runs against Winfree with `a = 0` (his edit of the default; initial conditions
+from `r_min = 0.01`) hit `nan` after ≈ 1 400 steps (loss spike, then nothing). Assessment
+and changes:
+
+- **Cause, structural.** With `a = 0` the origin is non-hyperbolic ($\dot r = r^2(1-r)$,
+  algebraic escape: from $r_0 = 0.01$ it takes ≈ 100 time units, i.e. longer than the
+  trajectory). The eigenvalues at the enclosed fixed point are a conjugacy invariant, and
+  $0 \pm i(1+w)$ cannot be matched by Bautin's $a \pm i\omega_0$; the map can only imitate
+  algebraic escape by sending near-origin data to extreme latent radii. Checked what the
+  Bautin chart does there: the closed-form flow and its gradient are finite down to
+  $r \approx 10^{-100}$ (then $\Psi$ overflows to $-\infty$ and everything is `nan`), and
+  outside the cycle $\Psi$ saturates so that any latent point beyond $r \approx 3$ is
+  pulled to $r = 1.73$ within $0.05$ time units with gradients growing like $r$. Which of
+  the two the run hit is what the new diagnostic will tell; both are the same disease.
+- **`WinfreeNormalForm` accepts `a < 0`** (hyperbolic repelling focus, eigenvalues
+  $-a \pm i(1+w)$, same closed forms — verified by autodiff), default `a = -0.25`,
+  `basin_radii = (max(a, 0), ∞)`, `eigenvalues_origin` on the class; `winfree.yaml` uses
+  `a: -0.25`, `r_min: 0.2`. `a = 0` stays available for the isochron pictures, documented
+  as not a conjugacy target (design document §3.3 "three regimes"; ADR-0013 §5).
+- **Latent-extent diagnostic** in the `Evaluator` (`training/evaluation.py`,
+  `latent_extent`): `latent/r_min|r_max` (conjugacy models), `latent/amp_min|amp_max`,
+  `latent/nonfinite`, over the validation window starts, combined across batches by
+  min/max/sum. Logged with the other validation metrics, so wandb shows the data being
+  flung before the loss does (ADR-0009 §5 amended). Test:
+  `test_latent_extent_reports_where_the_data_are_sent`.
+- Recommended for the rerun: `clip_norm=10` (turns a bad step into a bad step, not a
+  `nan`), and `jax.config.update("jax_debug_nans", True)` from the last good checkpoint
+  if it still happens — the diagnostic will then say *where* the points were.
+- Tests: the Winfree strategies and `test_winfree_structure` cover $a < 0$ (including the
+  origin's Jacobian against the eigenvalues).
 
 ## Design
 
@@ -122,3 +155,11 @@ Full suite: 479 passed, 1 xfail (`-m "not slow"`, `--hypothesis-profile=dev`).
 | `tests/test_normal_forms.py` (`all_normal_forms`, §4), `tests/test_data.py` |Looks good for now. | None |
 | `docs/design/normal-forms.md` amendment (§1, §3.3, §7, §9–11); ADR-0013; architecture; index; roadmap | Had a readthrough. Looks good. | None |
 | `prototype.ipynb` | Performing training on the WinfreeNormalForm as in the current notebook cells result in nan appearing after certain number of epochs. Possible reasons? Confirmed that there is no nan in source.ys. | Deferred to discussions with Claude. |
+
+### Review round 1
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `WinfreeNormalForm`: `a < 0` allowed and default (`-0.25`), `basin_radii = (max(a,0), ∞)`, `eigenvalues_origin`; `configs/data/winfree.yaml`; tests | | |
+| `training/evaluation.py`: `latent_extent` → `latent/r_min|r_max|amp_min|amp_max|nonfinite`; ADR-0009 §5; test | | |
+| Design document §3.3 "three regimes"; ADR-0013 §5 amendment | | |
