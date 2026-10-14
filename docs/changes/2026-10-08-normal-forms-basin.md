@@ -231,13 +231,13 @@ Full suite: 479 passed, 1 xfail (`-m "not slow"`, `--hypothesis-profile=dev`).
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `systems/normal_forms/bautin.py`: overflow-safe `phase_shift`/`isostable` (in $r^{-2}$); design document §3 table; test | | |
-| `training/evaluation.py`: extent over all samples, `latent/nonfinite_image`; ADR-0009 §5; test | | |
-| `scripts/find_nan.py` (new); `scripts/README.md`; architecture | | |
+| `systems/normal_forms/bautin.py`: overflow-safe `phase_shift`/`isostable` (in $r^{-2}$); design document §3 table; test | Confirmed. Training on the Winfree system does not explode now. | None |
+| `training/evaluation.py`: extent over all samples, `latent/nonfinite_image`; ADR-0009 §5; test | Confirmed. | None |
+| `scripts/find_nan.py` (new); `scripts/README.md`; architecture | Had a readthrough. | None |
 
 ### Review round 3
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `training/trainer.py`: `stop_on_nonfinite` (stop before checkpointing; empty-bucket `nan`s exempt); test | | |
-| `scripts/find_nan.py`: walk back to the last finite checkpoint | | |
+| `training/trainer.py`: `stop_on_nonfinite` (stop before checkpointing; empty-bucket `nan`s exempt); test | Looks good. | None |
+| `scripts/find_nan.py`: walk back to the last finite checkpoint | Confirmed. Looks good. NaN problem was solved with the Bautin change, so have not had a change to use yet, though. | None |
