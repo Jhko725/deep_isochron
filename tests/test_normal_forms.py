@@ -536,6 +536,28 @@ def test_winfree_a_zero_is_the_limit_of_small_a():
     assert WinfreeNormalForm().a < 0  # the default is the conjugacy-compatible member
 
 
+@given(a=st.floats(0.2, 3.0), b=st.floats(0.0, 2.0), w=st.floats(0.5, 3.0))
+def test_bautin_closed_forms_are_finite_up_to_the_float_range(a, b, w):
+    """A learned bijection can send a point to r ~ 1e150 before anything else fails;
+    the textbook forms gave inf/inf = nan there. In 1/r² they stay finite and reach
+    their limits: Ψ → ½ (b/(1+b))^b, h → ½ c ln((1+b)/b) (b > 0)."""
+    nf = BautinNormalForm(a, b, w, 0.3)
+    for r in (1e100, 1e150, 1e200, 1e300):
+        u = jnp.array([r, 0.0])
+        amp, phase = nf.amplitude(u), nf.phase(u)
+        assert jnp.isfinite(amp)
+        assert_close(amp, 0.5 * (b / (1 + b)) ** b if b > 0 else 0.5, rtol=1e-9)
+        if b > 1e-6:
+            assert jnp.isfinite(phase)
+    # and the small-r end is unchanged: Ψ ~ −r^{−2(1+b)} / (2 (1+b)^b)
+    r = jnp.asarray(1e-3)
+    assert_close(
+        nf.isostable(r),
+        -(r ** (-2 * (1 + b))) / (2 * (1 + b) ** b),
+        rtol=1e-5,
+    )
+
+
 def test_r_squared_integration_refuses_non_even_forms():
     nf = WinfreeNormalForm()
     with pytest.raises(TypeError, match="AbstractEvenNormalForm"):

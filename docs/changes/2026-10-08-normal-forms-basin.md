@@ -1,6 +1,6 @@
 ---
 type: change
-status: review round 1 applied (a < 0 member, latent-extent diagnostic)
+status: review round 2 applied (overflow-safe Bautin closed forms, extent over all samples, find_nan.py); nan hunt pending Joon's run
 updated: 2026-10-14
 branch: normal-forms-basin
 ---
@@ -92,6 +92,40 @@ and changes:
 - Tests: the Winfree strategies and `test_winfree_structure` cover $a < 0$ (including the
   origin's Jacobian against the eigenvalues).
 
+## Review round 2 (2026-10-14) — `nan` persists with `a < 0`
+
+Joon's two runs with `a = -0.25` (without / with `clip_norm = 10`): both reach `nan`
+after a small loss jump; `latent/nonfinite` goes from 0 to one point first; without
+clipping, `phase/circ_std` is intermittently `nan` *before* that (that metric runs over
+every sample of the validation windows while the extent ran over window starts only —
+so the first non-finite point was an interior sample). Clipping delays the event (≈ 2.6 k
+→ ≈ 4.4 k steps) and removes the intermittent `nan`s, which says the gradient spikes are a
+contributing path but not the cause. What this round changes:
+
+- **Bautin's closed forms were the first thing to overflow.** `isostable` as written
+  (design document §3) pairs $r^{2(1+b)}$ in the denominator with $(1 + br^2)^b$ in the
+  numerator: from $r \approx 10^{150}$ it is $\infty/\infty = $ `nan`, and `phase_shift`
+  is $\infty - \infty$ from $r \approx 10^{200}$ — while a learned bijection can reach such
+  radii long before its own layers go non-finite. Rewritten in $r^{-2}$ (algebraically
+  identical; the design-document table now shows both forms), finite up to the float
+  range, limits exact; `test_bautin_closed_forms_are_finite_up_to_the_float_range`.
+  With this, a non-finite *amplitude* at a finite image can no longer happen for Bautin.
+- **The extent runs over every validation sample** and reports
+  `latent/nonfinite_image` (the bijection's output itself non-finite) next to
+  `latent/nonfinite` (the chart's): the two cases the next run needs to tell apart. If
+  `nonfinite_image` is the one that rises, the problem is inside the INN (a spline
+  pushed out of its range, a conditioner output overflowing a `softplus`/`exp`), not the
+  chart.
+- **`scripts/find_nan.py`**: reopens a run at a checkpoint, replays the *same* batches,
+  prints the batch extent every 25 steps and, at the first non-finite gradient, the loss
+  terms, the offending parameter leaves, the windows with non-finite predictions, the
+  first bad window's start, its image $H(x_0)$ and its latent trajectory; `--debug-nans`
+  re-runs the batch so JAX names the primitive. This is the tool for the next run —
+  one command from the last good checkpoint — and replaces guessing. Smoke-tested on a
+  tiny run.
+- Not changed: the INN layers. Until `find_nan.py` points at one, hardening splines or
+  conditioners would be speculation.
+
 ## Design
 
 ADR-0013 has the five decisions and their alternatives. Points found while implementing:
@@ -164,3 +198,11 @@ Full suite: 479 passed, 1 xfail (`-m "not slow"`, `--hypothesis-profile=dev`).
 | `training/evaluation.py`: `latent_extent` → `latent/r_min\|r_max\|amp_min\|amp_max\|nonfinite`; ADR-0009 §5; test | Confirmed. Looks good. | None |
 | Design document §3.3 "three regimes"; ADR-0013 §5 amendment | Confirmed. Looks good. | None |
 | `prototype.ipynb`: Performed data generation and training for the Winfree's model with `a=-0.25`. | Without gradient clipping - training progresses much better, but NaN does occur after a while, after a small loss jump. From the eval metrics, the nonfinite count increases from 0 to 1. Weirdly, circular std intermittantly shows NaN before the actual losses go bad. With `grad_clip=10`, the spurious NaNs in circular std disappears and the appearence of NaNs in the loss is quite delayed, but still occurs nonetheless. | Deferred to discussions with Claude. |
+
+### Review round 2
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `systems/normal_forms/bautin.py`: overflow-safe `phase_shift`/`isostable` (in $r^{-2}$); design document §3 table; test | | |
+| `training/evaluation.py`: extent over all samples, `latent/nonfinite_image`; ADR-0009 §5; test | | |
+| `scripts/find_nan.py` (new); `scripts/README.md`; architecture | | |

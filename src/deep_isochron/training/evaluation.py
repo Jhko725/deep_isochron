@@ -103,9 +103,10 @@ def prediction_sums(
 def latent_extent(
     model: AbstractPhaseAmplitudeModel, points: Float[Array, "n dim"]
 ) -> dict[str, Array]:
-    """Where the model sends the data: over ``points`` (validation window starts), the
-    extremes of the amplitude ``A(x)`` and — for a conjugacy model — of the latent
-    radius ``|H(x)|``, plus the count of points whose amplitude is not finite. Combined
+    """Where the model sends the data: over ``points`` (every sample of the validation
+    windows), the extremes of the amplitude ``A(x)`` and — for a conjugacy model — of
+    the latent radius ``|H(x)|``, plus the count of points whose amplitude is not finite
+    and, for a conjugacy model, whose image ``H(x)`` is not finite. Combined
     across batches by ``Evaluator`` (min/max/sum). This is the detector for a learned
     map that flings points toward the latent origin (``r_min → 0``, ``amp_min → −∞``,
     where the normal form's closed forms overflow) or far outside the cycle (``r_max``
@@ -120,9 +121,12 @@ def latent_extent(
         "amp_max": jnp.max(jnp.where(finite, safe, -jnp.inf)),
     }
     if isinstance(model, ConjugateLatentDynamics):
-        r = jnp.linalg.norm(jax.vmap(model.bijection)(points), axis=-1)
-        out["r_min"] = jnp.min(r)
-        out["r_max"] = jnp.max(r)
+        y = jax.vmap(model.bijection)(points)
+        r = jnp.linalg.norm(y, axis=-1)
+        r_finite = jnp.isfinite(r)
+        out["r_min"] = jnp.min(jnp.where(r_finite, r, jnp.inf))
+        out["r_max"] = jnp.max(jnp.where(r_finite, r, -jnp.inf))
+        out["nonfinite_image"] = jnp.sum(~r_finite).astype(amp.dtype)
     return out
 
 
@@ -286,7 +290,9 @@ class Evaluator:
             part_p = prediction_sums(model, batch, t_split)
             pred = part_p if pred is None else {k: pred[k] + part_p[k] for k in part_p}
             u = jnp.asarray(batch["u"])
-            extent = _combine_extent(extent, latent_extent(model, u[:, 0]))
+            extent = _combine_extent(
+                extent, latent_extent(model, u.reshape(-1, u.shape[-1]))
+            )
             if self.reference is not None:
                 part = phase_amplitude_sums(
                     model, self.reference, u.reshape(-1, u.shape[-1])
@@ -318,6 +324,8 @@ class Evaluator:
         for k in ("amp_min", "amp_max", "r_min", "r_max"):
             if k in extent:
                 out[f"latent/{k}"] = extent[k]
+        if "nonfinite_image" in extent:
+            out["latent/nonfinite_image"] = extent["nonfinite_image"] / extent["n"]
         if isinstance(model, ConjugateLatentDynamics):
             out.update(bijection_grid_metrics(model.bijection, self.grid))
         if sums is not None:

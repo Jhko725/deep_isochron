@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-13
+updated: 2026-10-14
 sources: [code]
 ---
 
@@ -117,6 +117,7 @@ deep_isochron
 configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment
 scripts/train.py                                Hydra entry point: one training run
 scripts/generate_data.py (+ configs/data/)      Hydra entry point for data generation
+scripts/find_nan.py                             first non-finite gradient of a run, with the latent extent
 scripts/check_md_math.py                        GitHub-safe Markdown math check
 scripts/README.md                               what each script does and how to call it
 scripts/bench_dataloader.py                     data-pipeline vs training-step benchmark

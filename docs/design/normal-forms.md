@@ -181,8 +181,8 @@ $$
 | $\rho(r)$ | $a(1-r^2)$ | $a(1-r^2)(1+br^2)$ |
 | $\kappa = \rho'(1)$ | $-2a$ | $-2a(1+b)$ |
 | $\mu = e^{\kappa T}$ | $e^{-4\pi a/\omega_1}$ | $e^{-4\pi a(1+b)/\omega_1}$ |
-| $h(r)$ | $c\ln r$ | $c\left[\ln r - \tfrac12\ln\dfrac{1+br^2}{1+b}\right]$ |
-| $\Psi(r)$ | $\dfrac{r^2-1}{2r^2}$ | $\dfrac{(r^2-1)(1+br^2)^{b}}{2(1+b)^{b}\thinspace r^{2(1+b)}}$ |
+| $h(r)$ | $c\ln r$ | $c\left[\ln r - \tfrac12\ln\dfrac{1+br^2}{1+b}\right] = \tfrac{c}{2}\left[\ln(1+b) - \ln(r^{-2} + b)\right]$ (implemented form, finite for $b > 0$ up to $r = \infty$) |
+| $\Psi(r)$ | $\dfrac{r^2-1}{2r^2}$ | $\dfrac{(r^2-1)(1+br^2)^{b}}{2(1+b)^{b}\thinspace r^{2(1+b)}} = \dfrac{(1 - r^{-2})(r^{-2} + b)^{b}}{2(1+b)^{b}}$ (the second form is the implemented one: finite up to the float range, where the first is $\infty/\infty$ from $r \approx 10^{150}$) |
 | eigenvalues at $0$ | $a \pm i\omega_0$ | $a \pm i\omega_0$ |
 | basin of $\Gamma$ | $\mathbb{R}^2\setminus\lbrace0\rbrace$ | $\mathbb{R}^2\setminus\lbrace0\rbrace$ if $b \ge 0$; $0 < r < 1/\sqrt{-b}$ if $-1 < b < 0$ |
 | $\Psi$ as $r\to\infty$ (or $\to$ basin edge) | $\tfrac12$ | $\tfrac12\bigl(\tfrac{b}{1+b}\bigr)^{b}$ if $b > 0$; $+\infty$ at $r^2 = -1/b$ if $b < 0$ |

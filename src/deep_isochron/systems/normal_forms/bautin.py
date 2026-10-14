@@ -78,16 +78,19 @@ class BautinNormalForm(AbstractEvenNormalForm):
     def _angular_rate_sq(self, s):
         return self.w0 + (self.w - self.w0) * s
 
-    # closed forms, in r
+    # closed forms, in r — written in 1/s = r⁻² so that they stay finite for r up to
+    # the float range: the textbook forms (design document §3) pair an overflowing
+    # numerator with an overflowing denominator (inf/inf = nan) from r ≈ 1e150 on,
+    # which a learned bijection can reach before anything else goes wrong
     def phase_shift(self, r):
+        # c [ln r − ½(ln(1 + b r²) − ln(1 + b))] = ½ c [ln(1 + b) − ln(r⁻² + b)]
         b = self.b
-        return (
-            (self.w - self.w0)
-            / self.a
-            * (jnp.log(r) - 0.5 * (jnp.log1p(b * r**2) - jnp.log1p(b)))
-        )
+        inv_s = 1.0 / (r * r)
+        return 0.5 * (self.w - self.w0) / self.a * (jnp.log1p(b) - jnp.log(inv_s + b))
 
     def isostable(self, r):
+        # (s − 1)(1 + b s)^b / (2 (1 + b)^b s^(1+b))
+        #   = (1 − 1/s)(1/s + b)^b / (2 (1 + b)^b)
         b = self.b
-        s = r * r
-        return (s - 1) * (1 + b * s) ** b / (2 * (1 + b) ** b * s ** (1 + b))
+        inv_s = 1.0 / (r * r)
+        return (1.0 - inv_s) * (inv_s + b) ** b / (2 * (1 + b) ** b)

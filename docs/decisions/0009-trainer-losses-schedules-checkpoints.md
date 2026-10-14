@@ -164,10 +164,12 @@ so nothing is held in memory and the grid's bounding box comes from a first pass
 - *Rejected*: a list of batches collected once (round 1) — correct but holds the set in
   memory and bypasses the pipeline; kept only as `collect_batches` for convenience.
 
-- *Amended 2026-10-14*: `Evaluator` reports the **latent extent** over the validation
-  window starts — `latent/amp_min|amp_max` (the model's amplitude), for conjugacy models
-  `latent/r_min|r_max` (the latent radius `|H(x)|`), and `latent/nonfinite` (fraction of
-  non-finite amplitudes): the detector for a learned map that sends data toward the latent
+- *Amended 2026-10-14*: `Evaluator` reports the **latent extent** over every validation
+  sample — `latent/amp_min|amp_max` (the model's amplitude), for conjugacy models
+  `latent/r_min|r_max` (the latent radius `|H(x)|`) and `latent/nonfinite_image`
+  (fraction of samples whose image `H(x)` is not finite), and `latent/nonfinite`
+  (fraction of non-finite amplitudes; with a finite image this means the chart
+  overflowed): the detector for a learned map that sends data toward the latent
   origin (where the normal form's closed forms overflow) or far outside the cycle (where
   `Ψ` saturates and the chart's inverse is ill-conditioned) — the mechanism behind the
   `nan` runs against Winfree's $a = 0$ member (ADR-0013 §5).
