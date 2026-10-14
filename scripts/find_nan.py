@@ -11,7 +11,9 @@ saw), and steps the trainer by hand. Every 25 steps it prints the batch's latent
 every step it checks the gradients leaf by leaf, and at the first non-finite one reports
 the step, the loss terms, the batch's extent, the offending parameter leaves and the
 batch's non-finite predictions, then stops. ``--debug-nans`` re-runs that batch under
-``jax_debug_nans`` so JAX names the primitive. Nothing is written to the run directory.
+``jax_debug_nans`` so JAX names the primitive. A checkpoint that already holds
+non-finite parameters is skipped for the last finite one on disk. Nothing is written to
+the run directory.
 """
 
 from __future__ import annotations
@@ -30,7 +32,9 @@ from deep_isochron.experiment import (
     configure_jax,
     load_run,
     Loaders,
+    Run,
 )
+from deep_isochron.training import OrbaxCheckpointer
 from deep_isochron.training.evaluation import latent_extent
 
 
@@ -40,6 +44,14 @@ def nonfinite_leaves(tree) -> list[str]:
         if isinstance(leaf, jax.Array) and not bool(jnp.all(jnp.isfinite(leaf))):
             out.append(jax.tree_util.keystr(path))
     return out
+
+
+def available_steps(run_dir: Path) -> list[int]:
+    ckpt = OrbaxCheckpointer(Run.open(run_dir).checkpoint_dir, metric=None)
+    try:
+        return ckpt.steps
+    finally:
+        ckpt.close()
 
 
 def describe_extent(model, batch) -> str:
@@ -59,6 +71,24 @@ def main() -> None:
 
     cfg, state = load_run(args.run_dir, args.step)
     assert cfg is not None
+    if nonfinite_leaves(state.model):
+        # the checkpoint itself is already poisoned (a run saved after the event):
+        # walk back to the last finite one
+        steps = available_steps(args.run_dir)
+        print(
+            f"checkpoint step {int(state.step)} already holds non-finite parameters; "
+            f"checkpoints on disk: {steps}"
+        )
+        for step in reversed([s for s in steps if s < int(state.step)]):
+            cfg, state = load_run(args.run_dir, step)
+            if not nonfinite_leaves(state.model):
+                print(f"starting from the last finite checkpoint, step {step}")
+                break
+        else:
+            raise SystemExit(
+                "no finite checkpoint in this run; rerun it (the trainer now stops "
+                "before checkpointing a non-finite state) and hunt from there."
+            )
     device = configure_jax(cfg)
     source: TimeSeriesDataSource = build_source(cfg.data)
     trainer = build_trainer(cfg)

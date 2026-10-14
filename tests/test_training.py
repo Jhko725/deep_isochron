@@ -46,6 +46,7 @@ from deep_isochron.model.invertible import BiLipschitzLinear
 from deep_isochron.systems import BautinNormalForm, HopfNormalForm
 from deep_isochron.training import (
     AbstractLoss,
+    Checkpointer,
     collect_batches,
     ConjugacyTrajectoryLoss,
     Constant,
@@ -384,6 +385,49 @@ def test_evaluation_on_exact_models_is_exact():
 
     with pytest.raises(ValueError, match="empty"):
         Evaluator([])(identity)
+
+
+def test_non_finite_validation_metric_stops_the_run_before_checkpointing():
+    """A ``nan`` validation metric raises ``FloatingPointError`` at that evaluation
+    and the state is not offered to the checkpointer, so the last checkpoint stays
+    finite; ``val/mse_early`` / ``late`` being ``nan`` for an empty bucket does not stop
+    a run."""
+    batches = _nf_batches()
+    model = ConjugateLatentDynamics(
+        NF, BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=jax.random.key(0))
+    )
+    trainer = Trainer(optax.adam(1e-3), ConjugacyTrajectoryLoss())
+    saved: list[int] = []
+
+    class Recorder(Checkpointer):
+        def save(self, step, state, metrics, *, force=False):
+            saved.append(step)
+            return True
+
+    calls = {"n": 0}
+
+    def evaluate(m):
+        calls["n"] += 1
+        return {"val/mse": float("nan") if calls["n"] >= 2 else 1.0}
+
+    with pytest.raises(FloatingPointError, match="step 4"):
+        trainer.train(
+            model,
+            batches * 4,
+            key=jax.random.key(0),
+            checkpointer=Recorder(),
+            evaluate=evaluate,
+            eval_every=2,
+        )
+    assert saved == [2]
+    state = trainer.train(
+        model,
+        batches * 2,
+        key=jax.random.key(0),
+        evaluate=lambda m: {"val/mse": 1.0, "val/mse_early": float("nan")},
+        eval_every=1,
+    )
+    assert int(state.step) == len(batches) * 2
 
 
 def test_latent_extent_reports_where_the_data_are_sent():

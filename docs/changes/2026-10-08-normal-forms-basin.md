@@ -1,6 +1,6 @@
 ---
 type: change
-status: review round 2 applied (overflow-safe Bautin closed forms, extent over all samples, find_nan.py); nan hunt pending Joon's run
+status: review round 3 applied (trainer stops before checkpointing a non-finite state; find_nan.py walks back to a finite checkpoint); nan hunt pending Joon's rerun
 updated: 2026-10-14
 branch: normal-forms-basin
 ---
@@ -126,6 +126,34 @@ contributing path but not the cause. What this round changes:
 - Not changed: the INN layers. Until `find_nan.py` points at one, hardening splines or
   conditioners would be speculation.
 
+## Review round 3 (2026-10-14) — the first `find_nan.py` output
+
+Joon's run of `find_nan.py runs/c2_no_weight_decay --step 3400 --debug-nans`: the
+checkpoint at step 3400 *already* holds `nan` in every parameter — `jax_debug_nans`
+fires on the very first array touched (`raw_U - raw_U.T` in `BiLipschitzLinear.constrain`,
+a `convert_element_type` of a `nan` leaf), all 2048 windows are non-finite, $H(x_0)$ is
+`nan` for a perfectly ordinary $x_0 = (0.93, 0.37)$. The clue is about the *checkpoint*,
+not the model: the run kept training after the event and the checkpointer saved the
+poisoned state as "latest" (with `save_every = 50` and the preservation policy
+`LatestN(1) + BestN(1)`, the earlier finite checkpoints had been pruned). So this output
+locates nothing yet; it says where to look from. Two changes so that the next run can be
+hunted:
+
+- **`Trainer.train` stops at the first non-finite validation metric** (`stop_on_nonfinite`,
+  default on): `FloatingPointError` naming the step and the last checkpoint, raised
+  *before* `checkpointer.save`, so the last checkpoint on disk is finite. `val/mse_early`
+  / `late` being `nan` for an empty bucket (design document `validation-split.md`) does
+  not stop a run. The loop still reads no device values between evaluations; the check
+  lives at the evaluations, which already sync.
+- **`find_nan.py` walks back** from a checkpoint with non-finite parameters to the last
+  finite one on disk (listing the steps it found), or tells you there is none.
+
+Next: rerun from `Experiment.from_config` with `eval_every` small enough (50) that the
+stop lands within a few dozen steps of the event; then
+`find_nan.py <run> --debug-nans` from the stopped run — the first non-finite gradient
+will be at most `eval_every` steps away, and the traceback will point into the bijection
+or the chart rather than at a poisoned leaf.
+
 ## Design
 
 ADR-0013 has the five decisions and their alternatives. Points found while implementing:
@@ -206,3 +234,10 @@ Full suite: 479 passed, 1 xfail (`-m "not slow"`, `--hypothesis-profile=dev`).
 | `systems/normal_forms/bautin.py`: overflow-safe `phase_shift`/`isostable` (in $r^{-2}$); design document §3 table; test | | |
 | `training/evaluation.py`: extent over all samples, `latent/nonfinite_image`; ADR-0009 §5; test | | |
 | `scripts/find_nan.py` (new); `scripts/README.md`; architecture | | |
+
+### Review round 3
+
+| Change | Thoughts | Modifications |
+|---|---|---|
+| `training/trainer.py`: `stop_on_nonfinite` (stop before checkpointing; empty-bucket `nan`s exempt); test | | |
+| `scripts/find_nan.py`: walk back to the last finite checkpoint | | |

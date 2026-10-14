@@ -164,6 +164,10 @@ so nothing is held in memory and the grid's bounding box comes from a first pass
 - *Rejected*: a list of batches collected once (round 1) — correct but holds the set in
   memory and bypasses the pipeline; kept only as `collect_batches` for convenience.
 
+- *Amended 2026-10-14*: `Trainer.train(stop_on_nonfinite=True)` raises
+  `FloatingPointError` at the first evaluation with a non-finite metric, before that state
+  reaches the checkpointer — the last checkpoint on disk is finite, which is what
+  `scripts/find_nan.py` needs; an empty validation bucket's `nan` (§5 split) is exempt.
 - *Amended 2026-10-14*: `Evaluator` reports the **latent extent** over every validation
   sample — `latent/amp_min|amp_max` (the model's amplitude), for conjugacy models
   `latent/r_min|r_max` (the latent radius `|H(x)|`) and `latent/nonfinite_image`

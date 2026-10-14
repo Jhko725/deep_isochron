@@ -15,26 +15,48 @@ Runs from Python (notebooks, analysis). `Experiment.from_config` builds what the
 the run directory; the loop is yours or the default:
 
 ```python
-from deep_isochron.experiment import Experiment, compose, compose_group, load_model, load_or_generate_source, load_run, train
-
-source = load_or_generate_source(compose_group("data", "fhn", "n_trajectories=500"))  # one group alone;
-                                             # notebooks may generate; from_config/train never do
-cfg = compose("data=fhn", "data.n_trajectories=500", "model=conjugacy", "num_steps=2500")
-exp = Experiment.from_config(cfg, "runs/notebook/try-1")   # refuses a directory that already holds a run
-state = exp.trainer.train(                   # your loop, your logger …
-    exp.state, exp.loaders.train,
-    logger=DelayedLogger(WandbLogger(wandb.init(entity="jhko725", project="isochron"), every=25)),
-    checkpointer=exp.run.checkpointer(save_every=200),   # … but the run's checkpointer
-    evaluate=exp.evaluator, eval_every=200,
+from deep_isochron.experiment import (
+    Experiment,
+    compose,
+    compose_group,
+    load_model,
+    load_or_generate_source,
+    load_run,
+    train,
 )
-state = exp.train()                          # or the default loop (Print + wandb per config)
-state = train(cfg, "runs/notebook/try-2")    # = Experiment.from_config(...).train()
 
-cfg, state = load_run("runs/notebook/try-1")             # any run directory, latest step
+source = load_or_generate_source(
+    compose_group("data", "fhn", "n_trajectories=500")
+)  # one group alone;
+# notebooks may generate; from_config/train never do
+cfg = compose(
+    "data=fhn", "data.n_trajectories=500", "model=conjugacy", "num_steps=2500"
+)
+exp = Experiment.from_config(
+    cfg, "runs/notebook/try-1"
+)  # refuses a directory that already holds a run
+state = exp.trainer.train(  # your loop, your logger …
+    exp.state,
+    exp.loaders.train,
+    logger=DelayedLogger(
+        WandbLogger(wandb.init(entity="jhko725", project="isochron"), every=25)
+    ),
+    checkpointer=exp.run.checkpointer(save_every=200),  # … but the run's checkpointer
+    evaluate=exp.evaluator,
+    eval_every=200,
+)
+state = exp.train()  # or the default loop (Print + wandb per config)
+state = train(cfg, "runs/notebook/try-2")  # = Experiment.from_config(...).train()
+
+cfg, state = load_run("runs/notebook/try-1")  # any run directory, latest step
 model = load_model("runs/2026-10-05/12-00-00", step=5000)
-cfg, state = load_run("results/bare-ckpt", template=my_state)  # a model built without a config
+cfg, state = load_run(
+    "results/bare-ckpt", template=my_state
+)  # a model built without a config
 
 cfg_more = compose(..., "num_steps=5000")
-state = train(cfg_more, "runs/notebook/try-1", resume=True)   # continue in place: explicit; the
-                                                              # config change is recorded
+state = train(
+    cfg_more, "runs/notebook/try-1", resume=True
+)  # continue in place: explicit; the
+# config change is recorded
 ```
