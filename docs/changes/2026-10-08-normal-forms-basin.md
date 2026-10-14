@@ -160,6 +160,7 @@ Full suite: 479 passed, 1 xfail (`-m "not slow"`, `--hypothesis-profile=dev`).
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `WinfreeNormalForm`: `a < 0` allowed and default (`-0.25`), `basin_radii = (max(a,0), ∞)`, `eigenvalues_origin`; `configs/data/winfree.yaml`; tests | | |
-| `training/evaluation.py`: `latent_extent` → `latent/r_min|r_max|amp_min|amp_max|nonfinite`; ADR-0009 §5; test | | |
-| Design document §3.3 "three regimes"; ADR-0013 §5 amendment | | |
+| `WinfreeNormalForm`: `a < 0` allowed and default (`-0.25`), `basin_radii = (max(a,0), ∞)`, `eigenvalues_origin`; `configs/data/winfree.yaml`; tests | Looks good. Trajectories and isochrons looks okay (in a qualitative sense) too. | None |
+| `training/evaluation.py`: `latent_extent` → `latent/r_min\|r_max\|amp_min\|amp_max\|nonfinite`; ADR-0009 §5; test | Confirmed. Looks good. | None |
+| Design document §3.3 "three regimes"; ADR-0013 §5 amendment | Confirmed. Looks good. | None |
+| `prototype.ipynb`: Performed data generation and training for the Winfree's model with `a=-0.25`. | Without gradient clipping - training progresses much better, but NaN does occur after a while, after a small loss jump. From the eval metrics, the nonfinite count increases from 0 to 1. Weirdly, circular std intermittantly shows NaN before the actual losses go bad. With `grad_clip=10`, the spurious NaNs in circular std disappears and the appearence of NaNs in the loss is quite delayed, but still occurs nonetheless. | Deferred to discussions with Claude. |
