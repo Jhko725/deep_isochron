@@ -194,9 +194,9 @@ split and the loaders come from one place.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `Experiment.setup` references updated everywhere (tests, README, ADR-0011, architecture, docstrings); `train` kept | | |
-| `configs/data/fhn-easy.yaml`: `c: 1.0`, `z: -0.8` (Langfield et al. 2025 §4.2) | | |
-| `pyproject.toml`: matplotlib → main dependencies (`uv lock` to be run by Joon) | | |
-| `experiment/data.py`: `build_source` not-found message; `tests/test_experiment.py` dataset rename | | |
-| `from_config` classmethods: `Experiment.from_config`, `Loaders.from_config`, `Run.from_config(resume=)`; ADR-0011 §6 rule; callers, tests, docs | | |
-| `training/optimizers.py` (`decay_mask`), `configs/optimizer/adamw.yaml` (`weight_decay`, `mask`); `test_training` + `test_experiment` decay tests | | |
+| `Experiment.setup` references updated everywhere (tests, README, ADR-0011, architecture, docstrings); `train` kept | Confirmed. | None |
+| `configs/data/fhn-easy.yaml`: `c: 1.0`, `z: -0.8` (Langfield et al. 2025 §4.2) | Looks good. | None|
+| `pyproject.toml`: matplotlib → main dependencies (`uv lock` to be run by Joon) | `uv sync --all-extras` ran to install the cuda version of JAX. | None |
+| `experiment/data.py`: `build_source` not-found message; `tests/test_experiment.py` dataset rename | Good. | None |
+| `from_config` classmethods: `Experiment.from_config`, `Loaders.from_config`, `Run.from_config(resume=)`; ADR-0011 §6 rule; callers, tests, docs | Confirmed. Good | None |
+| `training/optimizers.py` (`decay_mask`), `configs/optimizer/adamw.yaml` (`weight_decay`, `mask`); `test_training` + `test_experiment` decay tests | Confirmed. | Need to assess later the effect of choosing the right optimizer and its parameters. Deferred for now. |

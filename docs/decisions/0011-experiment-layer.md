@@ -1,7 +1,7 @@
 ---
 type: decision
 id: ADR-0011
-status: accepted; amended 2026-10-07/13 (§6: Run, Experiment.from_config, explicit resume, one construction style)
+status: accepted; amended 2026-10-07/13 (§6 - Run, Experiment.from_config, explicit resume, one construction style)
 updated: 2026-10-13
 verified_by: pending (Joon; decisions taken in discussion 2026-10-05)
 ---
