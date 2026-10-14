@@ -52,7 +52,7 @@ class WinfreeNormalForm(AbstractNormalForm):
     a: float = eqx.field(static=True)
     w: float = eqx.field(static=True)
 
-    def __init__(self, a: float = 0.25, w: float = -0.5):
+    def __init__(self, a: float = 0.0, w: float = -0.5):
         if not 0.0 <= a < 1.0:
             raise ValueError(
                 "a must satisfy 0 <= a < 1 (the hole lies inside the cycle)."

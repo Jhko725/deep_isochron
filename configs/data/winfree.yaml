@@ -8,12 +8,12 @@ n_trajectories: 256
 
 system:
   _target_: deep_isochron.systems.WinfreeNormalForm
-  a: 0.25
+  a: 0.0
   w: -0.5
 
 ic_sampler:
   _target_: deep_isochron.data.UniformAnnulus
-  r_min: 0.3            # > a: inside the basin
+  r_min: 0.01           # > a: inside the basin
   r_max: 2.5
 
 time:

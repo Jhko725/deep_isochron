@@ -115,9 +115,10 @@ Full suite: 479 passed, 1 xfail (`-m "not slow"`, `--hypothesis-profile=dev`).
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `systems/normal_forms/base.py`: data in `r`, `basin_radii`/`in_basin`, `nan` outside, `AbstractEvenNormalForm` | | |
-| `systems/normal_forms/winfree.py` (new): `WinfreeNormalForm` | | |
-| `systems/normal_forms/{hopf,bautin,integration,__init__}.py`, `systems/{base,__init__}.py` | | |
-| `data/generate.py` (`outside_basin`, `_sample_in_basin`), `data/dataset.py` (`SamplingSpec.outside_basin`, `Provenance.rejected_ics`), `experiment/data.py`, `configs/data/*` | | |
-| `tests/test_normal_forms.py` (`all_normal_forms`, §4), `tests/test_data.py` | | |
-| `docs/design/normal-forms.md` amendment (§1, §3.3, §7, §9–11); ADR-0013; architecture; index; roadmap | | |
+| `systems/normal_forms/base.py`: data in `r`, `basin_radii`/`in_basin`, `nan` outside, `AbstractEvenNormalForm` | Confirmed. Looks good for now. | None |
+| `systems/normal_forms/winfree.py` (new): `WinfreeNormalForm` | Will mostly be experimenting with `a=0`, so default case needs to be changed. Also confirmed that the analytical isochrons visually match those of Langfield et al. (2025). | Changed the default case and the constructor. |
+| `systems/normal_forms/{hopf,bautin,integration,__init__}.py`, `systems/{base,__init__}.py` | Trivial changes. | None |
+| `data/generate.py` (`outside_basin`, `_sample_in_basin`), `data/dataset.py` (`SamplingSpec.outside_basin`, `Provenance.rejected_ics`), `experiment/data.py`, `configs/data/*` | Confirmed. Looks good. | None |
+| `tests/test_normal_forms.py` (`all_normal_forms`, §4), `tests/test_data.py` |Looks good for now. | None |
+| `docs/design/normal-forms.md` amendment (§1, §3.3, §7, §9–11); ADR-0013; architecture; index; roadmap | Had a readthrough. Looks good. | None |
+| `prototype.ipynb` | Performing training on the WinfreeNormalForm as in the current notebook cells result in nan appearing after certain number of epochs. Possible reasons? Confirmed that there is no nan in source.ys. | Deferred to discussions with Claude. |
