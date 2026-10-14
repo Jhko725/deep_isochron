@@ -28,6 +28,7 @@ from ..data import (
 )
 from ..data.windows import mixed_ranges, WindowBatchSource
 from ..systems.normal_forms import AbstractNormalForm
+from ..training import Evaluator
 from .instantiate import instantiate
 
 
@@ -89,12 +90,22 @@ def build_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
     path = dataset_file(data_cfg)
     if not path.exists():
         raise FileNotFoundError(
-            f"dataset {path} not found. Training never generates data; run\n"
-            "    uv run python scripts/generate_data.py --config-name "
-            f"{data_cfg.name}\n"
-            "(with the same overrides) first."
+            f"dataset {path} (name {data_cfg.name!r}) not found. Training never "
+            "generates data; run\n"
+            "    uv run python scripts/generate_data.py --config-name <data config>\n"
+            "(with the same overrides) first, or load_or_generate_source(cfg.data) "
+            "from Python."
         )
     return TimeSeriesDataSource.load(path)
+
+
+def load_or_generate_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
+    """For notebooks: ``build_source`` if the dataset file exists, else
+    ``generate_dataset`` first. Training runs (``setup``/``train``) still never generate
+    (ADR-0011): this is the explicit opt-in."""
+    if not dataset_file(data_cfg).exists():
+        generate_dataset(data_cfg)
+    return build_source(data_cfg)
 
 
 def reference_normal_form(data_cfg: DictConfig) -> AbstractNormalForm | None:
@@ -119,10 +130,10 @@ def validation_t_split(cfg: DictConfig, source: TimeSeriesDataSource) -> float |
 
 @dataclass(frozen=True)
 class Loaders:
-    """What ``build_loaders`` returns. ``train`` is the device-prefetched stream the
-    trainer consumes; ``train_batches`` the underlying finite ``MapDataset`` (sliced at
-    ``start_step`` already) for inspection; ``val`` the finite validation dataset for an
-    ``Evaluator``."""
+    """The run's loaders (``from_config``). ``train`` is the device-prefetched stream
+    the trainer consumes; ``train_batches`` the underlying finite ``MapDataset``
+    (sliced at ``start_step`` already) for inspection; ``val`` the finite validation
+    dataset for an ``Evaluator``."""
 
     train: grain.IterDataset
     train_batches: grain.MapDataset
@@ -131,6 +142,42 @@ class Loaders:
     num_windows: int
     train_source: TimeSeriesDataSource
     val_source: TimeSeriesDataSource
+
+    @classmethod
+    def from_config(
+        cls,
+        cfg: DictConfig,
+        source: TimeSeriesDataSource,
+        device: jax.Device,
+        *,
+        start_step: int = 0,
+    ) -> Loaders:
+        """Split the trajectories, build the batched training stream from
+        ``start_step`` (resume = the slice ``[start_step:]`` of the same deterministic
+        dataset) and the finite validation dataset."""
+        v = cfg.validation
+        train_source, val_source = source.split_trajectories(v.fraction, seed=v.seed)
+        wsrc = build_window_source(cfg, train_source)
+        batches = grain.MapDataset.source(wsrc)
+        if start_step:
+            if start_step >= len(batches):
+                raise ValueError(
+                    f"resume step {start_step} is beyond the run's {len(batches)} "
+                    "batches; raise num_steps."
+                )
+            batches = batches[start_step:]
+        val = validation_windows(val_source, cfg.windows.length, stride=v.stride).batch(
+            v.batch
+        )
+        return cls(
+            train=to_device(batches, device),
+            train_batches=batches,
+            val=val,
+            batches_per_epoch=wsrc.batches_per_epoch,
+            num_windows=wsrc.num_windows,
+            train_source=train_source,
+            val_source=val_source,
+        )
 
 
 def build_window_source(
@@ -175,36 +222,14 @@ def build_window_source(
     raise ValueError(f"unknown windows.sampling.kind {kind!r}.")
 
 
-def build_loaders(
-    cfg: DictConfig,
-    source: TimeSeriesDataSource,
-    device: jax.Device,
-    *,
-    start_step: int = 0,
-) -> Loaders:
-    """Split the trajectories, build the batched training stream from ``start_step``
-    (resume = the slice ``[start_step:]`` of the same deterministic dataset) and the
-    finite validation dataset."""
-    v = cfg.validation
-    train_source, val_source = source.split_trajectories(v.fraction, seed=v.seed)
-    wsrc = build_window_source(cfg, train_source)
-    batches = grain.MapDataset.source(wsrc)
-    if start_step:
-        if start_step >= len(batches):
-            raise ValueError(
-                f"resume step {start_step} is beyond the run's {len(batches)} batches; "
-                "raise num_steps."
-            )
-        batches = batches[start_step:]
-    val = validation_windows(val_source, cfg.windows.length, stride=v.stride).batch(
-        v.batch
-    )
-    return Loaders(
-        train=to_device(batches, device),
-        train_batches=batches,
-        val=val,
-        batches_per_epoch=wsrc.batches_per_epoch,
-        num_windows=wsrc.num_windows,
-        train_source=train_source,
-        val_source=val_source,
+def build_evaluator(
+    cfg: DictConfig, source: TimeSeriesDataSource, loaders: Loaders
+) -> Evaluator:
+    """The run's ``Evaluator``: the validation dataset, the generating normal form as
+    reference when there is one, and ``validation.t_split`` resolved against the
+    sampler."""
+    return Evaluator(
+        loaders.val,
+        reference=reference_normal_form(cfg.data),
+        t_split=validation_t_split(cfg, source),
     )

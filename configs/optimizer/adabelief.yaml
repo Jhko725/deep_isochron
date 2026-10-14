@@ -1,0 +1,5 @@
+# AdaBelief (Zhuang et al., NeurIPS 2020): Adam's step normalized by the gradient's
+# variance about its running mean instead of its magnitude; Kidger's diffrax neural-ODE
+# example trains with it (lr 3e-3). No weight decay.
+_target_: optax.adabelief
+learning_rate: 1.0e-3

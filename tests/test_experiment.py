@@ -10,6 +10,13 @@ and resumed.
 4. run             ``train`` for a few steps writes config, metadata and checkpoints;
                    ``load_model`` returns the final model; a resumed run continues the
                    step count and the data stream
+5. from_config     the notebook path: ``Experiment.from_config`` then a hand-rolled
+                   ``trainer.train``, ``run.checkpointer()`` reopens with ``load_run``;
+                   a hand-built model reopens through ``template``; ``Run.from_config``
+                   refuses an existing run; ``resume=True`` continues in place and
+                   records config changes;
+                   ``load_or_generate_source`` generates once; ``build_logger`` takes an
+                   existing wandb run
 """
 
 import json
@@ -17,22 +24,34 @@ from pathlib import Path
 
 import equinox as eqx
 import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 from deep_isochron.experiment import (
-    build_loaders,
+    build_evaluator,
+    build_logger,
     build_model,
     build_source,
     build_trainer,
     compose,
+    compose_group,
     dataset_file,
+    Experiment,
     generate_dataset,
     load_model,
+    load_or_generate_source,
     load_run,
+    Loaders,
+    Run,
     train,
 )
 from deep_isochron.model import ConjugateLatentDynamics, PhaseAmplitudeAutoencoder
-from deep_isochron.training import ConjugacyTrajectoryLoss, PhaseAutoencoderLoss
+from deep_isochron.training import (
+    ConjugacyTrajectoryLoss,
+    ListLogger,
+    OrbaxCheckpointer,
+    PhaseAutoencoderLoss,
+)
 from omegaconf import DictConfig
 
 
@@ -80,6 +99,8 @@ def tiny(data_dir: Path, *overrides: str) -> DictConfig:
         ["wandb=offline"],
         ["windows.sampling.kind=weighted"],
         ["windows.sampling.kind=mixed", "windows.sampling.split_idx=100"],
+        ["optimizer=adabelief"],
+        ["optimizer=adamw", "clip_norm=1.0"],
     ],
 )
 def test_shipped_configs_compose(overrides):
@@ -87,10 +108,19 @@ def test_shipped_configs_compose(overrides):
     assert cfg.num_steps > 0 and cfg.windows.batch > 0
 
 
+def test_compose_group_is_the_groups_node():
+    data = compose_group("data", "fhn", "n_trajectories=500")
+    assert data.name == "fitzhugh_nagumo" and data.n_trajectories == 500
+    full = compose("data=fhn", "data.n_trajectories=500").data
+    assert dataset_file(data) == dataset_file(full)
+    model = compose_group("model", "autoencoder")
+    assert model.kind == "autoencoder"
+
+
 # ------------------------------------------------------------------- 2. data ------
 def test_build_source_requires_the_generated_file(tmp_path):
     cfg = compose(*TINY_DATA, f"data.out_dir={tmp_path}")
-    with pytest.raises(FileNotFoundError, match="--config-name bautin"):
+    with pytest.raises(FileNotFoundError, match="never generates"):
         build_source(cfg.data)
 
 
@@ -98,19 +128,22 @@ def test_loaders_shapes_and_resume_slice(data_dir):
     cfg = tiny(data_dir)
     source = build_source(cfg.data)
     dev = jax.devices()[0]
-    full = build_loaders(cfg, source, dev)
+    full = Loaders.from_config(cfg, source, dev)
     b = next(iter(full.train))
     assert b["u"].shape == (16, 10, 2) and b["t"].shape == (16, 10)
     assert full.train_source.num_trajectories == 9  # 12 − round(0.25 · 12)
     assert full.val_source.num_trajectories == 3
     assert len(full.train_batches) >= cfg.num_steps
-    later = build_loaders(cfg, source, dev, start_step=2)
+    later = Loaders.from_config(cfg, source, dev, start_step=2)
     assert np.array_equal(later.train_batches[0]["u"], full.train_batches[2]["u"])
     with pytest.raises(ValueError, match="beyond"):
-        build_loaders(cfg, source, dev, start_step=10**6)
+        Loaders.from_config(cfg, source, dev, start_step=10**6)
     for kind, extra in [("weighted", []), ("mixed", ["windows.sampling.split_idx=30"])]:
         cfg_k = tiny(data_dir, f"windows.sampling.kind={kind}", *extra)
-        assert next(iter(build_loaders(cfg_k, source, dev).train))["u"].shape[0] == 16
+        assert (
+            next(iter(Loaders.from_config(cfg_k, source, dev).train))["u"].shape[0]
+            == 16
+        )
 
 
 # ----------------------------------------------------------- 3. model/trainer -----
@@ -127,6 +160,26 @@ def test_models_and_trainers_build(data_dir):
     assert isinstance(build_trainer(cfg_ae).loss, PhaseAutoencoderLoss)
     with pytest.raises(ValueError, match="model.kind"):
         build_model(compose("model.kind=nope").model, jax.random.key(0))
+    # the default optimizer is adam without decay: a zero-gradient step moves nothing;
+    # the adamw group masks its decay off the latent dynamics: the normal form's
+    # parameters stay exactly where they were while the bijection shrinks
+    state = trainer.init(model, key=jax.random.key(1))
+    zero = jax.tree.map(jnp.zeros_like, state.filter_trainable(model))
+    assert eqx.tree_equal(state.take_step(zero).model, model)
+    decayed = build_trainer(tiny(data_dir, "optimizer=adamw")).init(
+        model, key=jax.random.key(1)
+    )
+    stepped = decayed.take_step(zero)
+    assert eqx.tree_equal(stepped.model.latent_dynamics, model.latent_dynamics)
+    assert not eqx.tree_equal(stepped.model.bijection, model.bijection)
+    # clip_norm wraps the optimizer: a huge gradient moves the parameters by at most
+    # about lr per leaf element (adam) whether or not it is clipped — so check the
+    # chain is there by its state instead
+    clipped = build_trainer(tiny(data_dir, "clip_norm=1.0"))
+    assert (
+        isinstance(clipped.optimizer.init(zero), tuple)
+        and len(clipped.optimizer.init(zero)) == 2
+    )
 
 
 # -------------------------------------------------------------------- 4. run ------
@@ -159,8 +212,8 @@ def test_resume_continues_steps_and_stream(data_dir, tmp_path):
     assert int(state.step) == 5
     # the resumed run consumed batches 3 and 4 of the same deterministic stream
     source = build_source(cfg.data)
-    full = build_loaders(cfg_resume, source, jax.devices()[0])
-    resumed = build_loaders(cfg_resume, source, jax.devices()[0], start_step=3)
+    full = Loaders.from_config(cfg_resume, source, jax.devices()[0])
+    resumed = Loaders.from_config(cfg_resume, source, jax.devices()[0], start_step=3)
     assert np.array_equal(resumed.train_batches[0]["u"], full.train_batches[3]["u"])
 
 
@@ -192,3 +245,134 @@ def test_autoencoder_run(data_dir, tmp_path):
     cfg = tiny(data_dir, "model=autoencoder", "loss=autoencoder", "schedule=yawata")
     state = train(cfg, tmp_path / "ae")
     assert int(state.step) == 3
+
+
+# ------------------------------------------------------------- 5. Run / setup -----
+def test_from_config_then_manual_training_loop_reopens_with_load_run(
+    data_dir, tmp_path
+):
+    """The notebook path: ``from_config`` builds the objects and the run directory; the
+    loop is the caller's, with ``exp.run.checkpointer()`` and any logger; ``load_run``
+    then finds the config in the directory."""
+    exp = Experiment.from_config(tiny(data_dir), tmp_path / "nb")
+    assert (exp.run.dir / "config.yaml").exists() and exp.start_step == 0
+    assert exp.run.metadata["batches_per_epoch"] > 0
+    logger = ListLogger()
+    state = exp.trainer.train(
+        exp.state,
+        exp.loaders.train,
+        num_steps=3,
+        logger=logger,
+        checkpointer=exp.run.checkpointer(save_every=1, metric="val/mse"),
+        evaluate=exp.evaluator,
+        eval_every=2,
+    )
+    assert int(state.step) == 3 and logger.records
+    cfg, loaded = load_run(exp.run.dir)
+    assert cfg.num_steps == 3 and eqx.tree_equal(loaded.model, state.model)
+    assert Run.open(exp.run.dir).latest_step() == 3
+
+
+def test_hand_built_model_reopens_through_a_template(data_dir, tmp_path):
+    """A model built without any config, checkpointed by a bare ``OrbaxCheckpointer``:
+    ``load_run(template=...)`` restores it, and reports no config."""
+    cfg = tiny(data_dir)
+    exp = Experiment.from_config(
+        cfg, tmp_path / "run"
+    )  # only for the loaders and evaluator
+    trainer = build_trainer(cfg)
+    state0 = trainer.init(
+        build_model(cfg.model, jax.random.key(7)), key=jax.random.key(8)
+    )
+    ckpt_dir = tmp_path / "bare-ckpt"
+    with OrbaxCheckpointer(ckpt_dir, save_every=1, metric="val/mse") as ckpt:
+        state = trainer.train(
+            state0,
+            exp.loaders.train,
+            num_steps=2,
+            checkpointer=ckpt,
+            evaluate=exp.evaluator,
+            eval_every=2,
+        )
+    cfg_found, loaded = load_run(ckpt_dir, template=state0)
+    assert cfg_found is None and eqx.tree_equal(loaded.model, state.model)
+    assert eqx.tree_equal(load_model(ckpt_dir, template=state0), state.model)
+    with pytest.raises(FileNotFoundError, match="template"):
+        load_run(ckpt_dir)
+
+
+def test_run_create_refuses_an_existing_run_and_resume_is_explicit(data_dir, tmp_path):
+    cfg = tiny(data_dir)
+    run_dir = tmp_path / "run"
+    (run_dir / ".hydra").mkdir(parents=True)  # Hydra makes the directory first: fine
+    train(cfg, run_dir)
+    with pytest.raises(FileExistsError, match="resume"):
+        Experiment.from_config(cfg, run_dir)
+    with pytest.raises(FileExistsError, match="resume"):
+        train(cfg, run_dir)
+    # continuing in place: more steps, a changed learning rate, both on record
+    cfg_more = tiny(data_dir, "num_steps=5", "optimizer.learning_rate=2e-3")
+    state = train(cfg_more, run_dir, resume=True)
+    assert int(state.step) == 5
+    run = Run.open(run_dir)
+    assert run.cfg.num_steps == 5
+    changes = run.metadata["resumed"]["config_changes"]
+    assert changes["num_steps"] == [3, 5]
+    assert changes["optimizer.learning_rate"][1] == 2e-3
+    assert run.metadata["resumed"]["from_step"] == 3
+    assert len(run.metadata["resumed"]["history"]) == 1
+    # resume=True and cfg.resume together is a contradiction
+    with pytest.raises(ValueError, match="not both"):
+        Experiment.from_config(
+            tiny(data_dir, f"resume={run_dir}"), run_dir, resume=True
+        )
+    # and a resume needs a checkpoint to continue from
+    with pytest.raises(FileNotFoundError):
+        Experiment.from_config(cfg, tmp_path / "nowhere", resume=True)
+
+
+def test_warm_start_from_another_run_is_recorded(data_dir, tmp_path):
+    cfg = tiny(data_dir)
+    train(cfg, tmp_path / "first")
+    state = train(
+        tiny(data_dir, f"resume={tmp_path / 'first'}", "num_steps=5"),
+        tmp_path / "second",
+    )
+    assert int(state.step) == 5
+    meta = Run.open(tmp_path / "second").metadata
+    assert meta["resumed_from"]["step"] == 3 and meta["resumed_from"]["run"].endswith(
+        "first"
+    )
+
+
+def test_load_or_generate_source_generates_once(tmp_path):
+    cfg = compose(*TINY_DATA, f"data.out_dir={tmp_path}")
+    assert not dataset_file(cfg.data).exists()
+    source = load_or_generate_source(cfg.data)
+    assert dataset_file(cfg.data).exists() and source.num_trajectories == 12
+    mtime = dataset_file(cfg.data).stat().st_mtime_ns
+    load_or_generate_source(cfg.data)
+    assert dataset_file(cfg.data).stat().st_mtime_ns == mtime  # loaded, not regenerated
+
+
+def test_build_logger_takes_an_existing_wandb_run(data_dir, tmp_path):
+    class FakeRun:
+        def __init__(self):
+            self.logged = []
+
+        def log(self, metrics, step):
+            self.logged.append((step, metrics))
+
+    cfg = tiny(data_dir)  # wandb=off: without a run no wandb logger would be made
+    fake = FakeRun()
+    logger, run = build_logger(cfg, tmp_path, {}, 4, wandb_run=fake)
+    assert run is fake
+    with logger:
+        logger.log({"loss": 1.0}, 0)
+        logger.log({"loss": 0.7}, 1)  # thinned by wandb.every = 50
+        logger.log({"loss": 0.5}, 50)
+    assert [s for s, _ in fake.logged] == [0, 50] and "epoch" in fake.logged[0][1]
+    # and the evaluator builder matches what setup uses
+    source = build_source(cfg.data)
+    loaders = Loaders.from_config(cfg, source, jax.devices()[0])
+    assert build_evaluator(cfg, source, loaders).t_split is None

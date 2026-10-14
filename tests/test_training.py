@@ -49,6 +49,7 @@ from deep_isochron.training import (
     collect_batches,
     ConjugacyTrajectoryLoss,
     Constant,
+    decay_mask,
     DelayedLogger,
     Evaluator,
     ListLogger,
@@ -560,3 +561,35 @@ def test_trainer_runs_the_phase_autoencoder_pipeline():
         final
     )
     assert all(np.isfinite(v) for v in final.values())
+
+
+def test_decay_mask_keeps_weight_decay_off_the_latent_dynamics():
+    """A zero-gradient ``adamw`` step shrinks the bijection's parameters by the decay
+    and leaves the normal form's untouched; without the mask it shrinks both (and
+    ``raw_a → 0`` would drift the Bautin form toward ``a = 1``, ``b = 0``)."""
+    model = ConjugateLatentDynamics(
+        BautinNormalForm(1.3, 0.4, 2.0, 0.5),
+        BiLipschitzLinear(
+            dim=2, max_lipschitz=2.0, key=jax.random.key(0), init="rotation"
+        ),
+    )
+    params = eqx.filter(model, eqx.is_inexact_array)
+    zero = jax.tree.map(jnp.zeros_like, params)
+    for masked in (True, False):
+        opt = optax.adamw(1e-2, weight_decay=0.1, mask=decay_mask() if masked else None)
+        updates, _ = opt.update(zero, opt.init(params), params)
+        new = eqx.apply_updates(params, updates)
+        dyn_moved = any(
+            bool(jnp.any(a != b))
+            for a, b in zip(
+                jax.tree.leaves(params.latent_dynamics),
+                jax.tree.leaves(new.latent_dynamics),
+            )
+        )
+        bij_moved = bool(jnp.any(new.bijection.raw_U != params.bijection.raw_U))
+        assert bij_moved and dyn_moved == (not masked)
+    # the mask is a pytree of bools matching the parameters, False exactly under
+    # latent_dynamics
+    m = decay_mask()(params)
+    assert not any(jax.tree.leaves(m.latent_dynamics))
+    assert all(jax.tree.leaves(m.bijection))

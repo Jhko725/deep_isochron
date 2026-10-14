@@ -19,6 +19,7 @@ from .losses import (
     ConjugacyTrajectoryLoss as ConjugacyTrajectoryLoss,
     PhaseAutoencoderLoss as PhaseAutoencoderLoss,
 )
+from .optimizers import decay_mask as decay_mask
 from .schedules import (
     AbstractLossSchedule as AbstractLossSchedule,
     Constant as Constant,

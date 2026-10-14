@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-08
+updated: 2026-10-13
 sources: [code]
 ---
 
@@ -90,6 +90,7 @@ deep_isochron
 │   │                        weighted named terms; ConjugacyTrajectoryLoss,
 │   │                        PhaseAutoencoderLoss
 │   ├── schedules.py         Constant / StepSchedule (curriculum) / ThresholdSwitch
+│   ├── optimizers.py        decay_mask: weight decay off the latent-dynamics parameters
 │   ├── loggers.py           Logger base class; Null / List / Print / Wandb; DelayedLogger;
 │   │                        MultiLogger; EpochLogger
 │   ├── checkpoint.py        Checkpointer base class; OrbaxCheckpointer (whole state)
@@ -98,13 +99,17 @@ deep_isochron
 ├── experiment/              configs -> a run (config parsing + instantiation only) ── ADR-0011
 │   ├── compose.py           compose(*overrides): the train config as train.py sees it
 │   ├── instantiate.py       `_target_` instantiation with YAML lists as tuples
-│   ├── data.py              dataset_file / build_source (never generates) / generate_dataset;
-│   │                        build_window_source / build_loaders (resume = slice);
+│   ├── data.py              dataset_file / build_source (never generates) / generate_dataset /
+│                            load_or_generate_source (notebooks); build_evaluator;
+│   │                        build_window_source / Loaders.from_config (resume = slice);
 │   │                        validation_t_split
 │   ├── model.py             build_model (`_target_` layers + per-layer keys + flip)
 │   ├── training.py          build_loss / build_schedule / build_optimizer / build_trainer
 │   ├── logging.py           build_logger: Print (+ Wandb online/offline) → Epoch → Delayed
-│   └── run.py               train(cfg, run_dir); load_run / load_model from a run directory
+│   └── run.py               Run (the directory: config.yaml, metadata.json, checkpoints/;
+│                            create refuses an existing run, resume is explicit);
+│                            Experiment.from_config(cfg, run_dir); train = Experiment.from_config().train();
+│                            load_run / load_model (template= for hand-built models)
 └── utils/                   shared helpers
     ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian (constraints, normal forms)
     └── provenance.py        git_state(), package_version() — for dataset and run metadata
@@ -255,12 +260,17 @@ configs/train.yaml ──compose──► cfg          (Hydra groups; `_target_`
         ├─ build_source(cfg.data): <out_dir>/<name>-<hash>.nc  (hash = generation_metadata; no generation)
         ├─ build_trainer(cfg): loss, schedule (Constant ← default_weights), optimizer
         ├─ build_model(cfg.model, key(seed)) → trainer.init  — or OrbaxCheckpointer(resume).restore
-        ├─ build_loaders(cfg, source, device, start_step): split_trajectories; WindowBatchSource
+        ├─ Loaders.from_config(cfg, source, device, start_step): split_trajectories; WindowBatchSource
         │        (num_steps → epochs); [start_step:]; to_device; validation_windows().batch
-        ├─ run_dir/config.yaml, metadata.json; build_logger (Print, wandb?) → DelayedLogger
-        └─ Trainer.train(state, loader, num_steps, logger, OrbaxCheckpointer(run_dir/checkpoints,
-                 custom_metadata), Evaluator(val, reference_normal_form(cfg.data)), eval_every)
+        ├─ Run.from_config(cfg, run_dir, metadata): config.yaml, metadata.json  (refuses an existing run;
+        │        Experiment.from_config(..., resume=True) → Run.from_config(resume=True): restore latest, record config_changes)
+        ├─ build_evaluator(cfg, source, loaders)        ─┐ all of the above = Experiment.from_config(cfg, run_dir)
+        ├─ build_logger (Print, wandb? or wandb_run=) → DelayedLogger   → Experiment
+        └─ Trainer.train(state, loader, num_steps, logger, run.checkpointer()  [= Experiment.train()]
+                 (OrbaxCheckpointer(run_dir/checkpoints, custom_metadata=metadata)), evaluator, eval_every)
                  └─ final step always checkpointed → load_run(run_dir) / load_model(run_dir)
+                    notebook: exp = Experiment.from_config(cfg, dir); trainer.train(exp.state, exp.loaders.train, logger=mine,
+                    checkpointer=exp.run.checkpointer(), evaluate=exp.evaluator) → load_run(dir) works
 ```
 
 ## Data flow of one training step

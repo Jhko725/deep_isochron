@@ -1,1 +1,2 @@
 mode: disabled     # PrintLogger only
+every: 50          # used when an existing wandb run is passed to build_logger
