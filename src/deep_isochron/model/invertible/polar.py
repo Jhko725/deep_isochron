@@ -20,18 +20,18 @@ class OffsetedBijection(AbstractScalarBijection[tuple]):
     """
 
     bijection: AbstractScalarBijection
-    raw: None = eqx.field(static=True, default=None, init=False)
+    raw: Float[Array, " num_params"] | None = eqx.field(
+        static=True, default=None, init=False
+    )
+    num_params: int = eqx.field(static=True, init=False)
     smoothness: int | None = eqx.field(static=True, init=False)
 
     def __init__(self, bijection: AbstractScalarBijection):
         if not isinstance(bijection, AbstractScalarBijection):
             raise TypeError("OffsetedBijection wraps an AbstractScalarBijection.")
         self.bijection = bijection
+        self.num_params = bijection.num_params
         self.smoothness = bijection.smoothness
-
-    @property
-    def num_params(self) -> int:
-        return self.bijection.num_params
 
     def constrain(self, raw):
         return self.bijection.constrain(raw)

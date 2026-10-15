@@ -107,6 +107,7 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
     """
 
     raw: Float[Array, " {self.num_params}"] | None
+    num_params: int = eqx.field(static=True, init=False)
     num_bins: int = eqx.field(static=True)
     xy_range: tuple[float, float] = eqx.field(static=True)
     min_rel_knot_width: float = eqx.field(static=True)
@@ -131,13 +132,10 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
         self.min_rel_knot_width = min_rel_knot_width
         self.min_rel_coeff_incr = min_rel_coeff_incr
         self.newton_iters = newton_iters
+        self.num_params = 2 * self.num_bins + 2
         self.raw = self._init_raw(jnp.zeros(self.num_params) if raw is None else raw)
 
     # -------------------------------------------------------------- interface -----
-    @property
-    def num_params(self) -> int:
-        return 2 * self.num_bins + 2
-
     def constrain(self, raw) -> BSplineParams:
         K = self.num_bins
         t_raw, a_raw = jnp.split(raw, [K + 4])

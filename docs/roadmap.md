@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-14
+updated: 2026-10-15
 sources: [joon, claude]
 ---
 
@@ -73,7 +73,7 @@ fixed by keeping bijection-law points off the regularization radius instead of `
 | D3 | `scripts/train.py`: Hydra run dir, `resolve_device`, x64, config/metadata/checkpoints in the run dir, final step always checkpointed, `resume=` continues the same stream, multirun group for wandb | *done 2026-10-05* |
 | D4 | `load_run(run_dir, step)` / `load_model` from the checkpoint's `custom_metadata` (config) | *done 2026-10-05* |
 | D5 | Notebook on `hydra.compose` + the builders (Joon, as Phase E runs start). 2026-10-07: the notebook's hand-rolled loop could not be reopened → `Run`/`setup`/explicit resume (branch `run-layout`, ADR-0011 §6 amended); the notebook moves onto `setup` | in progress |
-| D6 | CI: `.github/workflows/ci.yml` — ruff, ty, `check_md_math`, `pytest --hypothesis-profile=ci -n 4 -m "not slow"`; `slow` job + 20-step end-to-end `train.py` run; the `circular_rq (K=8)` failure fixed (test domain off the `eps_r` disc) | *done 2026-10-05* (first green run on GitHub pending) |
+| D6 | CI: `.github/workflows/ci.yml` — ruff, ty, `check_md_math`, `pytest --hypothesis-profile=ci -n 4 -m "not slow"`; `slow` job + 20-step end-to-end `train.py` run; the `circular_rq (K=8)` failure fixed (test domain off the `eps_r` disc) | *done 2026-10-05*; red since 2026-10-06 on `uvx ty` drifting to 0.0.88 — fixed 2026-10-15 (`ci-ty`: seven ADR-0004 overrides, CI on `ty@latest` by choice) |
 | D7 | `scripts/bench_dataloader.py --config <overrides>` benchmarks a training config's own pipeline, model and loss | *done 2026-10-05* |
 | D8 | ADR-0011; `docs/architecture.md` (`experiment/`, scripts, config→run data flow); change document; design doc §7 | *done 2026-10-05* |
 
@@ -159,3 +159,4 @@ hole (Langfield et al. 2025 §4.1) is a normal form now, with its exact chart as
 | 2026-10-05 | `experiment-config` | D1–D4, D6–D8: `configs/train.yaml` and groups; `deep_isochron.experiment` (`instantiate`, builders, `run.train`/`load_run`/`load_model`); `scripts/train.py`; forced final checkpoint; `generation_metadata`; CI workflow; benchmark on configs; `circular_rq` test domain fixed; ADR-0011 | `docs/changes/2026-10-05-experiment-config.md`, ADR-0011 |
 | 2026-10-07 | `run-layout` | `experiment.Run` (the run directory; `create` refuses an existing run, `resume` explicit with recorded config changes), `setup(cfg, run_dir) -> Experiment`, `train = setup().train()`, `load_run(template=)` for configless models, `build_evaluator`, `build_logger(wandb_run=)`, `load_or_generate_source`; ADR-0011 §6 amended | `docs/changes/2026-10-07-run-layout.md`, ADR-0011 |
 | 2026-10-08 | `normal-forms-basin` | Normal forms take their data in `r` on a declared basin (`basin_radii`, `in_basin`, `nan` outside); evenness is the `AbstractEvenNormalForm` subfamily (Hopf, Bautin); `WinfreeNormalForm` (Langfield et al. 2025 §4.1, closed-form isochrons, phaseless disk; `a = 0` allowed); `generate(outside_basin=error\|resample)`; design document §3.3/§9 amended; ADR-0013 | `docs/changes/2026-10-08-normal-forms-basin.md`, ADR-0013 |
+| 2026-10-15 | `ci-ty` | CI green against the latest ty: five `num_params` properties → ADR-0004 fields, template `raw` keeps the base annotation; `uvx ty@latest` in CI by choice, ty in the dev group; ADR-0004 amended | `docs/changes/2026-10-15-ci-ty.md`, ADR-0004 |

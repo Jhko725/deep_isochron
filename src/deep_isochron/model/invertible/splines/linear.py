@@ -27,6 +27,7 @@ class LinearSpline(AbstractSpline[LinearSplineParams]):
     """
 
     raw: Float[Array, " {self.num_params}"] | None
+    num_params: int = eqx.field(static=True, init=False)
     num_bins: int = eqx.field(static=True)
     xy_range: tuple[float, float] = eqx.field(static=True)
     min_rel_width: float = eqx.field(static=True)
@@ -45,11 +46,8 @@ class LinearSpline(AbstractSpline[LinearSplineParams]):
         self.num_bins = num_bins
         self.xy_range = self._check_range(xy_range)
         self.min_rel_width = min_rel_width
+        self.num_params = 2 * self.num_bins
         self.raw = self._init_raw(jnp.zeros(self.num_params) if raw is None else raw)
-
-    @property
-    def num_params(self) -> int:
-        return 2 * self.num_bins
 
     def constrain(self, raw) -> LinearSplineParams:
         x_raw, y_raw = jnp.split(raw, 2)

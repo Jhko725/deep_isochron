@@ -1,7 +1,11 @@
 # Phase D6. Two jobs: the quick suite on every push (lint, types, Markdown math, the
 # hypothesis `ci` profile with the slow tests deselected) and a `slow` job with the full
 # training tests and a 20-step end-to-end run of scripts/train.py on a tiny generated
-# Bautin dataset (CPU). ruff and ty run through uvx so the lock file stays as it is.
+# Bautin dataset (CPU). ruff runs through uvx so the lock file stays as it is; ty runs as
+# ``uvx ty@latest`` on purpose: the checker is young and its rules grow, and we want the
+# code clean against the newest one (``uvx ty`` alone may serve a cached older build).
+# The local ``uv run ty`` is the pinned dev-group copy — when CI goes red on a rule the
+# local run does not show, ``uv lock --upgrade-package ty`` and fix forward.
 name: CI
 
 on:
@@ -26,7 +30,7 @@ jobs:
       - run: uv sync --group dev
       - run: uvx ruff check src tests scripts
       - run: uvx ruff format --check src tests scripts --exclude src/deep_isochron/model/fourier.py
-      - run: uvx ty check src
+      - run: uvx ty@latest check src
       - run: uv run python scripts/check_md_math.py
       - run: uv run pytest --hypothesis-profile=ci -n 4 -m "not slow"
 
