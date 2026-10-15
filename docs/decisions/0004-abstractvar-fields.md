@@ -44,8 +44,8 @@ names.
 ## Consequences
 
 - Pinned by `test_abstractvars_are_not_init_args` and `test_smoothness_declared`.
-- The rule is in `CLAUDE.md`; `systems/` still carries `dim: ClassVar[int]` with
-  `# ty: ignore` and should be migrated the same way when touched.
+- The rule is in `CLAUDE.md`. `systems/` was migrated the same way in `invertible-cleanup`
+  A8 (2026-10-02, `07f6979`); no `# ty: ignore` remains anywhere under `src/`.
 
 ## Amendment 2026-10-15 (branch `ci-ty`)
 
