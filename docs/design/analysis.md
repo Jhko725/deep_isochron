@@ -1,7 +1,7 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-06
+updated: 2026-10-15
 verified_by: pending (Joon); the E1 oracle tests in tests/test_analysis.py pass
 sources: [ADR-0012 (analysis layout), roadmap Phase E, docs/design/normal-forms.md (phase conventions)]
 ---
@@ -200,8 +200,13 @@ Tolerances are entries of `tests/helpers.TOL` (`cycle_query`, `cycle_period`,
   cheap and its truncation is the phase's error (a 2.5 : 1 affine image of the circle
   needs 24 density terms for a $2\cdot10^{-6}$ phase; 11 leave $3\cdot10^{-3}$).
 
-## 2–5. E2–E5
+## 2–. `analysis.ode` (O1–O6) and the data items (D2–D3)
 
-Written when each item lands (roadmap Phase E): E3 `Cycle.winding`/`contains`, E2
-`settling_time` and the E1/E2 iteration, E4 `floquet_multiplier` from data, E5
-`analysis.ode`.
+Written as each item lands (roadmap Phase E, replanned 2026-10-15): O1 `limit_cycle`, O3
+`asymptotic_phase`, O4 `phase_sensitivity` (one survey: Guckenheimer 1975; Ermentrout &
+Kopell 1991; Brown, Moehlis & Holmes 2004; Izhikevich 2007 ch. 10; Monga, Wilson, Matchen
+& Moehlis 2019; Langfield, Krauskopf & Osinga 2014 for FHN; Yawata et al. 2024 for the
+evaluation protocol), then O2 `floquet_exponent`, O5 `isostable`, O6 `isostable_response`
+(Mauroy, Mezić & Moehlis 2013; Wilson & Moehlis 2016; Shirasaka, Kurebayashi & Nakao
+2017; Wilson & Ermentrout 2018), then D2/D3 on the data half. Each survey is delivered to
+Joon before implementation (ADR-0012, amendment).

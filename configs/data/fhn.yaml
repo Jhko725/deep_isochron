@@ -1,9 +1,10 @@
-# FitzHugh–Nagumo trajectories: 256 initial conditions in a box, 50 time units.
-# Run:  uv run python scripts/generate_data.py --config-name fhn  [key=value overrides]
-name: fhn
+# Trajectories from the FitzHugh–Nagumo system in the slow-fast parameter regime, discussed in P. Langfield et al. Chaos 24, 013131 (2014).
+# Default is 500 initial conditions in a box, 50 time units.
+# Run: uv run python scripts/generate_data.py --config-name fhn  [key=value overrides]
+name: fitzhugh_nagumo
 out_dir: data
 seed: 0
-n_trajectories: 256
+n_trajectories: 500
 
 system:
   _target_: deep_isochron.systems.FitzhughNagumo
@@ -26,4 +27,5 @@ solver:
   atol: 1.0e-10
   max_steps: 65536
 
+outside_basin: error   # initial conditions in a phaseless set: error | resample (ADR-0013)
 integration: null  # AbstractNormalForm systems only

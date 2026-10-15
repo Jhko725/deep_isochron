@@ -37,6 +37,7 @@ class MonotonicRQSpline(AbstractSpline[RQSplineParams]):
     """
 
     raw: Float[Array, " {self.num_params}"] | None
+    num_params: int = eqx.field(static=True, init=False)
     num_bins: int = eqx.field(static=True)
     xy_range: tuple[float, float] = eqx.field(static=True)
     min_rel_width: float = eqx.field(static=True)
@@ -58,11 +59,8 @@ class MonotonicRQSpline(AbstractSpline[RQSplineParams]):
         self.xy_range = self._check_range(xy_range)
         self.min_rel_width = min_rel_width
         self.min_derivative = min_derivative
+        self.num_params = 3 * self.num_bins - 1
         self.raw = self._init_raw(jnp.zeros(self.num_params) if raw is None else raw)
-
-    @property
-    def num_params(self) -> int:
-        return 3 * self.num_bins - 1
 
     def constrain(self, raw) -> RQSplineParams:
         K = self.num_bins

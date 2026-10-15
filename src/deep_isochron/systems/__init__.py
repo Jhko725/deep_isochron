@@ -6,6 +6,7 @@ from .base import (
 from .fitzhugh_nagumo import FitzhughNagumo as FitzhughNagumo
 from .hodgekin_huxley import HodgekinHuxley as HodgekinHuxley
 from .normal_forms import (
+    AbstractEvenNormalForm as AbstractEvenNormalForm,
     AbstractFlowIntegration as AbstractFlowIntegration,
     AbstractNormalForm as AbstractNormalForm,
     BautinNormalForm as BautinNormalForm,
@@ -15,4 +16,5 @@ from .normal_forms import (
     INTEGRATIONS as INTEGRATIONS,
     PolarIntegration as PolarIntegration,
     RadiusSquaredIntegration as RadiusSquaredIntegration,
+    WinfreeNormalForm as WinfreeNormalForm,
 )

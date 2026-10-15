@@ -24,14 +24,24 @@ def build_schedule(
     return instantiate(schedule_cfg)
 
 
-def build_optimizer(optimizer_cfg: DictConfig) -> optax.GradientTransformation:
-    return instantiate(optimizer_cfg)
+def build_optimizer(
+    optimizer_cfg: DictConfig, clip_norm: float | None = None
+) -> optax.GradientTransformation:
+    """The ``optimizer`` group as written (``optax.adam`` / ``adabelief`` / ``adamw``
+    with its ``decay_mask``); with ``clip_norm`` the gradients are clipped to that
+    global norm first (``optax.chain(clip_by_global_norm, optimizer)``)."""
+    optimizer = instantiate(optimizer_cfg)
+    if clip_norm is None:
+        return optimizer
+    return optax.chain(optax.clip_by_global_norm(float(clip_norm)), optimizer)
 
 
 def build_trainer(cfg: DictConfig) -> Trainer:
     loss = build_loss(cfg.loss)
     return Trainer(
-        build_optimizer(cfg.optimizer), loss, build_schedule(cfg.schedule, loss)
+        build_optimizer(cfg.optimizer, cfg.get("clip_norm")),
+        loss,
+        build_schedule(cfg.schedule, loss),
     )
 
 

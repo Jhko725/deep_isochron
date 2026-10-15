@@ -1,0 +1,34 @@
+# Winfree's planar model (Langfield et al. 2025, §4.1; ADR-0013): closed-form isochrons.
+# a > 0: a phaseless disk r <= a (the paper's a = 0.25); a = 0: a non-hyperbolic point (not
+# a conjugacy target); a < 0: a hyperbolic repelling focus, the member to train against.
+# Run:  uv run python scripts/generate_data.py --config-name winfree  [key=value overrides]
+name: winfree
+out_dir: data
+seed: 0
+n_trajectories: 256
+
+system:
+  _target_: deep_isochron.systems.WinfreeNormalForm
+  a: -0.25
+  w: -0.5
+
+ic_sampler:
+  _target_: deep_isochron.data.UniformAnnulus
+  r_min: 0.2            # > max(a, 0): inside the basin, off the degenerate region
+  r_max: 2.5
+
+time:
+  t0: 0.0
+  t1: 50.0
+  n: 501
+
+solver:
+  _target_: deep_isochron.systems.SolverConfig
+  solver:
+    _target_: diffrax.Tsit5
+  rtol: 1.0e-8
+  atol: 1.0e-10
+  max_steps: 65536
+
+outside_basin: error    # or resample, e.g. with a UniformBox sampler
+integration: null       # null -> closed_form (exact); or cartesian | polar (r_squared refuses this form)

@@ -24,8 +24,9 @@ from typing import Any
 
 import diffrax as dfx
 import equinox as eqx
+import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, ArrayLike, Float
+from jaxtyping import Array, ArrayLike, Bool, Float
 
 
 class SolverConfig(eqx.Module):
@@ -97,6 +98,15 @@ class AbstractODE(eqx.Module):
         self, t: Float[ArrayLike, ""], u: Float[Array, " {self.dim}"], args: Any = None
     ) -> Float[Array, " {self.dim}"]:
         """The vector field, in the diffrax signature (``t`` may be a Python float)."""
+
+    def in_basin(self, u: Float[Array, " {self.dim}"]) -> Bool[Array, ""]:
+        """Whether ``u`` lies in the basin of attraction of the system's limit cycle —
+        the domain on which an asymptotic phase exists. ``True`` everywhere by default
+        (a basin whose complement has measure zero, like FitzHugh–Nagumo's single
+        phaseless point); a normal form with a phaseless *set* overrides it, and
+        ``data.generate`` uses it to reject or resample initial conditions."""
+        del u
+        return jnp.asarray(True)
 
     def params(self) -> dict[str, Any]:
         """The system's parameters as JSON-able *constrained* values, keyed by their

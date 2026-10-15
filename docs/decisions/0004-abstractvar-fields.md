@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0004
 status: accepted
-updated: 2026-10-01
+updated: 2026-10-15
 verified_by: joon
 ---
 
@@ -44,5 +44,19 @@ names.
 ## Consequences
 
 - Pinned by `test_abstractvars_are_not_init_args` and `test_smoothness_declared`.
-- The rule is in `CLAUDE.md`; `systems/` still carries `dim: ClassVar[int]` with
-  `# ty: ignore` and should be migrated the same way when touched.
+- The rule is in `CLAUDE.md`. `systems/` was migrated the same way in `invertible-cleanup`
+  A8 (2026-10-02, `07f6979`); no `# ty: ignore` remains anywhere under `src/`.
+
+## Amendment 2026-10-15 (branch `ci-ty`)
+
+ty 0.0.88 enforces what the table above predicted and 0.0.84 let through: a `@property`
+implementing `num_params` is an `invalid-property-type-override` (a read-only attribute
+over a writable one). The five properties (`ScalarChain`, `OffsetedBijection`, the three
+splines) became `num_params: int = eqx.field(static=True, init=False)` assigned in
+`__init__` — the decision as written. It also rejects narrowing a mutable attribute in a
+subclass (`invalid-mutable-override`): the template classes declared `raw: None`, which
+is now `raw: Float[Array, " num_params"] | None = eqx.field(static=True, default=None,
+init=False)` — the base's annotation with the default. CI runs `uvx ty@latest` on purpose
+(the checker is young; we want to be clean against its newest rules), while the dev group
+carries a locked copy for `uv run ty`; the two are reconciled with `uv lock
+--upgrade-package ty` and a fix-forward.

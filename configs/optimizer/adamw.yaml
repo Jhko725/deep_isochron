@@ -1,0 +1,10 @@
+# Adam with decoupled weight decay (Loshchilov & Hutter 2019) — a prior toward the
+# identity bijection (raw = 0 is the identity, ADR-0002); the latent-dynamics parameters
+# are masked out (training.decay_mask) so the estimated invariants are not biased.
+# At lr 1e-3 and weight_decay 1e-4 the decay is 1e-7 per step: invisible over 1e4 steps.
+_target_: optax.adamw
+learning_rate: 1.0e-3
+weight_decay: 1.0e-4
+mask:
+  _target_: deep_isochron.training.decay_mask
+  exclude: [latent_dynamics]

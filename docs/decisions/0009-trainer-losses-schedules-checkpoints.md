@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0009
 status: accepted; amended
-updated: 2026-10-06
+updated: 2026-10-14
 verified_by: joon (review round 1, 2026-10-04); round 2 pending
 ---
 
@@ -164,6 +164,19 @@ so nothing is held in memory and the grid's bounding box comes from a first pass
 - *Rejected*: a list of batches collected once (round 1) — correct but holds the set in
   memory and bypasses the pipeline; kept only as `collect_batches` for convenience.
 
+- *Amended 2026-10-14*: `Trainer.train(stop_on_nonfinite=True)` raises
+  `FloatingPointError` at the first evaluation with a non-finite metric, before that state
+  reaches the checkpointer — the last checkpoint on disk is finite, which is what
+  `scripts/find_nan.py` needs; an empty validation bucket's `nan` (§5 split) is exempt.
+- *Amended 2026-10-14*: `Evaluator` reports the **latent extent** over every validation
+  sample — `latent/amp_min|amp_max` (the model's amplitude), for conjugacy models
+  `latent/r_min|r_max` (the latent radius `|H(x)|`) and `latent/nonfinite_image`
+  (fraction of samples whose image `H(x)` is not finite), and `latent/nonfinite`
+  (fraction of non-finite amplitudes; with a finite image this means the chart
+  overflowed): the detector for a learned map that sends data toward the latent
+  origin (where the normal form's closed forms overflow) or far outside the cycle (where
+  `Ψ` saturates and the chart's inverse is ill-conditioned) — the mechanism behind the
+  `nan` runs against Winfree's $a = 0$ member (ADR-0013 §5).
 - *Amended 2026-10-06*: `Evaluator(t_split=…)` additionally reports `val/mse_early` /
   `val/mse_late` — the same error over windows starting before / at-or-after `t_split` —
   because the overall mean is dominated by near-cycle windows and selects for the cycle;

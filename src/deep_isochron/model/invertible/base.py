@@ -84,10 +84,10 @@ class AbstractScalarBijection[P: tuple](AbstractBijection):
        ``class Foo(AbstractScalarBijection[FooParams])``.
     2. Fields: ``raw: Float[Array, " n"] | None`` — the **only** array leaf — then
        static configuration as ``eqx.field(static=True)``, then ``num_params`` and
-       ``smoothness`` as ``eqx.field(static=True, default=..., init=False)`` (or
-       ``num_params`` as a property when it depends on the configuration, as the
-       splines do). Nothing else is an array: no cached constrained values, no
-       constraint objects (ADR-0005).
+       ``smoothness`` as ``eqx.field(static=True, default=..., init=False)`` —
+       assigned in ``__init__`` (no ``default=``) when it depends on the
+       configuration, as the splines do; never a property (ADR-0004). Nothing else
+       is an array: no cached constrained values, no constraint objects (ADR-0005).
     3. ``__init__(self, <static config>, *, raw=None, ...)``: validate and store the
        configuration, then ``self.raw = self._init_raw(jnp.zeros(n) if raw is None
        else raw)``. So ``Foo(config)`` is the identity map and ``Foo(config,
@@ -172,7 +172,10 @@ class ScalarChain(AbstractScalarBijection[tuple]):
     """
 
     members: tuple[AbstractScalarBijection, ...]
-    raw: None = eqx.field(static=True, default=None, init=False)
+    raw: Float[Array, " num_params"] | None = eqx.field(
+        static=True, default=None, init=False
+    )
+    num_params: int = eqx.field(static=True, init=False)
     smoothness: int | None = eqx.field(static=True, init=False)
 
     def __init__(self, members: Sequence[AbstractScalarBijection]):
@@ -185,11 +188,8 @@ class ScalarChain(AbstractScalarBijection[tuple]):
                     f"{type(m).__name__} is not an AbstractScalarBijection."
                 )
         self.members = members
+        self.num_params = sum(m.num_params for m in members)
         self.smoothness = min_smoothness([m.smoothness for m in members])
-
-    @property
-    def num_params(self) -> int:
-        return sum(m.num_params for m in self.members)
 
     def _chunks(self, raw):
         sizes = [m.num_params for m in self.members]

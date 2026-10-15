@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-06
+updated: 2026-10-15
 sources: [joon, claude]
 ---
 
@@ -72,40 +72,55 @@ fixed by keeping bijection-law points off the regularization radius instead of `
 | D2 | Builders: `experiment.instantiate` (lists → tuples), `build_source` (file by generation hash, no generation), `build_window_source`/`build_loaders` (resume slice), `build_model` (`_target_` layers + keys + `flip`), `build_loss`/`build_schedule`/`build_optimizer`/`build_trainer`, `build_logger` | *done 2026-10-05* |
 | D3 | `scripts/train.py`: Hydra run dir, `resolve_device`, x64, config/metadata/checkpoints in the run dir, final step always checkpointed, `resume=` continues the same stream, multirun group for wandb | *done 2026-10-05* |
 | D4 | `load_run(run_dir, step)` / `load_model` from the checkpoint's `custom_metadata` (config) | *done 2026-10-05* |
-| D5 | Notebook on `hydra.compose` + the builders (Joon, as Phase E runs start) | pending |
-| D6 | CI: `.github/workflows/ci.yml` — ruff, ty, `check_md_math`, `pytest --hypothesis-profile=ci -n 4 -m "not slow"`; `slow` job + 20-step end-to-end `train.py` run; the `circular_rq (K=8)` failure fixed (test domain off the `eps_r` disc) | *done 2026-10-05* (first green run on GitHub pending) |
+| D5 | Notebook on `hydra.compose` + the builders (Joon, as Phase E runs start). 2026-10-07: the notebook's hand-rolled loop could not be reopened → `Run`/`setup`/explicit resume (branch `run-layout`, ADR-0011 §6 amended); the notebook moves onto `setup` | in progress |
+| D6 | CI: `.github/workflows/ci.yml` — ruff, ty, `check_md_math`, `pytest --hypothesis-profile=ci -n 4 -m "not slow"`; `slow` job + 20-step end-to-end `train.py` run; the `circular_rq (K=8)` failure fixed (test domain off the `eps_r` disc) | *done 2026-10-05*; red since 2026-10-06 on `uvx ty` drifting to 0.0.88 — fixed 2026-10-15 (`ci-ty`: seven ADR-0004 overrides, CI on `ty@latest` by choice) |
 | D7 | `scripts/bench_dataloader.py --config <overrides>` benchmarks a training config's own pipeline, model and loss | *done 2026-10-05* |
 | D8 | ADR-0011; `docs/architecture.md` (`experiment/`, scripts, config→run data flow); change document; design doc §7 | *done 2026-10-05* |
 
-## Phase E — `analysis`, then science (current; planned 2026-10-06; E1 landed 2026-10-06)
+## Phase E — `analysis`, then science (current; replanned 2026-10-15; E1 landed 2026-10-06)
 
-Decisions taken with Joon on 2026-10-06: `deep_isochron.analysis` has two halves —
-**`analysis.data`** (from sampled, possibly noisy trajectories; the priority, and what real
-data will need) and **`analysis.ode`** (from a known vector field; the ground truth the
-learned models are compared against) — sharing one **`Cycle`** object (a closed curve as a
-Fourier series, its period and centroid, with `distance`, `contains`, `winding`). The
-data-driven cycle estimate is self-contained (it works on trajectory *tails*, needing no
-settling time), the settling time is a function of *a* `Cycle` from either half, and a
-refinement alternates the two; neither needs the other to run. **Each analysis function
-lands in its own commit, preceded by a literature survey** recorded in the design document
-(what exists, what we credit, what we do differently and why).
+**Replanned 2026-10-15** (Joon; ADR-0012 amended). `deep_isochron.analysis` keeps its
+two halves, but their roles and priority are now:
 
-| # | Item | Depends on | Oracle / done when |
+- **`analysis.ode`** — *given* an `AbstractODE`, compute the reference objects of a
+  limit-cycle oscillator: the cycle, its Floquet exponent, the asymptotic phase, the phase
+  response curve (PRC/PSF), the amplitude (isostable) coordinate and its response curve.
+  These are what a trained model is **assessed** against (does its phase / isochrons /
+  PRC match the ground-truth system's?). **The priority.**
+- **`analysis.data`** — from sampled trajectories, the quantities that automate
+  **training decisions**: winding sense → the latent `w` sign; transient detection →
+  the split index of a `mixed` dataset. Later, as the runs demand.
+
+Method, per item: **a literature survey first, delivered to Joon** (what exists, what to
+credit, candidate numerical schemes, the oracles), who reads it, extends it and may
+prototype; implementation follows in its own commit, with the survey recorded in
+`docs/design/analysis.md`. Abstractions come *last*: functions first, shared objects
+once several functions exist (the `Cycle` object of E1 is kept as it is and reassessed
+then — Parked).
+
+| # | Item | Method candidates (surveyed before implementation) | Oracle / done when |
 |---|---|---|---|
-| E1 | `analysis.Cycle` + `analysis.data.estimate_cycle(trajectories, tail_periods)`: tails → polar protophase → Kralemann et al. protophase-to-phase (density as a time integral over whole revolutions) → period from the slope of the unwrapped phase → least-squares Fourier curve → `converged` (earlier revolutions against the last revolution's own fit); one or many trajectories; `winding` reported | — | *done 2026-10-06*: Bautin/Hopf radius, center, period and phase to 1e-8; FHN period 11.2279 (Langfield et al.) clockwise; noise σ = 0.05: residual at the noise level, curve error 0.018 → 0.008 from 4 to 16 trajectories |
-| E2 | `analysis.data.settling_time(trajectory, cycle, …)`: distance to the cycle `d(t)`, threshold with persistence or a robust fit of `log d(t)` (shared with E4); `estimate_cycle_and_transient` refinement; `t_settle` in dataset metadata; default for `validation.t_split` | a `Cycle` (E1 or E5) | `t_settle = ln(d_0 / eps) / abs(kappa)` for the normal forms |
-| E3 | `Cycle.winding` (signed area) and `Cycle.contains(points)` (winding number of the curve about each point, vectorized) | `Cycle` | sign of `w`; `r < r_*` on a grid |
-| E4 | `analysis.data.floquet_multiplier(trajectories, cycle)`: slope of the planar return map at its fixed point from successive section-crossing deviations, cross-checked by the slope of `log d(t)` (`kappa = ln(lambda) / T`) | E1, E2 | `exp(kappa T)` for the normal forms; graceful degradation with noise |
-| E5 | `analysis.ode`: periodic orbit by Newton on the Poincaré map (polish) and period; multiplier by `exp(∫ div f dt)` (planar, Liouville) and by the monodromy matrix; asymptotic phase by long integration; isochrons / isostables by Fourier–Laplace averages (Mauroy & Mezić 2012; Mauroy, Mezić & Moehlis 2013); Langfield, Krauskopf & Osinga (2014) as the published FHN comparison | `Cycle` | the normal forms' exact chart; FHN against Langfield et al. |
-| E6 | Wiring: `build_model` sets the signs of `w`, `w0` from `Cycle.winding`; `generate` records `t_settle` and the cycle estimate; `OnCycleGaussian` for FHN from the cycle; a far-from-cycle validation `data` config (`UniformAnnulus`); `Evaluator` reference for FHN from E5 | E1–E5 | `train.py data=fhn` reports every metric the Bautin runs have |
-| E7 | Experiments: Bautin → identity sanity; FHN conjugacy with `mixed` / `weighted` sampling and `val/mse_early` selection; the Yawata autoencoder baseline on both; learned FHN isochrons against E5 / Langfield. Losses and diagnostics from the earlier list (pushforward near the slow manifold, Hessian matching, Jacobian anisotropy, INN depth 8–12, periodic spline endpoints) only as the runs demand, each as a config group | E6 | figures and tables; the research questions answered or sharpened |
-| E8 | Docs: design document `analysis.md` (per algorithm: literature survey, method, oracle, noise model; the E1/E2 bootstrap), ADR-0012 (`analysis` data/ode split, `Cycle` as the shared object), architecture, change document, CI | — | — |
+| E1 | `analysis.Cycle` + `analysis.data.estimate_cycle` — the cycle from trajectory tails (data half) | Revzen & Guckenheimer; Kralemann et al. 2008 protophase-to-phase | *done 2026-10-06*: normal forms to 1e-8; FHN period 11.2279 (Langfield et al. 2014) |
+| O1 | `analysis.ode`: `limit_cycle(ode)` — points on $\gamma$ and the period $T$ | settle by long integration, polish by Newton on a Poincaré return map (shooting); $T$ as the return time | normal forms: $r = 1$, $T = 2\pi/\omega$; FHN: $T = 11.2279$ |
+| O3 | `analysis.ode`: `asymptotic_phase(ode, cycle, x)` — the phase field on a grid | direct method: integrate $x$ for $n$ periods, read the phase of the cycle point it lands beside (Guckenheimer 1975's definition made numerical; Yawata et al. 2024 Fig. 8); error controlled by $\kappa$ and $n$ | normal forms' exact `phase` (Hopf, Bautin, Winfree); the learned-phase comparison plot |
+| O4 | `analysis.ode`: `phase_sensitivity(ode, cycle, θ)` — PRC/PSF $Z(\theta) = \nabla\Theta$ on $\gamma$ | adjoint equation, backward integration, normalization $Z \cdot F = \omega$ (Ermentrout & Kopell 1991; Brown, Moehlis & Holmes 2004 App. A; the "true PSF" of Yawata et al. 2024 Figs. 9/12/15); direct finite-perturbation cross-check | normal forms: $\nabla\Theta$ of the closed-form chart by autodiff; FHN: direct vs adjoint |
+| O2 | `analysis.ode`: `floquet_exponent(ode, cycle)` — $\kappa$ | monodromy matrix by the variational equation over one period; planar cross-check by Liouville, $\exp\int \mathrm{div} f\thinspace dt$ | normal forms: $\kappa = \rho'(1)$ |
+| O5 | `analysis.ode`: `isostable(ode, cycle, x)` — the amplitude coordinate $\Psi$ | direct: fit $d(t) \approx C e^{\kappa t}$ along the settling trajectory, normalized $\partial_r\Psi(1) = 1$; alternatively Laplace averages (Mauroy, Mezić & Moehlis 2013) | normal forms' exact `amplitude` |
+| O6 | `analysis.ode`: `isostable_response(ode, cycle, θ)` — IRC/ARC $I(\theta) = \nabla\Psi$ on $\gamma$ | adjoint-type equation for the isostable gradient (Wilson & Moehlis 2016 Eqs. 9–14; Shirasaka, Kurebayashi & Nakao 2017; Wilson & Ermentrout 2018) | normal forms: $\nabla\Psi$ of the chart by autodiff |
+| M | Model-side metrics in `training/evaluation.py`, one per oracle as it lands: aligned phase-field error (offset and orientation by the circular mean, shared with the plot), PRC error in the first $k$ Fourier modes and the normalization residual $Z \cdot F - \omega$, amplitude correlation, ARC error; `amplitude_sensitivity` on `AbstractPhaseAmplitudeModel` | — | `train.py data=winfree` / `fhn` report them |
+| D2 | `analysis.data`: winding sense → `build_model` sets the signs of `w`, `w0` (E1's `winding`) | — | no manual sign intervention on FHN/Winfree |
+| D3 | `analysis.data`: transient detection (`settling_time` against a cycle; shared `log d(t)` fit with O5) → `t_settle` in dataset metadata, default `validation.t_split`; the far-from-cycle validation set (`UniformAnnulus`, design document `validation-split.md`) | O1 or E1 | `t_settle = ln(d_0/\epsilon)/\vert\kappa\vert` on the normal forms |
+| E7 | Experiments (running on the side throughout, feeding the plots and analysis wants): Bautin identity sanity; Winfree $a < 0$ against its invariants ($T$, $\kappa$, phase, PRC); FHN; the Yawata baseline on both; Winfree $a > 0$ — what a planar diffeomorphism does with a phaseless disk (`outside_basin=resample`). Losses/diagnostics (pushforward near the slow manifold, Hessian matching, Jacobian anisotropy, INN depth, periodic spline endpoints) only as the runs demand | M | figures and tables |
+| E8 | Docs: `analysis.md` one section per function; ADR-0012 amendments; architecture; `docs/figures/` from `scripts/figures.py` once the plots module exists (Joon moves plot code from notebooks as it stabilizes) | — | — |
 
-Order: E1 → E3 → E2 → E4 on branch `analysis` (the data-driven half; every test runs with
-and without measurement noise from the start), then E5 and E6, then E7.
+Order: O1 → O3 → O4 (one survey, shared references), then O2, O5 → O6, with M alongside
+each; D2/D3 when a run asks for them; E7 continuously.
 
 ## Parked (with reason)
 
+- `analysis.Cycle` as the shared abstraction of both halves (ADR-0012 §1, E1) — kept as
+  implemented, not extended (2026-10-15): abstractions are decided after the `analysis.ode`
+  functions exist, from what they actually share.
 - Optimistix for `radius_from_isostable` (and other hand-rolled solves) — dropped for now
   (review round 3, 2026-10-04): the bracketed Newton with its implicit-function JVP is
   tested and small; revisit if a second root solve appears or the dependency is needed
@@ -159,3 +174,6 @@ and without measurement noise from the start), then E5 and E6, then E7.
 | 2026-10-05 | `trainer` | C9: `WindowBatchSource` / `window_batches` / `mixed_window_batches` — batched window source for training runs (epochs of every window once, one gather per batch, finite loader); `Trainer.train(num_steps=None)`; `resolve_device`; ADR-0008 Decision 3 | `docs/changes/2026-10-04-trainer.md`, ADR-0008 |
 | 2026-10-05 | `experiment-config` | D1–D4, D6–D8: `configs/train.yaml` and groups; `deep_isochron.experiment` (`instantiate`, builders, `run.train`/`load_run`/`load_model`); `scripts/train.py`; forced final checkpoint; `generation_metadata`; CI workflow; benchmark on configs; `circular_rq` test domain fixed; ADR-0011 | `docs/changes/2026-10-05-experiment-config.md`, ADR-0011 |
 | 2026-10-06 | `analysis` | E1: `analysis.Cycle` (Fourier closed curve in a phase uniform in time) and `analysis.data.estimate_cycle` (tails, polar protophase, Kralemann PTP, regression period, self-consistency check); literature survey in `docs/design/analysis.md` §1; ADR-0012; `tests/test_analysis.py` | `docs/changes/2026-10-06-analysis.md`, ADR-0012 |
+| 2026-10-07 | `run-layout` | `experiment.Run` (the run directory; `create` refuses an existing run, `resume` explicit with recorded config changes), `setup(cfg, run_dir) -> Experiment`, `train = setup().train()`, `load_run(template=)` for configless models, `build_evaluator`, `build_logger(wandb_run=)`, `load_or_generate_source`; ADR-0011 §6 amended | `docs/changes/2026-10-07-run-layout.md`, ADR-0011 |
+| 2026-10-08 | `normal-forms-basin` | Normal forms take their data in `r` on a declared basin (`basin_radii`, `in_basin`, `nan` outside); evenness is the `AbstractEvenNormalForm` subfamily (Hopf, Bautin); `WinfreeNormalForm` (Langfield et al. 2025 §4.1, closed-form isochrons, phaseless disk; `a = 0` allowed); `generate(outside_basin=error\|resample)`; design document §3.3/§9 amended; ADR-0013 | `docs/changes/2026-10-08-normal-forms-basin.md`, ADR-0013 |
+| 2026-10-15 | `ci-ty` | CI green against the latest ty: five `num_params` properties → ADR-0004 fields, template `raw` keeps the base annotation; `uvx ty@latest` in CI by choice, ty in the dev group; ADR-0004 amended | `docs/changes/2026-10-15-ci-ty.md`, ADR-0004 |

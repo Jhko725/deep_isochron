@@ -19,6 +19,7 @@ script (Phase D) wires wandb, Orbax and Hydra's run directory."""
 from __future__ import annotations
 
 import itertools
+import math
 import warnings
 from collections.abc import Callable, Iterable, Mapping
 from copy import replace
@@ -98,6 +99,12 @@ class TrainerState(eqx.Module, Generic[M]):
         return eqx.filter(pytree, self.is_trainable)
 
 
+def _expected_nan(keys: list[str]) -> bool:
+    """Metrics that are ``nan`` by design when a bucket is empty (``val/mse_early`` /
+    ``late`` with no window on that side of ``t_split``) must not stop a run."""
+    return all(k in ("val/mse_early", "val/mse_late") for k in keys)
+
+
 def check_batch_dtype(batch: Batch, *, x64_enabled: bool | None = None) -> None:
     """Refuse float64 data when ``jax_enable_x64`` is off: ``jnp.asarray`` would
     silently round it to float32 and every tolerance in the project assumes float64."""
@@ -167,6 +174,7 @@ class Trainer(Generic[M]):
         checkpointer: Checkpointer | None = None,
         evaluate: Callable[[M], Mapping[str, Any]] | None = None,
         eval_every: int = 1,
+        stop_on_nonfinite: bool = True,
     ) -> TrainerState[M]:
         """Run until the loader ends — a ``data.window_batches`` loader is finite and
         epoch-structured, so the data define the run — or for ``num_steps`` steps if
@@ -181,7 +189,11 @@ class Trainer(Generic[M]):
         (``jit`` transfers them, synchronously). The logger and checkpointer are
         entered as context managers, so they close — and the ``DelayedLogger``
         flushes — even if a step raises. Resume by passing a restored
-        ``TrainerState``."""
+        ``TrainerState``. With ``stop_on_nonfinite`` (default), a non-finite validation
+        metric stops the run with ``FloatingPointError`` **before** that state is
+        checkpointed, so the last checkpoint on disk is a finite one (the starting point
+        for ``scripts/find_nan.py``); the loop itself never reads device values, so the
+        check lives at the evaluations."""
         if isinstance(model_or_state, TrainerState):
             state = model_or_state
         else:
@@ -202,6 +214,13 @@ class Trainer(Generic[M]):
             assert evaluate is not None
             val_metrics = {k: float(v) for k, v in evaluate(state.model).items()}
             log.log(val_metrics, step)
+            bad = sorted(k for k, v in val_metrics.items() if not math.isfinite(v))
+            if stop_on_nonfinite and bad and not _expected_nan(bad):
+                raise FloatingPointError(
+                    f"non-finite validation metrics at step {step}: {bad}; the state "
+                    f"was not checkpointed (last checkpoint: step {saved_step}). "
+                    "Hunt it with scripts/find_nan.py from that checkpoint."
+                )
             if ckpt.save(step, state, val_metrics, force=force):
                 saved_step = step
 

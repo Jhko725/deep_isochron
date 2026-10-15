@@ -15,6 +15,7 @@ device: null       # index into jax.devices(); null -> data.resolve_device() (sc
 x64: true
 
 num_steps: 5000    # the run's length in steps; the loader is sized to cover it (epochs logged)
+clip_norm: null    # global gradient-norm clip (optax.clip_by_global_norm) ahead of the optimizer; null = off
 windows:
   length: 50
   batch: 2048

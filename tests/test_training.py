@@ -46,9 +46,11 @@ from deep_isochron.model.invertible import BiLipschitzLinear
 from deep_isochron.systems import BautinNormalForm, HopfNormalForm
 from deep_isochron.training import (
     AbstractLoss,
+    Checkpointer,
     collect_batches,
     ConjugacyTrajectoryLoss,
     Constant,
+    decay_mask,
     DelayedLogger,
     Evaluator,
     ListLogger,
@@ -384,6 +386,80 @@ def test_evaluation_on_exact_models_is_exact():
     with pytest.raises(ValueError, match="empty"):
         Evaluator([])(identity)
 
+
+def test_non_finite_validation_metric_stops_the_run_before_checkpointing():
+    """A ``nan`` validation metric raises ``FloatingPointError`` at that evaluation
+    and the state is not offered to the checkpointer, so the last checkpoint stays
+    finite; ``val/mse_early`` / ``late`` being ``nan`` for an empty bucket does not stop
+    a run."""
+    batches = _nf_batches()
+    model = ConjugateLatentDynamics(
+        NF, BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=jax.random.key(0))
+    )
+    trainer = Trainer(optax.adam(1e-3), ConjugacyTrajectoryLoss())
+    saved: list[int] = []
+
+    class Recorder(Checkpointer):
+        def save(self, step, state, metrics, *, force=False):
+            saved.append(step)
+            return True
+
+    calls = {"n": 0}
+
+    def evaluate(m):
+        calls["n"] += 1
+        return {"val/mse": float("nan") if calls["n"] >= 2 else 1.0}
+
+    with pytest.raises(FloatingPointError, match="step 4"):
+        trainer.train(
+            model,
+            batches * 4,
+            key=jax.random.key(0),
+            checkpointer=Recorder(),
+            evaluate=evaluate,
+            eval_every=2,
+        )
+    assert saved == [2]
+    state = trainer.train(
+        model,
+        batches * 2,
+        key=jax.random.key(0),
+        evaluate=lambda m: {"val/mse": 1.0, "val/mse_early": float("nan")},
+        eval_every=1,
+    )
+    assert int(state.step) == len(batches) * 2
+
+
+def test_latent_extent_reports_where_the_data_are_sent():
+    """``latent/r_min|r_max`` are the extremes of ``|H(x)|`` over every validation
+    sample, ``latent/amp_min|amp_max`` those of the amplitude, ``latent/nonfinite`` /
+    ``nonfinite_image`` the fractions of non-finite amplitudes / images: the detector
+    for a map that flings points toward the latent origin or far outside the cycle."""
+    batches = _nf_batches()
+    starts = np.concatenate([np.asarray(b["u"]).reshape(-1, 2) for b in batches])
+    radii = np.linalg.norm(starts, axis=-1)
+    identity = ConjugateLatentDynamics(
+        NF, BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=jax.random.key(0))
+    )
+    out = Evaluator(batches)(identity)
+    assert out["latent/r_min"] == pytest.approx(radii.min(), rel=1e-6)
+    assert out["latent/r_max"] == pytest.approx(radii.max(), rel=1e-6)
+    assert out["latent/amp_min"] == pytest.approx(float(NF.isostable(radii.min())))
+    assert out["latent/amp_max"] == pytest.approx(float(NF.isostable(radii.max())))
+    assert out["latent/nonfinite"] == 0.0 and out["latent/nonfinite_image"] == 0.0
+    # a map that contracts the plane (raw_s → −∞ puts s at its floor 1/L = 0.5) sends
+    # the data toward the origin: r_min shrinks and the amplitude plunges
+    # (Ψ ~ −r^{−2(1+b)}); the autoencoder path reports the amplitude extremes only
+    scaled = eqx.tree_at(lambda m: m.bijection.raw_s, identity, -20.0 * jnp.ones(2))
+    r_scaled = float(jnp.linalg.norm(scaled.bijection(jnp.asarray(starts[0]))))
+    shrink = r_scaled / radii[0]
+    out2 = Evaluator(batches)(scaled)
+    assert shrink < 0.6
+    assert out2["latent/r_min"] == pytest.approx(radii.min() * shrink, rel=1e-6)
+    assert out2["latent/amp_min"] < out["latent/amp_min"]
+    ae = Evaluator(batches)(_exact_autoencoder(NF))
+    assert "latent/r_min" not in ae and ae["latent/nonfinite"] == 0.0
+
     # the intended source: a finite, deterministic dataset, re-iterated each call
     src = generate(
         NF,
@@ -560,3 +636,35 @@ def test_trainer_runs_the_phase_autoencoder_pipeline():
         final
     )
     assert all(np.isfinite(v) for v in final.values())
+
+
+def test_decay_mask_keeps_weight_decay_off_the_latent_dynamics():
+    """A zero-gradient ``adamw`` step shrinks the bijection's parameters by the decay
+    and leaves the normal form's untouched; without the mask it shrinks both (and
+    ``raw_a → 0`` would drift the Bautin form toward ``a = 1``, ``b = 0``)."""
+    model = ConjugateLatentDynamics(
+        BautinNormalForm(1.3, 0.4, 2.0, 0.5),
+        BiLipschitzLinear(
+            dim=2, max_lipschitz=2.0, key=jax.random.key(0), init="rotation"
+        ),
+    )
+    params = eqx.filter(model, eqx.is_inexact_array)
+    zero = jax.tree.map(jnp.zeros_like, params)
+    for masked in (True, False):
+        opt = optax.adamw(1e-2, weight_decay=0.1, mask=decay_mask() if masked else None)
+        updates, _ = opt.update(zero, opt.init(params), params)
+        new = eqx.apply_updates(params, updates)
+        dyn_moved = any(
+            bool(jnp.any(a != b))
+            for a, b in zip(
+                jax.tree.leaves(params.latent_dynamics),
+                jax.tree.leaves(new.latent_dynamics),
+            )
+        )
+        bij_moved = bool(jnp.any(new.bijection.raw_U != params.bijection.raw_U))
+        assert bij_moved and dyn_moved == (not masked)
+    # the mask is a pytree of bools matching the parameters, False exactly under
+    # latent_dynamics
+    m = decay_mask()(params)
+    assert not any(jax.tree.leaves(m.latent_dynamics))
+    assert all(jax.tree.leaves(m.bijection))

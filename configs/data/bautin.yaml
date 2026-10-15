@@ -29,4 +29,5 @@ solver:
   atol: 1.0e-10
   max_steps: 65536
 
+outside_basin: error   # initial conditions in a phaseless set: error | resample (ADR-0013)
 integration: null  # null -> the normal form's default (closed_form); or cartesian | polar | r_squared

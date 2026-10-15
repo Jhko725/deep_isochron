@@ -1,15 +1,17 @@
 ---
 type: decision
 id: ADR-0012
-status: accepted
-updated: 2026-10-06
+status: accepted; amended 2026-10-15
+updated: 2026-10-15
 verified_by: pending (Joon; the split and the ordering were decided in discussion 2026-10-06)
 ---
 
 # ADR-0012 — `analysis`: a data-driven half and an ODE half sharing one `Cycle`
 
 **Status**: accepted (2026-10-06, branch `analysis`; decisions taken with Joon before
-implementation, roadmap Phase E).
+implementation, roadmap Phase E). **Amended 2026-10-15** — see the end: the ODE half is
+the priority, `Cycle` is no longer the organizing object, and the survey is delivered
+before anything is implemented.
 
 ## Context
 
@@ -85,3 +87,20 @@ reinventing either.
 - The normal forms' `period()` is signed (the sign is the sense of rotation, design
   document `normal-forms.md` §2); `Cycle.period` is positive and the orientation is
   `winding`. Consumers that compare the two take the absolute value.
+
+## Amendment 2026-10-15 (Joon, after the first Winfree runs)
+
+- **Priority inverted.** The ODE half assesses trained models (phase, isochrons, PRC,
+  amplitude, ARC of the learned conjugacy against the ground-truth system) and is what the
+  experiments need now; the data half automates training decisions (winding → latent `w`
+  sign, transient → `mixed` split index) and follows as the runs ask. Roadmap Phase E,
+  items O1–O6, M, D2–D3.
+- **Decision 1 narrowed.** The two subpackages stand; `Cycle` as the object every
+  function produces and consumes does not — it was decided before the functions existed.
+  E1's `Cycle` stays as implemented (tested, used by `estimate_cycle`), and the shared
+  objects of the module are chosen *after* several `analysis.ode` functions exist, from
+  what they actually share (Parked in the roadmap).
+- **Decision 4 extended.** Each survey is *delivered to Joon first* — what exists, what
+  to credit, candidate schemes, oracles — for reading, further search and possibly his own
+  prototype; the implementation commit follows, with the survey recorded in
+  `docs/design/analysis.md`. Decisions 2 and 3 are unchanged.
