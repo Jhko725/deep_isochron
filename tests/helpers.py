@@ -1,13 +1,10 @@
-from collections.abc import Callable
-
 import diffrax as dfx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-from deep_isochron.systems import AbstractODE, SolverConfig
-from jaxtyping import Array, ArrayLike, Float
+from deep_isochron.systems import SolverConfig
 
 
 # Tolerances (float64 throughout). Every tolerance in the suite is an entry here, used
@@ -46,16 +43,18 @@ TOL = {
     "cycle_period": 1e-6,
     "cycle_curve": 2e-3,
     "cycle_phase": 2e-2,
-    # ``analysis.ode`` (O1), shooting at rtol 1e-10 / atol 1e-12
-    # (``SHOOTING_SOLVER_CONFIG``): the period and the orbit against the normal forms'
-    # exact values, the return time of the Poincaré map (event located by Newton at the
-    # solver's tolerance), the trivial Floquet multiplier's distance from 1, and the
-    # level-set residual of a designed cycle (Guckenheimer & Meloon's own accuracy
-    # measure) — all a decade above the observed 1e-11..1e-10
-    "limit_cycle": 1e-9,
+    # ``analysis.ode`` (O1), the vector field integrated at rtol 1e-10 / atol 1e-12
+    # (``SHOOTING_SOLVER_CONFIG``; always the solver, never a normal form's closed form,
+    # which is the oracle): over one period the global error is ~1e-9, so the period and
+    # the orbit against the exact values, and the level-set residual of a designed cycle
+    # (Guckenheimer & Meloon's own accuracy measure), are asked to a decade above that;
+    # the return map's point and time (event located by Newton at the solver's
+    # tolerance) and the distance of a return-map derivative's eigenvalue from its exact
+    # value likewise
+    "limit_cycle": 1e-8,
     "return_map": 1e-8,
     "trivial_multiplier": 1e-8,
-    "level_set": 1e-9,
+    "level_set": 1e-8,
 }
 
 
@@ -132,60 +131,3 @@ def adam_step[M: eqx.Module](module: M, key: jax.Array, lr: float = 1.0) -> M:
     opt = optax.adam(lr)
     updates, _ = opt.update(grads, opt.init(params), params)
     return eqx.combine(eqx.apply_updates(params, updates), static)
-
-
-class LevelSetCycle(AbstractODE):
-    r"""A planar ODE whose limit cycle is the zero level set of a given smooth ``g``.
-
-    $f = s\,(R\nabla g - g\nabla g)$ with $R$ the rotation by $+90°$: along it
-    $\dot g = \nabla g \cdot f = -s\,g\,\Vert\nabla g\Vert^2$, so $\lbrace g = 0\rbrace$
-    is invariant and attracting wherever $\nabla g \neq 0$, and is traversed
-    counterclockwise at speed $s\Vert\nabla g\Vert$. Guckenheimer & Meloon (2000,
-    §5.1) use exactly this with $g = x^2 - y^2 + \tfrac23 y^3 + c$ and $s = 1/2$ (their
-    field $\dot x = y - y^2 - xg$, $\dot y = x + (y - y^2)g$) as a test orbit whose
-    location is known in closed form: $\max\vert g\vert$ along a computed orbit is its
-    error. With a non-convex level set (a Cassini oval) a straight section cuts the
-    cycle four times, the case the Poincaré map's minimum-period logic must handle.
-
-    ``g`` is a static field (a Python function), so distinct ``g`` compile separately.
-    """
-
-    dim: int = eqx.field(static=True, default=2, init=False)
-    g: Callable[[Array], Array] = eqx.field(static=True)
-    speed: float = eqx.field(static=True, default=1.0)
-
-    def __init__(self, g, speed: float = 1.0):
-        self.g = g
-        self.speed = float(speed)
-
-    def level(self, u: Float[ArrayLike, " 2"]) -> Float[Array, ""]:
-        return self.g(jnp.asarray(u))
-
-    def rhs(self, t, u: Float[Array, " 2"], args=None) -> Float[Array, " 2"]:
-        del t, args
-        grad = jax.grad(self.level)(u)
-        rot = jnp.array([-grad[1], grad[0]])
-        return self.speed * (rot - self.level(u) * grad)
-
-    def params(self):
-        return {"speed": self.speed}
-
-
-def guckenheimer_meloon_cycle(c: float = 0.07) -> LevelSetCycle:
-    """Guckenheimer & Meloon (2000) §5.1: the orbit on ``x² − y² + 2y³/3 + c = 0``,
-    ``c ∈ (0, 1/3)``; for ``c = 0.07`` the period is ≈ 7.7 and
-    ``(0, 0.2952161257895192)`` lies on it to round-off (their p. 970)."""
-    return LevelSetCycle(lambda u: u[0] ** 2 - u[1] ** 2 + 2 * u[1] ** 3 / 3 + c, 0.5)
-
-
-def cassini_cycle(a: float = 1.0, b: float = 1.1) -> LevelSetCycle:
-    """A Cassini oval ``(x² + y²)² − 2a²(x² − y²) = b⁴ − a⁴``: for ``a < b < a√2`` a
-    single non-convex ("peanut") curve, waist at ``y = ±√(b² − a²)``; a horizontal line
-    above the waist cuts it four times."""
-    return LevelSetCycle(
-        lambda u: (
-            (u[0] ** 2 + u[1] ** 2) ** 2
-            - 2 * a**2 * (u[0] ** 2 - u[1] ** 2)
-            - (b**4 - a**4)
-        )
-    )

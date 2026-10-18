@@ -6,7 +6,7 @@ settling time, the winding direction, the Floquet multiplier — from sampled, p
 noisy trajectories; ``analysis.ode`` computes the same quantities, and the asymptotic
 phase and isochrons, from a known vector field, as ground truth. Replanned 2026-10-15
 (ADR-0012 amendment): the ODE half comes first, and ``Cycle`` is one object among
-several rather than the organizing one — ``analysis.ode`` starts from ``Hyperplane``,
+several rather than the organizing one — ``analysis.ode`` starts from ``CrossSection``,
 ``PoincareMap`` and ``LimitCycle``.
 """
 

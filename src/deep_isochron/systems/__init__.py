@@ -5,6 +5,11 @@ from .base import (
 )
 from .fitzhugh_nagumo import FitzhughNagumo as FitzhughNagumo
 from .hodgekin_huxley import HodgekinHuxley as HodgekinHuxley
+from .level_set import (
+    cassini as cassini,
+    guckenheimer_meloon as guckenheimer_meloon,
+    LevelSetCycle as LevelSetCycle,
+)
 from .normal_forms import (
     AbstractEvenNormalForm as AbstractEvenNormalForm,
     AbstractFlowIntegration as AbstractFlowIntegration,

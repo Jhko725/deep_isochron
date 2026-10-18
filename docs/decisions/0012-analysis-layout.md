@@ -104,6 +104,6 @@ reinventing either.
   to credit, candidate schemes, oracles — for reading, further search and possibly his own
   prototype; the implementation commit follows, with the survey recorded in
   `docs/design/analysis.md`. Decisions 2 and 3 are unchanged.
-- **2026-10-18**: the first `analysis.ode` objects are `Hyperplane`, `PoincareMap` and
+- **2026-10-18**: the first `analysis.ode` objects are `CrossSection`, `PoincareMap` and
   `LimitCycle` (ADR-0014), chosen from the O1 survey and Joon's prototype — functions
   and one map abstraction, with `Cycle` consumed (not produced) by `limit_cycle`'s output.

@@ -1,23 +1,34 @@
 """ODE-side analysis: reference objects of a limit-cycle oscillator computed from its
 vector field (roadmap Phase E, O1–O6). Host-side results (NumPy dataclasses), JAX
-inside.
+inside; the stages are jitted, the drivers are not.
 
-O1: ``Hyperplane`` (a cross-section), ``PoincareMap`` (the first-return map on it, with
-``fixed_point`` and ``jacobian``), ``multiple_shooting`` (the polish on the time-T flow)
-and ``limit_cycle`` (settle → return map → shooting → ``LimitCycle``).
+O1: ``CrossSection`` (a hyperplane), ``PoincareMap`` (the first-return map on it,
+differentiable in the point, with ``iterate`` and ``fixed_point``),
+``multiple_shooting`` (the polish on the time-T flow) and ``find_limit_cycle`` (settle
+→ return map → shooting → ``LimitCycle``), with its stages exported for reuse.
 """
 
-from .limit_cycle import limit_cycle as limit_cycle, LimitCycle as LimitCycle
+from .limit_cycle import (
+    find_limit_cycle as find_limit_cycle,
+    initial_guess as initial_guess,
+    is_equilibrium as is_equilibrium,
+    LimitCycle as LimitCycle,
+    orientation as orientation,
+    period_consistent as period_consistent,
+    polish as polish,
+    sample_orbit as sample_orbit,
+    settle as settle,
+)
 from .poincare import (
     Direction as Direction,
     FixedPoint as FixedPoint,
     PoincareMap as PoincareMap,
 )
-from .sections import Hyperplane as Hyperplane
+from .sections import CrossSection as CrossSection
 from .shooting import (
     multiple_shooting as multiple_shooting,
-    segment_flow as segment_flow,
     shooting_residual as shooting_residual,
     SHOOTING_SOLVER_CONFIG as SHOOTING_SOLVER_CONFIG,
+    ShootingArgs as ShootingArgs,
     ShootingResult as ShootingResult,
 )

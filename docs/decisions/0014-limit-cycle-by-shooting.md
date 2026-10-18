@@ -1,7 +1,7 @@
 ---
 type: decision
 id: ADR-0014
-status: accepted
+status: accepted; amended 2026-10-18 (review round 1)
 updated: 2026-10-18
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-17/18 after the O1 survey and his notebook prototype)
 ---
@@ -28,8 +28,7 @@ multiple shooting by Levenberg–Marquardt) before this refactoring.
 
 The orbit is found by multiple shooting: unknowns $(x_1, \dots, x_m, T)$, residual
 $\Phi_{T/m}(x_i) - x_{i+1}$ (cyclic) plus one phase condition, solved by Levenberg–Marquardt
-(optimistix) with the Jacobian by forward-mode AD through the diffrax solve, coarsening
-$m \to \dots \to 1$. *Why*: the segments are independent IVP solves (`vmap`), the Jacobian is
+(optimistix) with the Jacobian by forward-mode AD through the diffrax solve, $m$ fixed. *Why*: the segments are independent IVP solves (`vmap`), the Jacobian is
 the exact derivative of the numerical flow (the property Guckenheimer & Meloon identify
 as the source of accuracy), the adaptive solver's error control comes for free, and our
 orbits are attracting. *Rejected*: collocation (a BVP solver to write, no error control
@@ -51,19 +50,22 @@ in a one-off solve; evaluable by shooting through a quadrature state if a contin
 ever wanted); BifurcationKit's factor $T$ on the phase row (a row scaling with no stated
 rationale; we keep the row in state units).
 
-### 3. `PoincareMap` is the one abstraction; results are frozen dataclasses
+### 3. `PoincareMap` is the one abstraction; results are lightweight containers
 
 A `PoincareMap(ode, section, config, t_max, direction, reverse_time)` is the discrete map
 the flow induces on the section. It unifies three operations the plan had as separate
 functions: the return time and point ($P(x)$), the settle stage (iterate $P$ to its fixed
 point, with the minimum-period test as period-$k$ detection), and the brute-force
-multiplier (the contraction of the iterates); its `jacobian` (Parker & Chua Eq. 5.21,
-projected fixed-time derivative, no differentiation through the event) is the O2 hook.
+multiplier (the contraction of the iterates). It is a differentiable function of the
+point through a custom JVP (Parker & Chua Eq. 5.21 for the point, implicit
+differentiation of the crossing for the time; no differentiation through the event), so
+`jax.jacfwd(P)` is $DP$ — the O2 hook.
 `direction` (positive / negative / both) and `reverse_time` are static constructor
 arguments — the map's identity, not per-call options; `fixed_point` is defined for the
-one-sided maps only. `LimitCycle`, `FixedPoint`, `ShootingResult` are frozen dataclasses of
-NumPy arrays (ADR-0012 §3), kept lightweight until the package has enough functions for
-the shared abstractions to be chosen from what they actually share (ADR-0012 amendment).
+one-sided maps only. `LimitCycle` and `FixedPoint` (host-side) are frozen dataclasses of NumPy arrays
+(ADR-0012 §3); `ShootingResult` (the output of a jittable function) is a `NamedTuple` of
+arrays — kept lightweight until the package has enough functions for the shared
+abstractions to be chosen from what they actually share (ADR-0012 amendment).
 
 ### 4. Reverse time finds repelling cycles
 
@@ -73,13 +75,13 @@ monodromy is always the forward-time one (the reversed monodromy inverted). Firs
 Winfree's inner cycle $r = a$ ($a > 0$), the basin boundary, with its exact exponent
 $\kappa_u = a(1 - a)$ as oracle.
 
-### 5. Diagnostics, guards, and what is deferred
+### 5. Guards, and what is deferred
 
-`limit_cycle` reports the shooting residual and the monodromy's trivial-multiplier error
-$\min_i\vert\lambda_i - 1\vert$ (Guckenheimer & Meloon §5.4), and rejects the two extraneous
-solutions of shooting (an equilibrium; $T \to 0$; Parker & Chua §5.5). The *interpretation*
-of the nontrivial multiplier and Liouville's cross-check $\exp\int\mathrm{div}f\thinspace dt$
-are O2's (Joon, 2026-10-18); symmetric forward/backward shooting for canard-type segments
+`find_limit_cycle` reports the shooting residual and rejects the two extraneous solutions
+of shooting (an equilibrium; $T \to 0$; Parker & Chua §5.5). Properties *of* the orbit —
+the monodromy with its trivial-multiplier error (Guckenheimer & Meloon §5.4), the
+nontrivial multiplier, Liouville's cross-check $\exp\int\mathrm{div}f\thinspace dt$ — are
+functions of a `LimitCycle` and belong to O2 (review round 1, Joon 2026-10-18); symmetric forward/backward shooting for canard-type segments
 (Guckenheimer & Meloon §5.3) and per-point sections with variable segment times are
 documented, not built.
 
@@ -104,3 +106,24 @@ documented, not built.
   cycle in reverse time.
 - Open: the sign convention between the normal forms' signed `period()`, `Cycle.winding`
   and `LimitCycle.orientation` (all three exist; a test keeps them consistent).
+
+## Amendment 2026-10-18 — review round 1
+
+- **Jit scope** (decision 7): the map (`__call__`, `iterate`), the shooting solve and the
+  flow are jit- and vmap-compatible, with failures as runtime errors (`throw`, as in
+  diffrax); `fixed_point` and `find_limit_cycle` are host-side drivers over them. A jitted
+  settle would need a bounded history buffer and a masked minimal-period search for a
+  stage that runs once per system; revisit if a use case asks for it.
+- **Custom JVP** instead of a `jacobian` method; **no grid coarsening** (the $m$-point
+  solution is as valid as a single-shooting one, and the monodromy can be taken from any
+  point); the stages of `find_limit_cycle` are functions, not a class; the monodromy and
+  the multipliers leave `LimitCycle` for O2.
+- **Names**: `CrossSection` (the dynamical-systems term) with `signed_distance` and
+  `normal_to_flow`; `find_limit_cycle`; `AbstractODE.flow_to` replaces the three local
+  flow helpers; `LevelSetCycle` moves to `systems/level_set.py`.
+- **`analysis` integrates the vector field numerically** (`AbstractODE.integrate`,
+  `flow_to`), never a system's `flow`: the normal forms' `flow` defaults to their
+  *closed-form* chart, which (i) would make the tests against them circular and (ii)
+  loses precision at a basin edge — found when the reverse-time Winfree run through
+  `ode.flow` returned garbage at $r = a$ and a $10^{-7}$ period just inside. The closed
+  forms are oracles, not inputs.

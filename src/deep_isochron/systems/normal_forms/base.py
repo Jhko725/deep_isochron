@@ -216,7 +216,8 @@ class AbstractNormalForm(AbstractODE):
         ``integration.INTEGRATIONS`` (``"cartesian"``, ``"polar"``, ``"r_squared"``,
         ``"closed_form"``), or ``None`` for ``self.default_integration``; it is static,
         so each value traces separately under ``jit``/``vmap``. ``config`` is ignored by
-        ``"closed_form"``."""
+        ``"closed_form"``. ``integrate`` (the plain numerical solve of ``rhs``) is what
+        ``analysis`` uses, so that the closed forms stay oracles rather than inputs."""
         from .integration import resolve_integration
 
         method = resolve_integration(integration or self.default_integration)

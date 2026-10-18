@@ -27,8 +27,12 @@ trajectories.
 ```
 deep_isochron
 ├── systems/                 ODEs (observed and normal forms)      ── AbstractODE
-│   ├── base.py              rhs(t, u) · params() · in_basin(u) · SolverConfig · flow -> Solution
+│   ├── base.py              rhs(t, u) · params() · in_basin(u) · SolverConfig · integrate
+│   │                        (numerical, what analysis uses) · flow (default means; closed
+│   │                        form for normal forms) · flow_to(t, u0) -> state
 │   ├── fitzhugh_nagumo.py   FitzhughNagumo (dim 2)
+│   ├── level_set.py         LevelSetCycle: f = s(R∇g − g∇g), the zero level set of g is the
+│   │                        attracting cycle; guckenheimer_meloon(), cassini() test orbits
 │   ├── hodgekin_huxley.py   HodgekinHuxley (dim 4)
 │   └── normal_forms/
 │       ├── base.py          AbstractNormalForm: ρ(r), ω(r) on a basin (r_in, r_out);
@@ -88,15 +92,17 @@ deep_isochron
 │   │                        PTP phase → period by regression → Fourier curve → converged
 │   ├── errors.py            NotConvergedError (stage, message, last iterate)
 │   └── ode/                 from an AbstractODE (O1 landed; O2–O6 to come)      ── ADR-0014
-│       ├── sections.py      Hyperplane: cross-section (point, unit normal); through(ode, p)
-│       │                    = normal to the flow
+│       ├── sections.py      CrossSection: a hyperplane (point, unit normal); signed_distance;
+│       │                    normal_to_flow(ode, p)
 │       ├── poincare.py      PoincareMap: first-return map on a section (direction, reverse
-│       │                    time); __call__, iterate, fixed_point (settle + minimum-period
-│       │                    test), jacobian (Parker & Chua 5.21); FixedPoint
-│       ├── shooting.py      multiple_shooting: LM on the time-T flow, AD Jacobians, grid
-│       │                    coarsening; SHOOTING_SOLVER_CONFIG
-│       └── limit_cycle.py   limit_cycle: settle → return map → shooting → guards →
-│                            monodromy → LimitCycle (orbit at uniform times, period, …)
+│       │                    time); __call__ and iterate jitted/vmappable and differentiable
+│       │                    in the point (custom JVP, Parker & Chua 5.21); fixed_point
+│       │                    (host-side settle + minimum-period test); FixedPoint
+│       ├── shooting.py      multiple_shooting: LM on the time-T flow, AD Jacobians, jitted;
+│       │                    SHOOTING_SOLVER_CONFIG
+│       └── limit_cycle.py   find_limit_cycle = settle → initial_guess → polish → guards
+│                            (is_equilibrium, period_consistent) → sample_orbit →
+│                            LimitCycle (orbit at uniform times, period, orientation, …)
 ├── training/                                                            ── ADR-0009
 │   ├── trainer.py           TrainerState (model · opt_state · step · key · schedule
 │   │                        state); Trainer(optimizer, loss, schedule): jitted
