@@ -20,6 +20,7 @@ leaves, so it is static under the filter transforms.
 """
 
 import abc
+import dataclasses
 from typing import Any
 
 import diffrax as dfx
@@ -48,6 +49,12 @@ class SolverConfig(eqx.Module):
 
     def controller(self) -> dfx.PIDController:
         return dfx.PIDController(rtol=self.rtol, atol=self.atol)
+
+    def with_adjoint(self, adjoint: dfx.AbstractAdjoint) -> "SolverConfig":
+        """The same configuration with another adjoint — ``diffrax.ForwardMode()``
+        for a solve that will be differentiated with ``jax.jacfwd`` (the default
+        ``RecursiveCheckpointAdjoint`` supports reverse mode only)."""
+        return dataclasses.replace(self, adjoint=adjoint)
 
     def params(self) -> dict[str, Any]:
         """JSON-able description (for dataset metadata)."""

@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-14
+updated: 2026-10-18
 sources: [code]
 ---
 
@@ -86,7 +86,17 @@ deep_isochron
 │   ├── data/                from sampled, possibly noisy trajectories (host-side NumPy)
 │   │   └── cycle.py         estimate_cycle (E1): tails → polar protophase → Kralemann
 │   │                        PTP phase → period by regression → Fourier curve → converged
-│   └── ode/                 from an AbstractODE: periodic orbit, monodromy, isochrons (E5)
+│   ├── errors.py            NotConvergedError (stage, message, last iterate)
+│   └── ode/                 from an AbstractODE (O1 landed; O2–O6 to come)      ── ADR-0014
+│       ├── sections.py      Hyperplane: cross-section (point, unit normal); through(ode, p)
+│       │                    = normal to the flow
+│       ├── poincare.py      PoincareMap: first-return map on a section (direction, reverse
+│       │                    time); __call__, iterate, fixed_point (settle + minimum-period
+│       │                    test), jacobian (Parker & Chua 5.21); FixedPoint
+│       ├── shooting.py      multiple_shooting: LM on the time-T flow, AD Jacobians, grid
+│       │                    coarsening; SHOOTING_SOLVER_CONFIG
+│       └── limit_cycle.py   limit_cycle: settle → return map → shooting → guards →
+│                            monodromy → LimitCycle (orbit at uniform times, period, …)
 ├── training/                                                            ── ADR-0009
 │   ├── trainer.py           TrainerState (model · opt_state · step · key · schedule
 │   │                        state); Trainer(optimizer, loss, schedule): jitted
@@ -197,7 +207,7 @@ even in `r` (the `_sq` hooks in `s = r²`): smooth at the origin, `eigenvalues_o
 the `r_squared` integration — Hopf and Bautin; `WinfreeNormalForm` (Langfield et al. 2025)
 is the first form outside it, with a phaseless disk. **The rule**: a class carries only what is available analytically; anything
 numerical — locating a limit cycle, monodromy, asymptotic phase of FitzHugh–Nagumo — is a
-function over `AbstractODE` in `analysis/ode` (Phase E, E5). Everything public is cartesian.
+function over `AbstractODE` in `analysis/ode` (Phase E; `limit_cycle` landed as O1). Everything public is cartesian.
 
 **Integrations** (`normal_forms/integration.py`) are objects in the diffrax style — pass an
 instance, or one of `"cartesian" | "polar" | "r_squared" | "closed_form"` for the
@@ -351,3 +361,4 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0011](decisions/0011-experiment-layer.md) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit generation, forced final checkpoint |
 | [0012](decisions/0012-analysis-layout.md) | `analysis`: data-driven and ODE halves sharing `Cycle`; E1 self-contained; host-side NumPy; one commit per function |
 | [0013](decisions/0013-normal-form-basins.md) | normal forms: data in `r` on a declared basin; evenness is the `AbstractEvenNormalForm` subfamily; `nan` outside the basin; `generate(outside_basin=)` |
+| [0014](decisions/0014-limit-cycle-by-shooting.md) | the limit cycle from the vector field: first-return map on a flow-normal section, multiple shooting with AD Jacobians and LM; `PoincareMap` as the abstraction; reverse time for repelling cycles |

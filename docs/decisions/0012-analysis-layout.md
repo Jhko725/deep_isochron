@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0012
 status: accepted; amended 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-18
 verified_by: pending (Joon; the split and the ordering were decided in discussion 2026-10-06)
 ---
 
@@ -104,3 +104,6 @@ reinventing either.
   to credit, candidate schemes, oracles — for reading, further search and possibly his own
   prototype; the implementation commit follows, with the survey recorded in
   `docs/design/analysis.md`. Decisions 2 and 3 are unchanged.
+- **2026-10-18**: the first `analysis.ode` objects are `Hyperplane`, `PoincareMap` and
+  `LimitCycle` (ADR-0014), chosen from the O1 survey and Joon's prototype — functions
+  and one map abstraction, with `Cycle` consumed (not produced) by `limit_cycle`'s output.

@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-15
+updated: 2026-10-18
 ---
 
 # `deep_isochron` documentation — index
@@ -29,7 +29,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`normal-forms.md`](design/normal-forms.md) | agreed; §5.3–5.4 and the 2026-10-08 amendment (§3.3 Winfree, basins) tentative | Θ/Ψ conventions, Hopf and Bautin closed forms, the (Θ, Ψ) chart, the implementation contract (§9) and the tests it implies (§10); relation to Yawata et al. and Kvalheim & Revzen |
 | [`cubic-bspline.md`](design/cubic-bspline.md) | agreed | the `CubicBSpline` boundary treatment and inverse error bound |
 | [`validation-split.md`](design/validation-split.md) | tentative | why `val/mse` is a near-cycle metric and the early/late split by window start (`t_split`); how to choose the threshold; what it does not do |
-| [`analysis.md`](design/analysis.md) | tentative | the `Cycle` representation; per analysis function (E1 so far): literature survey with cited/deduced claims, method, oracles, limits |
+| [`analysis.md`](design/analysis.md) | tentative (§1 E1, §2 O1) | the `Cycle` representation; per analysis function (E1, O1 so far): literature survey with cited/deduced claims, method, oracles, limits |
 | [`training-step-performance.md`](design/training-step-performance.md) | tentative | where a JAX training step spends its time: asynchronous dispatch, committed/uncommitted placement, the GIL and grain's threads, what `bench_dataloader.py` measures, the bottleneck taxonomy, and the Phase C case history |
 
 ## Decision records (`decisions/`)
@@ -51,6 +51,7 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | [0011](decisions/0011-experiment-layer.md) | accepted; amended 2026-10-07 (§6 `Run`/`setup`, explicit resume) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit data generation, forced final checkpoint |
 | [0012](decisions/0012-analysis-layout.md) | accepted; amended 2026-10-15 (ODE half first; `Cycle` not the organizing object; survey delivered before implementation) | `analysis`: data-driven and ODE halves sharing `Cycle`; `estimate_cycle` self-contained, `settling_time` takes a cycle; host-side NumPy; one commit per function after a literature survey |
 | [0013](decisions/0013-normal-form-basins.md) | accepted (review pending) | normal forms take their data in `r` on a declared basin; evenness is the `AbstractEvenNormalForm` subfamily (Hopf, Bautin); Winfree's model with a hole; `nan` outside the basin; `generate(outside_basin=error\|resample)` |
+| [0014](decisions/0014-limit-cycle-by-shooting.md) | accepted (review pending) | `analysis.ode.limit_cycle`: shooting on the time-T flow (not collocation), Poincaré section normal to the flow, `PoincareMap` as the one abstraction with `direction`/`reverse_time`, frozen-dataclass results, Liouville/multiplier interpretation deferred to O2 |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 

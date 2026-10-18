@@ -1,9 +1,9 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-15
-verified_by: pending (Joon); the E1 oracle tests in tests/test_analysis.py pass
-sources: [ADR-0012 (analysis layout), roadmap Phase E, docs/design/normal-forms.md (phase conventions)]
+updated: 2026-10-18
+verified_by: pending (Joon); the E1 oracle tests in tests/test_analysis.py and the O1 tests in tests/test_analysis_ode.py pass
+sources: [ADR-0012 (analysis layout), ADR-0014 (limit cycle by shooting), roadmap Phase E, docs/design/normal-forms.md (phase conventions)]
 ---
 
 # `deep_isochron.analysis` — the limit cycle and its neighborhood, from data and from the vector field
@@ -200,13 +200,62 @@ Tolerances are entries of `tests/helpers.TOL` (`cycle_query`, `cycle_period`,
   cheap and its truncation is the phase's error (a 2.5 : 1 affine image of the circle
   needs 24 density terms for a $2\cdot10^{-6}$ phase; 11 leave $3\cdot10^{-3}$).
 
-## 2–. `analysis.ode` (O1–O6) and the data items (D2–D3)
+## 2. O1 — `analysis.ode.limit_cycle`: the periodic orbit and its period from the vector field
 
-Written as each item lands (roadmap Phase E, replanned 2026-10-15): O1 `limit_cycle`, O3
-`asymptotic_phase`, O4 `phase_sensitivity` (one survey: Guckenheimer 1975; Ermentrout &
-Kopell 1991; Brown, Moehlis & Holmes 2004; Izhikevich 2007 ch. 10; Monga, Wilson, Matchen
-& Moehlis 2019; Langfield, Krauskopf & Osinga 2014 for FHN; Yawata et al. 2024 for the
-evaluation protocol), then O2 `floquet_exponent`, O5 `isostable`, O6 `isostable_response`
-(Mauroy, Mezić & Moehlis 2013; Wilson & Moehlis 2016; Shirasaka, Kurebayashi & Nakao
-2017; Wilson & Ermentrout 2018), then D2/D3 on the data half. Each survey is delivered to
-Joon before implementation (ADR-0012, amendment).
+**The problem.** Given a planar `AbstractODE` with a hyperbolic attracting periodic orbit $\gamma$, find a point $x^\ast \in \gamma$, the period $T$, and the orbit sampled uniformly in time — the reference every later item (asymptotic phase, PRC, isostables) is built on, to an accuracy far beyond what a learned model's comparison can use (target $10^{-10}$ on $T$). Claims are *cited* (read in the source), *secondary* (via a source that cites it) or *deduced*.
+
+### 2.1 What exists
+
+Every method solves the same boundary value problem — $\dot x = T f(x)$ on $[0, 1]$, $x(0) = x(1)$, plus one phase condition — and differs in how the trajectory between mesh points is represented.
+
+| Family | Trajectory between mesh points | Jacobian | References |
+|---|---|---|---|
+| Brute force: settle, then measure returns to a section | adaptive IVP | none | Parker & Chua 1989 §5.1.1, and the minimum-period test of §5.5 read forwards (*cited*) |
+| Single shooting: Newton on $\Phi^T(x) - x$ with $T$ unknown | one adaptive IVP | variational equation or AD | Aprille & Trick 1972 and Mees 1981 (*secondary* via Parker & Chua §5.5, *cited*); the Poincaré-map variant with $DP_+ = [I - f(y)h^{\top}/\langle h, f(y)\rangle]\thinspace\Phi_T(x)$, their Eq. (5.21) |
+| Multiple shooting: $m$ segments with matching | $m$ adaptive IVPs | block-cyclic, blocks $\partial_x\Phi^{T/m}(x_i)$ | Morrison, Riley & Zancanaro 1962 (*cited* via Wikipedia); Keller 1968; Osborne 1969, J. Math. Anal. Appl. 27:417–433 (*cited*, author's list); Stoer & Bulirsch §7.3.5 (*cited* via Wikipedia); Deuflhard 1980 survey (*secondary*: Guckenheimer & Meloon and Dednam & Botha both cite it); Ascher, Mattheij & Russell 1988 (*secondary*) |
+| Symmetric multiple shooting: forward from $x_i$, backward from $x_{i+1}$ | half-segments both ways | same structure | Guckenheimer & Meloon 2000 §2, §5.3 (*cited*) |
+| Finite differences | one step of a one-step formula per interval | sparse cyclic | Parker & Chua §5.5 (*cited*) — multiple shooting with one solver step per segment |
+| Orthogonal collocation | piecewise polynomial zeroed at Gauss nodes | sparse, explicit | Doedel 1981; Doedel, Keller & Kernevez 1991; Doedel 2007 (*cited* via the Osinga/Krauskopf lecture notes and BifurcationKit's documentation); AUTO, MatCont, CoCo |
+| Taylor-series shooting with AD | degree-$d$ Taylor polynomial of the trajectory | AD of the Taylor map | Guckenheimer & Meloon 2000 (*cited*) |
+| Least-squares shooting | fixed-step RK on rescaled time, stacked residual | finite differences | Dednam & Botha 2015 (*cited*) |
+| Harmonic balance | truncated Fourier series, Galerkin | dense | Parker & Chua §5.5 (*cited*); Urabe 1965 (*secondary*) |
+
+What the two modern papers add, and do not (*cited*). Guckenheimer & Meloon's accuracy comes from exact derivatives of the discrete flow map — "no finite difference calculations of derivatives implicit in our methods" (§6) — and coarse meshes with increasing polynomial degree; on their algebraic test orbit (§5.1, Fig. 5.1) AUTO reaches $\approx 5\cdot10^{-15}$, RK4 at its optimal step $\approx 8\cdot10^{-15}$, their method $\approx 6\cdot10^{-16}$: one order of magnitude at the roundoff floor. Their genuinely stronger case is a canard cycle (§5.3), which forward integration cannot follow at all and symmetric shooting can. Dednam & Botha's extra residual components $x(1 + \Delta s) - x(\Delta s)$ are redundant at a zero (uniqueness of the flow), so their Levenberg–Marquardt contributes *globalization*, not accuracy (*deduced*); their finite-difference Jacobian is their own stated weakness (§2). Neither has grounds to beat AD-Jacobian multiple shooting on an adaptive high-order solver: JAX gives the exact-Jacobian property for free, and $10^{-10}$ is reachable with `Dopri8` at tight tolerances.
+
+**The degeneracy and the phase condition.** At a solution $DG = [\thinspace M - I \mid f(x^\ast)\thinspace]$ with $M$ the monodromy and $Mf = f$, so the null space is the flow direction at fixed $T$; an admissible phase condition has a nonzero component along $f(x^\ast)$, i.e. a transversal section (*deduced*). Two are in use: the Poincaré condition $\langle n, x_1 - p\rangle = 0$ (local, fixes the starting point) and Doedel's integral condition $\int_0^1 \langle x, \dot x_{\rm ref}\rangle = 0$, the stationarity condition of the time-shift distance to a reference orbit (*deduced*), the natural one for continuation. Shooting *can* evaluate the integral through a quadrature state; for a one-off solve with no reference orbit the Poincaré condition is the choice (ADR-0014 §2). BifurcationKit's default $s = T\langle x - x_\pi, \phi\rangle$ is this condition with `center` $x_\pi$ and unit `normal` $\phi = F(x_1)/\Vert F(x_1)\Vert$ (its `SectionSS`, *cited* from the source); the factor $T$ is a row scaling with no stated rationale, which we drop.
+
+**The initial guess** is not packaged anywhere (BifurcationKit, BoundaryValueDiffEq, MatCont, CoCo, AUTO take an orbit guess from the user or start from a Hopf point; *cited*/*secondary*). The recipe is Parker & Chua's brute force on a section: settle, place $\Sigma$ normal to the flow at the settled point ("let the program automatically set $h = f(x^{(0)})$ and $x_\Sigma = x^{(0)}$", §5.5), count positive crossings (footnote 4), measure the return time. Crossings are located by event detection with a root finder (Shampine & Thompson 2000, Comput. Math. Appl. 39:43–54 — *verify*; the classical remedy for the final-step error is Hénon 1982, via Tucker 2002, *cited*). Peak-to-peak timing is inferior: a smooth extremum localizes time to $\sqrt{2\varepsilon/\vert\ddot x\vert}$, a transversal crossing to $\varepsilon/\vert\dot x\vert$ (*deduced*).
+
+### 2.2 The method (`analysis/ode/`)
+
+`Hyperplane` (`sections.py`): $\Sigma = (p, n)$ with unit normal, `through(ode, p)` the flow-normal section.
+
+`PoincareMap` (`poincare.py`): the first-return map $P$ of the flow on $\Sigma$ — `__call__(x) -> (P(x), τ(x))` by a diffrax `Event` after a short departure solve (a zero of the condition at $t_0$ is read as a crossing; in reverse-time solves diffrax 0.7.2 hands the condition its internal increasing time, so the guard is a separate solve, not a time test); `direction` positive / negative / both and `reverse_time` are static constructor arguments; `iterate`; `fixed_point(x, tol, max_iter)` iterates the one-sided map until it returns to within `tol` of an earlier iterate — a period-$k$ orbit of $P$, $k$ minimal (Parker & Chua §5.4; a cycle cutting $\Sigma$ in $2k$ points), with the contraction of successive differences as the brute-force multiplier estimate; `jacobian(x)` by Eq. (5.21) from the fixed-horizon flow derivative, no differentiation through the event.
+
+`multiple_shooting` (`shooting.py`): unknowns $(x_1, \dots, x_m, T)$, residual $(\Phi_{T/m}(x_i) - x_{i+1}\ \text{cyclic},\ \langle n, x_1 - p\rangle)$, segments `vmap`ped, Jacobian by `jax.jacfwd` with `diffrax.ForwardMode`, solved by `optimistix.least_squares(LevenbergMarquardt)`; grid coarsening $m \to m/2 \to \dots \to 1$ (BoundaryValueDiffEq.jl's `MultipleShooting`, *cited*). `SHOOTING_SOLVER_CONFIG`: `Dopri8`, rtol $10^{-10}$, atol $10^{-12}$ — the solver's tolerance is the residual floor (Joon's prototype at rtol $10^{-6}$ had residual $10^{-6}$ at the *initial guess*).
+
+`limit_cycle` (`limit_cycle.py`): `in_basin` check → settle for `t_settle` → `Hyperplane.through` → `PoincareMap.fixed_point` ($\hat x$, $\hat T$ over $k$ returns, $\hat\lambda$) → `multiple_shooting` from $m$ points of the orbit through $\hat x$ → guards against the two extraneous solutions of shooting (an equilibrium; $T \to 0$; Parker & Chua §5.5, "Extraneous solutions") → monodromy $M = \partial_x\Phi_T(x^\ast)$ with $\min_i\vert\lambda_i - 1\vert$ as the accuracy readout (Guckenheimer & Meloon §5.4; inverted to forward time when `reverse_time`) → `LimitCycle` (orbit at `n_points` uniform times in $[0, T)$, period, orientation as the sign of the signed area, section, monodromy, residual, the settle record).
+
+### 2.3 Oracles (`tests/test_analysis_ode.py`)
+
+| System | Exact | Pinned |
+|---|---|---|
+| Hopf, Bautin, Winfree ($a < 0$) | $r = 1$, $T = 2\pi/\vert\omega_1\vert$, $\kappa = \rho'(1)$ | $T$ and radius to $10^{-9}$; return time and point of $P$; $DP$'s eigenvalues $\lbrace 0, e^{\kappa T}\rbrace$; $M$'s $\lbrace 1, e^{\kappa T}\rbrace$; contraction of the iterates $\to e^{\kappa T}$ in the linear regime; orientation = sign of $\omega$ |
+| Designed level-set cycles, `tests/helpers.LevelSetCycle`: $f = s\thinspace(R\nabla g - g\nabla g)$, so $\dot g = -s\thinspace g\thinspace\Vert\nabla g\Vert^2$ and $\lbrace g = 0\rbrace$ is an attracting cycle traversed counterclockwise (*deduced*; Guckenheimer & Meloon's §5.1 field is this with $s = 1/2$) | the curve | **Guckenheimer & Meloon's algebraic orbit** $g = x^2 - y^2 + \tfrac23 y^3 + c$, $c = 0.07$, start $(0, 0.2952161257895192)$ (*cited*, p. 970): $\max\vert g\vert$ along the output $< 10^{-9}$ (theirs $6\cdot10^{-16}$ at roundoff; ours is bounded by rtol), $T \approx 7.7$; **a Cassini oval** (non-convex): a horizontal section above the waist is cut four times — the two-sided map visits the four intersections in order, the one-sided map has a period-2 orbit and `fixed_point` reports $k = 2$ |
+| FitzHugh–Nagumo | — | $T = 11.2279$ (Langfield, Krauskopf & Osinga 2014 §III, *cited*) to $2\cdot10^{-3}$; brute-force $\hat T$ agrees with the polished $T$ to $10^{-6}$; clockwise (`slow`) |
+| Winfree $a = 0.25$, reverse time | inner cycle $r = a$, $T = 2\pi/\vert\omega(a)\vert$, $\kappa_u = a(1 - a)$ | radius and period to $10^{-9}$; forward-time monodromy's multiplier $e^{\kappa_u T} > 1$ |
+| Failure modes | — | outside the basin (`ValueError`), an equilibrium start (`ValueError`), no crossing within `t_max`, `max_iter` exhausted, the $T \to 0$ extraneous solution — each a `NotConvergedError` with the stage named |
+
+Also: a near-Hopf Bautin cycle ($\kappa \to 0$) where the fixed-point stage alone cannot reach a tight tolerance and the polish finishes from a loose settle; tolerance monotonicity (tighter solver, smaller period error); the output consumed by `Cycle.from_points` (phase-uniform points) with negligible residual; Hypothesis over Hopf parameters and starting points.
+
+### 2.4 Limits
+
+- **Attracting orbits only** (repelling ones through `reverse_time`); a saddle cycle in higher dimension would need shooting proper (error growth $e^{\kappa_u T/m}$ per segment is the lever) — not planar, not planned.
+- **No canard safety.** Forward segments; a cycle hugging a repelling slow manifold needs symmetric shooting (Guckenheimer & Meloon §5.3). FitzHugh–Nagumo at $\varepsilon = 0.08$ follows the attracting branches; Langfield et al.'s sensitivity near the repelling slow manifold concerns the *isochrons*, not the orbit.
+- **No continuation.** A parameter sweep would want the integral phase condition and pseudo-arclength; the quadrature-state formulation makes that a small addition. Collocation only if Langfield-style isochron BVPs are ever wanted.
+- **Floquet multipliers** are available (the monodromy, `PoincareMap.jacobian`, the contraction) but their interpretation and the Liouville cross-check $\exp\int_0^T \mathrm{div} f\thinspace dt$ belong to O2.
+- **Host-side**, Python-level control flow in `fixed_point` and the coarsening loop; the solves and the shooting residual are jitted. First call per `(ODE class, config, m)` pays XLA compilation (≈ 15 s on CPU); later instances of the same class reuse it.
+
+## 3–. O2–O6 and the data items (D2–D3)
+
+Written as each item lands (roadmap Phase E): O3 `asymptotic_phase`, O4 `phase_sensitivity` (one survey: Guckenheimer 1975; Ermentrout & Kopell 1991; Brown, Moehlis & Holmes 2004; Izhikevich 2007 ch. 10; Monga, Wilson, Matchen & Moehlis 2019; Langfield, Krauskopf & Osinga 2014 for FHN; Yawata et al. 2024 for the evaluation protocol), then O2 `floquet_exponent`, O5 `isostable`, O6 `isostable_response` (Mauroy, Mezić & Moehlis 2013; Wilson & Moehlis 2016; Shirasaka, Kurebayashi & Nakao 2017; Wilson & Ermentrout 2018), then D2/D3 on the data half. Each survey is delivered to Joon before implementation (ADR-0012, amendment).
