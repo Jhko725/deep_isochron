@@ -55,7 +55,11 @@ class CrossSection(eqx.Module):
     ) -> CrossSection:
         r"""The section through ``point`` whose normal is the flow direction there,
         $n = f(p)/\Vert f(p)\Vert$. Raises ``ValueError`` at an equilibrium (no flow
-        direction to be normal to)."""
+        direction to be normal to).
+
+        This is one of the methods to choose a Poincare section for finding limit
+        cycles, as discussed in Parker & Chua §5.5.2 (Choosing $\Sigma$).
+        """
         point = jnp.asarray(point, dtype=float)
         f = ode.rhs(t, point)
         if not bool(jnp.linalg.norm(f) > 0):
