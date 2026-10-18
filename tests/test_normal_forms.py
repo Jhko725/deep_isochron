@@ -407,6 +407,22 @@ def test_integrations_agree(nf, r, theta):
         assert_close(ys[0], u0, atol=TOL["closed_form"], msg=f"{name}: y(0) != u0")
 
 
+def test_integration_is_a_constructor_argument():
+    """``integration="cartesian"`` makes ``flow`` numerical (what ``analysis`` needs to
+    treat a normal form as a black-box vector field); unknown names are refused."""
+    nf = HopfNormalForm(a=1.0, w=2.0, integration="cartesian")
+    assert nf.default_integration == "cartesian"
+    ts = jnp.linspace(0.0, 1.0, 5)
+    u0 = jnp.array([0.5, 0.0])
+    assert_close(
+        nf.flow(ts, u0, config=SOLVERS["tight"]).ys,
+        HopfNormalForm(a=1.0, w=2.0).flow(ts, u0).ys,
+        atol=TOL["flow"],
+    )
+    with pytest.raises(ValueError):
+        HopfNormalForm(integration="spectral")
+
+
 @given(a=st.floats(0.2, 3.0), w=st.floats(0.5, 3.0), w0=st.floats(-2.0, 2.0), r0=radii)
 def test_hopf_closed_form_is_explicit(a, w, w0, r0):
     """Design document §6.1: r(t)⁻² = 1 + (r₀⁻² − 1) e^{−2at} and

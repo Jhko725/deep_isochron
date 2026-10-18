@@ -142,11 +142,6 @@ class PoincareMap(eqx.Module):
         up = self.direction == "positive"
         return up if not self.reverse_time else not up
 
-    @property
-    def forward_config(self) -> SolverConfig:
-        """``config`` with a forward-mode adjoint, for the derivative of the flow."""
-        return self.config.with_adjoint(dfx.ForwardMode())
-
     # ----------------------------------------------------------------- the map ----
     def __call__(
         self, x: Float[ArrayLike, " dim"]
@@ -288,7 +283,9 @@ def _first_return_jvp(primals, tangents):
     x_dot = jnp.zeros_like(x) if x_dot is None else x_dot
     # J dx: the fixed-horizon flow derivative over the known return time
     _, j_dx = jax.jvp(
-        lambda z: pmap.ode.flow_to(pmap.time_sign * tau, z, config=pmap.forward_config),
+        lambda z: pmap.ode.flow_to(
+            pmap.time_sign * tau, z, config=pmap.config.with_adjoint(dfx.ForwardMode())
+        ),
         (x,),
         (x_dot,),
     )

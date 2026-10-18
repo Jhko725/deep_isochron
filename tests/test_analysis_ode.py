@@ -15,6 +15,11 @@
                      algebraic orbit (max|g|), FitzHugh–Nagumo against Langfield et al.
                      (slow), near-Hopf Bautin, reverse time, output invariants, the
                      guards; Hypothesis over Hopf parameters
+
+The normal forms are constructed with ``integration="cartesian"`` so that the analysis
+integrates their vector field numerically and their closed forms are the oracle (with
+the default closed-form ``flow`` the comparison would be circular); one test checks that
+the two agree.
 """
 
 import importlib
@@ -51,7 +56,8 @@ from .helpers import assert_close, TOL
 
 
 CFG = SHOOTING_SOLVER_CONFIG
-HOPF = HopfNormalForm(a=1.0, w=2.0)
+NUM = {"integration": "cartesian"}  # analyze the vector field, not the closed form
+HOPF = HopfNormalForm(a=1.0, w=2.0, **NUM)
 X0 = jnp.array([0.3, 0.1])
 
 
@@ -93,7 +99,11 @@ def test_flow_normal_section_points_along_the_flow():
 # ----------------------------------------------------------------- 2. PoincareMap --
 @pytest.mark.parametrize(
     "nf",
-    [HOPF, BautinNormalForm(a=1.0, b=0.1, w=-1.5), WinfreeNormalForm(a=-0.25, w=-0.5)],
+    [
+        HOPF,
+        BautinNormalForm(a=1.0, b=0.1, w=-1.5, **NUM),
+        WinfreeNormalForm(a=-0.25, w=-0.5, **NUM),
+    ],
     ids=["hopf", "bautin_cw", "winfree"],
 )
 def test_return_map_on_the_cycle_returns_in_one_period(nf):
@@ -179,7 +189,7 @@ def test_fixed_point_contracts_at_the_floquet_multiplier():
 
 def test_return_map_derivative_has_eigenvalues_zero_and_the_multiplier():
     """``jax.jacfwd`` through the custom JVP (Parker & Chua Eq. 5.21)."""
-    nf = BautinNormalForm(a=1.0, b=0.2, w=1.0)
+    nf = BautinNormalForm(a=1.0, b=0.2, w=1.0, **NUM)
     p = _on_cycle(nf, 0.7)
     P = PoincareMap(nf, CrossSection.normal_to_flow(nf, p), CFG, t_max=20.0)
     DP = jax.jacfwd(lambda x: P(x)[0])(p)
@@ -192,7 +202,7 @@ def test_return_time_derivative_matches_finite_differences():
     """Winfree's angular rate depends on r, so the return time varies with the point:
     the JVP's dτ (implicit differentiation of the crossing) against central
     differences; for Hopf (constant ω) dτ is zero."""
-    w = WinfreeNormalForm(a=-0.25, w=-0.5)
+    w = WinfreeNormalForm(a=-0.25, w=-0.5, **NUM)
     p = _on_cycle(w)
     P = PoincareMap(w, CrossSection.normal_to_flow(w, p), CFG, t_max=20.0)
     x = jnp.array([1.1, 0.0])
@@ -225,7 +235,7 @@ def test_reverse_time_map_contracts_onto_winfrees_repelling_inner_cycle():
     footnote 1): one return (a full period, 2π/|ω(a)| with ω(a) = −(1 + w(1 − a)))
     brings the radius closer to a by e^{−κ_u T}, κ_u = a(1 − a); the derivative of the
     reversed map has the eigenvalues {0, e^{−κ_u T}}."""
-    w = WinfreeNormalForm(a=0.25, w=-0.5)
+    w = WinfreeNormalForm(a=0.25, w=-0.5, **NUM)
     p = w.flow_to(-20.0, jnp.array([0.3, 0.0]), config=CFG)  # partly settled, reversed
     P = PoincareMap(
         w, CrossSection.normal_to_flow(w, p), CFG, t_max=30.0, reverse_time=True
@@ -311,8 +321,8 @@ def _check_invariants(lc: LimitCycle, orientation: int):
     "nf, orientation",
     [
         (HOPF, 1),
-        (BautinNormalForm(a=1.0, b=0.1, w=-1.5), -1),
-        (WinfreeNormalForm(a=-0.25, w=-0.5), -1),
+        (BautinNormalForm(a=1.0, b=0.1, w=-1.5, **NUM), -1),
+        (WinfreeNormalForm(a=-0.25, w=-0.5, **NUM), -1),
     ],
     ids=["hopf", "bautin_cw", "winfree"],
 )
@@ -326,10 +336,25 @@ def test_limit_cycle_matches_the_normal_form(nf, orientation):
     assert_close(np.diff(angles), orientation * 2 * np.pi / len(lc.times), atol=1e-8)
 
 
+def test_closed_form_flow_and_numerical_flow_give_the_same_cycle():
+    """A normal form with its default closed-form ``flow`` is analyzed exactly (the
+    chart *is* the answer); with ``integration="cartesian"`` the solver is analyzed
+    against it. Both must agree — and only the second is a test of the numerics."""
+    exact = find_limit_cycle(HopfNormalForm(a=1.0, w=2.0), X0, t_settle=5.0, m=2)
+    numerical = find_limit_cycle(HOPF, X0, t_settle=5.0, m=2)
+    assert_close(exact.period, numerical.period, atol=TOL["limit_cycle"])
+    assert_close(exact.points, numerical.points, atol=TOL["limit_cycle"])
+    # the closed form solves itself to Levenberg–Marquardt's atol (1e-2 tol), with no
+    # solver-error floor underneath — the mark of the circularity
+    assert exact.residual < 1e-10
+
+
 def test_limit_cycle_points_are_a_phase_uniform_cycle():
     """The output is what ``Cycle.from_points`` expects: points at phases uniform in
     time; the fitted curve reproduces them (the two halves of ``analysis`` meet)."""
-    lc = find_limit_cycle(BautinNormalForm(a=1.0, b=0.1, w=-1.5), X0, t_settle=5.0, m=2)
+    lc = find_limit_cycle(
+        BautinNormalForm(a=1.0, b=0.1, w=-1.5, **NUM), X0, t_settle=5.0, m=2
+    )
     phases = 2 * np.pi * lc.times / lc.period
     cyc = Cycle.from_points(phases, lc.points, lc.period)
     assert cyc.residual < TOL["cycle_query"]
@@ -360,7 +385,7 @@ def test_limit_cycle_near_hopf_needs_the_polish():
     """A Bautin cycle with κ → 0: the return map barely contracts, so the fixed-point
     stage runs out of iterations at a tight tolerance, while a loose settle plus the
     shooting polish reaches the exact answer."""
-    nf = BautinNormalForm(a=0.02, b=0.1, w=1.0)  # κ = ρ'(1) small
+    nf = BautinNormalForm(a=0.02, b=0.1, w=1.0, **NUM)  # κ = ρ'(1) small
     with pytest.raises(NotConvergedError):
         find_limit_cycle(nf, X0, t_settle=5.0, m=2, settle_tol=1e-10, max_returns=3)
     lc = find_limit_cycle(nf, X0, t_settle=5.0, m=2, settle_tol=1e-2, max_returns=40)
@@ -369,7 +394,7 @@ def test_limit_cycle_near_hopf_needs_the_polish():
 
 
 def test_limit_cycle_reverse_time_finds_the_repelling_cycle():
-    w = WinfreeNormalForm(a=0.25, w=-0.5)
+    w = WinfreeNormalForm(a=0.25, w=-0.5, **NUM)
     lc = find_limit_cycle(
         w, jnp.array([0.3, 0.0]), t_settle=20.0, m=2, reverse_time=True
     )
@@ -382,7 +407,9 @@ def test_limit_cycle_reverse_time_finds_the_repelling_cycle():
 def test_limit_cycle_refuses_bad_starts():
     with pytest.raises(ValueError):  # inside Winfree's hole: outside the basin
         find_limit_cycle(
-            WinfreeNormalForm(a=0.25, w=-0.5), jnp.array([0.1, 0.0]), t_settle=5.0
+            WinfreeNormalForm(a=0.25, w=-0.5, **NUM),
+            jnp.array([0.1, 0.0]),
+            t_settle=5.0,
         )
     with pytest.raises(ValueError):  # the origin is an equilibrium of Hopf
         find_limit_cycle(HOPF, jnp.zeros(2), t_settle=5.0)
@@ -411,7 +438,7 @@ def test_limit_cycle_guards_against_a_collapsed_period(monkeypatch):
     angle=st.floats(0.0, 6.2),
 )
 def test_limit_cycle_on_random_hopf_forms(a, w, sign, r0, angle):
-    nf = HopfNormalForm(a=a, w=sign * w)
+    nf = HopfNormalForm(a=a, w=sign * w, **NUM)
     x0 = r0 * jnp.array([jnp.cos(angle), jnp.sin(angle)])
     lc = find_limit_cycle(nf, x0, t_settle=8.0 / a, m=2, n_points=16, config=CFG)
     assert_close(lc.period, 2 * np.pi / w, atol=TOL["limit_cycle"])

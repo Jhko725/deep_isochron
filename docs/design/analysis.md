@@ -1,7 +1,7 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-18
+updated: 2026-10-19
 verified_by: pending (Joon); the E1 oracle tests in tests/test_analysis.py and the O1 tests in tests/test_analysis_ode.py pass
 sources: [ADR-0012 (analysis layout), ADR-0014 (limit cycle by shooting), roadmap Phase E, docs/design/normal-forms.md (phase conventions)]
 ---
@@ -236,7 +236,7 @@ What the two modern papers add, and do not (*cited*). Guckenheimer & Meloon's ac
 
 `find_limit_cycle` (`limit_cycle.py`), a host-side composition of jitted stages, each exported: `settle` (flow for `t_settle`) → `initial_guess` (`CrossSection.normal_to_flow` and `PoincareMap.fixed_point`: $\hat x$, $\hat T$ over $k$ returns, $\hat\lambda$) → `polish` (`multiple_shooting` from $m$ points of the orbit through $\hat x$) → the guards `is_equilibrium` and `period_consistent` (the two extraneous solutions of shooting, Parker & Chua §5.5, "Extraneous solutions") → `sample_orbit` (the orbit at `n_points` uniform times in $[0, T)$, forward order even in reverse time) and `orientation` (sign of the signed area) → `LimitCycle` (orbit, period, orientation, section, residual, settle record). Properties *of* the orbit — monodromy, multipliers, their cross-checks — are O2's functions of a `LimitCycle`, not products of the search.
 
-`AbstractODE.integrate(ts, u0)` and `flow_to(t, u0)` (the **numerical** flow of the vector field — the state at a signed time, differentiable in both) and `LevelSetCycle` (`systems/level_set.py`, the designed-cycle family of §2.3) were added to `systems` for this item. `analysis` calls `integrate`/`flow_to`, never a system's `flow`: for the normal forms `flow` defaults to the closed-form chart, which would make the oracle tests circular and, at a basin edge ($r \to a$ for Winfree), loses precision — the closed forms are the oracles, the solver is the input.
+`AbstractODE.flow_to(t, u0)` (the state at a signed time, `flow(ts=[0, t]).ys[-1]`, differentiable in both) and `LevelSetCycle` (`systems/level_set.py`, the designed-cycle family of §2.3) were added to `systems` for this item. `analysis` works through the `flow` contract alone; which integration a system's `flow` performs is the system's choice. For the normal forms it defaults to the closed-form chart, which as an *input* would make the oracle tests circular and, at a basin edge ($r \to a$ for Winfree), loses precision — so the tests construct them with `integration="cartesian"` (a constructor argument) and the closed forms stay the oracles, the solver the input (ADR-0014, round 2).
 
 ### 2.3 Oracles (`tests/test_analysis_ode.py`)
 

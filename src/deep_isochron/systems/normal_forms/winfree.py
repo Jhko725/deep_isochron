@@ -61,7 +61,10 @@ class WinfreeNormalForm(AbstractNormalForm):
     a: float = eqx.field(static=True)
     w: float = eqx.field(static=True)
 
-    def __init__(self, a: float = -0.25, w: float = -0.5):
+    def __init__(
+        self, a: float = -0.25, w: float = -0.5, integration: str = "closed_form"
+    ):
+        self._set_integration(integration)
         if not a < 1.0:
             raise ValueError("a must be < 1 (the cycle r = 1 must attract).")
         self.a = float(a)

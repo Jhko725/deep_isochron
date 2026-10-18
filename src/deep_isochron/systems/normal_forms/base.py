@@ -55,7 +55,18 @@ class AbstractNormalForm(AbstractODE):
     """The integration ``flow`` uses when none is given. ``"closed_form"`` is exact
     (phase and isostable evolved analytically, §6) and cheaper than any ODE solve, so
     it is the default for every normal form; the numerical integrations exist for the
-    comparison experiments (``integration.INTEGRATIONS``)."""
+    comparison experiments (``integration.INTEGRATIONS``) and for analyzing a normal
+    form as a black-box vector field (``analysis`` works through ``flow``, so a normal
+    form constructed with ``integration="cartesian"`` is analyzed numerically and its
+    closed forms stay the oracle). Every concrete normal form takes ``integration`` in
+    its constructor and sets this field through ``_set_integration``."""
+
+    def _set_integration(self, integration: str) -> None:
+        """Validate and store ``default_integration`` (called from ``__init__``)."""
+        from .integration import resolve_integration
+
+        resolve_integration(integration)  # raises on an unknown name
+        self.default_integration = integration
 
     # ------------------------------------------------ defining data (abstract) ----
     @abc.abstractmethod
@@ -216,8 +227,7 @@ class AbstractNormalForm(AbstractODE):
         ``integration.INTEGRATIONS`` (``"cartesian"``, ``"polar"``, ``"r_squared"``,
         ``"closed_form"``), or ``None`` for ``self.default_integration``; it is static,
         so each value traces separately under ``jit``/``vmap``. ``config`` is ignored by
-        ``"closed_form"``. ``integrate`` (the plain numerical solve of ``rhs``) is what
-        ``analysis`` uses, so that the closed forms stay oracles rather than inputs."""
+        ``"closed_form"``."""
         from .integration import resolve_integration
 
         method = resolve_integration(integration or self.default_integration)

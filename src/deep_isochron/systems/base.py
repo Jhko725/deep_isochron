@@ -126,23 +126,6 @@ class AbstractODE(eqx.Module):
             if not f.metadata.get("static", False)
         }
 
-    def integrate(
-        self,
-        ts: Float[Array, " time"],
-        u0: Float[Array, " {self.dim}"],
-        args: Any = None,
-        *,
-        config: SolverConfig = DEFAULT_SOLVER_CONFIG,
-    ) -> dfx.Solution:
-        """The **numerical** flow of the vector field: the diffrax ``Solution`` of
-        ``rhs`` through ``u0`` sampled at ``ts`` (``.ys`` the trajectory ``(time,
-        dim)``, ``.result`` the outcome — compare with ``diffrax.RESULTS.successful``,
-        elementwise under ``vmap`` with ``config.throw=False`` — ``.stats`` the step
-        counts). Always the solver, whatever closed forms a subclass has: this is what
-        ``analysis`` integrates, so that its results are an *independent* numerical
-        reference even for the normal forms."""
-        return diffeqsolve(self.rhs, ts, u0, args, config)
-
     def flow(
         self,
         ts: Float[Array, " time"],
@@ -151,11 +134,13 @@ class AbstractODE(eqx.Module):
         *,
         config: SolverConfig = DEFAULT_SOLVER_CONFIG,
     ) -> dfx.Solution:
-        """The flow through ``u0`` sampled at ``ts``, by the system's *default* means:
-        ``integrate`` here; the normal forms override it with a choice of integration
-        whose default is their closed form (``default_integration``), so for them
-        ``flow`` is exact and ``integrate`` is the numerical comparison."""
-        return self.integrate(ts, u0, args, config=config)
+        """The diffrax ``Solution`` through ``u0`` sampled at ``ts``: ``.ys`` is the
+        trajectory ``(time, dim)``, ``.result`` the outcome (compare with
+        ``diffrax.RESULTS.successful``; elementwise under ``vmap`` with
+        ``config.throw=False``), ``.stats`` the step counts. The normal forms override
+        it with a choice of integration, closed form by default (their ``integration``
+        constructor argument selects a numerical one)."""
+        return diffeqsolve(self.rhs, ts, u0, args, config)
 
     def flow_to(
         self,
@@ -165,12 +150,11 @@ class AbstractODE(eqx.Module):
         *,
         config: SolverConfig = DEFAULT_SOLVER_CONFIG,
     ) -> Float[Array, " {self.dim}"]:
-        """The state at time ``t`` (negative for the reversed flow) from ``u0`` by the
-        **numerical** flow: ``integrate(ts=[0, t]).ys[-1]``. ``t`` may be traced;
-        differentiable in ``u0`` and ``t`` under the mode ``config.adjoint``
-        supports."""
+        """The state at time ``t`` (negative for the reversed flow) from ``u0``:
+        ``flow(ts=[0, t]).ys[-1]``. ``t`` may be traced; differentiable in ``u0`` and
+        ``t`` under the mode ``config.adjoint`` supports."""
         ts = jnp.stack([jnp.zeros_like(t), jnp.asarray(t)])
-        ys = cast(Array, self.integrate(ts, u0, args, config=config).ys)
+        ys = cast(Array, self.flow(ts, u0, args, config=config).ys)
         return ys[-1]
 
     def __repr__(self) -> str:

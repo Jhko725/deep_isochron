@@ -38,7 +38,14 @@ class HopfNormalForm(AbstractEvenNormalForm):
     w: Float[Array, ""]
     w0: Float[Array, ""]
 
-    def __init__(self, a: float = 1.0, w: float = 1.0, w0: float | None = None):
+    def __init__(
+        self,
+        a: float = 1.0,
+        w: float = 1.0,
+        w0: float | None = None,
+        integration: str = "closed_form",
+    ):
+        self._set_integration(integration)
         if a <= 0:
             raise ValueError("a must be positive.")
         self.raw_a = A_CONSTRAINT.inverse(jnp.asarray(a, dtype=float))

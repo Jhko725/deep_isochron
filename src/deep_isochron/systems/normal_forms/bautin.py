@@ -44,8 +44,14 @@ class BautinNormalForm(AbstractEvenNormalForm):
     w0: Float[Array, ""]
 
     def __init__(
-        self, a: float = 1.0, b: float = 0.1, w: float = 1.0, w0: float | None = None
+        self,
+        a: float = 1.0,
+        b: float = 0.1,
+        w: float = 1.0,
+        w0: float | None = None,
+        integration: str = "closed_form",
     ):
+        self._set_integration(integration)
         if a <= 0:
             raise ValueError("a must be positive.")
         if b <= -1:

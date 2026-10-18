@@ -112,11 +112,9 @@ def polish(
     ``i period_hat / m``."""
     sign = -1.0 if reverse_time else 1.0
     x_hat = jnp.asarray(x_hat, dtype=float)
-    times = sign * period_hat * jnp.arange(m) / m
+    times = sign * jnp.linspace(0.0, period_hat, m, endpoint=False)
     guess = (
-        cast(Array, ode.integrate(times, x_hat, config=config).ys)
-        if m > 1
-        else x_hat[None]
+        cast(Array, ode.flow(times, x_hat, config=config).ys) if m > 1 else x_hat[None]
     )
     return multiple_shooting(
         ode,
@@ -158,11 +156,11 @@ def sample_orbit(
     """The orbit through ``x0`` at ``n_points`` uniform times in ``[0, period)``, in
     the forward time order (a reverse-time sampling is re-ordered)."""
     x0 = jnp.asarray(x0, dtype=float)
-    times = period * jnp.arange(n_points) / n_points
+    times = jnp.linspace(0.0, period, n_points, endpoint=False)
     if not reverse_time:
-        return times, cast(Array, ode.integrate(times, x0, config=config).ys)
+        return times, cast(Array, ode.flow(times, x0, config=config).ys)
     # Φ_{-t}(x0) = Φ_{T-t}(x0): sample backward, then reverse the loop after x0
-    back = cast(Array, ode.integrate(-times, x0, config=config).ys)
+    back = cast(Array, ode.flow(-times, x0, config=config).ys)
     return times, jnp.concatenate([back[:1], back[1:][::-1]], axis=0)
 
 

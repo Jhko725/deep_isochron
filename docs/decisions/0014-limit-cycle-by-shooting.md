@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0014
-status: accepted; amended 2026-10-18 (review round 1)
-updated: 2026-10-18
+status: accepted; amended 2026-10-18 (review rounds 1–2)
+updated: 2026-10-19
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-17/18 after the O1 survey and his notebook prototype)
 ---
 
@@ -121,9 +121,13 @@ documented, not built.
 - **Names**: `CrossSection` (the dynamical-systems term) with `signed_distance` and
   `normal_to_flow`; `find_limit_cycle`; `AbstractODE.flow_to` replaces the three local
   flow helpers; `LevelSetCycle` moves to `systems/level_set.py`.
-- **`analysis` integrates the vector field numerically** (`AbstractODE.integrate`,
-  `flow_to`), never a system's `flow`: the normal forms' `flow` defaults to their
-  *closed-form* chart, which (i) would make the tests against them circular and (ii)
-  loses precision at a basin edge — found when the reverse-time Winfree run through
-  `ode.flow` returned garbage at $r = a$ and a $10^{-7}$ period just inside. The closed
-  forms are oracles, not inputs.
+- **`analysis` works through the `flow` contract alone** (`flow`, `flow_to`); which
+  integration a system's `flow` performs is the *system's* choice. The normal forms'
+  `flow` defaults to their *closed-form* chart, which as the input of an analysis (i)
+  makes the tests against them circular and (ii) loses precision at a basin edge — found
+  when the reverse-time Winfree run returned garbage at $r = a$ and a $10^{-7}$ period just
+  inside. So the tests construct them with `integration="cartesian"` (a constructor
+  argument, review round 2) and the closed forms stay the oracles. *Rejected* (round 1's
+  first fix, reverted in round 2): an `AbstractODE.integrate` that always solves `rhs`
+  numerically — a near-duplicate of `flow` on the base contract for a need the normal
+  forms already meet with their integration switch.

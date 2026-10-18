@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-18
+updated: 2026-10-19
 sources: [code]
 ---
 
@@ -27,9 +27,9 @@ trajectories.
 ```
 deep_isochron
 ├── systems/                 ODEs (observed and normal forms)      ── AbstractODE
-│   ├── base.py              rhs(t, u) · params() · in_basin(u) · SolverConfig · integrate
-│   │                        (numerical, what analysis uses) · flow (default means; closed
-│   │                        form for normal forms) · flow_to(t, u0) -> state
+│   ├── base.py              rhs(t, u) · params() · in_basin(u) · SolverConfig ·
+│   │                        flow -> Solution (numerical; normal forms choose via
+│   │                        integration=) · flow_to(t, u0) -> state
 │   ├── fitzhugh_nagumo.py   FitzhughNagumo (dim 2)
 │   ├── level_set.py         LevelSetCycle: f = s(R∇g − g∇g), the zero level set of g is the
 │   │                        attracting cycle; guckenheimer_meloon(), cassini() test orbits
