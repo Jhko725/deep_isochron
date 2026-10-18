@@ -29,7 +29,7 @@ class Hyperplane(eqx.Module):
 
     ``__call__(x)`` is the signed distance $\langle n, x - p\rangle$: positive on the
     side the normal points to. The "positive direction" of a crossing (Parker & Chua
-    §5.5, footnote 4) is the one along which this distance increases.
+    §2.1.2; §5.5, footnote 4) is the one along which this distance increases.
     """
 
     point: Float[Array, " dim"]
