@@ -185,7 +185,8 @@ class PoincareMap(eqx.Module):
         xs = [np.asarray(jnp.asarray(x, dtype=float))]
         taus: list[float] = []
 
-        def unfinished(converged: bool) -> FixedPoint:
+        def unfinished() -> FixedPoint:
+            """The iteration so far, for ``NotConvergedError.last``."""
             return FixedPoint(
                 x=xs[-1],
                 tau=float("nan"),
@@ -193,7 +194,7 @@ class PoincareMap(eqx.Module):
                 taus=np.asarray(taus),
                 iterates=np.stack(xs),
                 contraction=float("nan"),
-                converged=converged,
+                converged=False,
             )
 
         for i in range(1, max_iter + 1):
@@ -204,7 +205,7 @@ class PoincareMap(eqx.Module):
                     f"no {self.direction} crossing of the section within t_max = "
                     f"{self.t_max} from iterate {i - 1}; the point may be outside the "
                     "basin, or converging to an equilibrium.",
-                    last=unfinished(False),
+                    last=unfinished(),
                 )
             xs.append(np.asarray(xn))
             taus.append(float(tau))
@@ -230,7 +231,7 @@ class PoincareMap(eqx.Module):
             f"no return to within {tol} of an earlier crossing in {max_iter} "
             "iterations of the map; the transient is slower than max_iter allows, or "
             "the orbit is not periodic.",
-            last=unfinished(False),
+            last=unfinished(),
         )
 
 
