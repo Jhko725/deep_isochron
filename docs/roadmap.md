@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-18
+updated: 2026-10-19
 sources: [joon, claude]
 ---
 
@@ -113,7 +113,7 @@ then — Parked).
 | E7 | Experiments (running on the side throughout, feeding the plots and analysis wants): Bautin identity sanity; Winfree $a < 0$ against its invariants ($T$, $\kappa$, phase, PRC); FHN; the Yawata baseline on both; Winfree $a > 0$ — what a planar diffeomorphism does with a phaseless disk (`outside_basin=resample`). Losses/diagnostics (pushforward near the slow manifold, Hessian matching, Jacobian anisotropy, INN depth, periodic spline endpoints) only as the runs demand | M | figures and tables |
 | E8 | Docs: `analysis.md` one section per function; ADR-0012 amendments; architecture; `docs/figures/` from `scripts/figures.py` once the plots module exists (Joon moves plot code from notebooks as it stabilizes) | — | — |
 
-Order: O1 → O3 → O4 (one survey, shared references), then O2, O5 → O6, with M alongside
+Order: O1 → O2 (survey delivered 2026-10-19, design document §3; Joon's call) → O3 → O4 (one survey, shared references), then O5 → O6, with M alongside
 each; D2/D3 when a run asks for them; E7 continuously.
 
 ## Parked (with reason)
