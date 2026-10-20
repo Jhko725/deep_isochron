@@ -87,6 +87,14 @@ def _as_batch(ys: ArrayLike) -> np.ndarray:
     return ys
 
 
+def orientation(points: Float[ArrayLike, "n 2"]) -> int:
+    """+1 for a counterclockwise closed curve (positive signed area), −1 clockwise."""
+    pts = np.asarray(points, dtype=float)
+    x, y = pts[:, 0], pts[:, 1]
+    area = 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+    return 1 if area > 0 else -1
+
+
 def protophase(
     ys: Float[np.ndarray, "N T 2"], center: Float[np.ndarray, " 2"]
 ) -> Float[np.ndarray, "N T"]:
