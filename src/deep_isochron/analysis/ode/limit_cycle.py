@@ -22,12 +22,12 @@ Floquet multipliers, ``floquet``) integrates the same system the same way. The o
 properties beyond its location are functions *of* a ``LimitCycle`` (roadmap O2–O6),
 not products of the search.
 
-**Jit.** ``find_limit_cycle`` and ``PoincareMap.fixed_point`` are host-side drivers
-(they run once per system and raise informative errors); the stages they call —
-``settle``, ``PoincareMap.__call__``, ``multiple_shooting``, the sampling kernel — are
-``eqx.filter_jit``-ted. Kernels take arrays (``x0s``, ``period``) and the static
-configuration, never a ``LimitCycle`` (its ``settle`` record has a per-cycle shape,
-which would recompile every kernel per cycle).
+**Jit.** The stages (``settle``, ``polish``, ``LimitCycle.sample``) and the map are
+naturally jit- and vmap-compatible and are left unjitted — the caller chooses the
+level. ``find_limit_cycle`` and ``PoincareMap.fixed_point`` are host-side drivers (they
+run once per system and raise informative errors) and jit the stages they call. A
+``LimitCycle`` is a fixed-shape pytree (its ``settle`` record is the light
+``FixedPoint``), so functions of a cycle can be jitted and vmapped as they stand.
 """
 
 from __future__ import annotations
@@ -56,8 +56,9 @@ class LimitCycle(eqx.Module):
         `i T / m` along the orbit; `x0s[0]` lies on `section`.
     - `period`: The period $T > 0$.
     - `residual`: The norm of the shooting residual at the solution.
-    - `settle`: The `FixedPoint` iteration of the return map that produced the initial
-        guess (host-side record; its arrays have a per-cycle length).
+    - `settle`: The `FixedPoint` of the return map that gave the initial guess (its
+        return time `tau` is the brute-force period, its `contraction` the
+        brute-force multiplier estimate).
     - `section`: The `CrossSection` through `x0s[0]`, normal to the flow there.
     - `config`: The `SolverConfig` the orbit was found with, used by every method and
         analysis of the orbit (static).
@@ -98,11 +99,15 @@ class LimitCycle(eqx.Module):
 
         `(times, points)` with `times (n,)` and `points (n, dim)`,
         `points[0] == x0s[0]`, in forward time order (a reverse-time orbit is sampled
-        backward and re-ordered).
+        backward and re-ordered). Jit- and vmap-compatible.
         """
-        return _sample(
-            self.ode, self.x0s[0], self.period, n_points, self.config, self.reverse_time
-        )
+        x0 = self.x0s[0]
+        times = jnp.linspace(0.0, 1.0, n_points, endpoint=False) * self.period
+        if not self.reverse_time:
+            return times, cast(Array, self.ode.flow(times, x0, config=self.config).ys)
+        # Φ_{-t}(x0) = Φ_{T-t}(x0): sample backward, then reverse the loop after x0
+        back = cast(Array, self.ode.flow(-times, x0, config=self.config).ys)
+        return times, jnp.concatenate([back[:1], back[1:][::-1]], axis=0)
 
     def orientation(self, n_points: int = 64) -> int:
         """$+1$ for a counterclockwise orbit (positive signed area of the sampled
@@ -114,7 +119,6 @@ class LimitCycle(eqx.Module):
 
 
 # ------------------------------------------------------------------ the stages ----
-@eqx.filter_jit
 def settle(
     ode: AbstractODE,
     x0: Float[ArrayLike, " dim"],
@@ -124,7 +128,7 @@ def settle(
     reverse_time: bool = False,
 ) -> Float[Array, " dim"]:
     """The state after ``t_settle`` (Parker & Chua §5.1.1): near the cycle if ``x0`` is
-    in its basin and ``t_settle`` covers the transient."""
+    in its basin and ``t_settle`` covers the transient. Jit-compatible."""
     sign = -1.0 if reverse_time else 1.0
     return ode.flow_to(sign * t_settle, jnp.asarray(x0, dtype=float), config=config)
 
@@ -140,10 +144,12 @@ def initial_guess(
     reverse_time: bool = False,
 ) -> tuple[CrossSection, FixedPoint]:
     """The flow-normal section through ``p`` and the fixed point of its one-sided
-    return map: a point on the cycle to ``settle_tol`` and the return time."""
+    return map: a point on the cycle to ``settle_tol`` and the return time (the
+    iteration record is dropped; call ``PoincareMap.fixed_point`` for it)."""
     section = CrossSection.normal_to_flow(ode, p)
     pmap = PoincareMap(ode, section, config, t_max=t_max, reverse_time=reverse_time)
-    return section, pmap.fixed_point(p, tol=settle_tol, max_iter=max_returns)
+    fp, _ = pmap.fixed_point(p, tol=settle_tol, max_iter=max_returns)
+    return section, fp
 
 
 def polish(
@@ -158,7 +164,7 @@ def polish(
     reverse_time: bool = False,
 ) -> ShootingResult:
     """Multiple shooting from ``m`` points of the orbit through ``x_hat`` at times
-    ``i period_hat / m``."""
+    ``i period_hat / m``. Jit-compatible."""
     sign = -1.0 if reverse_time else 1.0
     x_hat = jnp.asarray(x_hat, dtype=float)
     times = sign * jnp.linspace(0.0, period_hat, m, endpoint=False)
@@ -193,25 +199,12 @@ def period_consistent(period: float, period_hat: float, factor: float = 10.0) ->
     return period_hat / factor <= period <= factor * period_hat
 
 
-@eqx.filter_jit
-def _sample(
-    ode: AbstractODE,
-    x0: Float[Array, " dim"],
-    period: Float[Array, ""],
-    n_points: int,
-    config: SolverConfig,
-    reverse_time: bool,
-) -> tuple[Float[Array, " n"], Float[Array, "n dim"]]:
-    """The kernel of ``LimitCycle.sample``."""
-    times = jnp.linspace(0.0, 1.0, n_points, endpoint=False) * period
-    if not reverse_time:
-        return times, cast(Array, ode.flow(times, x0, config=config).ys)
-    # Φ_{-t}(x0) = Φ_{T-t}(x0): sample backward, then reverse the loop after x0
-    back = cast(Array, ode.flow(-times, x0, config=config).ys)
-    return times, jnp.concatenate([back[:1], back[1:][::-1]], axis=0)
-
-
 # ----------------------------------------------------------------- the driver ----
+_settle = eqx.filter_jit(settle)
+_polish = eqx.filter_jit(polish)
+"""The stages as the host-side driver runs them."""
+
+
 def find_limit_cycle(
     ode: AbstractODE,
     x0: Float[ArrayLike, " dim"],
@@ -281,7 +274,7 @@ def find_limit_cycle(
         raise ValueError("t_settle must be positive.")
     t_max = 10.0 * t_settle if t_max is None else t_max
 
-    p = settle(ode, x0, t_settle, config=config, reverse_time=reverse_time)
+    p = _settle(ode, x0, t_settle, config=config, reverse_time=reverse_time)
     if not bool(jnp.all(jnp.isfinite(p))):
         raise NotConvergedError("settle", "the trajectory left the finite domain.", p)
     section, fp = initial_guess(
@@ -293,10 +286,11 @@ def find_limit_cycle(
         max_returns=max_returns,
         reverse_time=reverse_time,
     )
-    shot = polish(
+    period_hat = float(fp.tau)
+    shot = _polish(
         ode,
         fp.x,
-        fp.tau,
+        period_hat,
         section,
         m=m,
         config=config,
@@ -312,11 +306,11 @@ def find_limit_cycle(
         raise NotConvergedError(
             "shooting", "converged to an equilibrium (the vector field vanishes).", shot
         )
-    if not period_consistent(period, fp.tau):
+    if not period_consistent(period, period_hat):
         raise NotConvergedError(
             "shooting",
             f"the period collapsed or exploded: T = {period:.6g} vs the return-map "
-            f"estimate {fp.tau:.6g}.",
+            f"estimate {period_hat:.6g}.",
             shot,
         )
     return LimitCycle(

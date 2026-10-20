@@ -89,26 +89,30 @@ deep_isochron
 │   │                        nearest_phase (shared by both halves; design: analysis.md)
 │   ├── data/                from sampled, possibly noisy trajectories (host-side NumPy)
 │   │   └── cycle.py         estimate_cycle (E1): tails → polar protophase → Kralemann
-│   │                        PTP phase → period by regression → Fourier curve → converged
+│   │                        PTP phase → period by regression → Fourier curve → converged;
+│   │                        orientation(points) (signed area of a closed polygon)
 │   ├── errors.py            NotConvergedError (stage, message, last iterate)
 │   └── ode/                 from an AbstractODE (O1, O2 landed; O3–O6 to come) ── ADR-0014/15
-│       │                    results are eqx.Modules; drivers take them (f(cycle, …)),
-│       │                    jitted kernels take arrays
+│       │                    results are fixed-shape eqx.Modules; functions of them
+│       │                    (f(cycle, …)) jit/vmap as they stand and are left unjitted;
+│       │                    the host-side drivers jit the stages they call
 │       ├── sections.py      CrossSection: a hyperplane (point, unit normal); signed_distance;
 │       │                    normal_to_flow(ode, p)
 │       ├── poincare.py      PoincareMap: first-return map on a section (direction, reverse
 │       │                    time); __call__ and iterate jitted/vmappable and differentiable
 │       │                    in the point (custom JVP, Parker & Chua 5.21); fixed_point
-│       │                    (host-side settle + minimum-period test); FixedPoint
+│       │                    (host-side settle + minimum-period test) -> (FixedPoint,
+│       │                    FixedPointIteration)
 │       ├── shooting.py      multiple_shooting: LM on the time-T flow, AD Jacobians, jitted;
 │       │                    SHOOTING_SOLVER_CONFIG
 │       ├── limit_cycle.py   find_limit_cycle = settle → initial_guess → polish → guards
 │       │                    (is_equilibrium, period_consistent) → LimitCycle (ode, the
 │       │                    shooting mesh x0s, period, config; sample(n), orientation())
-│       └── floquet.py       floquet(cycle, method=) → Floquet: seeded periodic Schur
-│                            chain on the segment Jacobians (the method; Floquet vectors
-│                            at every mesh point), explicit monodromy and Liouville's
-│                            divergence integral (checks); return_map_multiplier
+│       └── floquet.py       floquet(cycle, method=) → Floquet, dispatching over
+│                            floquet_periodic_schur (seeded chain on the segment
+│                            Jacobians: the method, with Floquet vectors at every mesh
+│                            point), floquet_monodromy and floquet_liouville (checks);
+│                            return_map_multiplier
 ├── training/                                                            ── ADR-0009
 │   ├── trainer.py           TrainerState (model · opt_state · step · key · schedule
 │   │                        state); Trainer(optimizer, loss, schedule): jitted

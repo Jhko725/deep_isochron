@@ -6,7 +6,8 @@ $\mu_j$; $\kappa_j = \log\mu_j/T$ are the Floquet exponents — for a planar att
 cycle one $\mu \in (0, 1)$, the rate $\dot\psi = \kappa\psi$ of the amplitude coordinate
 (Wilson & Moehlis 2016, Eq. 7; Kvalheim & Revzen 2021, Prop. 5). This module computes
 them from the shooting mesh ``x0s`` of a ``LimitCycle`` by three routes, one the method
-and two cross-checks, all jitted:
+and two cross-checks, each a jit- and vmap-compatible function of the cycle (left
+unjitted — the caller chooses the level):
 
 **Periodic Schur chain** (the method, ``method="periodic_schur"``). The monodromy is the
 ordered product of the segment Jacobians $M_i = \partial_x\Phi_{T/m}(x_i)$. Forming the
@@ -71,7 +72,6 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
-from ...systems import AbstractODE, SolverConfig
 from ...systems.base import diffeqsolve
 from .limit_cycle import LimitCycle
 from .poincare import PoincareMap
@@ -135,27 +135,16 @@ class Floquet(eqx.Module):
 
 
 # --------------------------------------------------------------- the kernels ----
-@eqx.filter_jit
-def _segment_jacobians(
-    ode: AbstractODE,
-    x0s: Float[Array, "m dim"],
-    period: Float[Array, ""],
-    config: SolverConfig,
-    reverse_time: bool,
-) -> Float[Array, "m dim dim"]:
-    sign = -1.0 if reverse_time else 1.0
-    duration = sign * period / x0s.shape[0]
-    fwd = config.with_adjoint(dfx.ForwardMode())
-    return jax.vmap(jax.jacfwd(lambda x: ode.flow_to(duration, x, config=fwd)))(x0s)
-
-
 def segment_jacobians(cycle: LimitCycle) -> Float[Array, "m dim dim"]:
     """The Jacobians ``M_i = ∂Φ_{T/m}(x0s[i])`` of the flow over each shooting
     segment, in the time direction in which the orbit attracts (the reversed field
-    for a reverse-time cycle): ``M_m ⋯ M_1`` is the monodromy at ``x0s[0]``."""
-    return _segment_jacobians(
-        cycle.ode, cycle.x0s, cycle.period, cycle.config, cycle.reverse_time
-    )
+    for a reverse-time cycle): ``M_m ⋯ M_1`` is the monodromy at ``x0s[0]``.
+    Jit- and vmap-compatible."""
+    sign = -1.0 if cycle.reverse_time else 1.0
+    duration = sign * cycle.period / cycle.m
+    fwd = cycle.config.with_adjoint(dfx.ForwardMode())
+    flow = lambda x: cycle.ode.flow_to(duration, x, config=fwd)  # noqa: E731
+    return jax.vmap(jax.jacfwd(flow))(cycle.x0s)
 
 
 def _frame_from(q1: Float[Array, " dim"]) -> Float[Array, "dim dim"]:
@@ -179,7 +168,6 @@ def _qr_positive(A: Float[Array, "dim dim"]) -> tuple[Array, Array]:
     return Q * s[None, :], R * s[:, None]
 
 
-@eqx.filter_jit
 def periodic_schur(
     jacobians: Float[Array, "m dim dim"], q1: Float[ArrayLike, " dim"]
 ) -> PeriodicSchur:
@@ -195,7 +183,8 @@ def periodic_schur(
 
     **Returns:**
 
-    A `PeriodicSchur`; its `multipliers` are the eigenvalues of the product.
+    A `PeriodicSchur`; its `multipliers` are the eigenvalues of the product. Jit- and
+    vmap-compatible.
 
     **Raises:**
 
@@ -222,13 +211,12 @@ def periodic_schur(
     return PeriodicSchur(Qs, Rs, signs)
 
 
-@eqx.filter_jit
 def monodromy(jacobians: Float[Array, "m dim dim"]) -> Float[Array, "dim dim"]:
     """The ordered product ``M_m ⋯ M_1`` of the segment Jacobians — the monodromy at
-    mesh point 0."""
-    dim = jacobians.shape[-1]
-    M, _ = jax.lax.scan(lambda M, J: (J @ M, None), jnp.eye(dim), jacobians)
-    return M
+    mesh point 0 (``jnp.linalg.multi_dot``; for square factors every association
+    costs the same and rounds the same, the chain's loss of accuracy being in the
+    product itself, not in its order)."""
+    return jnp.linalg.multi_dot(list(jacobians[::-1]))
 
 
 def multipliers_from_monodromy(M: Float[Array, "dim dim"]) -> Float[Array, " dim"]:
@@ -257,34 +245,12 @@ def return_map_multiplier(
     return jnp.real(ev[jnp.argmax(jnp.abs(ev))])
 
 
-@eqx.filter_jit
-def _divergence_integral(
-    ode: AbstractODE,
-    x0: Float[Array, " dim"],
-    period: Float[Array, ""],
-    config: SolverConfig,
-    reverse_time: bool,
-) -> Float[Array, ""]:
-    sign = -1.0 if reverse_time else 1.0
-    dim = x0.shape[0]
-
-    def rhs(t, u, args):
-        x = u[:dim]
-        div = jnp.trace(jax.jacfwd(lambda y: ode.rhs(t, y))(x))
-        return jnp.concatenate([sign * ode.rhs(t, x), div[None]])
-
-    ts = jnp.stack([jnp.zeros_like(period), period])
-    sol = diffeqsolve(rhs, ts, jnp.concatenate([x0, jnp.zeros(1)]), None, config)
-    ys = sol.ys
-    assert ys is not None
-    return ys[-1, dim]
-
-
 def divergence_integral(cycle: LimitCycle) -> Float[Array, ""]:
     r"""$\int_0^T \mathrm{div} f(\gamma(t))\thinspace dt = \log\mu$ for a planar orbit
-    (Liouville), by an augmented solve along the orbit at the cycle's tolerances, in
-    the direction in which the orbit attracts (the integrand is the forward field's
-    divergence either way).
+    (Liouville), by an augmented solve
+    $(\dot x, \dot z) = (f, \mathrm{tr}\thinspace Df)$ along the orbit at the cycle's
+    tolerances, in the direction in which the orbit attracts (the integrand is the
+    forward field's divergence either way). Jit-compatible.
 
     **Raises:**
 
@@ -293,9 +259,19 @@ def divergence_integral(cycle: LimitCycle) -> Float[Array, ""]:
     """
     if cycle.dim != 2:
         raise ValueError("the Liouville route is defined for planar orbits only.")
-    return _divergence_integral(
-        cycle.ode, cycle.x0s[0], cycle.period, cycle.config, cycle.reverse_time
-    )
+    sign = -1.0 if cycle.reverse_time else 1.0
+    dim, ode = cycle.dim, cycle.ode
+
+    def rhs(t, u, args):
+        x = u[:dim]
+        div = jnp.trace(jax.jacfwd(lambda y: ode.rhs(t, y))(x))
+        return jnp.concatenate([sign * ode.rhs(t, x), div[None]])
+
+    ts = jnp.stack([jnp.zeros_like(cycle.period), cycle.period])
+    u0 = jnp.concatenate([cycle.x0s[0], jnp.zeros(1)])
+    ys = diffeqsolve(rhs, ts, u0, None, cycle.config).ys
+    assert ys is not None
+    return ys[-1, dim]
 
 
 # ----------------------------------------------------------------- the driver ----
@@ -320,16 +296,66 @@ def _floquet_vectors(ps: PeriodicSchur) -> Float[Array, "m dim dim-1"]:
     return v[:, :, None]
 
 
+def floquet_periodic_schur(cycle: LimitCycle) -> Floquet:
+    """The Floquet data by the seeded periodic Schur chain on the shooting mesh (the
+    method; see the module docstring): the chain runs in the direction in which the
+    orbit attracts and the result is reported forward-time. Jit-compatible."""
+    f = cycle.ode.rhs(0.0, cycle.x0s[0])
+    ps = periodic_schur(segment_jacobians(cycle), f / jnp.linalg.norm(f))
+    log_mu = ps.log_multipliers * (-1.0 if cycle.reverse_time else 1.0)
+    mult = ps.signs * jnp.exp(log_mu)
+    return Floquet(
+        multipliers=mult,
+        exponents=log_mu / cycle.period,
+        trivial_error=jnp.abs(mult[0] - 1.0),
+        closure=ps.closure,
+        vectors=_floquet_vectors(ps) if cycle.dim == 2 else None,
+        method="periodic_schur",
+    )
+
+
+def floquet_monodromy(cycle: LimitCycle) -> Floquet:
+    """The Floquet data from the eigenvalues of the explicit monodromy — the
+    diagnostic route, with the floor ``ε‖M‖/μ`` (see the module docstring).
+    Jit-compatible."""
+    mult = multipliers_from_monodromy(monodromy(segment_jacobians(cycle)))
+    if cycle.reverse_time:  # the reversed flow's {1, 1/μ}
+        mult = 1.0 / mult
+    return Floquet(
+        multipliers=mult,
+        exponents=jnp.log(jnp.abs(mult)) / cycle.period,
+        trivial_error=jnp.abs(mult[0] - 1.0),
+        closure=None,
+        vectors=None,
+        method="monodromy",
+    )
+
+
+def floquet_liouville(cycle: LimitCycle) -> Floquet:
+    """The Floquet data from the planar divergence integral — the cross-check
+    independent of all linear algebra, which assumes the trivial multiplier exactly
+    (``trivial_error`` is ``None``). Jit-compatible; planar only."""
+    log_mu = divergence_integral(cycle)
+    zero = jnp.zeros_like(log_mu)
+    return Floquet(
+        multipliers=jnp.stack([jnp.ones_like(log_mu), jnp.exp(log_mu)]),
+        exponents=jnp.stack([zero, log_mu]) / cycle.period,
+        trivial_error=None,
+        closure=None,
+        vectors=None,
+        method="liouville",
+    )
+
+
 def floquet(cycle: LimitCycle, *, method: FloquetMethod = "periodic_schur") -> Floquet:
-    """The Floquet multipliers and exponents of `cycle`, forward-time.
+    """The Floquet multipliers and exponents of `cycle`, forward-time, by the route
+    `method` — a dispatch over `floquet_periodic_schur` (the method),
+    `floquet_monodromy` and `floquet_liouville` (the checks).
 
     **Arguments:**
 
     - `cycle`: The `LimitCycle` (its `ode`, `config` and `reverse_time` are used).
-    - `method`: `"periodic_schur"` (the method: the seeded forward QR chain on the
-        segment Jacobians), `"monodromy"` (eigenvalues of the explicit product; a
-        diagnostic with the floor `ε‖M‖/μ`), or `"liouville"` (the planar divergence
-        integral; a cross-check independent of all linear algebra).
+    - `method`: `"periodic_schur"`, `"monodromy"` or `"liouville"`.
 
     **Returns:**
 
@@ -340,47 +366,17 @@ def floquet(cycle: LimitCycle, *, method: FloquetMethod = "periodic_schur") -> F
     - `ValueError` for an unknown `method`, or `"liouville"` on a non-planar cycle.
     - `NotImplementedError` for `"periodic_schur"` with `cycle.dim > 2`.
     """
-    T = cycle.period
-    if method == "periodic_schur":
-        J = segment_jacobians(cycle)
-        f = cycle.ode.rhs(0.0, cycle.x0s[0])
-        ps = periodic_schur(J, f / jnp.linalg.norm(f))
-        log_mu = ps.log_multipliers * (-1.0 if cycle.reverse_time else 1.0)
-        mult = ps.signs * jnp.exp(log_mu)
-        return Floquet(
-            multipliers=mult,
-            exponents=log_mu / T,
-            trivial_error=jnp.abs(mult[0] - 1.0),
-            closure=ps.closure,
-            vectors=_floquet_vectors(ps) if cycle.dim == 2 else None,
-            method=method,
+    routes = {
+        "periodic_schur": floquet_periodic_schur,
+        "monodromy": floquet_monodromy,
+        "liouville": floquet_liouville,
+    }
+    if method not in routes:
+        raise ValueError(
+            f"unknown method {method!r}; use 'periodic_schur', 'monodromy' or "
+            "'liouville'."
         )
-    if method == "monodromy":
-        mult = multipliers_from_monodromy(monodromy(segment_jacobians(cycle)))
-        if cycle.reverse_time:  # the reversed flow's {1, 1/μ}
-            mult = 1.0 / mult
-        return Floquet(
-            multipliers=mult,
-            exponents=jnp.log(jnp.abs(mult)) / T,
-            trivial_error=jnp.abs(mult[0] - 1.0),
-            closure=None,
-            vectors=None,
-            method=method,
-        )
-    if method == "liouville":
-        log_mu = divergence_integral(cycle)
-        mult = jnp.stack([jnp.ones_like(log_mu), jnp.exp(log_mu)])
-        return Floquet(
-            multipliers=mult,
-            exponents=jnp.stack([jnp.zeros_like(log_mu), log_mu]) / T,
-            trivial_error=None,
-            closure=None,
-            vectors=None,
-            method=method,
-        )
-    raise ValueError(
-        f"unknown method {method!r}; use 'periodic_schur', 'monodromy' or 'liouville'."
-    )
+    return routes[method](cycle)
 
 
 __all__ = [
@@ -389,6 +385,9 @@ __all__ = [
     "PeriodicSchur",
     "divergence_integral",
     "floquet",
+    "floquet_liouville",
+    "floquet_monodromy",
+    "floquet_periodic_schur",
     "monodromy",
     "multipliers_from_monodromy",
     "periodic_schur",

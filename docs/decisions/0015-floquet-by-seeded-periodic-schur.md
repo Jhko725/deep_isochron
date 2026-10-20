@@ -1,7 +1,7 @@
 ---
 type: decision
 id: ADR-0015
-status: accepted (review pending)
+status: accepted; amended 2026-10-20 (review round 5: jit rule, light FixedPoint)
 updated: 2026-10-20
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-19/20 after the O2 survey and his notebook prototype)
 ---
@@ -91,20 +91,33 @@ analysis must integrate the same system the same way, so `LimitCycle` holds `ode
 `x0s` (the converged shooting mesh — what the periodic Schur chain needs), `period`,
 `residual`, `settle`, `section`, `config` (static), `reverse_time` (static); it samples
 itself (`sample(n_points)`, re-integrating; the sampled orbit is a derived quantity,
-no longer stored) and reports its `orientation()`. Signature rule for `analysis.ode`:
-drivers take the cycle, `f(cycle, ...)`; jitted kernels take arrays and the static
-configuration, never the cycle (its `settle` record has a per-cycle shape and would
-recompile every kernel per cycle). *Rejected*: storing a diffrax dense interpolant
+no longer stored) and reports its `orientation()` (the signed-area test lives in
+`analysis.data.cycle`, since it acts on a discretized curve — review round 5). The
+cycle is a *fixed-shape* pytree: `FixedPoint` holds only `x`, `tau`, `k`,
+`contraction`, `converged`, and the search record (`taus`, `iterates`, per-cycle
+length) is returned by `fixed_point` separately as a `FixedPointIteration` and not
+stored on the cycle (review round 5, Joon). Signature rule for `analysis.ode`:
+functions of a cycle take the cycle, `f(cycle, ...)`, and are jit- and vmap-compatible
+as they stand — a batch of cycles of one mesh size (the ODE's parameters being leaves)
+is one `vmap`. Each Floquet route returns a `Floquet` (`floquet_periodic_schur`,
+`floquet_monodromy`, `floquet_liouville`); `floquet(cycle, method=)` dispatches.
+*Rejected*: storing a diffrax dense interpolant
 (`SaveAt(dense=True)`, 8th order for `Dopri8`) for resampling — its size is the step
 count, a static-shape and consistency burden, for a resampling that costs a fraction
 of a second; revisit if resampling becomes hot.
 
-### 6. Jit scope
+### 6. Jit scope (review round 5, Joon's rule)
 
-`settle`, `multiple_shooting`, the sampling kernel, `PoincareMap.__call__` and
-`iterate`, `segment_jacobians`, `periodic_schur`, `monodromy` and the divergence
-integral are `eqx.filter_jit`-ted; `find_limit_cycle`, `fixed_point` and `floquet`
-are host-side drivers (ADR-0014 amendment, round 1).
+A function that is naturally jit- and vmap-compatible is left unjitted, so the caller
+chooses the level (`eqx.filter_jit(floquet)`, `eqx.filter_vmap(floquet)` over a batch of
+cycles, or neither); a function that is not — a host-side driver with Python control
+flow and informative errors — jits the subcomponents it calls. So `settle`, `polish`,
+`multiple_shooting`, `LimitCycle.sample`, `PoincareMap.__call__`/`iterate`,
+`segment_jacobians`, `periodic_schur`, `monodromy`, `divergence_integral` and the
+`floquet_*` routes carry no decorator; `find_limit_cycle` runs `eqx.filter_jit(settle)`
+and `eqx.filter_jit(polish)`, `fixed_point` the jitted return solve. The first version
+of this branch decorated the kernels and kept kernel/driver pairs
+(`_divergence_integral`/`divergence_integral`); the pairs are gone with the rule.
 
 ## Consequences
 

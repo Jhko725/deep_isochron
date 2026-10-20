@@ -71,6 +71,13 @@ branch, and never edits *Review notes* except when asked to.
   `**Raises:**` as needed; class docstrings use `**Attributes:**`; names in single
   backticks. Existing docstrings are migrated when their file is touched, not in a
   sweep. (Chosen so that MkDocs can render the API later.)
+- Jit and vmap: a function that is naturally jit- and vmap-compatible is left
+  undecorated — the caller jits at the level they want. A function that is not
+  (a host-side driver with Python control flow or informative errors) jits the
+  subcomponents it calls, e.g. `_settle = eqx.filter_jit(settle)` next to the
+  driver. Result objects are fixed-shape `eqx.Module` pytrees so that functions of
+  them jit and vmap as they stand; per-call records of varying length are returned
+  separately, not stored on them.
 - `docs/roadmap.md` is the single, current plan. Finished items move to its
   *Done* ledger (not deleted), which is chronological: new rows are always
   appended at the end, never inserted; it is updated in the same commit as the

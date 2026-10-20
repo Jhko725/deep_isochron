@@ -1,7 +1,8 @@
 """ODE-side analysis: reference objects of a limit-cycle oscillator computed from its
-vector field (roadmap Phase E, O1–O6). Results are ``eqx.Module`` pytrees; the stage
-kernels are jitted and take arrays, the drivers are host-side and take the result
-objects (``f(cycle, ...)``), reading the ODE and solver configuration from them.
+vector field (roadmap Phase E, O1–O6). Results are fixed-shape ``eqx.Module`` pytrees
+and the functions of them (``f(cycle, ...)``) are jit- and vmap-compatible and left
+unjitted — the caller chooses the level; the host-side drivers (``find_limit_cycle``,
+``fixed_point``) jit the stages they call.
 
 O1: ``CrossSection`` (a hyperplane), ``PoincareMap`` (the first-return map on it,
 differentiable in the point, with ``iterate`` and ``fixed_point``),
@@ -15,6 +16,9 @@ from .floquet import (
     divergence_integral as divergence_integral,
     Floquet as Floquet,
     floquet as floquet,
+    floquet_liouville as floquet_liouville,
+    floquet_monodromy as floquet_monodromy,
+    floquet_periodic_schur as floquet_periodic_schur,
     FloquetMethod as FloquetMethod,
     monodromy as monodromy,
     multipliers_from_monodromy as multipliers_from_monodromy,
@@ -36,6 +40,7 @@ from .limit_cycle import (
 from .poincare import (
     Direction as Direction,
     FixedPoint as FixedPoint,
+    FixedPointIteration as FixedPointIteration,
     PoincareMap as PoincareMap,
 )
 from .sections import CrossSection as CrossSection

@@ -298,15 +298,15 @@ $$
 
 ### 3.2 The method (`analysis/ode/floquet.py`, ADR-0015)
 
-Functions over a `LimitCycle` (which, as of O2, is an `eqx.Module` carrying its `ode`, the shooting mesh `x0s`, `period`, `config`, `reverse_time`; analysis functions take the cycle, jitted kernels take arrays — ADR-0015 §5):
+Functions over a `LimitCycle` (which, as of O2, is a fixed-shape `eqx.Module` carrying its `ode`, the shooting mesh `x0s`, `period`, `config`, `reverse_time` and a light `FixedPoint`; analysis functions take the cycle — ADR-0015 §5):
 
 - `segment_jacobians(cycle) -> (m, dim, dim)`: $M_i = \partial_x\Phi_{T/m}(x_i)$ by `vmap(jacfwd(flow_to))` with `ForwardMode`, in the time direction in which the orbit attracts.
 - `periodic_schur(jacobians, q1) -> PeriodicSchur(Q, R, signs)`: the forward QR chain seeded with `q1` as a `lax.scan`; positive diagonals (rows of $R$ and columns of $Q$ flipped together — Joon's prototype flipped columns of $R$, invisible on the diagonal, wrong for the vectors); `signs` $= \mathrm{diag}(Q_1^{\top}Q_{m+1})$ rounded; `multipliers` $= D\exp\sum\log\mathrm{diag}R_i$, `closure` $= \Vert Q_{m+1} - Q_1D\Vert$. `NotImplementedError` for `dim > 2` (the transverse block would need the periodic QR iteration; `slycot.math.mb03wd` wraps SLICOT's).
 - `monodromy(jacobians)`, `multipliers_from_monodromy(M)` (eigenvalues, the one closest to 1 first), `return_map_multiplier(pmap, x)` (the eigenvalue of `jacfwd(P)`, not its trace): the diagnostics, with their floors in the docstrings.
 - `divergence_integral(cycle)`: the augmented solve $(\dot x, \dot z) = (f, \mathrm{tr}\thinspace Df)$ through `systems.base.diffeqsolve` at `cycle.config`; planar only (`ValueError`).
-- `floquet(cycle, *, method="periodic_schur" | "monodromy" | "liouville") -> Floquet`: `multipliers`, `exponents` (forward-time; index 0 trivial), `trivial_error`, `closure` and `vectors` (the right Floquet vectors at every mesh point from the triangular factors' cyclic products — O5's hook; `None` for the other routes). A `Literal` now; strategy objects when a method grows options.
+- `floquet_periodic_schur`, `floquet_monodromy`, `floquet_liouville`: each `(cycle) -> Floquet` — `multipliers`, `exponents` (forward-time; index 0 trivial), `trivial_error`, `closure` and `vectors` (the right Floquet vectors at every mesh point from the triangular factors' cyclic products — O5's hook; `None` for the other routes); `floquet(cycle, *, method=)` dispatches over them. A `Literal` now; strategy objects when a method grows options. All are jit- and vmap-compatible functions of the cycle, left unjitted (ADR-0015 §6): a batch of cycles of one mesh size is one `vmap`.
 
-`LimitCycle.sample(n_points)` re-integrates the orbit from `x0s[0]` (the sampled orbit is derived, not stored); `orientation()` from the sampled polygon.
+`LimitCycle.sample(n_points)` re-integrates the orbit from `x0s[0]` (the sampled orbit is derived, not stored); `orientation()` from the sampled polygon (`analysis.data.cycle.orientation`).
 
 ### 3.3 Oracles (`tests/test_analysis_ode.py`, O2 block)
 

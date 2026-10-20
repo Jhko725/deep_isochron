@@ -48,17 +48,17 @@ velocity at $y$ — Parker & Chua Eq. (5.21), the fixed-time flow derivative pro
 onto $\Sigma$ along the flow. $DP$'s eigenvalues are $0$ (along the flow) and the
 nontrivial Floquet multipliers of a cycle through $x$ (their §5.3).
 
-**Jit.** ``__call__`` and ``iterate`` are ``eqx.filter_jit``-ted and vmap-compatible;
-a missing crossing is a runtime error (``throw=True``, as in diffrax) or ``tau = inf``
-(``throw=False``). ``fixed_point`` is a host-side driver over the jitted map (its state
-— a growing history searched for the minimal period — buys nothing from compilation
-for a stage that runs once per system), and raises ``NotConvergedError`` with the
-iteration so far.
+**Jit.** ``__call__`` and ``iterate`` are jit- and vmap-compatible and left unjitted
+(the caller chooses the level); a missing crossing is a runtime error (``throw=True``,
+as in diffrax) or ``tau = inf`` (``throw=False``). ``fixed_point`` is a host-side driver
+(its state — a growing history searched for the minimal period — buys nothing from
+compilation for a stage that runs once per system) over the *jitted* return solve, and
+raises ``NotConvergedError`` with the iteration so far.
 """
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, NamedTuple
 
 import diffrax as dfx
 import equinox as eqx
@@ -77,30 +77,36 @@ Direction = Literal["positive", "negative", "both"]
 
 
 class FixedPoint(eqx.Module):
-    """The settled state of ``PoincareMap.fixed_point`` — a record produced host-side
-    (its arrays have the length of the iteration), carried as a pytree.
+    """A fixed point of a ``PoincareMap`` as settled by ``fixed_point`` — a light,
+    fixed-shape pytree (the iteration that produced it is returned separately, as a
+    ``FixedPointIteration``).
 
     **Attributes:**
 
     - `x`: The last iterate, on the section.
     - `tau`: The time of one full return to it (the sum of the last `k` map times).
     - `k`: The minimal period of the map at the fixed point (1 for a cycle cutting the
-        section twice).
-    - `taus`: The return times `(n,)` of the whole iteration.
-    - `iterates`: The iterates `(n+1, dim)`, `iterates[0]` the starting point.
+        section twice; static).
     - `contraction`: The ratio of the last two distances `|x_i - x_{i-k}|` — the
         brute-force estimate of the nontrivial Floquet multiplier (`nan` if fewer than
         `2k` steps were taken).
-    - `converged`: Whether the tolerance was met.
+    - `converged`: Whether the tolerance was met (static).
     """
 
-    x: Float[np.ndarray, " dim"]
-    tau: float
-    k: int
+    x: Float[Array, " dim"]
+    tau: Float[Array, ""]
+    k: int = eqx.field(static=True)
+    contraction: Float[Array, ""]
+    converged: bool = eqx.field(static=True)
+
+
+class FixedPointIteration(NamedTuple):
+    """The record of a ``fixed_point`` search (host-side NumPy): the return times
+    ``taus (n,)`` and the iterates ``(n+1, dim)``, ``iterates[0]`` the starting
+    point."""
+
     taus: Float[np.ndarray, " n"]
     iterates: Float[np.ndarray, "n+1 dim"]
-    contraction: float
-    converged: bool
 
 
 class PoincareMap(eqx.Module):
@@ -147,12 +153,11 @@ class PoincareMap(eqx.Module):
         return up if not self.reverse_time else not up
 
     # ----------------------------------------------------------------- the map ----
-    @eqx.filter_jit
     def __call__(
         self, x: Float[ArrayLike, " dim"]
     ) -> tuple[Float[Array, " dim"], Float[Array, ""]]:
         """``(P(x), tau(x))``: the next counted crossing and the positive time to it.
-        Jit- and vmap-compatible; differentiable in ``x``."""
+        Jit- and vmap-compatible (left to the caller); differentiable in ``x``."""
         y, tau = _first_return(self, jnp.asarray(x, dtype=float))
         if self.throw:
             tau = eqx.error_if(
@@ -163,7 +168,6 @@ class PoincareMap(eqx.Module):
             )
         return y, tau
 
-    @eqx.filter_jit
     def iterate(self, x: Float[ArrayLike, " dim"], k: int) -> tuple[Array, Array]:
         """``k`` applications of the map by ``lax.scan``: the iterates ``(k+1, dim)``
         (starting with ``x``) and the return times ``(k,)``."""
@@ -178,33 +182,48 @@ class PoincareMap(eqx.Module):
 
     def fixed_point(
         self, x: Float[ArrayLike, " dim"], *, tol: float = 1e-8, max_iter: int = 100
-    ) -> FixedPoint:
-        """Iterate the one-sided map until it returns to within ``tol`` of an earlier
-        iterate — a period-``k`` orbit of the map, ``k`` minimal (Parker & Chua §5.4,
-        the minimum-period test), ``k = 1`` for a cycle that cuts the section twice.
-        Host-side; raises ``NotConvergedError`` (with the iteration so far in ``last``)
-        after ``max_iter`` steps or when a return is missing. Not defined for
-        ``direction="both"``: consecutive crossings of a two-sided map alternate
-        sides, so a cycle is never its fixed point."""
+    ) -> tuple[FixedPoint, FixedPointIteration]:
+        """Iterate the one-sided map until it returns to within `tol` of an earlier
+        iterate — a period-`k` orbit of the map, `k` minimal (Parker & Chua §5.4, the
+        minimum-period test), `k = 1` for a cycle that cuts the section twice. A
+        host-side driver over the jitted return solve.
+
+        **Arguments:**
+
+        - `x`: The starting point, on the section.
+        - `tol`: The distance to an earlier iterate that counts as a return.
+        - `max_iter`: The bound on the number of map iterations.
+
+        **Returns:**
+
+        `(fixed_point, iteration)`: the `FixedPoint` and the `FixedPointIteration`
+        that produced it.
+
+        **Raises:**
+
+        - `ValueError` for `direction="both"`: consecutive crossings of a two-sided
+            map alternate sides, so a cycle is never its fixed point.
+        - `NotConvergedError` after `max_iter` steps or when a return is missing,
+            with the unfinished `(fixed_point, iteration)` in `last`.
+        """
         if self.direction == "both":
             raise ValueError("fixed_point needs a one-sided map; use iterate.")
         xs = [np.asarray(jnp.asarray(x, dtype=float))]
         taus: list[float] = []
 
-        def unfinished() -> FixedPoint:
+        def unfinished() -> tuple[FixedPoint, FixedPointIteration]:
             """The iteration so far, for ``NotConvergedError.last``."""
-            return FixedPoint(
-                x=xs[-1],
-                tau=float("nan"),
+            fp = FixedPoint(
+                x=jnp.asarray(xs[-1]),
+                tau=jnp.asarray(float("nan")),
                 k=0,
-                taus=np.asarray(taus),
-                iterates=np.stack(xs),
-                contraction=float("nan"),
+                contraction=jnp.asarray(float("nan")),
                 converged=False,
             )
+            return fp, FixedPointIteration(np.asarray(taus), np.stack(xs))
 
         for i in range(1, max_iter + 1):
-            xn, tau = _first_return(self, jnp.asarray(xs[-1]))
+            xn, tau = _first_return_jit(self, jnp.asarray(xs[-1]))
             if not bool(jnp.isfinite(tau)):
                 raise NotConvergedError(
                     "return",
@@ -223,15 +242,14 @@ class PoincareMap(eqx.Module):
                         if i - 2 * k >= 0
                         else 0.0
                     )
-                    return FixedPoint(
-                        x=xs[i],
-                        tau=float(np.sum(taus[i - k : i])),
+                    fp = FixedPoint(
+                        x=jnp.asarray(xs[i]),
+                        tau=jnp.asarray(float(np.sum(taus[i - k : i]))),
                         k=k,
-                        taus=np.asarray(taus),
-                        iterates=np.stack(xs),
-                        contraction=d / prev if prev > 0 else float("nan"),
+                        contraction=jnp.asarray(d / prev if prev > 0 else float("nan")),
                         converged=True,
                     )
+                    return fp, FixedPointIteration(np.asarray(taus), np.stack(xs))
         raise NotConvergedError(
             "settle",
             f"no return to within {tol} of an earlier crossing in {max_iter} "
@@ -303,4 +321,8 @@ def _first_return_jvp(primals, tangents):
     return (y, tau), (dy, dtau)
 
 
-__all__ = ["Direction", "FixedPoint", "PoincareMap"]
+_first_return_jit = eqx.filter_jit(_first_return)
+"""The jitted return solve the host-side ``fixed_point`` drives."""
+
+
+__all__ = ["Direction", "FixedPoint", "FixedPointIteration", "PoincareMap"]

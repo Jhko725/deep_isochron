@@ -180,8 +180,8 @@ def test_two_sided_map_visits_the_four_intersections_of_a_non_convex_cycle():
     assert_close(xs[4], p, atol=TOL["return_map"])
     # the one-sided map sees a period-2 orbit
     pos = PoincareMap(ode, plane, CFG, t_max=50.0)
-    fp = pos.fixed_point(p, tol=TOL["return_map"])
-    assert fp.k == 2
+    fp, it = pos.fixed_point(p, tol=TOL["return_map"])
+    assert fp.k == 2 and it.iterates.shape[0] == len(it.taus) + 1
     assert_close(fp.tau, float(jnp.sum(taus)), atol=TOL["return_map"])
     with pytest.raises(ValueError):
         both.fixed_point(p)
@@ -191,7 +191,7 @@ def test_fixed_point_contracts_at_the_floquet_multiplier():
     P = PoincareMap(
         HOPF, CrossSection.normal_to_flow(HOPF, _on_cycle(HOPF)), CFG, t_max=20.0
     )
-    fp = P.fixed_point(jnp.array([1.05, 0.0]), tol=1e-6)
+    fp, _ = P.fixed_point(jnp.array([1.05, 0.0]), tol=1e-6)
     assert fp.converged and fp.k == 1
     assert_close(jnp.linalg.norm(fp.x), 1.0, atol=1e-6)
     # successive differences shrink by e^{κT} per return once in the linear regime
@@ -199,7 +199,7 @@ def test_fixed_point_contracts_at_the_floquet_multiplier():
     assert_close(fp.contraction, _multiplier(HOPF), rtol=2e-2)
     with pytest.raises(NotConvergedError) as info:
         P.fixed_point(jnp.array([1.3, 0.0]), tol=1e-12, max_iter=1)
-    assert info.value.stage == "settle" and not info.value.last.converged
+    assert info.value.stage == "settle" and not info.value.last[0].converged
 
 
 def test_return_map_derivative_has_eigenvalues_zero_and_the_multiplier():
@@ -264,7 +264,7 @@ def test_reverse_time_map_contracts_onto_winfrees_repelling_inner_cycle():
     assert_close(d_after / d_before, np.exp(-kappa_u * T), rtol=5e-2)
     # the fixed-point tolerance cannot go below the solver's noise (~1e-10 per return),
     # and ω varies with r here (dT/dr ≈ 8), so the return time is only known to ~1e-8
-    fp = P.fixed_point(p, tol=1e-9)
+    fp, _ = P.fixed_point(p, tol=1e-9)
     assert fp.k == 1
     assert_close(jnp.linalg.norm(fp.x), 0.25, atol=TOL["return_map"])
     assert_close(fp.tau, T, atol=1e-7)
@@ -557,12 +557,15 @@ def test_floquet_and_period_of_the_cassini_oval_against_line_integrals():
     for method in ("periodic_schur", "liouville"):
         fl = floquet(lc, method=method)
         assert_close(_exponent(fl) * float(lc.period), log_mu, atol=TOL["floquet"])
-    # κT ≈ −36.8 over T ≈ 1.7: μ ≈ 1e-16 is below machine resolution of the trivial
-    # multiplier, so the explicit monodromy's eigenvalue is pure rounding (its trivial
-    # multiplier is still fine) — the failure the chain exists to avoid
+    # κT ≈ −36.8 over T ≈ 1.7: μ ≈ 1e-16 is at machine resolution of the trivial
+    # multiplier, so the explicit monodromy's eigenvalue is rounding noise — Bauer–Fike
+    # bounds its error by ε‖M‖ ≈ μ, and the realized error (6e-2 to 5e-1 relative,
+    # depending on the association order) is orders beyond the chain's 1e-9 — while
+    # its trivial multiplier is still fine: the failure the chain exists to avoid
     mo = floquet(lc, method="monodromy")
     assert float(mo.trivial_error) < TOL["floquet"]
-    assert abs(_exponent(mo) * float(lc.period) - log_mu) > 0.1
+    mu = np.exp(log_mu)
+    assert abs(float(mo.multipliers[1]) / mu - 1) > 1e-5
 
 
 def test_floquet_on_the_guckenheimer_meloon_orbit():
@@ -638,6 +641,25 @@ def test_periodic_schur_factorization_is_exact_and_vmappable():
     assert_close(mults[0], ps.multipliers, atol=TOL["identity"])
 
 
+def test_floquet_functions_jit_and_vmap_over_cycles():
+    """A ``LimitCycle`` is a fixed-shape pytree: ``floquet`` jits as it stands, and
+    vmaps over a batch of cycles of the same mesh size (the ODE's parameters are
+    leaves of the cycle, so a batch of normal forms is one call)."""
+    cycles = [
+        find_limit_cycle(
+            HopfNormalForm(a=a, w=2.0, **INTEGRATION), X0, t_settle=5.0, m=2
+        )
+        for a in (0.5, 1.0)
+    ]
+    jitted = eqx.filter_jit(floquet)
+    assert_close(jitted(cycles[1]).exponents[1], -2.0, atol=TOL["floquet"])
+    batch = jax.tree.map(lambda *xs: jnp.stack(xs), *cycles)
+    out = eqx.filter_vmap(floquet)(batch)
+    assert_close(out.exponents[:, 1], jnp.array([-1.0, -2.0]), atol=TOL["floquet"])
+    _, points = eqx.filter_jit(cycles[0].sample)(8)
+    assert points.shape == (8, 2)
+
+
 class _Linear3D(AbstractODE):
     dim: int = eqx.field(static=True, default=3, init=False)
 
@@ -649,12 +671,10 @@ def test_floquet_refuses_non_planar_systems():
     with pytest.raises(NotImplementedError):
         periodic_schur(jnp.tile(jnp.eye(3), (2, 1, 1)), jnp.array([1.0, 0.0, 0.0]))
     fp = FixedPoint(
-        x=np.zeros(3),
-        tau=1.0,
+        x=jnp.zeros(3),
+        tau=jnp.asarray(1.0),
         k=1,
-        taus=np.ones(1),
-        iterates=np.zeros((2, 3)),
-        contraction=float("nan"),
+        contraction=jnp.asarray(float("nan")),
         converged=True,
     )
     fake = LimitCycle(
