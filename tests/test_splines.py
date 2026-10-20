@@ -104,9 +104,12 @@ def test_tail_gradients_are_finite(cls, data):
 # ----------------------------------------------------- 3. regularity of join ------
 def _check_join(f, order):
     lo, hi = f.xy_range
-    # One-sided limits: the mismatch is ~ h * f^(order+1), which is bounded by
-    # ~1e4 for the drawn parameter ranges, hence TOL["join"] = 1e-7 at this step h.
-    h = 1e-12 * (hi - lo)
+    # One-sided limits: the mismatch is ~ h * f^(order+1). Bins at the minimum width
+    # (1e-3 of the range) drive f^(order+1) to ~1e5 (measured 9.2e4 for a cubic
+    # B-spline with three minimal bins at the end — the ci-profile failure of
+    # 2026-10-20), so h = 1e-14 (range) keeps the term at ~1e-9 against
+    # TOL["join"] = 1e-7, while x_in is still ~100 ulps inside the range.
+    h = 1e-14 * (hi - lo)
     fs = _derivatives(f, order)
     for x0, x_in in ((lo, jnp.asarray(lo + h)), (hi, jnp.asarray(hi - h))):
         assert_close(fs[0](x_in), x0, atol=TOL["join"], msg=f"f discontinuous at {x0}")
