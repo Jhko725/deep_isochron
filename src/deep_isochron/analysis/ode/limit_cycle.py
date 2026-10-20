@@ -43,7 +43,8 @@ from .shooting import multiple_shooting, SHOOTING_SOLVER_CONFIG, ShootingResult
 class LimitCycle:
     """A periodic orbit located by ``find_limit_cycle`` (host-side NumPy).
 
-    - ``x0 (dim,)``: a point of the orbit (on ``section``); ``period`` $T > 0$.
+    - ``x0s (m, dim)``: starting points of the converged shooting segments. The first
+        point `x0s[0]` lies on ``section``.; ``period`` $T > 0$.
     - ``times (n,)``, ``points (n, dim)``: the orbit at ``n`` uniform times in
       $[0, T)$, ``points[0] == x0``; phase-uniform, so ``2π times / period`` is the
       asymptotic phase on the cycle up to a constant.
@@ -54,7 +55,7 @@ class LimitCycle:
       is a *repelling* orbit of the flow).
     """
 
-    x0: Float[np.ndarray, " dim"]
+    x0s: Float[np.ndarray, "m dim"]
     period: float
     times: Float[np.ndarray, " n"]
     points: Float[np.ndarray, "n dim"]
@@ -179,28 +180,60 @@ def find_limit_cycle(
     *,
     t_settle: float,
     m: int = 8,
-    n_points: int = 256,
-    config: SolverConfig = SHOOTING_SOLVER_CONFIG,
-    tol: float = 1e-8,
-    settle_tol: float = 1e-6,
-    max_returns: int = 100,
-    t_max: float | None = None,
     reverse_time: bool = False,
+    config: SolverConfig = SHOOTING_SOLVER_CONFIG,
+    t_max: float | None = None,
+    max_returns: int = 100,
+    settle_tol: float = 1e-6,
+    tol: float = 1e-8,
+    n_points: int = 256,
 ) -> LimitCycle:
     """Locate the limit cycle reached from ``x0``; see the module docstring.
 
-    ``t_settle``: integration time before the section is placed (a few transient
-    times); ``m``: shooting segments; ``tol``: the shooting tolerance (Levenberg–
-    Marquardt ``rtol``, ``atol = 1e-2 tol``) — the accuracy asked of the result;
-    ``settle_tol``: the fixed-point tolerance of the return map, i.e. how good the
-    initial guess must be before the polish (loosen it for weakly attracting cycles,
-    whose returns contract slowly); ``max_returns``: bound on the map iterations;
-    ``t_max``: bound on one return time (default ``10 t_settle``); ``reverse_time``:
-    find a repelling cycle by iterating the reversed flow (the basin check is skipped,
-    since the forward basin is not the relevant set).
+    **Main arguments:**
 
-    Raises ``ValueError`` if ``x0`` is outside ``ode.in_basin`` (forward time) or the
-    settled point is an equilibrium, ``NotConvergedError`` from any stage.
+    - `ode`: The `AbstractODE` instance whose limit cycle is sought.
+    - `x0`: Initial condition for the limit cycle search. If the target is the stable
+        limit cycle of `ode`, `x0` must be in the basin of attraction. This is
+        explicitly checked for using `ode.in_basin`.
+    - `t_settle`: Initial integration time for x0 to settle to the vicinity of the
+        limit cycle (duration of the transient dynamics from x0). Insufficient
+        convergence to the limit cycle is caught by inspecting the iterates of the
+        one-sided Poincare map. (see `initial_guess`). If `reverse_time` is True,
+        corresponds to the backwards time integration duration.
+    - `m`: Number of shooting segments. `m=1` corresponds to single-shooting.
+    - `reverse_time`: Whether to detect limit cycles using reverse-time flow. Relevant
+        for finding repelling cycles. If True, `ode.in_basin` check is skipped since
+        the forward basin of attraction is irrelevant for the repelling cycle.
+    - `config`: `SolverConfig` used for the numerical integration of flows during all
+        stages of the algorithm.
+
+    **Other arguments:**
+    - `t_max`: Bound on one return time of the Poincare map. None corresponds to the
+        default choice of `10 t_settle`.
+    - `max_returns`: Maximum iterations of the Poincare map used while searching for its
+        fixed point.
+    - `settle_tol`: Tolerance for determining the fixed-point tolerance of the Poincare
+        map. Does not have to be stringent due to the subsequent polishing step. For
+        weakly attracting cycles, the value must be loosened since the return map
+        contracts slowly.
+    - `tol`: Tolerance for the Levenberg-Marquardt optimzer used in multiple shooting.
+        (Optimizer tolerances are set as `rtol`=`tol`, `atol = 1e-2 tol`). Corresponds
+        to the accuracy of the shooting result.
+    - `n_points`: Number of equispaced time points used to sample the discovered limit
+        cycle.
+
+    **Returns:**
+
+    Returns a `LimitCycle` object containing the sampled limit cycle and relevant
+    auxiliary information, such as the starting poitns of the converged shooting
+    segments.
+
+    **Raises:**
+
+    - `ValueError` if ``x0`` is outside ``ode.in_basin`` (forward time) or the
+    settled point is an equilibrium.
+    - `NotConvergedError` if optimization fails to converge at any stage.
     """
     x0 = jnp.asarray(x0, dtype=float)
     if x0.ndim != 1:
@@ -253,7 +286,7 @@ def find_limit_cycle(
         ode, x_star, period, n_points, config=config, reverse_time=reverse_time
     )
     return LimitCycle(
-        x0=np.asarray(x_star),
+        x0s=np.asarray(shot.points),
         period=period,
         times=np.asarray(times),
         points=np.asarray(points),
