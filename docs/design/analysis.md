@@ -3,7 +3,7 @@ type: design
 status: tentative
 updated: 2026-10-27
 verified_by: pending (Joon); the E1 oracle tests in tests/test_analysis.py and the O1/O2 tests in tests/test_analysis_ode.py pass
-sources: [ADR-0012 (analysis layout), ADR-0014 (limit cycle by shooting), ADR-0015 (Floquet by seeded periodic Schur), roadmap Phase E, docs/design/normal-forms.md (phase conventions); §3 survey: Guckenheimer & Meloon 2000, Lust 2001, Fairgrieve & Jepson 1991, Mauroy & Mezić 2018, Wilson & Moehlis 2016, Kvalheim & Revzen 2021, Giacomini & Grau 2005, Bojanczyk et al. 1992, Dieci et al. 1997, Geist et al. 1990, BifurcationKit and diffrax documentation]
+sources: [ADR-0012 (analysis layout), ADR-0014 (limit cycle by shooting), ADR-0015 (Floquet by seeded periodic Schur), roadmap Phase E, docs/design/normal-forms.md (phase conventions); §3 survey: Guckenheimer & Meloon 2000, Lust 2001, Fairgrieve & Jepson 1991, Mauroy & Mezić 2018, Wilson & Moehlis 2016, Kvalheim & Revzen 2021, Giacomini & Grau 2005, Bojanczyk et al. 1992, Dieci et al. 1997, Geist et al. 1990, BifurcationKit and diffrax documentation; §4–5 survey: Guckenheimer 1975, Brown et al. 2004, Langfield et al. 2014, Osinga & Moehlis 2010, Mauroy & Mezić 2012, Monga et al. 2019, Pérez-Cervera et al. 2020, Yawata et al. 2024, Kvalheim & Revzen 2021]
 ---
 
 # `deep_isochron.analysis` — the limit cycle and its neighborhood, from data and from the vector field
@@ -329,6 +329,94 @@ Functions over a `LimitCycle` (which, as of O2, is a fixed-shape `eqx.Module` ca
 - **The forward-direction stability argument** is deduced and measured, not cited.
 - **For training**: with $T$ fixed by O1, $\mu = e^{\kappa T}$ is what a conjugacy must match; for the Bautin normal form $\kappa = \rho'(1)$ gives one equation in $(a, b)$ — the first place O2's number feeds the model side (roadmap M).
 
-## 4–. O3–O6 and the data items (D2–D3)
+## 4. O3 — `analysis.ode.asymptotic_phase`: the phase field of the basin
 
-Written as each item lands (roadmap Phase E): O3 `asymptotic_phase`, O4 `phase_sensitivity` (one survey: Guckenheimer 1975; Ermentrout & Kopell 1991; Brown et al. 2004; Izhikevich 2007, Ch. 10; Monga et al. 2019; Langfield et al. 2014 for FHN; Yawata et al. 2024 for the evaluation protocol), then O5 `isostable`, O6 `isostable_response` (Mauroy et al. 2013; Wilson & Moehlis 2016; Shirasaka et al. 2017; Wilson & Ermentrout 2018), then D2/D3 on the data half. Each survey is delivered to Joon before implementation (ADR-0012, amendment).
+**Status: survey (2026-10-20), delivered before implementation (ADR-0012 amendment). §4.2 and §5.2 are proposals; the decisions marked ▶ are Joon's. Conventions already fixed with Joon: the public phase is an angle $\Theta \in [0, 2\pi)$, $\Theta = 0$ at `cycle.x0s[0]` and increasing with time ($\Theta(\gamma(t)) = \omega t$, $\omega = 2\pi/T$); everything is computed in time along `LimitCycle.sample` and rescaled by $\omega$ at the end; the per-point function is vmappable and a `phase_grid` utility handles the grid (masking, chunking).**
+
+**The problem.** Given a `LimitCycle` of a planar `AbstractODE`, compute the asymptotic phase $\Theta(x)$ of any $x$ in the basin — Winfree's definition, $\lim_{t\to\infty}\vert\Phi_t(x) - \Phi_{t + \Theta(x)/\omega}(x_0)\vert = 0$ (Winfree 1974; Langfield, Krauskopf & Osinga 2014 §II.A, *cited*) — to the accuracy of the orbit, with `nan` outside the basin and on the phaseless set, and cheaply enough for a grid. This is the field a learned model's phase is compared against (roadmap M; Yawata et al. 2024 Figs. 4 and 8 compare on exactly such a grid, *cited*). Claims are *cited*, *secondary* or *deduced* as in §2.
+
+### 4.1 What exists
+
+**The object.** Isochrons are the level sets of $\Theta$; Guckenheimer 1975 (Theorem A, Appendix A, *cited*) shows each isochron $I(c)$ is the stable manifold of $c \in \gamma$ under the time-$T$ map $\Phi_T$, a cross-section of $\gamma$ diffeomorphic to $\mathbb R^{n-1}$, with the isochrons permuted by the flow ($I(\gamma(t)) = \Phi_t(I(\gamma(0)))$) and their union the basin. Two consequences we use: $D\Phi_T(c)$ has the eigenvalue $1$ along $f(c)$ and the stable eigenvalues transverse to it, and "the Stable Manifold Theorem ensures that $I(c)$ is tangent at $c$ to the stable linear eigenspace $E^s(c)$ that is spanned by the $n - 1$ stable eigenvectors of $D\Phi_T(c)$" (Langfield et al. 2014 §II.B, *cited*) — so in the plane the isochron through a mesh point is tangent to O2's Floquet vector $v(c)$; and the phaseless set is the frontier of the basin (Guckenheimer Appendix C: for planar flows every point of the frontier is phaseless, Theorem C1, *cited*) — FitzHugh–Nagumo's source equilibrium, Winfree's hole $r \leq a$. Isochrons accumulate on the phaseless set, and for slow–fast systems also in an *almost phaseless* region along the repelling slow manifold, where the phase is "very sensitive, meaning that a slight perturbation from any point will result in a completely different phase" (Langfield et al. §IV, *cited*; Osinga & Moehlis 2010 §4.4 "almost phaseless set", *cited*). No method resolves the phase there; the grid utility must report it, not hide it.
+
+**Routes to $\Theta(x)$.**
+
+| Route | Computes | Where it stands | Cost / accuracy |
+|---|---|---|---|
+| (a) Forward integration, phase read off the cycle | $\Phi_{nT}(x)$ for $n$ periods, then the phase of the cycle point it lands beside | Winfree's original computation: "asymptotic phase from forward-time integrations", which "was not accurate enough to resolve the isochron structure" in the sensitive regions (Langfield et al. §I, §III, *cited*); Monga et al. 2019 Eq. (2) is this definition (*cited*); Yawata et al.'s "direct numerical calculations" for the FHN truth (§IV.C, *cited*) | one solve of length $nT$ per point, $n \approx \log(\varepsilon/d_0)/\log\mu$ (one period for FHN, $\sim 10^2$ near a Hopf point); the nearest-point read-off is only $O(d)$ accurate because isochrons are transverse, not orthogonal, to $\gamma$ (*deduced*) |
+| (b) Return times to a section | iterate the one-sided `PoincareMap` from $x$: $t_n - nT \to c(x)$ and $\Theta(x) = -\omega\thinspace c(x)$ | Guckenheimer 1975 §1: "the existence of isochrons is equivalent to the existence of cross-sections to $\gamma$ for which the time of first return is identically the period" (*cited*) — the offset $c(x)$ is what the section through $p$ misses; the return-time formulation is ours (*deduced*), on O1's map | the same solves as (a) split at the crossings; converges geometrically at rate $\mu$, the remainder after $n$ returns is $O(\vert y_n - p\vert)$; `nan` when no crossing within `t_max` |
+| (b′) (b) with a first-order correction at the section | $\Theta(x) = -\omega t_n + \langle Z(p), y_n - p\rangle$ | $\Theta(y_n) = \Theta(p) + \nabla\Theta(p)\cdot(y_n - p) + O(\vert y_n - p\vert^2)$ with $Z(p)$ from O4 (*deduced*) | error $O(\vert y_n - p\vert^2) = O(\mu^{2n})$: halves the number of returns |
+| (c) Fourier averages | $\Theta(x) = \arg\lim\frac1\tau\int_0^\tau g(\Phi_t x)e^{-i\omega t}dt$ for almost any observable $g$ | Mauroy & Mezić 2012 (Chaos 22:033112), Eq. (2), Prop. 1: the average is the Koopman eigenfunction of eigenvalue $i\omega$ and "the isochrons are the level sets of the Fourier averages" (*cited*) | forward integration only, "not limited by numerical issues", but convergence is $O(1/\tau)$ — they use 20–300 periods (*cited*); a quadrature state in our augmented-solve style |
+| (d) Backward integration of a local isochron | extend the linear isochron $E^s(c)$ by the reversed flow | Sherwood & Guckenheimer 2010; Guillamon & Huguet 2009 (*secondary* via Langfield et al. §I and Osinga & Moehlis §3); Winfree's second method | gives *curves*, not a field; "requires exponentially small variations in the initial condition", impossible in double precision for slow–fast systems (Osinga & Moehlis §3, *cited*) |
+| (e) BVP continuation | orbit segments ending on $E^s(c)$, continued in AUTO | Osinga & Moehlis 2010 (SIADS 9:1201); Langfield et al. 2014 (the FHN isochrons, "Winfree's puzzle") (*cited*) | the method of record for isochron *geometry* in sensitive regions; a continuation code, not a field evaluator |
+| (f) Parametrization method | $K(\theta, \sigma)$ with $\partial_\theta K/T + \lambda\sigma\partial_\sigma K = X(K)$, $\Theta$ by inversion | Guillamon & Huguet 2009; Pérez-Cervera, Seara & Huguet 2020 (Chaos 30:083117), Eqs. 9–16 (*cited*) | global phase *and* amplitude at once, with their response functions off the cycle; convergence of the expansions "is typically slow" for slow–fast systems (Osinga & Moehlis §3, *cited*) — O5/O6 material |
+| (g) Eikonal / level-set PDE | $\nabla\Theta\cdot f = \omega$ solved on a grid | Detrixhe, Doubeck, Moehlis & Gibou 2016 (*secondary*, cited by Pérez-Cervera et al.) | grid-native; the PDE has infinitely many solutions without the asymptotic condition (Brown et al. 2004 §2.2.2, *cited*) |
+
+**What the learned-model comparison needs** is a field on a grid with the sensitive regions marked, not isochron curves: (a)/(b) with $n$ chosen from $\mu$, vmapped. The normal forms give the field in closed form (`phase`, with its $\Psi(r)$ shift for $\omega(r) \neq$ const); FHN's truth is (a) run to convergence, which is what Yawata et al. did and what Langfield et al. show qualitatively (their Figs. 3–4: the isochrons, the spiral accumulation at $q$, the boomerang turns near the repelling slow manifold).
+
+### 4.2 Proposed method (`analysis/ode/phase.py`)
+
+- `asymptotic_phase(cycle, x, *, n_returns=None, t_max=None, throw=False) -> Θ`: route (b′). The map is `PoincareMap(cycle.ode, cycle.section, cycle.config, t_max, reverse_time=cycle.reverse_time)`; $n$ returns by `iterate` (static $n$, so a `lax.scan`; default from $\mu$: $n = \lceil\log(\varepsilon_{\rm tol}/d_0)/\log\mu\rceil$ with $d_0$ a basin-scale guess, capped), then $\Theta = -\omega\sum_i(\tau_i - T) + \langle Z(p), y_n - p\rangle$, reduced mod $2\pi$; `nan` where a return is missing (`throw=False`, matching `PoincareMap`). Vmappable; jit left to the caller. ▶ The correction term ties O3 to O4 (`phase_sensitivity` at $p$ is one number per cycle, computed once); without it the function is (b), one order slower in $n$ — include or not?
+- `phase_grid(cycle, xs, ys, *, batch_size, **kw) -> (Θ (ny, nx), mask)`: builds the grid, pre-masks by `ode.in_basin`, runs `asymptotic_phase` through `jax.lax.map(..., batch_size=)` over the flattened points (chunked vmap; the solves per point are the cost, $\sim 4\cdot10^4$ for $200\times200$), masks non-finite results, returns the field and the mask. ▶ Its home: `analysis.ode` (the field is an analysis product) or next to the plot code.
+- **Reverse time**: for a repelling cycle the phase field of the *reversed* flow is what exists (the forward basin is the complement); `reverse_time` cycles get the reversed map and $\Theta$ of the reversed flow, documented.
+- **Sensitivity diagnostic** (▶ optional): the gradient of the return time, $\Vert\nabla\Theta(x)\Vert$ by `jax.grad` through the custom JVP, flags the almost-phaseless regions on a grid at the cost of one tangent per point.
+- Rejected for now: (c) Fourier averages ($O(1/\tau)$; only wins in high dimension), (d)–(e) (curves, continuation codes), (f)–(g) (O5/O6 or a grid PDE we do not need).
+
+### 4.3 Oracles (`tests/test_analysis_ode.py`, O3 block)
+
+| System | Exact | Pinned |
+|---|---|---|
+| Hopf, Bautin, Winfree ($a < 0$), `integration="cartesian"` | `nf.phase(x)` (Bautin and Winfree carry the $\Psi(r)$ shift: isochrons are *not* radial) | $\Theta(x) - $ `nf.phase(x)` $=$ const mod $2\pi$ on a set of basin points, to $10^{-8}$; the constant is $-$`nf.phase(x0s[0])` |
+| Any cycle | $\Theta(\Phi_t x) = \Theta(x) + \omega t$ | the flow invariance on random points and times; $\Theta(\gamma(t)) = \omega t$ on `sample` |
+| Winfree $a = 0.25$ | the hole is phaseless | `nan` inside $r \leq a$, finite outside; the map's `t_max` respected |
+| FitzHugh–Nagumo (slow) | — | $n = 1$ suffices ($\mu = 1.7\cdot10^{-12}$); flow invariance; `nan` at the equilibrium; the sensitivity diagnostic large along the repelling slow manifold (Langfield et al. Fig. 5, qualitative) |
+| `phase_grid` | — | the mask equals `in_basin` ∧ finite; chunking changes nothing; shape |
+
+### 4.4 Limits
+
+- No isochron *curves*; the field near the almost-phaseless set is reported with its sensitivity, not resolved (that is (e)'s job, not planned).
+- One section for the whole basin: a trajectory's $n$-th positive crossing of the *global* hyperplane $\Sigma$ is the $n$-th return near $p$ only once it is close to a convex-enough cycle; a Cassini-like cycle (period-2 map) would miscount — planar convex cycles only, with the period-$k$ detection of O1 as the guard (`k = 1` asserted).
+
+## 5. O4 — `analysis.ode.phase_sensitivity`: the PRC $Z(\theta) = \nabla\Theta$ on the cycle
+
+**The problem.** $Z(\theta) = \nabla\Theta(\gamma(\theta))$, the infinitesimal phase response curve (phase sensitivity function), normalized by $\langle Z, f\rangle = \omega$ (Brown, Moehlis & Holmes 2004 Eq. 2.4/A.6, *cited*): what enters every phase reduction $\dot\theta = \omega + Z(\theta)\cdot G$, and the second thing a learned model's phase is assessed on (Yawata et al. Figs. 5, 9, 12, 15: estimated vs "true PSF calculated by solving the adjoint equation", *cited*).
+
+### 5.1 What exists
+
+| Route | Computes | Where it stands | Cost / accuracy |
+|---|---|---|---|
+| (a) Direct (finite perturbation) | $\Delta\Theta/\Delta x$ for a small kick at $\gamma(\theta)$, measured after the transient | Winfree; Brown et al. §2.2.1 (*cited*): "the difference $\Delta\theta$ is preserved under the flow", so measure it as $t \to \infty$; Monga et al. §2.1 Fig. 1 compares it with the adjoint (*cited*) | $O(\Delta x)$ bias, one O3 evaluation per kick; the sanity check every paper shows |
+| (b) Adjoint equation | $\dot Z = -Df(\gamma(t))^{\top}Z$, the $T$-periodic solution with $\langle Z(0), f(\gamma(0))\rangle = \omega$ | Ermentrout & Kopell 1991; Hoppensteadt & Izhikevich 1997 Eqs. 9.16–17; Brown et al. App. A, Eqs. A.4–A.7 (*cited*: $\nabla\theta = \omega Q_{\rm XPP}$); Monga et al. Eqs. 10–11 (*cited*); Izhikevich 2007 ch. 10 (Malkin's theorem, *secondary*) | XPP integrates it *backward*: the adjoint's multipliers are $\lbrace 1, 1/\mu\rbrace$, so the periodic solution is unstable forward and attracting backward, with contamination decaying by $\mu$ per backward period (*deduced*; "backward integration is the standard approach", Osinga & Moehlis §2.1, *cited*). Needs $\gamma(t)$ along the backward integration — the orbit itself is *repelling* backward, so it must come from a stored forward solution (a dense interpolant), not be co-integrated |
+| (c) Left eigenvector of the monodromy | $Z(c)^{\top}M(c) = Z(c)^{\top}$, i.e. $Z(c)$ is the left eigenvector of $D\Phi_T(c)$ for the eigenvalue $1$ | $\Theta\circ\Phi_T = \Theta$ differentiated (*deduced*); Kvalheim & Revzen 2021 Prop. 5 for the eigenfunction $e^{i\Theta}$ with exponent $i\omega$ (*cited*); Osinga & Moehlis §2.1: "in higher dimensions … the left eigenvector for the eigenvalue 1, found by the power method" (*cited*) | one linear-algebra step per point once $M(c)$ is known — and O2's periodic Schur chain *has* $M(c)$ in triangular form at every mesh point: $Z \propto Q_i\thinspace(1, T_{01}/(T_{00} - T_{11}))$ from the cyclic product $T_i$ of the factors (*deduced*; the planar triangular left eigenproblem) |
+| (c′) Planar closed form from the Floquet vector | $Z \perp v$ (the isochron is tangent to $E^s = \mathrm{span}\thinspace v$), so $Z = \omega\thinspace v^{\perp}/\langle v^{\perp}, f\rangle$ | Langfield et al. §II.B for the tangency (*cited*); the rest *deduced* (biorthogonality of left and right eigenvectors of $M$) | the same as (c) in the plane, written with O2's `vectors` |
+| (d) AD of the phase function | $\nabla\Theta(x)$ by `jax.grad` of `asymptotic_phase` through the custom JVP of the return map | Brown et al. §2.2.2: the adjoint "is equivalent to the direct method" (*cited*); AD makes the direct method exact in $\Delta x$ (*deduced*); Pérez-Cervera et al. Eq. 23: $\nabla\Theta$ as a row of $[DK]^{-1}$ — the gradient of the inverse parametrization (*cited*) | one tangent per point, on *or off* the cycle (the phase response *function* of Pérez-Cervera et al., Eq. 20–21); its accuracy is O3's |
+| (e) Transport along the cycle | $Z(\Phi_t c) = D\Phi_t(c)^{-\top}Z(c)$ | $Z(x)^{\top} = Z(\Phi_t x)^{\top}D\Phi_t(x)$ from $\Theta\circ\Phi_t = \Theta + \omega t$ (*deduced*; the integrated form of (b)) | forward solves only; a $2\times2$ solve per point; conditioning $e^{\vert\kappa\vert t}$ — fine from the nearest mesh point ($t \leq T/m$), useless over a full period ($1/\mu$) |
+
+**Conventions.** $Z\cdot f = \omega$ fixes the scale (Brown et al. A.6; XPP's $Q$ is $Z/\omega$, A.7); $\theta = 0$ at $x_0$; sign conventions of the components follow the state coordinates (Yawata's $Z_1, Z_2$). For the Stuart–Landau/Hopf form with shear $\beta$, $Z(\theta) = (-\sin\theta - \beta\cos\theta,\ \cos\theta - \beta\sin\theta)$ (Yawata et al. Eq. 31, *cited*) — the radial component is the shear; our Bautin and Winfree have $\omega(r) \neq$ const and hence a nonzero radial PRC, Hopf's is tangential.
+
+### 5.2 Proposed method (`analysis/ode/phase.py`, same module as O3)
+
+- `phase_sensitivity(cycle, n_points) -> (θ (n,), Z (n, dim))` by route (c) at the mesh points (from `floquet_periodic_schur`'s factors, with the normalization $\langle Z, f\rangle = \omega$) and route (e) from the nearest mesh point to each of the `n_points` uniform times (forward solves with `ForwardMode`, a `vmap`). Exact in the sense of the discrete flow, no backward integration, no interpolant. Output in angle: $\theta_j = \omega t_j$, $Z$ scaled by $\omega$.
+- `phase_response(cycle, x) -> ∇Θ(x)`: route (d), `jax.grad(asymptotic_phase)` — the response *function* anywhere in the basin; on the cycle a cross-check of (c)+(e) to O3's accuracy.
+- Cross-checks in tests, not in the API: (b) by backward integration over $k$ periods on a dense `Dopri8` interpolant of the orbit (▶ keep as a test-only reference, or expose as `method="adjoint"`?); (a) finite perturbation at a few points.
+- ▶ The $Z(p)$ needed by O3's correction (b′) is `phase_sensitivity` at mesh point 0 — computed once per cycle; where to cache it (a field on `Floquet`? recomputed?) is a design point.
+
+### 5.3 Oracles (O4 block)
+
+| System | Exact | Pinned |
+|---|---|---|
+| Hopf | $Z(\theta) = (-\sin\theta, \cos\theta)\thinspace\omega/r$ at $r = 1$: tangential | (c)+(e) and (d) to $10^{-8}$; $\langle Z, f\rangle = \omega$; $\langle Z, v\rangle = 0$ |
+| Bautin, Winfree ($a < 0$) | `jax.grad(nf.phase)` on the cycle (nonzero radial component from $\omega'(r)$) | same, to $10^{-8}$; the radial component's sign against $\omega'(1)$ |
+| Any cycle | $\langle Z(\theta), f(\gamma(\theta))\rangle = \omega$ for all $\theta$; $Z$ is $2\pi$-periodic; $Z$ is $\perp$ O2's Floquet vector at every mesh point | identities |
+| FitzHugh–Nagumo (slow) | — | (c)+(e), (d) and the backward adjoint (b) agree to $10^{-6}$; the direct method (a) within $O(\Delta x)$; shape against Yawata et al. Fig. 9 / Langfield et al. only qualitatively (different FHN parametrization: theirs $\varepsilon = 0.08$, $T = 36.56$; ours $c = 3$, $T = 11.23$) |
+| Conditioning | — | transport (e) over $T/m$ vs over $T$: the latter loses $\log_{10}(1/\mu)$ digits (asserted on FHN) |
+
+### 5.4 Limits and consequences
+
+- Planar in the closed form (c′) only; (c), (d), (e) are dimension-free, (c) needs the general periodic Schur for `dim > 2` (ADR-0015 open issue).
+- $Z$ is as accurate as the orbit and the segment Jacobians ($10^{-8}$); near the almost-phaseless set, `phase_response` off the cycle inherits O3's sensitivity.
+- For training (roadmap M): the PRC error in the first $k$ Fourier modes and the residual $\langle Z, f\rangle - \omega$ of the *learned* phase are now computable against this $Z$.
+
+## 6–. O5–O6 and the data items (D2–D3)
+
+Written as each item lands (roadmap Phase E): O5 `isostable`, O6 `isostable_response` (Mauroy, Mezić & Moehlis 2013; Wilson & Moehlis 2016; Shirasaka, Kurebayashi & Nakao 2017; Wilson & Ermentrout 2018; Pérez-Cervera, Seara & Huguet 2020), then D2/D3 on the data half. Each survey is delivered to Joon before implementation (ADR-0012, amendment).
