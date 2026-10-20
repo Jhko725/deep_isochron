@@ -1,13 +1,28 @@
 """ODE-side analysis: reference objects of a limit-cycle oscillator computed from its
-vector field (roadmap Phase E, O1–O6). Host-side results (NumPy dataclasses), JAX
-inside; the stages are jitted, the drivers are not.
+vector field (roadmap Phase E, O1–O6). Results are ``eqx.Module`` pytrees; the stage
+kernels are jitted and take arrays, the drivers are host-side and take the result
+objects (``f(cycle, ...)``), reading the ODE and solver configuration from them.
 
 O1: ``CrossSection`` (a hyperplane), ``PoincareMap`` (the first-return map on it,
 differentiable in the point, with ``iterate`` and ``fixed_point``),
 ``multiple_shooting`` (the polish on the time-T flow) and ``find_limit_cycle`` (settle
-→ return map → shooting → ``LimitCycle``), with its stages exported for reuse.
+→ return map → shooting → ``LimitCycle``, which samples itself), with its stages
+exported for reuse. O2: ``floquet`` (multipliers and exponents of a ``LimitCycle`` by
+the seeded periodic Schur chain, with the monodromy and Liouville routes as checks).
 """
 
+from .floquet import (
+    divergence_integral as divergence_integral,
+    Floquet as Floquet,
+    floquet as floquet,
+    FloquetMethod as FloquetMethod,
+    monodromy as monodromy,
+    multipliers_from_monodromy as multipliers_from_monodromy,
+    periodic_schur as periodic_schur,
+    PeriodicSchur as PeriodicSchur,
+    return_map_multiplier as return_map_multiplier,
+    segment_jacobians as segment_jacobians,
+)
 from .limit_cycle import (
     find_limit_cycle as find_limit_cycle,
     initial_guess as initial_guess,
@@ -16,7 +31,6 @@ from .limit_cycle import (
     orientation as orientation,
     period_consistent as period_consistent,
     polish as polish,
-    sample_orbit as sample_orbit,
     settle as settle,
 )
 from .poincare import (

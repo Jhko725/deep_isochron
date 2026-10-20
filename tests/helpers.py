@@ -55,6 +55,7 @@ TOL = {
     "return_map": 1e-8,
     "trivial_multiplier": 1e-8,
     "level_set": 1e-8,
+    "floquet": 1e-8,  # O2: the exponent inherits O1's orbit error
 }
 
 

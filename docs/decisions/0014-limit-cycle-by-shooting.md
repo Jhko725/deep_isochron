@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0014
-status: accepted; amended 2026-10-18 (review rounds 1–2)
-updated: 2026-10-19
+status: accepted; amended 2026-10-18 (review rounds 1–2); amended 2026-10-20 (ADR-0015)
+updated: 2026-10-20
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-17/18 after the O1 survey and his notebook prototype)
 ---
 
@@ -131,3 +131,7 @@ documented, not built.
   first fix, reverted in round 2): an `AbstractODE.integrate` that always solves `rhs`
   numerically — a near-duplicate of `flow` on the base contract for a need the normal
   forms already meet with their integration switch.
+
+## Amendment 2026-10-20 — ADR-0015
+
+§3's "frozen dataclasses of NumPy arrays" for `LimitCycle` and `FixedPoint` is superseded by ADR-0015 §5 (`eqx.Module`s carrying the ODE and configuration; the sampled orbit derived by `LimitCycle.sample`, not stored). The O2 hook of §3 (`jax.jacfwd(P)` as $DP$) is a diagnostic only: the multipliers come from the seeded periodic Schur chain on the shooting mesh.

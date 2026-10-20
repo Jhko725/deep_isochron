@@ -14,20 +14,27 @@ of a planar ODE and its period, as a composition of stages.
 4. Guards (Parker & Chua §5.5, "Extraneous solutions"): the shooting equations are
    also solved by an equilibrium (``is_equilibrium``) and by $T \to 0$
    (``period_consistent`` against $\hat T$); both are rejected.
-5. ``sample_orbit``: the orbit at ``n_points`` uniform times in $[0, T)$ (a
-   phase-uniform parametrization), and ``orientation`` as the sign of its signed area.
 
-The orbit's own properties beyond its location — the monodromy, the Floquet multipliers,
-their cross-checks — are functions *of* a ``LimitCycle`` (roadmap O2), not products of
-the search, and are not computed here. ``find_limit_cycle`` is a host-side driver (it
-runs once per system and raises informative errors); every stage it calls is jitted.
+The result is a ``LimitCycle``: the converged shooting mesh ``x0s`` (the first point
+on the section), the period, and the ODE and solver configuration it was found with,
+so that every later analysis of the orbit (its sampling, ``LimitCycle.sample``; its
+Floquet multipliers, ``floquet``) integrates the same system the same way. The orbit's
+properties beyond its location are functions *of* a ``LimitCycle`` (roadmap O2–O6),
+not products of the search.
+
+**Jit.** ``find_limit_cycle`` and ``PoincareMap.fixed_point`` are host-side drivers
+(they run once per system and raise informative errors); the stages they call —
+``settle``, ``PoincareMap.__call__``, ``multiple_shooting``, the sampling kernel — are
+``eqx.filter_jit``-ted. Kernels take arrays (``x0s``, ``period``) and the static
+configuration, never a ``LimitCycle`` (its ``settle`` record has a per-cycle shape,
+which would recompile every kernel per cycle).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import cast
 
+import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, ArrayLike, Float
@@ -39,34 +46,75 @@ from .sections import CrossSection
 from .shooting import multiple_shooting, SHOOTING_SOLVER_CONFIG, ShootingResult
 
 
-@dataclass(frozen=True)
-class LimitCycle:
-    """A periodic orbit located by ``find_limit_cycle`` (host-side NumPy).
+class LimitCycle(eqx.Module):
+    """A periodic orbit located by ``find_limit_cycle``.
 
-    - ``x0s (m, dim)``: starting points of the converged shooting segments. The first
-        point `x0s[0]` lies on ``section``.; ``period`` $T > 0$.
-    - ``times (n,)``, ``points (n, dim)``: the orbit at ``n`` uniform times in
-      $[0, T)$, ``points[0] == x0``; phase-uniform, so ``2π times / period`` is the
-      asymptotic phase on the cycle up to a constant.
-    - ``orientation``: $+1$ counterclockwise (positive signed area), $-1$ clockwise.
-    - ``section``: the cross-section used; ``residual``: the shooting residual norm;
-      ``settle``: the fixed-point iteration that produced the initial guess;
-      ``reverse_time``: whether the orbit was found in the time-reversed flow (then it
-      is a *repelling* orbit of the flow).
+    **Attributes:**
+
+    - `ode`: The `AbstractODE` the orbit belongs to.
+    - `x0s`: Starting points `(m, dim)` of the converged shooting segments, at times
+        `i T / m` along the orbit; `x0s[0]` lies on `section`.
+    - `period`: The period $T > 0$.
+    - `residual`: The norm of the shooting residual at the solution.
+    - `settle`: The `FixedPoint` iteration of the return map that produced the initial
+        guess (host-side record; its arrays have a per-cycle length).
+    - `section`: The `CrossSection` through `x0s[0]`, normal to the flow there.
+    - `config`: The `SolverConfig` the orbit was found with, used by every method and
+        analysis of the orbit (static).
+    - `reverse_time`: Whether the orbit was found in the time-reversed flow — then it
+        is a *repelling* orbit of `ode` (static).
     """
 
-    x0s: Float[np.ndarray, "m dim"]
-    period: float
-    times: Float[np.ndarray, " n"]
-    points: Float[np.ndarray, "n dim"]
-    orientation: int
-    section: CrossSection
-    residual: float
+    ode: AbstractODE
+    x0s: Float[Array, "m dim"]
+    period: Float[Array, ""]
+    residual: Float[Array, ""]
     settle: FixedPoint
-    reverse_time: bool = False
+    section: CrossSection
+    config: SolverConfig = eqx.field(static=True)
+    reverse_time: bool = eqx.field(static=True, default=False)
+
+    @property
+    def dim(self) -> int:
+        return self.x0s.shape[1]
+
+    @property
+    def m(self) -> int:
+        """The number of shooting segments."""
+        return self.x0s.shape[0]
+
+    def sample(
+        self, n_points: int = 256
+    ) -> tuple[Float[Array, " n"], Float[Array, "n dim"]]:
+        """The orbit at `n_points` uniform times in $[0, T)$, by integrating from
+        `x0s[0]` with `config`: a phase-uniform parametrization, so
+        `2π times / period` is the asymptotic phase on the orbit up to a constant.
+
+        **Arguments:**
+
+        - `n_points`: The number of sample times.
+
+        **Returns:**
+
+        `(times, points)` with `times (n,)` and `points (n, dim)`,
+        `points[0] == x0s[0]`, in forward time order (a reverse-time orbit is sampled
+        backward and re-ordered).
+        """
+        return _sample(
+            self.ode, self.x0s[0], self.period, n_points, self.config, self.reverse_time
+        )
+
+    def orientation(self, n_points: int = 64) -> int:
+        """$+1$ for a counterclockwise orbit (positive signed area of the sampled
+        polygon), $-1$ for a clockwise one. Planar only."""
+        if self.dim != 2:
+            raise ValueError("orientation is defined for planar orbits only.")
+        _, points = self.sample(n_points)
+        return orientation(points)
 
 
 # ------------------------------------------------------------------ the stages ----
+@eqx.filter_jit
 def settle(
     ode: AbstractODE,
     x0: Float[ArrayLike, " dim"],
@@ -145,19 +193,17 @@ def period_consistent(period: float, period_hat: float, factor: float = 10.0) ->
     return period_hat / factor <= period <= factor * period_hat
 
 
-def sample_orbit(
+@eqx.filter_jit
+def _sample(
     ode: AbstractODE,
-    x0: Float[ArrayLike, " dim"],
-    period: float,
+    x0: Float[Array, " dim"],
+    period: Float[Array, ""],
     n_points: int,
-    *,
     config: SolverConfig,
-    reverse_time: bool = False,
+    reverse_time: bool,
 ) -> tuple[Float[Array, " n"], Float[Array, "n dim"]]:
-    """The orbit through ``x0`` at ``n_points`` uniform times in ``[0, period)``, in
-    the forward time order (a reverse-time sampling is re-ordered)."""
-    x0 = jnp.asarray(x0, dtype=float)
-    times = jnp.linspace(0.0, period, n_points, endpoint=False)
+    """The kernel of ``LimitCycle.sample``."""
+    times = jnp.linspace(0.0, 1.0, n_points, endpoint=False) * period
     if not reverse_time:
         return times, cast(Array, ode.flow(times, x0, config=config).ys)
     # Φ_{-t}(x0) = Φ_{T-t}(x0): sample backward, then reverse the loop after x0
@@ -186,9 +232,8 @@ def find_limit_cycle(
     max_returns: int = 100,
     settle_tol: float = 1e-6,
     tol: float = 1e-8,
-    n_points: int = 256,
 ) -> LimitCycle:
-    """Locate the limit cycle reached from ``x0``; see the module docstring.
+    """Locate the limit cycle reached from `x0`; see the module docstring.
 
     **Main arguments:**
 
@@ -196,44 +241,44 @@ def find_limit_cycle(
     - `x0`: Initial condition for the limit cycle search. If the target is the stable
         limit cycle of `ode`, `x0` must be in the basin of attraction. This is
         explicitly checked for using `ode.in_basin`.
-    - `t_settle`: Initial integration time for x0 to settle to the vicinity of the
-        limit cycle (duration of the transient dynamics from x0). Insufficient
+    - `t_settle`: Initial integration time for `x0` to settle to the vicinity of the
+        limit cycle (duration of the transient dynamics from `x0`). Insufficient
         convergence to the limit cycle is caught by inspecting the iterates of the
-        one-sided Poincare map. (see `initial_guess`). If `reverse_time` is True,
-        corresponds to the backwards time integration duration.
-    - `m`: Number of shooting segments. `m=1` corresponds to single-shooting.
-    - `reverse_time`: Whether to detect limit cycles using reverse-time flow. Relevant
-        for finding repelling cycles. If True, `ode.in_basin` check is skipped since
-        the forward basin of attraction is irrelevant for the repelling cycle.
+        one-sided Poincaré map (see `initial_guess`). If `reverse_time` is True,
+        corresponds to the backward time integration duration.
+    - `m`: Number of shooting segments. `m=1` corresponds to single shooting.
+    - `reverse_time`: Whether to detect limit cycles using the reverse-time flow.
+        Relevant for finding repelling cycles. If True, the `ode.in_basin` check is
+        skipped since the forward basin of attraction is irrelevant for the repelling
+        cycle.
     - `config`: `SolverConfig` used for the numerical integration of flows during all
-        stages of the algorithm.
+        stages of the algorithm, and recorded on the result for later analyses.
 
     **Other arguments:**
-    - `t_max`: Bound on one return time of the Poincare map. None corresponds to the
+
+    - `t_max`: Bound on one return time of the Poincaré map. None corresponds to the
         default choice of `10 t_settle`.
-    - `max_returns`: Maximum iterations of the Poincare map used while searching for its
-        fixed point.
-    - `settle_tol`: Tolerance for determining the fixed-point tolerance of the Poincare
-        map. Does not have to be stringent due to the subsequent polishing step. For
-        weakly attracting cycles, the value must be loosened since the return map
-        contracts slowly.
-    - `tol`: Tolerance for the Levenberg-Marquardt optimzer used in multiple shooting.
-        (Optimizer tolerances are set as `rtol`=`tol`, `atol = 1e-2 tol`). Corresponds
-        to the accuracy of the shooting result.
-    - `n_points`: Number of equispaced time points used to sample the discovered limit
-        cycle.
+    - `max_returns`: Maximum iterations of the Poincaré map used while searching for
+        its fixed point.
+    - `settle_tol`: Tolerance of the fixed-point iteration of the Poincaré map. Does
+        not have to be stringent due to the subsequent polishing step. For weakly
+        attracting cycles the value must be loosened, since the return map contracts
+        slowly.
+    - `tol`: Tolerance of the Levenberg–Marquardt optimizer used in multiple shooting
+        (`rtol = tol`, `atol = 1e-2 tol`). Corresponds to the accuracy of the shooting
+        result.
 
     **Returns:**
 
-    Returns a `LimitCycle` object containing the sampled limit cycle and relevant
-    auxiliary information, such as the starting poitns of the converged shooting
-    segments.
+    A `LimitCycle`: the converged shooting mesh `x0s`, the `period`, the shooting
+    `residual`, the `settle` record, the `section`, and the `ode`, `config` and
+    `reverse_time` the orbit was found with.
 
     **Raises:**
 
-    - `ValueError` if ``x0`` is outside ``ode.in_basin`` (forward time) or the
-    settled point is an equilibrium.
-    - `NotConvergedError` if optimization fails to converge at any stage.
+    - `ValueError` if `x0` is outside `ode.in_basin` (forward time) or the settled
+        point is an equilibrium.
+    - `NotConvergedError` if a stage fails to converge (the stage is named).
     """
     x0 = jnp.asarray(x0, dtype=float)
     if x0.ndim != 1:
@@ -282,18 +327,14 @@ def find_limit_cycle(
             f"estimate {fp.tau:.6g}.",
             shot,
         )
-    times, points = sample_orbit(
-        ode, x_star, period, n_points, config=config, reverse_time=reverse_time
-    )
     return LimitCycle(
-        x0s=np.asarray(shot.points),
-        period=period,
-        times=np.asarray(times),
-        points=np.asarray(points),
-        orientation=orientation(points),
-        section=section,
-        residual=float(shot.residual),
+        ode=ode,
+        x0s=shot.points,
+        period=shot.period,
+        residual=shot.residual,
         settle=fp,
+        section=section,
+        config=config,
         reverse_time=reverse_time,
     )
 
@@ -306,6 +347,5 @@ __all__ = [
     "orientation",
     "period_consistent",
     "polish",
-    "sample_orbit",
     "settle",
 ]

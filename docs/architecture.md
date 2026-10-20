@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-19
+updated: 2026-10-20
 sources: [code]
 ---
 
@@ -91,7 +91,9 @@ deep_isochron
 │   │   └── cycle.py         estimate_cycle (E1): tails → polar protophase → Kralemann
 │   │                        PTP phase → period by regression → Fourier curve → converged
 │   ├── errors.py            NotConvergedError (stage, message, last iterate)
-│   └── ode/                 from an AbstractODE (O1 landed; O2–O6 to come)      ── ADR-0014
+│   └── ode/                 from an AbstractODE (O1, O2 landed; O3–O6 to come) ── ADR-0014/15
+│       │                    results are eqx.Modules; drivers take them (f(cycle, …)),
+│       │                    jitted kernels take arrays
 │       ├── sections.py      CrossSection: a hyperplane (point, unit normal); signed_distance;
 │       │                    normal_to_flow(ode, p)
 │       ├── poincare.py      PoincareMap: first-return map on a section (direction, reverse
@@ -100,9 +102,13 @@ deep_isochron
 │       │                    (host-side settle + minimum-period test); FixedPoint
 │       ├── shooting.py      multiple_shooting: LM on the time-T flow, AD Jacobians, jitted;
 │       │                    SHOOTING_SOLVER_CONFIG
-│       └── limit_cycle.py   find_limit_cycle = settle → initial_guess → polish → guards
-│                            (is_equilibrium, period_consistent) → sample_orbit →
-│                            LimitCycle (orbit at uniform times, period, orientation, …)
+│       ├── limit_cycle.py   find_limit_cycle = settle → initial_guess → polish → guards
+│       │                    (is_equilibrium, period_consistent) → LimitCycle (ode, the
+│       │                    shooting mesh x0s, period, config; sample(n), orientation())
+│       └── floquet.py       floquet(cycle, method=) → Floquet: seeded periodic Schur
+│                            chain on the segment Jacobians (the method; Floquet vectors
+│                            at every mesh point), explicit monodromy and Liouville's
+│                            divergence integral (checks); return_map_multiplier
 ├── training/                                                            ── ADR-0009
 │   ├── trainer.py           TrainerState (model · opt_state · step · key · schedule
 │   │                        state); Trainer(optimizer, loss, schedule): jitted
@@ -368,3 +374,4 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0012](decisions/0012-analysis-layout.md) | `analysis`: data-driven and ODE halves sharing `Cycle`; E1 self-contained; host-side NumPy; one commit per function |
 | [0013](decisions/0013-normal-form-basins.md) | normal forms: data in `r` on a declared basin; evenness is the `AbstractEvenNormalForm` subfamily; `nan` outside the basin; `generate(outside_basin=)` |
 | [0014](decisions/0014-limit-cycle-by-shooting.md) | the limit cycle from the vector field: first-return map on a flow-normal section, multiple shooting with AD Jacobians and LM; `PoincareMap` as the abstraction; reverse time for repelling cycles |
+| [0015](decisions/0015-floquet-by-seeded-periodic-schur.md) | Floquet multipliers by the periodic Schur chain on the shooting mesh, seeded with the flow direction and run in the attracting direction; monodromy and Liouville as checks; `LimitCycle` an `eqx.Module` carrying its ODE and configuration; `f(cycle)` signatures |

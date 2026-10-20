@@ -48,16 +48,16 @@ velocity at $y$ — Parker & Chua Eq. (5.21), the fixed-time flow derivative pro
 onto $\Sigma$ along the flow. $DP$'s eigenvalues are $0$ (along the flow) and the
 nontrivial Floquet multipliers of a cycle through $x$ (their §5.3).
 
-**Jit.** ``__call__`` and ``iterate`` are jit- and vmap-compatible; a missing crossing
-is a runtime error (``throw=True``, as in diffrax) or ``tau = inf`` (``throw=False``).
-``fixed_point`` is a host-side driver over the jitted map (its state — a growing history
-searched for the minimal period — buys nothing from compilation for a stage that runs
-once per system), and raises ``NotConvergedError`` with the iteration so far.
+**Jit.** ``__call__`` and ``iterate`` are ``eqx.filter_jit``-ted and vmap-compatible;
+a missing crossing is a runtime error (``throw=True``, as in diffrax) or ``tau = inf``
+(``throw=False``). ``fixed_point`` is a host-side driver over the jitted map (its state
+— a growing history searched for the minimal period — buys nothing from compilation
+for a stage that runs once per system), and raises ``NotConvergedError`` with the
+iteration so far.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Literal
 
 import diffrax as dfx
@@ -76,18 +76,22 @@ from .sections import CrossSection
 Direction = Literal["positive", "negative", "both"]
 
 
-@dataclass(frozen=True)
-class FixedPoint:
-    """The settled state of ``PoincareMap.fixed_point`` (host-side NumPy).
+class FixedPoint(eqx.Module):
+    """The settled state of ``PoincareMap.fixed_point`` — a record produced host-side
+    (its arrays have the length of the iteration), carried as a pytree.
 
-    - ``x``: the last iterate, on the section; ``tau``: the time of one full return
-      to it (the sum of the last ``k`` map times); ``k``: the minimal period of the
-      map at the fixed point (1 for a cycle cutting the section twice).
-    - ``taus (n,)``, ``iterates (n+1, dim)``: the whole iteration, ``iterates[0]`` the
-      starting point.
-    - ``contraction``: ratio of the last two distances ``|x_i - x_{i-k}|`` — the
-      brute-force estimate of the nontrivial Floquet multiplier (``nan`` if fewer than
-      ``2k`` steps were taken); ``converged``: whether the tolerance was met.
+    **Attributes:**
+
+    - `x`: The last iterate, on the section.
+    - `tau`: The time of one full return to it (the sum of the last `k` map times).
+    - `k`: The minimal period of the map at the fixed point (1 for a cycle cutting the
+        section twice).
+    - `taus`: The return times `(n,)` of the whole iteration.
+    - `iterates`: The iterates `(n+1, dim)`, `iterates[0]` the starting point.
+    - `contraction`: The ratio of the last two distances `|x_i - x_{i-k}|` — the
+        brute-force estimate of the nontrivial Floquet multiplier (`nan` if fewer than
+        `2k` steps were taken).
+    - `converged`: Whether the tolerance was met.
     """
 
     x: Float[np.ndarray, " dim"]
@@ -143,6 +147,7 @@ class PoincareMap(eqx.Module):
         return up if not self.reverse_time else not up
 
     # ----------------------------------------------------------------- the map ----
+    @eqx.filter_jit
     def __call__(
         self, x: Float[ArrayLike, " dim"]
     ) -> tuple[Float[Array, " dim"], Float[Array, ""]]:
@@ -158,6 +163,7 @@ class PoincareMap(eqx.Module):
             )
         return y, tau
 
+    @eqx.filter_jit
     def iterate(self, x: Float[ArrayLike, " dim"], k: int) -> tuple[Array, Array]:
         """``k`` applications of the map by ``lax.scan``: the iterates ``(k+1, dim)``
         (starting with ``x``) and the return times ``(k,)``."""

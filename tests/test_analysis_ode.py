@@ -15,6 +15,12 @@
                      algebraic orbit (max|g|), FitzHugh–Nagumo against Langfield et al.
                      (slow), near-Hopf Bautin, reverse time, output invariants, the
                      guards; Hypothesis over Hopf parameters
+5. floquet           O2: the three routes against κ = ρ'(1) on the normal forms;
+                     Winfree's repelling cycle in reverse time; the Cassini oval's κ
+                     and T by solver-free line integrals; FitzHugh–Nagumo: periodic
+                     Schur vs Liouville agree, the monodromy and return-map floors
+                     (slow); the Cassini oval's μ ≈ 1e-16 beyond the monodromy's
+                     reach; invariance under base point and m; QR exactness; dim ≠ 2
 
 The normal forms are constructed with ``integration="cartesian"`` so that the analysis
 integrates their vector field numerically and their closed forms are the oracle (with
@@ -34,12 +40,19 @@ from deep_isochron.analysis import Cycle, NotConvergedError
 from deep_isochron.analysis.ode import (
     CrossSection,
     find_limit_cycle,
+    FixedPoint,
+    floquet,
     LimitCycle,
+    monodromy,
     multiple_shooting,
+    periodic_schur,
     PoincareMap,
+    return_map_multiplier,
+    segment_jacobians,
     SHOOTING_SOLVER_CONFIG,
 )
 from deep_isochron.systems import (
+    AbstractODE,
     cassini,
     FitzhughNagumo,
     guckenheimer_meloon,
@@ -308,15 +321,17 @@ def test_shooting_rejects_bad_input():
 
 
 # ------------------------------------------------------------- 4. find_limit_cycle --
-def _check_invariants(lc: LimitCycle, orientation: int):
+def _check_invariants(lc: LimitCycle, orientation: int, n: int = 64):
     assert lc.period > 0
-    assert_close(lc.points[0], lc.x0, atol=TOL["identity"])
-    assert_close(
-        lc.section.signed_distance(jnp.asarray(lc.x0)), 0.0, atol=TOL["return_map"]
-    )
-    assert_close(lc.times, lc.period * np.arange(len(lc.times)) / len(lc.times))
-    assert lc.orientation == orientation
+    times, points = lc.sample(n)
+    assert_close(points[0], lc.x0s[0], atol=TOL["identity"])
+    assert_close(lc.section.signed_distance(lc.x0s[0]), 0.0, atol=TOL["return_map"])
+    assert_close(times, lc.period * np.arange(n) / n)
+    assert lc.orientation() == orientation
     assert lc.residual < TOL["limit_cycle"]
+    # the shooting mesh lies on the orbit at times i T / m
+    _, mesh = lc.sample(lc.m)
+    assert_close(mesh, lc.x0s, atol=TOL["limit_cycle"])
 
 
 @pytest.mark.parametrize(
@@ -329,13 +344,14 @@ def _check_invariants(lc: LimitCycle, orientation: int):
     ids=["hopf", "bautin_cw", "winfree"],
 )
 def test_limit_cycle_matches_the_normal_form(nf, orientation):
-    lc = find_limit_cycle(nf, X0, t_settle=5.0, m=2, n_points=64, config=CFG)
+    lc = find_limit_cycle(nf, X0, t_settle=5.0, m=2, config=CFG)
     assert_close(lc.period, abs(float(nf.period())), atol=TOL["limit_cycle"])
-    assert_close(np.linalg.norm(lc.points, axis=1), 1.0, atol=TOL["limit_cycle"])
+    _, points = lc.sample(64)
+    assert_close(np.linalg.norm(points, axis=1), 1.0, atol=TOL["limit_cycle"])
     _check_invariants(lc, orientation)
     # the phase-uniform sampling: the cycle's phase advances uniformly in time
-    angles = np.unwrap(np.arctan2(lc.points[:, 1], lc.points[:, 0]))
-    assert_close(np.diff(angles), orientation * 2 * np.pi / len(lc.times), atol=1e-8)
+    angles = np.unwrap(np.arctan2(points[:, 1], points[:, 0]))
+    assert_close(np.diff(angles), orientation * 2 * np.pi / 64, atol=1e-8)
 
 
 def test_closed_form_flow_and_numerical_flow_give_the_same_cycle():
@@ -345,7 +361,7 @@ def test_closed_form_flow_and_numerical_flow_give_the_same_cycle():
     exact = find_limit_cycle(HopfNormalForm(a=1.0, w=2.0), X0, t_settle=5.0, m=2)
     numerical = find_limit_cycle(HOPF, X0, t_settle=5.0, m=2)
     assert_close(exact.period, numerical.period, atol=TOL["limit_cycle"])
-    assert_close(exact.points, numerical.points, atol=TOL["limit_cycle"])
+    assert_close(exact.sample(32)[1], numerical.sample(32)[1], atol=TOL["limit_cycle"])
     # the closed form solves itself to Levenberg–Marquardt's atol (1e-2 tol), with no
     # solver-error floor underneath — the mark of the circularity
     assert exact.residual < 1e-10
@@ -357,17 +373,19 @@ def test_limit_cycle_points_are_a_phase_uniform_cycle():
     lc = find_limit_cycle(
         BautinNormalForm(a=1.0, b=0.1, w=-1.5, **INTEGRATION), X0, t_settle=5.0, m=2
     )
-    phases = 2 * np.pi * lc.times / lc.period
-    cyc = Cycle.from_points(phases, lc.points, lc.period)
+    times, points = lc.sample(256)
+    phases = 2 * np.pi * np.asarray(times) / float(lc.period)
+    cyc = Cycle.from_points(phases, np.asarray(points), float(lc.period))
     assert cyc.residual < TOL["cycle_query"]
-    assert_close(cyc(phases), lc.points, atol=TOL["cycle_query"])
+    assert_close(cyc(phases), points, atol=TOL["cycle_query"])
 
 
 def test_limit_cycle_on_the_guckenheimer_meloon_algebraic_orbit():
     ode = guckenheimer_meloon(0.07)
     start = jnp.array([0.0, 0.2952161257895192])  # on the orbit (their p. 970)
-    lc = find_limit_cycle(ode, start, t_settle=2.0, m=4, n_points=128, config=CFG)
-    g = np.array([float(ode.level(jnp.asarray(pt))) for pt in lc.points])
+    lc = find_limit_cycle(ode, start, t_settle=2.0, m=4, config=CFG)
+    _, points = lc.sample(128)
+    g = np.array([float(ode.level(jnp.asarray(pt))) for pt in points])
     assert np.abs(g).max() < TOL["level_set"]
     assert 7.6 < lc.period < 7.8  # "period approximately 7.7"
     assert_close(lc.settle.tau, lc.period, atol=TOL["return_map"])
@@ -392,7 +410,7 @@ def test_limit_cycle_near_hopf_needs_the_polish():
         find_limit_cycle(nf, X0, t_settle=5.0, m=2, settle_tol=1e-10, max_returns=3)
     lc = find_limit_cycle(nf, X0, t_settle=5.0, m=2, settle_tol=1e-2, max_returns=40)
     assert_close(lc.period, abs(float(nf.period())), atol=TOL["limit_cycle"])
-    assert_close(np.linalg.norm(lc.points, axis=1), 1.0, atol=TOL["limit_cycle"])
+    assert_close(np.linalg.norm(lc.x0s, axis=1), 1.0, atol=TOL["limit_cycle"])
 
 
 def test_limit_cycle_reverse_time_finds_the_repelling_cycle():
@@ -401,8 +419,10 @@ def test_limit_cycle_reverse_time_finds_the_repelling_cycle():
         w, jnp.array([0.3, 0.0]), t_settle=20.0, m=2, reverse_time=True
     )
     assert_close(lc.period, 2 * np.pi / 0.625, atol=TOL["limit_cycle"])
-    assert_close(np.linalg.norm(lc.points, axis=1), 0.25, atol=TOL["limit_cycle"])
-    assert lc.reverse_time and lc.orientation == -1
+    assert_close(
+        np.linalg.norm(lc.sample(32)[1], axis=1), 0.25, atol=TOL["limit_cycle"]
+    )
+    assert lc.reverse_time
     _check_invariants(lc, -1)
 
 
@@ -442,7 +462,211 @@ def test_limit_cycle_guards_against_a_collapsed_period(monkeypatch):
 def test_limit_cycle_on_random_hopf_forms(a, w, sign, r0, angle):
     nf = HopfNormalForm(a=a, w=sign * w, **INTEGRATION)
     x0 = r0 * jnp.array([jnp.cos(angle), jnp.sin(angle)])
-    lc = find_limit_cycle(nf, x0, t_settle=8.0 / a, m=2, n_points=16, config=CFG)
+    lc = find_limit_cycle(nf, x0, t_settle=8.0 / a, m=2, config=CFG)
     assert_close(lc.period, 2 * np.pi / w, atol=TOL["limit_cycle"])
-    assert_close(np.linalg.norm(lc.points, axis=1), 1.0, atol=TOL["limit_cycle"])
-    assert lc.orientation == int(sign)
+    assert_close(np.linalg.norm(lc.x0s, axis=1), 1.0, atol=TOL["limit_cycle"])
+    assert lc.orientation(16) == int(sign)
+
+
+# ------------------------------------------------------------------- 5. floquet --
+METHODS = ("periodic_schur", "monodromy", "liouville")
+
+
+def _exponent(fl) -> float:
+    return float(fl.exponents[1])
+
+
+@pytest.mark.parametrize(
+    "nf",
+    [
+        HOPF,
+        BautinNormalForm(a=1.0, b=0.1, w=-1.5, **INTEGRATION),
+        WinfreeNormalForm(a=-0.25, w=-0.5, **INTEGRATION),
+    ],
+    ids=["hopf", "bautin_cw", "winfree"],
+)
+def test_floquet_exponent_matches_the_normal_form(nf):
+    """All three routes give κ = ρ'(1); the trivial multiplier is 1 and the periodic
+    Schur chain closes."""
+    lc = find_limit_cycle(nf, X0, t_settle=5.0, m=4, config=CFG)
+    kappa = float(nf.floquet_exponent())
+    for method in METHODS:
+        fl = floquet(lc, method=method)
+        assert_close(_exponent(fl), kappa, atol=TOL["floquet"])
+        assert_close(fl.multipliers[1], np.exp(kappa * float(lc.period)), rtol=1e-7)
+        if method != "liouville":
+            assert float(fl.trivial_error) < TOL["floquet"]
+    ps = floquet(lc, method="periodic_schur")
+    assert float(ps.closure) < TOL["floquet"]
+    assert fl.method == "liouville" and ps.vectors is not None
+
+
+def test_floquet_vectors_of_hopf_are_radial():
+    """Hopf's angular rate is constant, so the radial direction is invariant under
+    the monodromy: the right Floquet vector at every mesh point is radial."""
+    lc = find_limit_cycle(HOPF, X0, t_settle=5.0, m=8, config=CFG)
+    v = floquet(lc).vectors[:, :, 0]
+    radial = lc.x0s / jnp.linalg.norm(lc.x0s, axis=1, keepdims=True)
+    assert_close(jnp.abs(jnp.sum(v * radial, axis=1)), 1.0, atol=TOL["floquet"])
+
+
+def test_floquet_reverse_time_reports_the_forward_exponent():
+    """Winfree's inner cycle r = a repels with κ_u = a(1 − a); found in reverse time,
+    its multipliers and exponents are reported forward-time (ADR-0014 §4)."""
+    a = 0.25
+    w = WinfreeNormalForm(a=a, w=-0.5, **INTEGRATION)
+    lc = find_limit_cycle(
+        w, jnp.array([0.3, 0.0]), t_settle=20.0, m=4, reverse_time=True
+    )
+    for method in METHODS:
+        fl = floquet(lc, method=method)
+        assert_close(_exponent(fl), a * (1 - a), atol=TOL["floquet"])
+        assert float(fl.multipliers[1]) > 1 and abs(float(fl.multipliers[0]) - 1) < 1e-7
+
+
+def _cassini_line_integrals(ode, a: float, b: float, n: int = 2048):
+    """T = ∮ dℓ / (s‖∇g‖) and log μ = −∮ ‖∇g‖ dℓ on the oval r(θ)² = a² cos 2θ +
+    √(b⁴ − a⁴ sin² 2θ), by the trapezoidal rule in θ (exponentially convergent for
+    the analytic integrand): oracles that involve no ODE solve."""
+
+    def point(theta):
+        r2 = a**2 * jnp.cos(2 * theta) + jnp.sqrt(b**4 - a**4 * jnp.sin(2 * theta) ** 2)
+        r = jnp.sqrt(r2)
+        return jnp.array([r * jnp.cos(theta), r * jnp.sin(theta)])
+
+    thetas = jnp.linspace(0.0, 2 * jnp.pi, n, endpoint=False)
+    speed = jax.vmap(lambda t: jnp.linalg.norm(jax.jacfwd(point)(t)))(thetas)
+    grad_norm = jax.vmap(lambda t: jnp.linalg.norm(jax.grad(ode.level)(point(t))))(
+        thetas
+    )
+    dtheta = 2 * jnp.pi / n
+    period = float(jnp.sum(speed / (ode.speed * grad_norm)) * dtheta)
+    log_mu = -float(jnp.sum(grad_norm * speed) * dtheta)
+    return period, log_mu
+
+
+def test_floquet_and_period_of_the_cassini_oval_against_line_integrals():
+    """A level-set cycle's exponent κT = −∮‖∇g‖ dℓ (div f = −s‖∇g‖² on g = 0) and its
+    period T = ∮ dℓ/(s‖∇g‖) are line integrals over the curve: a solver-free oracle
+    for O2's exponent and, in passing, for O1's period."""
+    a, b = 1.0, 1.1
+    ode = cassini(a, b)
+    period, log_mu = _cassini_line_integrals(ode, a, b)
+    lc = find_limit_cycle(ode, jnp.array([1.3, 0.3]), t_settle=3.0, m=8, config=CFG)
+    assert_close(float(lc.period), period, atol=TOL["floquet"])
+    for method in ("periodic_schur", "liouville"):
+        fl = floquet(lc, method=method)
+        assert_close(_exponent(fl) * float(lc.period), log_mu, atol=TOL["floquet"])
+    # κT ≈ −36.8 over T ≈ 1.7: μ ≈ 1e-16 is below machine resolution of the trivial
+    # multiplier, so the explicit monodromy's eigenvalue is pure rounding (its trivial
+    # multiplier is still fine) — the failure the chain exists to avoid
+    mo = floquet(lc, method="monodromy")
+    assert float(mo.trivial_error) < TOL["floquet"]
+    assert abs(_exponent(mo) * float(lc.period) - log_mu) > 0.1
+
+
+def test_floquet_on_the_guckenheimer_meloon_orbit():
+    ode = guckenheimer_meloon(0.07)
+    lc = find_limit_cycle(
+        ode, jnp.array([0.0, 0.2952161257895192]), t_settle=2.0, m=8, config=CFG
+    )
+    ps, li = floquet(lc, method="periodic_schur"), floquet(lc, method="liouville")
+    assert_close(_exponent(ps), _exponent(li), atol=TOL["floquet"])
+    assert float(ps.trivial_error) < TOL["floquet"]
+
+
+@pytest.mark.slow
+def test_floquet_fitzhugh_nagumo_shows_the_conditioning_floors():
+    """FHN's cycle is strongly attracting (μ ≈ 1.7e-12): the periodic Schur chain and
+    Liouville agree to 1e-8 relative; the explicit monodromy's eigenvalue is at its
+    ε‖M‖/μ floor (≈ 1e-4 relative, Lust 2001 Eq. 10); the return-map Jacobian's
+    eigenvalue is at the solver's absolute floor and wrong by orders of magnitude;
+    the trivial multiplier reports the orbit's accuracy regardless."""
+    lc = find_limit_cycle(FitzhughNagumo(), jnp.array([3.0, 3.0]), t_settle=10.0, m=8)
+    ps, mo, li = (floquet(lc, method=m) for m in METHODS)
+    mu = float(li.multipliers[1])
+    assert 1e-13 < mu < 1e-11
+    assert abs(float(ps.multipliers[1]) / mu - 1) < 1e-7
+    assert 1e-7 < abs(float(mo.multipliers[1]) / mu - 1) < 1e-3
+    assert float(ps.trivial_error) < 1e-8 and float(mo.trivial_error) < 1e-8
+    pm = PoincareMap(lc.ode, lc.section, CFG, t_max=2 * float(lc.period))
+    assert abs(float(return_map_multiplier(pm, lc.x0s[0])) / mu - 1) > 1
+    # the leakage of the trace (not used): tr DP = (1 + μ) − 1 numerically
+    DP = jax.jacfwd(lambda u: pm(u)[0])(lc.x0s[0])
+    assert abs(float(jnp.trace(DP)) / mu - 1) > 1
+
+
+def test_floquet_return_map_route_on_a_moderate_cycle():
+    nf = BautinNormalForm(a=1.0, b=0.1, w=-1.5, **INTEGRATION)
+    p = _on_cycle(nf, 0.4)
+    pm = PoincareMap(nf, CrossSection.normal_to_flow(nf, p), CFG, t_max=20.0)
+    assert_close(float(return_map_multiplier(pm, p)), _multiplier(nf), atol=1e-8)
+
+
+def test_floquet_is_invariant_under_the_base_point_and_the_mesh():
+    nf = BautinNormalForm(a=1.0, b=0.1, w=-1.5, **INTEGRATION)
+    kappa = float(nf.floquet_exponent())
+    lc = find_limit_cycle(nf, X0, t_settle=5.0, m=8, config=CFG)
+    for k in (1, 3, 5):
+        rolled = eqx.tree_at(lambda c: c.x0s, lc, jnp.roll(lc.x0s, -k, axis=0))
+        assert_close(_exponent(floquet(rolled)), kappa, atol=TOL["floquet"])
+    for m in (1, 2, 16):
+        lc_m = find_limit_cycle(nf, X0, t_settle=5.0, m=m, config=CFG)
+        assert_close(_exponent(floquet(lc_m)), kappa, atol=TOL["floquet"])
+
+
+def test_periodic_schur_factorization_is_exact_and_vmappable():
+    """``Q[i+1] R[i] = M_i Q[i]`` for every segment (pins the sign convention: rows
+    of R and columns of Q flipped together), the seed is the first column of Q[0],
+    and the jitted chain vmaps over a batch of products."""
+    lc = find_limit_cycle(HOPF, X0, t_settle=5.0, m=4, config=CFG)
+    J = segment_jacobians(lc)
+    f = HOPF.rhs(0.0, lc.x0s[0])
+    ps = periodic_schur(J, f / jnp.linalg.norm(f))
+    for i in range(lc.m):
+        assert_close(ps.Q[i + 1] @ ps.R[i], J[i] @ ps.Q[i], atol=TOL["identity"])
+        assert_close(jnp.tril(ps.R[i], -1), 0.0, atol=TOL["identity"])
+        assert bool(jnp.all(jnp.diag(ps.R[i]) > 0))
+    assert_close(ps.Q[0][:, 0], f / jnp.linalg.norm(f), atol=TOL["identity"])
+    assert_close(ps.signs, 1.0, atol=TOL["identity"])
+    assert_close(monodromy(J), J[3] @ J[2] @ J[1] @ J[0], atol=TOL["identity"])
+    batch = jnp.stack([J, J[::-1]])  # a second product: the same factors reversed
+    mults = jax.vmap(lambda Js: periodic_schur(Js, f / jnp.linalg.norm(f)).multipliers)(
+        batch
+    )
+    assert mults.shape == (2, 2)
+    assert_close(mults[0], ps.multipliers, atol=TOL["identity"])
+
+
+class _Linear3D(AbstractODE):
+    dim: int = eqx.field(static=True, default=3, init=False)
+
+    def rhs(self, t, u, args=None):
+        return -u
+
+
+def test_floquet_refuses_non_planar_systems():
+    with pytest.raises(NotImplementedError):
+        periodic_schur(jnp.tile(jnp.eye(3), (2, 1, 1)), jnp.array([1.0, 0.0, 0.0]))
+    fp = FixedPoint(
+        x=np.zeros(3),
+        tau=1.0,
+        k=1,
+        taus=np.ones(1),
+        iterates=np.zeros((2, 3)),
+        contraction=float("nan"),
+        converged=True,
+    )
+    fake = LimitCycle(
+        ode=_Linear3D(),
+        x0s=jnp.zeros((2, 3)),
+        period=jnp.asarray(1.0),
+        residual=jnp.asarray(0.0),
+        settle=fp,
+        section=CrossSection(jnp.zeros(3), jnp.array([1.0, 0.0, 0.0])),
+        config=CFG,
+    )
+    with pytest.raises(ValueError):
+        floquet(fake, method="liouville")
+    with pytest.raises(ValueError):
+        fake.orientation()

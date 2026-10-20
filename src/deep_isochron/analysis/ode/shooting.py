@@ -97,6 +97,7 @@ def shooting_residual(
     return matching, phase
 
 
+@eqx.filter_jit
 def multiple_shooting(
     ode: AbstractODE,
     points: Float[ArrayLike, "m dim"],
@@ -112,9 +113,9 @@ def multiple_shooting(
 ) -> ShootingResult:
     """Solve the shooting equations from the guess ``(points, period)`` by
     Levenberg–Marquardt; ``points[0]`` should lie on ``section`` (the phase condition).
-    Jit-compatible; a failure to converge is a runtime error when ``throw`` (as in
-    optimistix), otherwise the result carries ``nan`` residual. ``config.adjoint`` is
-    replaced by ``diffrax.ForwardMode`` if needed."""
+    ``eqx.filter_jit``-ted; a failure to converge is a runtime error when ``throw``
+    (as in optimistix), otherwise the result carries ``nan`` residual.
+    ``config.adjoint`` is replaced by ``diffrax.ForwardMode`` if needed."""
     if not isinstance(config.adjoint, dfx.ForwardMode):
         config = config.with_adjoint(dfx.ForwardMode())
     pts = jnp.asarray(points, dtype=float)

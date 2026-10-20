@@ -65,6 +65,12 @@ branch, and never edits *Review notes* except when asked to.
   same commit as the document.
 - American English throughout (code, docstrings, documents): *center*, *normalize*,
   *optimizer*, *behavior*, *initialization*. Identifiers follow (`normalize_phase_plane`).
+- Docstrings follow the equinox/diffrax convention (e.g. `diffrax.diffeqsolve`,
+  `equinox.nn.Conv`): a one-paragraph summary, then `**Arguments:**` (one `- \`name\`:`
+  entry per argument, continuation lines indented four spaces), `**Returns:**`,
+  `**Raises:**` as needed; class docstrings use `**Attributes:**`; names in single
+  backticks. Existing docstrings are migrated when their file is touched, not in a
+  sweep. (Chosen so that MkDocs can render the API later.)
 - `docs/roadmap.md` is the single, current plan. Finished items move to its
   *Done* ledger (not deleted), which is chronological: new rows are always
   appended at the end, never inserted; it is updated in the same commit as the

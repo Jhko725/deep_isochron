@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0012
-status: accepted; amended 2026-10-15
-updated: 2026-10-18
+status: accepted; amended 2026-10-15; amended 2026-10-20 (ADR-0015)
+updated: 2026-10-20
 verified_by: pending (Joon; the split and the ordering were decided in discussion 2026-10-06)
 ---
 
@@ -107,3 +107,7 @@ reinventing either.
 - **2026-10-18**: the first `analysis.ode` objects are `CrossSection`, `PoincareMap` and
   `LimitCycle` (ADR-0014), chosen from the O1 survey and Joon's prototype — functions
   and one map abstraction, with `Cycle` consumed (not produced) by `limit_cycle`'s output.
+
+## Amendment 2026-10-20 — ADR-0015
+
+§3's host-side frozen dataclasses for the ODE half's results are superseded: `LimitCycle` and `FixedPoint` are `eqx.Module`s, the cycle carries its ODE and solver configuration, drivers take the cycle (`f(cycle, ...)`) and jitted kernels take arrays (ADR-0015 §5).

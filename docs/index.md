@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-18
+updated: 2026-10-20
 ---
 
 # `deep_isochron` documentation — index
@@ -52,6 +52,7 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | [0012](decisions/0012-analysis-layout.md) | accepted; amended 2026-10-15 (ODE half first; `Cycle` not the organizing object; survey delivered before implementation) | `analysis`: data-driven and ODE halves sharing `Cycle`; `estimate_cycle` self-contained, `settling_time` takes a cycle; host-side NumPy; one commit per function after a literature survey |
 | [0013](decisions/0013-normal-form-basins.md) | accepted (review pending) | normal forms take their data in `r` on a declared basin; evenness is the `AbstractEvenNormalForm` subfamily (Hopf, Bautin); Winfree's model with a hole; `nan` outside the basin; `generate(outside_basin=error\|resample)` |
 | [0014](decisions/0014-limit-cycle-by-shooting.md) | accepted (review pending) | `analysis.ode.limit_cycle`: shooting on the time-T flow (not collocation), Poincaré section normal to the flow, `PoincareMap` as the one abstraction with `direction`/`reverse_time`, frozen-dataclass results, Liouville/multiplier interpretation deferred to O2 |
+| [0015](decisions/0015-floquet-by-seeded-periodic-schur.md) | accepted (review pending) | `analysis.ode.floquet`: the seeded periodic Schur chain on the shooting-segment Jacobians (forward, in the attracting direction) as the method, explicit monodromy and Liouville as checks, `Literal` method dispatch; `LimitCycle`/`FixedPoint` as `eqx.Module`s carrying the ODE and configuration (amends ADR-0012 §3, ADR-0014 §3) |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 
