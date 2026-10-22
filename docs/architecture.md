@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-20
+updated: 2026-10-22
 sources: [code]
 ---
 
@@ -30,12 +30,17 @@ deep_isochron
 │   ├── base.py              rhs(t, u) · params() · in_basin(u) · SolverConfig ·
 │   │                        flow -> Solution (numerical; normal forms choose via
 │   │                        integration=) · flow_to(t, u0) -> state
-│   ├── fitzhugh_nagumo.py   FitzhughNagumo (dim 2)
+│   ├── symbolic.py          SymbolicODE (states, params, rhs as SymPy); AbstractSymbolicODE:
+│   │                        _symbolic_template() classmethod, rhs/params() derived, compiled
+│   │                        once per class in __init_subclass__; SupportsSymbolic ── ADR-0016
+│   ├── fitzhugh_nagumo.py   FitzhughNagumo (dim 2; symbolic)
 │   ├── level_set.py         LevelSetCycle: f = s(R∇g − g∇g), the zero level set of g is the
 │   │                        attracting cycle; guckenheimer_meloon(), cassini() test orbits
-│   ├── hodgekin_huxley.py   HodgekinHuxley (dim 4)
+│   ├── hodgekin_huxley.py   HodgekinHuxley (dim 4; symbolic, rhs only — not AUTO material)
 │   └── normal_forms/
-│       ├── base.py          AbstractNormalForm: ρ(r), ω(r) on a basin (r_in, r_out);
+│       ├── base.py          AbstractNormalForm: ρ(r), ω(r) declared as SymPy (_symbolic_rates,
+│       │                    _symbolic_rates_sq for the even family; JAX hooks derived) on a
+│       │                    basin (r_in, r_out); symbolic() = the cartesian field;
 │       │                    closed-form phase Θ, isostable Ψ, isochrons, κ, polar and
 │       │                    (Θ, Ψ) charts (nan outside the basin); closed_form default.
 │       │                    AbstractEvenNormalForm: data even in r via `_sq` hooks in
@@ -96,6 +101,12 @@ deep_isochron
 │       │                    results are fixed-shape eqx.Modules; functions of them
 │       │                    (f(cycle, …)) jit/vmap as they stand and are left unjitted;
 │       │                    the host-side drivers jit the stages they call
+│       ├── auto/            isochrons by AUTO-07p continuation (planar)        ── ADR-0016
+│       │   ├── codegen.py   write_problem(ode, workdir) -> AutoProblem: rhs.inc (F and the
+│       │   │                exact Jacobian from symbolic()), indices.inc (IP_* slots), c.<name>;
+│       │   │                internal_indices -> Idx; auto_pars; never imports AUTO
+│       │   └── fortran/     isochron_multiseg.f90 — the generic multi-segment BVP (plain
+│       │                    Fortran; INCLUDEs the two generated files)
 │       ├── sections.py      CrossSection: a hyperplane (point, unit normal); signed_distance;
 │       │                    normal_to_flow(ode, p)
 │       ├── poincare.py      PoincareMap: first-return map on a section (direction, reverse
@@ -207,12 +218,29 @@ trajectory; `.result` for batched generation with `throw=False`).
 it is leafless, so under `eqx.filter_vmap`/`filter_jit` it is static. `flow` is written for
 one initial condition; batching is `eqx.filter_vmap(ode.flow, in_axes=(None, 0))`.
 
+**Symbolic declaration** (`systems/symbolic.py`, ADR-0016). The observed systems declare
+their vector field once, as SymPy expressions, in the classmethod `_symbolic_template()`
+of `AbstractSymbolicODE(AbstractODE)`; `rhs` is derived from it (compiled through
+`sympy2jax` once per class, in `__init_subclass__`, and stored as a class attribute that
+is neither a field nor a pytree leaf), and so are `params()` and — in
+`analysis/ode/auto/codegen.py` — the AUTO-07p Fortran `RHS` with its exact Jacobian.
+Parameter symbols are named after the attributes holding their values (fields, or the
+constrained-value properties of the normal forms), so `getattr(self, name)` is the value
+and the template's `params` order is AUTO's `PAR(1..n)`. `AbstractODE` itself stays free:
+a learned or pushforward field is an ODE without being symbolic. The normal forms have the
+same structure one level down (next paragraph), and the code generator sees both through
+one protocol, `SupportsSymbolic` (`symbolic() -> SymbolicODE`, the cartesian field).
+
 `AbstractNormalForm(AbstractODE)` is the subset with closed-form phase–amplitude structure
 (a conjugacy target or a reference with known isochrons): planar, rotationally symmetric,
 `ṙ = rρ(r)`, `θ̇ = ω(r)`, a stable cycle at `r = 1`, on a declared basin `basin_radii() =
 (r_in, r_out)` outside which the chart is `nan` (ADR-0013). A subclass supplies the two
-rates and two closed-form integrals (`phase_shift` `h(r)`, `isostable` `ψ(r)`); the base
-derives the cartesian `rhs`, `rhs_polar`, `period`, `floquet_exponent`
+rates *as SymPy* (`_symbolic_rates()` in `r`, or `_symbolic_rates_sq()` in `s = r²` for the
+even family; the JAX hooks are derived, ADR-0016) and two closed-form integrals
+(`phase_shift` `h(r)`, `isostable` `ψ(r)`, hand-derived JAX, verified symbolically in the
+tests); the base
+derives the cartesian `rhs`, `rhs_polar`, `symbolic()` (the cartesian field as SymPy;
+polynomial for the even family), `period`, `floquet_exponent`
 (`κ = ρ'(1)` by autodiff), `phase` (`Θ = θ + h(r)`), `amplitude`
 (`Ψ`, `∂ᵣΨ(1) = 1`), `limit_cycle`, `isochron`, and the chart maps `to_polar`/`from_polar`
 (polar) and `to_phase_amplitude`/`from_phase_amplitude` (the latter through
@@ -379,3 +407,4 @@ annotations are checked at runtime by the jaxtyping/beartype import hook (`conft
 | [0013](decisions/0013-normal-form-basins.md) | normal forms: data in `r` on a declared basin; evenness is the `AbstractEvenNormalForm` subfamily; `nan` outside the basin; `generate(outside_basin=)` |
 | [0014](decisions/0014-limit-cycle-by-shooting.md) | the limit cycle from the vector field: first-return map on a flow-normal section, multiple shooting with AD Jacobians and LM; `PoincareMap` as the abstraction; reverse time for repelling cycles |
 | [0015](decisions/0015-floquet-by-seeded-periodic-schur.md) | Floquet multipliers by the periodic Schur chain on the shooting mesh, seeded with the flow direction and run in the attracting direction; monodromy and Liouville as checks; `LimitCycle` an `eqx.Module` carrying its ODE and configuration; `f(cycle)` signatures |
+| [0016](decisions/0016-symbolic-systems.md) | systems declared once in SymPy; JAX `rhs` and normal-form hooks derived (compiled per class in `__init_subclass__`); AUTO-07p Fortran assembled by `INCLUDE` from generated `rhs.inc`/`indices.inc` |

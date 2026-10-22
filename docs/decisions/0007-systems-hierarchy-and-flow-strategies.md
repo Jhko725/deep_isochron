@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0007
-status: accepted; amended
-updated: 2026-10-04
+status: accepted; amended (ADR-0013: basins, even subfamily; ADR-0016: symbolic defining data)
+updated: 2026-10-22
 verified_by: joon
 ---
 
@@ -131,3 +131,7 @@ imaginary part at the origin).
 - The numerical counterparts (`analysis/`) are Phase E; the namespace is reserved.
 - `AbstractODE.params()` returns the constrained parameter values keyed by their
   mathematical names; dataset metadata records it, nothing inspects attribute names.
+
+## Amendment 2026-10-22 (ADR-0016)
+
+The defining data of a normal form are declared as SymPy expressions — `_symbolic_rates()` returning `(r, ρ(r), ω(r), params)`, or `_symbolic_rates_sq()` in `s = r²` for the even family — and the JAX hooks named above (`log_growth_rate`, `angular_rate`, `_log_growth_rate_sq`, `_angular_rate_sq`) are *derived* from them (compiled once per class through `sympy2jax`). The rule of Decision 1 stands: a class carries only what is analytically available; only the language of the defining data changed, so that the same expressions also generate the AUTO-07p Fortran. `h(r)`, `Ψ(r)` stay hand-derived JAX, now verified symbolically in `tests/test_symbolic.py`. Observed systems have the same structure one level up (`AbstractSymbolicODE`, `_symbolic_template`).

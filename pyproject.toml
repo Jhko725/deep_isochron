@@ -23,6 +23,8 @@ dependencies = [
     "numpy>=2.5.1",
     "optax>=0.2.8",
     "orbax-checkpoint>=0.12.4",
+    "sympy>=1.14.0",
+    "sympy2jax>=0.0.8",
     "wandb>=0.28.0",
     "xarray>=2025.1",
 ]

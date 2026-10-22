@@ -1,7 +1,7 @@
 ---
 type: design
-status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative
-updated: 2026-10-14
+status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative; §9 amendment of 2026-10-22 (ADR-0016) pending review
+updated: 2026-10-22
 verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
 sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014, Langfield et al. 2025]
 ---
@@ -776,7 +776,10 @@ reports the constrained values. $b > -1$ is exactly the stability condition $\rh
 
 ---
 
-## 9. API implied (for B11; amended 2026-10-08)
+## 9. API implied (for B11; amended 2026-10-08; amended 2026-10-22)
+
+> **Amendment 2026-10-22 (ADR-0016).** The hooks `log_growth_rate`/`angular_rate` (and the even family's `_log_growth_rate_sq`/`_angular_rate_sq`) are no longer what a subclass writes: a subclass declares the same two functions as SymPy expressions in the classmethod `_symbolic_rates()` — `(r, ρ(r), ω(r), params)` — or `_symbolic_rates_sq()` in $s$, and the base class compiles them once per class to the JAX hooks listed below (whose contracts are unchanged) and to the cartesian `symbolic()` view used by the AUTO-07p code generator. Everything else in this section stands.
+
 
 **Decided 2026-10-03: Option B** — the defining data are even functions of $r$, enforced
 *by construction* by having subclasses supply them as smooth functions of $s = r^2$.

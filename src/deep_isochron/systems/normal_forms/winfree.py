@@ -48,6 +48,7 @@ from __future__ import annotations
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import sympy as sp
 from jaxtyping import Array, Complex, Float
 
 from .base import AbstractNormalForm
@@ -74,11 +75,12 @@ class WinfreeNormalForm(AbstractNormalForm):
         return {"a": self.a, "w": self.w}
 
     # ------------------------------------------------------------ defining data ----
-    def log_growth_rate(self, r):
-        return (1.0 - r) * (r - self.a)
-
-    def angular_rate(self, r):
-        return -(1.0 + self.w * (1.0 - r))
+    # symbolic, in r (not even); the JAX hooks are derived (ADR-0016)
+    @classmethod
+    def _symbolic_rates(cls):
+        r = sp.Symbol("r", positive=True)
+        a, w = sp.symbols("a w", real=True)
+        return r, (1 - r) * (r - a), -(1 + w * (1 - r)), {"a": a, "w": w}
 
     def _on_basin(self, r, value):
         # explicit nan outside the basin r > max(a, 0): for 1/a integer-valued the

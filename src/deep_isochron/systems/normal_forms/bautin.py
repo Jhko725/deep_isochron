@@ -23,6 +23,7 @@ constructor takes constrained values.
 """
 
 import jax.numpy as jnp
+import sympy as sp
 from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
@@ -77,12 +78,17 @@ class BautinNormalForm(AbstractEvenNormalForm):
             "w0": float(self.w0),
         }
 
-    # defining data, in s = r²
-    def _log_growth_rate_sq(self, s):
-        return self.a * (1 - s) * (1 + self.b * s)
-
-    def _angular_rate_sq(self, s):
-        return self.w0 + (self.w - self.w0) * s
+    # defining data, in s = r² (symbolic; the JAX hooks are derived, ADR-0016)
+    @classmethod
+    def _symbolic_rates_sq(cls):
+        s = sp.Symbol("s", positive=True)
+        a, b, w, w0 = sp.symbols("a b w w0", real=True)
+        return (
+            s,
+            a * (1 - s) * (1 + b * s),
+            w0 + (w - w0) * s,
+            {"a": a, "b": b, "w": w, "w0": w0},
+        )
 
     # closed forms, in r — written in 1/s = r⁻² so that they stay finite for r up to
     # the float range: the textbook forms (design document §3) pair an overflowing

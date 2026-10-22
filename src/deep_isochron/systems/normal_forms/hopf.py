@@ -20,6 +20,7 @@ $\omega_0$ (``w0``) free, ``w0`` defaults to
 """
 
 import jax.numpy as jnp
+import sympy as sp
 from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
@@ -59,12 +60,12 @@ class HopfNormalForm(AbstractEvenNormalForm):
     def params(self):
         return {"a": float(self.a), "w": float(self.w), "w0": float(self.w0)}
 
-    # defining data, in s = r²
-    def _log_growth_rate_sq(self, s):
-        return self.a * (1 - s)
-
-    def _angular_rate_sq(self, s):
-        return self.w0 + (self.w - self.w0) * s
+    # defining data, in s = r² (symbolic; the JAX hooks are derived, ADR-0016)
+    @classmethod
+    def _symbolic_rates_sq(cls):
+        s = sp.Symbol("s", positive=True)
+        a, w, w0 = sp.symbols("a w w0", real=True)
+        return s, a * (1 - s), w0 + (w - w0) * s, {"a": a, "w": w, "w0": w0}
 
     # closed forms, in r
     def phase_shift(self, r):

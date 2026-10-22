@@ -31,16 +31,24 @@ and ``flow`` with a choice of integration (§6).
 """
 
 import abc
-from typing import Any
+from typing import Any, ClassVar
 
 import diffrax as dfx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import sympy as sp
 from jaxtyping import Array, ArrayLike, Bool, Complex, Float
 
 from ...utils.numerics import cartesian_to_polar, polar_to_cartesian
 from ..base import AbstractODE, DEFAULT_SOLVER_CONFIG, SolverConfig
+from ..symbolic import (
+    compile_expressions,
+    CompiledExpressions,
+    defines_concretely,
+    is_abstract,
+    SymbolicODE,
+)
 
 
 ROOT_EXPAND_ITERS = 64
@@ -69,13 +77,62 @@ class AbstractNormalForm(AbstractODE):
         self.default_integration = integration
 
     # ------------------------------------------------ defining data (abstract) ----
-    @abc.abstractmethod
-    def log_growth_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
-        r"""$\rho(r) = \dot r / r$ on the basin; $\rho(1) = 0$, $\rho'(1) < 0$."""
+    _compiled_rates: ClassVar[CompiledExpressions]
+    r"""$(\rho(r), \omega(r))$ compiled to JAX, set per concrete class by
+    `__init_subclass__` from `_symbolic_rates` (ADR-0016)."""
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if defines_concretely(cls, "_symbolic_rates_sq"):
+            # AbstractEvenNormalForm's hook; derive both the s- and the r-compiled forms
+            # (the hook lives on the even subclass; reach it by name for the checker)
+            rates_sq = getattr(cls, "_symbolic_rates_sq")  # noqa: B009
+            s, rho_s, omega_s, params = rates_sq()
+            _validate_rates(s, rho_s, omega_s, params)
+            cls._compiled_rates_sq = compile_expressions(
+                (rho_s, omega_s), (s,), tuple(params)
+            )
+            r = sp.Symbol("r", positive=True)
+            cls._compiled_rates = compile_expressions(
+                (rho_s.subs(s, r**2), omega_s.subs(s, r**2)), (r,), tuple(params)
+            )
+        elif defines_concretely(cls, "_symbolic_rates") and not is_abstract(
+            getattr(cls, "_symbolic_rates_sq", None)
+        ):
+            # a non-even form's own hook (AbstractEvenNormalForm also defines a
+            # derived `_symbolic_rates`, but its `_symbolic_rates_sq` is still abstract)
+            r, rho, omega, params = cls._symbolic_rates()
+            _validate_rates(r, rho, omega, params)
+            cls._compiled_rates = compile_expressions((rho, omega), (r,), tuple(params))
+
+    @classmethod
     @abc.abstractmethod
+    def _symbolic_rates(
+        cls,
+    ) -> tuple[sp.Symbol, sp.Expr, sp.Expr, dict[str, sp.Symbol]]:
+        r"""The defining data as SymPy: `(r, ρ(r), ω(r), params)`, with `params` the
+        parameter symbols keyed by the attribute (field or property) holding their
+        value — the symbol is named after it. `AbstractEvenNormalForm` derives this
+        from `_symbolic_rates_sq`."""
+
+    def log_growth_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
+        r"""$\rho(r) = \dot r / r$ on the basin; $\rho(1) = 0$, $\rho'(1) < 0$.
+        Derived from `_symbolic_rates`."""
+        return type(self)._compiled_rates(self, r)[0]
+
     def angular_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
-        r"""$\omega(r) = \dot\theta$ on the basin; $\omega(1) \ne 0$."""
+        r"""$\omega(r) = \dot\theta$ on the basin; $\omega(1) \ne 0$. Derived from
+        `_symbolic_rates`."""
+        return type(self)._compiled_rates(self, r)[1]
+
+    def symbolic(self) -> SymbolicODE:
+        r"""The cartesian field as SymPy (`SupportsSymbolic`, for the AUTO code
+        generator): $\dot x = x\rho - y\omega$, $\dot y = y\rho + x\omega$ with
+        $r = \sqrt{x^2 + y^2}$ (`AbstractEvenNormalForm` substitutes $s = x^2 + y^2$
+        instead, with no square root)."""
+        r, rho, omega, params = self._symbolic_rates()
+        x, y = sp.symbols("x y", real=True)
+        return _cartesian(x, y, rho, omega, r, sp.sqrt(x**2 + y**2), params)
 
     @abc.abstractmethod
     def phase_shift(self, r: Float[Array, ""]) -> Float[Array, ""]:
@@ -243,15 +300,42 @@ class AbstractEvenNormalForm(AbstractNormalForm):
     starts at $0$) and its eigenvalues $\rho(0) \pm i\omega(0)$ are smooth-conjugacy
     invariants. The ``r_squared`` integration needs this family."""
 
+    _compiled_rates_sq: ClassVar[CompiledExpressions]
+    r"""$(\tilde\rho(s), \tilde\omega(s))$ compiled to JAX, set per concrete class by
+    `AbstractNormalForm.__init_subclass__` from `_symbolic_rates_sq`."""
+
+    @classmethod
     @abc.abstractmethod
+    def _symbolic_rates_sq(
+        cls,
+    ) -> tuple[sp.Symbol, sp.Expr, sp.Expr, dict[str, sp.Symbol]]:
+        r"""The defining data as SymPy in $s = r^2$: `(s, ρ̃(s), ω̃(s), params)`, as
+        `_symbolic_rates` but even in $r$; smooth in $s$."""
+
+    @classmethod
+    def _symbolic_rates(cls):
+        r"""Derived: $\rho(r) = \tilde\rho(r^2)$, $\omega(r) = \tilde\omega(r^2)$."""
+        s, rho_s, omega_s, params = cls._symbolic_rates_sq()
+        r = sp.Symbol("r", positive=True)
+        return r, rho_s.subs(s, r**2), omega_s.subs(s, r**2), params
+
     def _log_growth_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
         r"""$\tilde\rho(s) = \rho(\sqrt s)$, with $\dot r = r\,\tilde\rho(r^2)$;
-        $\tilde\rho(1) = 0$, $\tilde\rho'(1) < 0$. Smooth in $s$."""
+        $\tilde\rho(1) = 0$, $\tilde\rho'(1) < 0$. Smooth in $s$. Derived from
+        `_symbolic_rates_sq`."""
+        return type(self)._compiled_rates_sq(self, s)[0]
 
-    @abc.abstractmethod
     def _angular_rate_sq(self, s: Float[Array, ""]) -> Float[Array, ""]:
         r"""$\tilde\omega(s) = \omega(\sqrt s)$, with $\dot\theta = \tilde\omega(r^2)$.
-        Smooth in $s$."""
+        Smooth in $s$. Derived from `_symbolic_rates_sq`."""
+        return type(self)._compiled_rates_sq(self, s)[1]
+
+    def symbolic(self) -> SymbolicODE:
+        r"""The cartesian field as SymPy with $s = x^2 + y^2$ substituted: polynomial
+        for Hopf and Bautin, no square root anywhere."""
+        s, rho_s, omega_s, params = self._symbolic_rates_sq()
+        x, y = sp.symbols("x y", real=True)
+        return _cartesian(x, y, rho_s, omega_s, s, x**2 + y**2, params)
 
     # the r-chart views are derived (final); autodiff through r * r gives ρ'(1) = 2ρ̃'(1)
     def log_growth_rate(self, r: Float[Array, ""]) -> Float[Array, ""]:
@@ -282,6 +366,33 @@ class AbstractEvenNormalForm(AbstractNormalForm):
 
 def _wrap(angle):
     return jnp.arctan2(jnp.sin(angle), jnp.cos(angle))
+
+
+def _validate_rates(var, rho, omega, params):
+    for name, symbol in params.items():
+        if symbol.name != name:
+            raise ValueError(
+                f"parameter symbol {symbol.name!r} must be named after its attribute "
+                f"{name!r}."
+            )
+    allowed = {var} | set(params.values())
+    for expr in (rho, omega):
+        stray = expr.free_symbols - allowed
+        if stray:
+            raise ValueError(f"free symbols {stray} are neither {var} nor params.")
+
+
+def _cartesian(x, y, rho, omega, var, radial, params) -> SymbolicODE:
+    r"""Polar rates to the cartesian field: the chain rule $\dot x = \dot r\cos\theta -
+    r\dot\theta\sin\theta$ with $r\cos\theta = x$, i.e. $\dot x = x\rho - y\omega$,
+    $\dot y = y\rho + x\omega$, after substituting `radial` (either $r$ or $s$ in
+    terms of $x$, $y$) for `var`."""
+    rho_xy, omega_xy = (e.subs(var, radial) for e in (rho, omega))
+    return SymbolicODE(
+        states=(x, y),
+        params=dict(params),
+        rhs=(x * rho_xy - y * omega_xy, y * rho_xy + x * omega_xy),
+    ).validate()
 
 
 # ------------------------------------------------------------ the root solve ------

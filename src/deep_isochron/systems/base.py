@@ -21,6 +21,7 @@ leaves, so it is static under the filter transforms.
 
 import abc
 import copy
+import dataclasses
 from typing import Any, cast
 
 import diffrax as dfx
@@ -122,7 +123,7 @@ class AbstractODE(eqx.Module):
         report the constrained values (``AbstractNormalForm`` does)."""
         return {
             f.name: _jsonable(getattr(self, f.name))
-            for f in self.__dataclass_fields__.values()
+            for f in dataclasses.fields(self)  # excludes ClassVar pseudo-fields
             if not f.metadata.get("static", False)
         }
 
