@@ -46,6 +46,7 @@ rPre[6]  = run(rPre[5]('UZ1'), ICP =  [13,34,12,11], SP=[], DS=-0.01, DSMAX=0.05
 rPre[7]  = run(rPre[5]('UZ1'), ICP =  [13,34,12,11], SP=[], DS=0.01, DSMAX=0.05, NMX=2000,NPR=0,UZR={13:rPre[5]('UZ1')['PAR(11)']*phaseVec},RL0=0, RL1=rPre[5]('UZ1')['PAR(11)']*1.01)
 rPre[8]  = rl(merge(rPre[6]+rPre[7]))
 
+# Creating and saving Isochrons
 numUZR   = len(rPre[8]('UZ'))
 for i in range(1,numUZR+1):
     rIso      = {}
@@ -54,3 +55,8 @@ for i in range(1,numUZR+1):
     rIso[4]   = run(rIso[1], DS=-1e-05,DSMAX=10,NMX=8000,NPR=200,UZSTOP={36:[1e-06,-1e-6],74:[10,-10],74:[10,-10]},SP=['LP0','BP0'])
     data      = np.column_stack((np.concatenate((rIso[3]['PAR(72)'][::-1],rIso[4]['PAR(72)'])),np.concatenate((rIso[3]['PAR(73)'][::-1],rIso[4]['PAR(73)'])),np.concatenate((rIso[3]['PAR(74)'][::-1],rIso[4]['PAR(74)'])),np.concatenate((rIso[3]['PAR(75)'][::-1],rIso[4]['PAR(75)']))))
     np.savetxt('./dataIso/' + probStr + '_Iso_' + str(i) +'.csv', data, delimiter='\t')
+
+
+# Save the periodic solution
+rPre[1]('UZ1').writeRawFilename( './dataIso/' + probStr+'_periodicSolution')
+cl
