@@ -23,6 +23,7 @@ every rule removed from it has a new home that the file points at. No code chang
 | `docs/coding-standards.md` | **new** — tiers and commands, named tolerances and solvers, the contracts with their ADR numbers, the Markdown rules, the checks, deliberate exceptions |
 | `docs/index.md` | the new document listed under *Read first*; the branch's change document listed; `updated` bumped |
 | `scripts/check_spelling.py` | **new** — the rule for the `-ise` / `-isation` / `-yse` families, with the closed exception list |
+| `docs/design/{normal-forms,cubic-bspline,analysis}.md`, `docs/decisions/0006-*.md`, `docs/roadmap.md`, `src/deep_isochron/model/autoencoder.py`, `tests/test_systems.py` | `style:` — 18 British spellings in prose and docstrings; the cited diffrax quotation in `analysis.md` is kept and its line exempted |
 | `docs/changes/2026-10-25-conventions-docs.md` | this document |
 
 ## Design
@@ -46,6 +47,13 @@ every rule removed from it has a new home that the file points at. No code chang
   implicit here, scattered through the *Repository facts* bullets. The provenance labels
   ([cited] / [code] / [deduced]) are also stated explicitly for the first time, although
   `docs/design/analysis.md` has used them since Phase E began.
+- **`docs/changes/` is out of scope for the spelling checks.** A landed change document
+  records what was said, and its *Review notes* columns are Joon's words verbatim, typos
+  included; `CLAUDE.md` forbids editing them. Several lines also quote a spelling *as* the
+  thing that was fixed, so a sweep would erase the history the document exists to carry.
+  The current documents are in scope. A cited quotation likewise keeps its source's
+  spelling: `design/analysis.md` quotes diffrax's "discretise then optimise" <!-- codespell:ignore: cited quotation -->
+  and that line carries an ignore marker rather than a correction.
 - **The spelling rule becomes two checks, because the rule has two halves.** `codespell`
   is not a dictionary: its `en-GB_to_en-US` data is a 535-entry word list, and measured
   against this repository's vocabulary it misses `discretise`, `parametrise`, <!-- codespell:ignore -->
@@ -73,9 +81,10 @@ documents still holds.
 
 ## Open issues
 
-- The checks in `docs/coding-standards.md` are written down but not wired up. Turning the
-  two spelling checks on needs one `style:` commit first: `codespell` reports 70 findings
-  and `check_spelling.py` 23, each with one in `src` (`model/autoencoder.py`).
+- The checks in `docs/coding-standards.md` are written down but not wired up: the
+  `[tool.codespell]` and `banned-api` blocks are not in `pyproject.toml` and neither
+  check runs in `prek`. Both report 0 findings in scope as of the `style:` commit on this
+  branch.
 - `scripts/check_spelling.py` has no test of its own. Its behaviour is pinned only by the <!-- codespell:ignore -->
   measurement in the Design section: 13 of 13 on a line of British forms, 0 of 37 on a
   line of words where `-ise` is correct.

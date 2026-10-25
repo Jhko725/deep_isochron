@@ -56,8 +56,21 @@ YSE_FAMILY = re.compile(r"\b([A-Za-z]{3,}?)(yse|ysed|ysing)\b")  # codespell:ign
 IGNORE_MARKERS = ("spelling:ignore", "codespell:ignore")
 
 TEXT_SUFFIXES = frozenset({".py", ".md", ".toml", ".yaml", ".yml", ".txt", ".cfg"})
+# `changes` is `docs/changes/`: a landed change document records what was said, its
+# review table holds the reviewer's words verbatim, and some lines quote a spelling as
+# the thing that was fixed. Correcting those would erase the history they carry, so the
+# directory is out of scope here exactly as it is for codespell.
 SKIP_PARTS = frozenset(
-    {".git", ".venv", "node_modules", "__pycache__", "third_party", "icon", "notebooks"}
+    {
+        ".git",
+        ".venv",
+        "node_modules",
+        "__pycache__",
+        "third_party",
+        "icon",
+        "notebooks",
+        "changes",
+    }
 )
 
 

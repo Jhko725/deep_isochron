@@ -45,7 +45,7 @@ arbitrary values). Arrays are 0-based:
 So `coeffs[i]` and `_greville(knots)[i]` refer to the same basis function `B_{i−3,4}`,
 whose Greville abscissa is `ξ_j = (t_{j+1} + t_{j+2} + t_{j+3}) / 3` (de Boor [2], Ch. IX).
 
-## 2. Parametrisation (`constrain`)
+## 2. Parametrization (`constrain`)
 
 `raw` has `num_params = (K + 4) + (K − 2) = 2K + 2` entries: a knot block and a
 coefficient block, each passed through `Widths` (floored softmax; ADR-0005).
@@ -61,7 +61,7 @@ knots regardless of rounding, as nflows does).
 (all `s − r + 2k − 4` widths, in the paper's indexing) to sum to 1 and then place the
 knots so that `t_r = 0`. Read literally, that leaves the position of `t_s` depending on
 the exterior widths; the paper's lines 13–17 then compensate by rescaling the
-*coefficients* so that `f(1) = 1`. Normalising only the interior widths removes the need:
+*coefficients* so that `f(1) = 1`. Normalizing only the interior widths removes the need:
 `t_K = b` by construction. (This reading of lines 1–3 is deduced from the algorithm as
 summarized in [1]; the deviation itself is a design choice, not a correction.)
 
@@ -93,7 +93,7 @@ and the `B_{j,3}` are a non-negative partition of unity, so `f' > 0`. The floors
 positive lower bound (`l < f' < u` in the notation of [1]); the map is bi-Lipschitz on the
 range.
 
-**Linear precision.** Marsden's identity ([2], Ch. IX) specialises to
+**Linear precision.** Marsden's identity ([2], Ch. IX) specializes to
 `Σ_j ξ_j B_{j,4}(x) = x` for all `x` in the knot span. Hence wherever only basis functions
 with `α_j = ξ_j` are active, `f(x) = x`.
 

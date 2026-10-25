@@ -1,7 +1,7 @@
 """Laws of ``deep_isochron.systems`` that are not normal-form mathematics: the flow
 machinery, and facts about the specific observed systems at their default parameters.
 
-1. flow               vmap over initial conditions == loop; SolverConfig honoured (a
+1. flow               vmap over initial conditions == loop; SolverConfig honored (a
                       loose tolerance changes the answer, a tight one does not); flow
                       reports failure in Solution.result with throw=False; SolverConfig
                       is hashable and leafless

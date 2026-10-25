@@ -10,7 +10,7 @@ sensitivity function $Z(\theta) = \nabla_X \Theta$ at $X = f_{\rm dec}(\cos\thet
 
 Differences from the paper, deliberate: no batch normalization in the MLPs (their
 encoder: 2×100 ReLU + BN; decoder 3×100); the latent flow is continuous in $t$; input
-standardisation is left to the data pipeline.
+standardization is left to the data pipeline.
 """
 
 from collections.abc import Callable

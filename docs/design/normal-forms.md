@@ -49,7 +49,7 @@ $\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motion
 **Notation [decided].** Uppercase $\Theta, \Psi$ are the two *coordinate functions* on the
 basin; lowercase $\theta$ is the polar angle. $\Psi$ and $\kappa$ follow Wilson & Moehlis
 (2016), who write the isostable coordinate as $\psi$ and the exponent as $\kappa$; we
-capitalise $\psi\to\Psi$ so that both coordinate functions $(\Theta,\Psi)$ are uppercase.
+capitalize $\psi\to\Psi$ so that both coordinate functions $(\Theta,\Psi)$ are uppercase.
 Langfield, Krauskopf & Osinga (2014) use a period-normalized phase $\vartheta\in[0,1)$;
 we use radians, $\Theta = 2\pi\vartheta$.
 
@@ -156,7 +156,7 @@ $\omega(0) = \omega_0$. Write $c := (\omega_1 - \omega_0)/a$.
 $\dot r = r(\alpha + \beta r^2)$, $\dot\theta = \gamma + \delta r^2$; for $\alpha > 0$,
 $\beta < 0$ it has an unstable focus at $r=0$ and a stable cycle at
 $r^\ast = \sqrt{-\alpha/\beta}$. The cycle radius is immaterial for a conjugacy target, so we
-fix $r^\ast=1$ by $\beta = -\alpha =: -a$, and reparametrise the angular rate by its value on
+fix $r^\ast=1$ by $\beta = -\alpha =: -a$, and reparametrize the angular rate by its value on
 the cycle, $\omega_1 = \gamma+\delta$, and at the origin, $\omega_0 = \gamma$:
 
 $$
@@ -164,7 +164,7 @@ $$
 $$
 
 **Bautin (generalized Hopf).** Adds a quintic term. Keeping the same stability pattern
-(unstable focus at $0$, stable cycle at $r=1$) suggests the factorised parametrization
+(unstable focus at $0$, stable cycle at $r=1$) suggests the factorized parametrization
 
 $$
 \dot r = a\,r\,(1 - r^2)(1 + b r^2), \qquad \dot\theta = \omega_0 + (\omega_1 - \omega_0)\,r^2 ,
@@ -290,7 +290,7 @@ preserves these eigenvalues; a topological one preserves only the stability type
 
 ### 4.2 Stability of the cycle: Floquet exponent and multiplier
 
-Linearise the polar system about $r = 1$ (write $\delta r$, $\delta\theta$):
+Linearize the polar system about $r = 1$ (write $\delta r$, $\delta\theta$):
 
 $$
 \begin{bmatrix}\dot{\delta r}\\ \dot{\delta\theta}\end{bmatrix}
@@ -309,7 +309,7 @@ The same number written in $s = r^2$, $\dot s = 2s\tilde\rho(s)$, linearizes to
 $2\tilde\rho'(1)$, and since $\rho'(r) = 2r\tilde\rho'(r^2)$ both agree
 (Hopf: $\rho'(1) = -2a = 2\tilde\rho'(1)$). The pre-B11 code computed
 `2·grad(radial_rate)(1)` *because* `radial_rate` took $s$; the factor of two was a chart
-artefact.
+artifact.
 
 **Multiplier.** The multipliers are the eigenvalues of the monodromy matrix $\mathsf{M}(T)$,
 $\dot{\mathsf{M}} = \mathsf{A}(t)\mathsf{M}$, $\mathsf{M}(0) = \mathsf{I}$. Liouville's formula
@@ -422,7 +422,7 @@ function is arbitrary"), so a normalization is a convention, not a modeling choi
 matters only when comparing $\nabla\Psi$ (the isostable response curve) with values
 reported elsewhere.
 
-**Normalisation [decided]: Wilson–Moehlis.** For the normal forms the right Floquet vector
+**Normalization [decided]: Wilson–Moehlis.** For the normal forms the right Floquet vector
 at $r=1$ is radial; with $\mathbf{v} = \mathbf e_r$ the condition reads
 
 $$
@@ -607,10 +607,10 @@ costs), and why the log-polar member sits between the two.
 
 The closed forms of §5.1–5.2 are special to the normal forms, but the *objects* they
 compute exist for every oscillator in the study, on the whole basin, and are unique. This
-is the content of Kvalheim & Revzen's global Floquet normal form, specialised here to the
+is the content of Kvalheim & Revzen's global Floquet normal form, specialized here to the
 plane.
 
-**Statement** (their Prop. 3, specialised). Let $\Phi$ be a $C_{\rm loc}^{k,\alpha}$ flow on
+**Statement** (their Prop. 3, specialized). Let $\Phi$ be a $C_{\rm loc}^{k,\alpha}$ flow on
 the basin $Q$ of an attracting hyperbolic $\tau$-periodic orbit $\Gamma$, $x_0\in\Gamma$,
 $E_{x_0}^s$ the $\mathsf D_{x_0}\Phi^\tau$-invariant complement of $\mathsf T_{x_0}\Gamma$,
 and assume the spectral-spread condition $\nu(\mathsf D\Phi^\tau\vert_{E^s}, \mathsf D\Phi^\tau\vert_{E^s}) < k+\alpha$

@@ -85,7 +85,7 @@ previews agree.
 # pyproject.toml
 [tool.codespell]
 builtin = "clear,en-GB_to_en-US"
-skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,src/Isochron2PBVP"
+skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,src/Isochron2PBVP,docs/changes"
 ignore-words-list = "oint,numer,Numer,Commun,Stoer,INOUT,nd"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
@@ -115,10 +115,20 @@ English, from `advertise` to `otherwise`. `-isation` and `-isable` have no excep
 all; `-yses` is left out of the rule on purpose, since it is also the plural of `-ysis`
 (*the analyses*, which is correct).
 
-Run both commands for the current lists rather than reading one from here. At the time
-of writing `codespell` reports 70 findings and `check_spelling.py` 23, all genuine, with
-one of each in `src` (`model/autoencoder.py`). Fix them in a single `style:` commit
-before turning either check on, so the first CI run is green.
+**`docs/changes/` is skipped on purpose.** A landed change document is a record of what
+was said, and its *Review notes* table holds Joon's words verbatim — typos included
+(*annotationns*, *spefics*, *useing*). `CLAUDE.md` says Claude never edits those columns,
+and several lines quote a spelling *as* the thing that was fixed (the `centerd` typo,
+`normalise_phase_plane` → `normalize_phase_plane`), so correcting them would destroy the
+history they exist to carry. The current documents — `design/`, `decisions/`,
+`roadmap.md`, `architecture.md`, `index.md` — are in scope.
+
+A quotation keeps its source's spelling even when that spelling is British. Where one
+appears, the line carries `<!-- codespell:ignore: cited quotation -->`; `design/analysis.md`
+quotes diffrax's phrase for forward-mode differentiation and is the current instance.
+Both checks honor that marker, and `spelling:ignore` as well.
+
+Run both commands for the current lists rather than reading one from here.
 
 The `ignore-words-list` above covers the false positives this domain produces: the LaTeX
 contour-integral command, the numerator and denominator locals in

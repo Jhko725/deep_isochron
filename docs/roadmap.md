@@ -32,7 +32,7 @@ this order:
 | # | Item | Why | Done when |
 |---|---|---|---|
 | B8 | Mechanical review fixes: single `flow -> diffrax.Solution`; `strategy` → `integration` (`normal_forms/integration.py`, `AbstractFlowIntegration`); `systems/normal_forms/{base,hopf,bautin}.py`; `AbstractODE.params()` contract; `GreaterThan(lower, at_zero=lower+1)` with `Positive` as alias; `test_normal_forms.py` split from `test_systems.py` with Langfield et al. cited | review of `6c0fdc2` | *done 2026-10-03* |
-| B9 | Data layer as grain transforms: whole-trajectory frozen-dataclass source (`copy.replace`), `RandomWindow` / `WeightedWindow`, `mixed_windows`; grouped `DatasetMetadata`; `test_data.py` rewritten; ADR-0008 amended | review: idiomatic grain; organised metadata | *done 2026-10-03* |
+| B9 | Data layer as grain transforms: whole-trajectory frozen-dataclass source (`copy.replace`), `RandomWindow` / `WeightedWindow`, `mixed_windows`; grouped `DatasetMetadata`; `test_data.py` rewritten; ADR-0008 amended | review: idiomatic grain; organized metadata | *done 2026-10-03* |
 | B10 | `docs/design/normal-forms.md` — **agreed 2026-10-03** (Joon's revision merging the B10 draft with his derivation notes): `Θ`/`Ψ` notation, `κ = ρ'(1)`, Wilson–Moehlis normalization `∂ᵣΨ(1) = 1`, Option B (`_sq` hooks), `ClosedFormIntegration` + `(Θ, Ψ)` chart in B11, log-polar member deferred. Amended 2026-10-03: §5.1 corollary sign fixed (confirmed); §5.3 rewritten from the paper and §5.4 Kvalheim & Revzen added — both *proposed*, pending Joon | review: `r`/`s` inconsistency; math laid down before implementation | *done 2026-10-03* |
 | B11 | `AbstractNormalForm` reimplemented against the design document §9 (`_sq` hooks, API in `r`, `κ = ρ'(1)`, `Ψ` normalized, `eigenvalues_origin`, `(Θ, Ψ)` chart with differentiable `Ψ⁻¹`, `ClosedFormIntegration`); tests per §10; ADR-0007 amended | — | *done 2026-10-03* |
 | B12 | Yawata et al. (Chaos 34, 063111, 2024) baseline per `docs/design/normal-forms.md` §5.3: `PhaseAmplitudeLatentDynamics(omega, kappa)` (replaces `LinearLatentDynamics`), `PhaseAmplitudeAutoencoder` with unit-circle normalization, `phase`/`phase_sensitivity`; `PhaseAutoencoderLoss` (Eqs. (21)–(26), `α_k` and weight schedules); `OnCycleGaussian` sampler; `tests/test_baseline.py` against the exact chart + a `slow` training test on Hopf (Θ asserted up to a constant; Ψ, κ reported) | the paper's baseline; §5.4 says what it learns | *done 2026-10-03* |
@@ -137,12 +137,12 @@ each; D2/D3 when a run asks for them; E7 continuously.
   (`ORIENTATION_NOT_GUARANTEED`) coming back.
 - Phase-autoencoder baseline refinements — batch normalization in the MLPs, the paper's
   once-and-for-all weight switch and per-epoch `α_k` (Phase C's trainer owns schedules),
-  input standardisation, the FHN cycle for `OnCycleGaussian` (needs the numerical limit
+  input standardization, the FHN cycle for `OnCycleGaussian` (needs the numerical limit
   cycle of Phase E) — when the baseline is run for the paper.
 - Grouping the scalar bijections (`affine.py`, `analytic.py`, `splines/`, `OffsetedBijection`)
   under one subpackage — cosmetic; when the vocabulary stops growing.
 
-- Initialisation-strategy enum on `AbstractBijection` — only if training dynamics call for it
+- Initialization-strategy enum on `AbstractBijection` — only if training dynamics call for it
   (identity-at-init is universal; `BiLipschitzLinear.init="rotation"` is the one opt-in).
 - Merging `ScalarChain` back into `SequentialINN` — only if the overlap grows.
 - `_Shifted` as a mixin rather than a base — not worth the effort now.
