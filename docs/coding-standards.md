@@ -81,25 +81,22 @@ previews agree.
 
 ## Checks that replace prose
 
-```toml
-# pyproject.toml
-[tool.codespell]
-builtin = "clear,en-GB_to_en-US"
-skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,src/Isochron2PBVP,docs/changes"
-ignore-words-list = "oint,numer,Numer,Commun,Stoer,INOUT,nd"
+The configuration lives in `pyproject.toml` (`[tool.codespell]`, and the `banned-api` table
+with `TID251` in ruff's `select`), with a comment there on each non-obvious setting.
+This section says what each check is for; read the file for the current values.
 
-[tool.ruff.lint.flake8-tidy-imports.banned-api]
-"dataclasses.replace".msg = "use copy.replace (3.13)"
-"jax.scipy.linalg.expm".msg = "use linear.cayley — ADR-0010"
-```
+| Rule | Check | Runs in |
+|---|---|---|
+| American English, irregulars and typos | `codespell` 2.4.3 | `prek`, CI |
+| American English, the productive families | `scripts/check_spelling.py` | `prek`, CI |
+| `copy.replace` (this project's floor is Python 3.13); Cayley rotations | ruff `TID251` banned-api | `prek`, CI |
+| both Markdown previews | `scripts/check_md_math.py` | `prek`, CI |
+| no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
 
-| Rule | Check |
-|---|---|
-| American English, irregulars and typos | `codespell` as configured above |
-| American English, the productive families | `scripts/check_spelling.py` |
-| `copy.replace`; Cayley rotations | ruff banned-api as above |
-| no `# ty: ignore` under `src/` | `grep -rn "ty: ignore" src` in CI, expecting nothing |
-| both Markdown previews | `scripts/check_md_math.py`, in `prek` |
+One deliberate exemption: `scripts/bench_dataloader.py` times `jax.scipy.linalg.expm` against
+the closed-form rotation, which is the measurement ADR-0010 rests on, so that one line
+carries `# noqa: TID251` with the reason. The ban is for code that *uses* `expm`, not for
+the benchmark that justified banning it.
 
 **Two spelling checks, because one tool cannot do both jobs.** `codespell` is a
 535-entry British-to-American word list: the right shape for irregulars (*behaviour*, <!-- codespell:ignore -->
@@ -128,10 +125,8 @@ appears, the line carries `<!-- codespell:ignore: cited quotation -->`; `design/
 quotes diffrax's phrase for forward-mode differentiation and is the current instance.
 Both checks honor that marker, and `spelling:ignore` as well.
 
-Run both commands for the current lists rather than reading one from here.
-
-The `ignore-words-list` above covers the false positives this domain produces: the LaTeX
-contour-integral command, the numerator and denominator locals in
+The `ignore-words-list` in `pyproject.toml` covers the false positives this domain
+produces: the LaTeX contour-integral command, the numerator and denominator locals in
 `rational_quadratic.py`, two journal abbreviations, an author's surname, and a Fortran
 intent keyword.
 

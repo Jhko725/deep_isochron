@@ -319,7 +319,7 @@ def report_hlo_stats(trainer: Trainer, state, batch, device: jax.Device) -> None
     # the suspect: jax.scipy.linalg.expm (BiLipschitzLinear's rotations) is a 16-step
     # scan of lax.cond; time one 2×2 expm against the closed-form rotation
     a = jax.device_put(jnp.array([[0.0, -0.3], [0.3, 0.0]]), device)
-    expm = jax.jit(jax.scipy.linalg.expm)
+    expm = jax.jit(jax.scipy.linalg.expm)  # noqa: TID251 — the measurement behind ADR-0010
 
     def rotation(m):
         c, s = jnp.cos(m[1, 0]), jnp.sin(m[1, 0])

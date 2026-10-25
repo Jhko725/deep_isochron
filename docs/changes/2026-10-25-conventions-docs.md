@@ -25,6 +25,10 @@ every rule removed from it has a new home that the file points at. No code chang
 | `scripts/check_spelling.py` | **new** — the rule for the `-ise` / `-isation` / `-yse` families, with the closed exception list |
 | `docs/design/{normal-forms,cubic-bspline,analysis}.md`, `docs/decisions/0006-*.md`, `docs/roadmap.md`, `src/deep_isochron/model/autoencoder.py`, `tests/test_systems.py` | `style:` — 18 British spellings in prose and docstrings; the cited diffrax quotation in `analysis.md` is kept and its line exempted |
 | `docs/changes/2026-10-25-conventions-docs.md` | this document |
+| `pyproject.toml` | `[tool.codespell]`; ruff's `banned-api` table with `TID251` added to `select`, without which the table is inert |
+| `prek.toml` | codespell 2.4.3, `check_spelling.py` and `check_md_math.py` as hooks |
+| `.github/workflows/ci.yml` | `uvx codespell@2.4.3`, `check_spelling.py`, and the `! grep 'ty: ignore' src` step the standards document had promised |
+| `scripts/bench_dataloader.py` | `# noqa: TID251` on the one `expm` call: it is the measurement ADR-0010 rests on |
 
 ## Design
 
@@ -81,10 +85,14 @@ documents still holds.
 
 ## Open issues
 
-- The checks in `docs/coding-standards.md` are written down but not wired up: the
-  `[tool.codespell]` and `banned-api` blocks are not in `pyproject.toml` and neither
-  check runs in `prek`. Both report 0 findings in scope as of the `style:` commit on this
-  branch.
+- `uvx ruff check src tests scripts` in CI already fails on the base commit, independently
+  of this branch: `src/Isochron2PBVP/deprecated/mainIsochronFNC.py` has an undefined name
+  (`F821`), unsorted imports and long lines. That is the vendored reproduction, read as
+  reference; excluding it from ruff (`extend-exclude`) or fixing it is a decision for
+  whoever owns it, not a spelling branch.
+- The standards document no longer copies the TOML. `pyproject.toml` is the source of
+  truth for the check configuration, and the copy had already drifted from it (skip
+  pattern, both ban messages) within the same day.
 - `scripts/check_spelling.py` has no test of its own. Its behaviour is pinned only by the <!-- codespell:ignore -->
   measurement in the Design section: 13 of 13 on a line of British forms, 0 of 37 on a
   line of words where `-ise` is correct.
@@ -105,4 +113,8 @@ documents still holds.
 | `docs/coding-standards.md` (new): tiers, named values, contracts with ADR numbers, Markdown rules, checks, exceptions | | |
 | `docs/index.md`: the new document under *Read first*, and the branch's change document | | |
 | `scripts/check_spelling.py` (new): the `-ise` / `-isation` / `-yse` rule with its exception list; 23 findings here, none of them false | | |
+| `pyproject.toml`: `[tool.codespell]`; `TID251` + banned-api | | |
+| `prek.toml`: codespell, `check_spelling`, `check_md_math` hooks | | |
+| `.github/workflows/ci.yml`: codespell, `check_spelling`, the `ty: ignore` grep | | |
+| `scripts/bench_dataloader.py`: `noqa: TID251` on the ADR-0010 measurement | | |
 | `docs/changes/2026-10-25-conventions-docs.md`: this document | | |

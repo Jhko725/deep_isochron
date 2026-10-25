@@ -31,7 +31,13 @@ jobs:
       - run: uvx ruff check src tests scripts
       - run: uvx ruff format --check src tests scripts --exclude src/deep_isochron/model/fourier.py
       - run: uvx ty@latest check src
+      # ty honors ignore comments, so a clean run does not prove there are none (ADR-0004).
+      - run: "! grep -rn 'ty: ignore' src"
       - run: uv run python scripts/check_md_math.py
+      # American English: codespell for irregulars and typos (pinned: its word list is
+      # what docs/coding-standards.md measured), check_spelling.py for the -ise families.
+      - run: uvx codespell@2.4.3
+      - run: uv run python scripts/check_spelling.py
       - run: uv run pytest --hypothesis-profile=ci -n 4 -m "not slow"
 
   slow:

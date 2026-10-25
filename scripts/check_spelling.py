@@ -4,8 +4,8 @@
 the typos, and misses every productive form: this project's vocabulary includes the
 British spellings of `discretize`, `parametrize`, `orthogonalize`, `diagonalize`,
 `linearize` and `vectorize`, none of which any list ships. The `-ise` family is regular
-morphology, so a rule matches it; what is finite and enumerable is the set of words where
-`-ise` is also correct in American English, and that is the exception list below.
+morphology, so a rule matches it; what is finite and enumerable is the set of words
+where `-ise` is also correct in American English, and that is the exception list below.
 
 Run both checks: `codespell` for the irregulars and for typos, this script for the
 families.
@@ -21,6 +21,7 @@ import re
 import sys
 from collections.abc import Iterable, Iterator
 from pathlib import Path
+
 
 # Words whose `-ise` ending is correct in American English. Verbs of Latin (not Greek)
 # origin, plus every noun and adjective the pattern would otherwise catch. Closed: the
@@ -44,10 +45,11 @@ EXCEPTION_FREE = re.compile(
 )
 # The verb family, where the exception list applies.
 ISE_FAMILY = re.compile(r"\b([A-Za-z]{2,}?)(ise|ises|ised|ising)\b")
-# The Greek -lyse verbs (analyze, catalyze, dialyze, electrolyze, hydrolyze, paralyze)
-# all take -yze in American English, with no exceptions. The plural suffix is left out of
-# the rule on purpose: it is also the plural of -ysis, which is correct, and that plural
-# is far more common in prose than the British third-person verb form.
+# The Greek -lyse verbs (analyze, catalyze, dialyze, electrolyze, hydrolyze,
+# paralyze) all take -yze in American English, with no exceptions. The plural suffix
+# is left out of the rule on purpose: it is also the plural of -ysis, which is
+# correct, and that plural is far more common in prose than the British third-person
+# verb form.
 YSE_FAMILY = re.compile(r"\b([A-Za-z]{3,}?)(yse|ysed|ysing)\b")  # codespell:ignore
 
 # A line carrying either marker is skipped, so that a document quoting the spellings it
@@ -99,16 +101,26 @@ def check_text(text: str) -> Iterator[tuple[int, str, str]]:
                 yield number, word, _americanize(stem, suffix)
 
 
+def _in_scope(path: Path) -> bool:
+    """Whether `path` is a text file outside the skipped trees."""
+    return path.suffix in TEXT_SUFFIXES and not SKIP_PARTS.intersection(path.parts)
+
+
 def walk(paths: Iterable[Path]) -> Iterator[Path]:
-    """Yield every text file under `paths`, skipping vendored and generated trees."""
+    """Yield every text file under `paths`, skipping vendored and generated trees.
+
+    The skip applies to files named explicitly as well as to files found by walking a
+    directory, so a git hook that passes `docs/changes/x.md` gets the same answer as a
+    walk from the repository root.
+    """
     for path in paths:
         if path.is_file():
-            yield path
+            if _in_scope(path):
+                yield path
             continue
         for child in sorted(path.rglob("*")):
-            if child.is_file() and child.suffix in TEXT_SUFFIXES:
-                if not SKIP_PARTS.intersection(child.parts):
-                    yield child
+            if child.is_file() and _in_scope(child):
+                yield child
 
 
 def main(argv: list[str] | None = None) -> int:

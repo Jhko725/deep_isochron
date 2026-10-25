@@ -48,7 +48,11 @@ fix = true
 [tool.ruff.lint]
 fixable = ["I001", "F401"]
 ignore = ["E402", "E721", "E731", "E741", "F722"]
-select = ["E", "F", "I001"]
+select = ["E", "F", "I001", "TID251"]  # TID251 enforces banned-api below
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"dataclasses.replace".msg = "use copy.replace (Python 3.13, this project's floor)"
+"jax.scipy.linalg.expm".msg = "use linear.cayley: expm's 16-step cond scan is a host round trip per step on GPU (ADR-0010)"
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -80,3 +84,12 @@ filterwarnings = [
 xfail_strict = true
 
 [tool.hypothesis]
+
+[tool.codespell]
+# The irregular British spellings and typos; scripts/check_spelling.py covers the
+# productive -ise/-isation/-yse families. "./docs/changes" skips the directory when
+# codespell walks from the root (CI); "docs/changes/*" skips the paths a git hook
+# passes. docs/coding-standards.md says why that directory is out of scope.
+builtin = "clear,en-GB_to_en-US"
+skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,./src/Isochron2PBVP,src/Isochron2PBVP/*,./docs/changes,docs/changes/*"
+ignore-words-list = "oint,numer,Numer,Commun,Stoer,INOUT,nd"
