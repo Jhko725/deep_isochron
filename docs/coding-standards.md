@@ -117,8 +117,8 @@ all; `-yses` is left out of the rule on purpose, since it is also the plural of 
 
 **`docs/changes/` is skipped on purpose.** A landed change document is a record of what
 was said, and its *Review notes* table holds Joon's words verbatim — typos included
-(*annotationns*, *spefics*, *useing*). `CLAUDE.md` says Claude never edits those columns,
-and several lines quote a spelling *as* the thing that was fixed (the `centerd` typo,
+(*annotationns*, *spefics*, *useing*). `CLAUDE.md` says Claude never edits those columns, <!-- codespell:ignore: quoted typos -->
+and several lines quote a spelling *as* the thing that was fixed (the `centerd` typo, <!-- codespell:ignore: quoted typos -->
 `normalise_phase_plane` → `normalize_phase_plane`), so correcting them would destroy the
 history they exist to carry. The current documents — `design/`, `decisions/`,
 `roadmap.md`, `architecture.md`, `index.md` — are in scope.
