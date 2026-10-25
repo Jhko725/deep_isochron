@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-22
+updated: 2026-10-25
 ---
 
 # `deep_isochron` documentation — index
@@ -21,6 +21,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`architecture.md`](architecture.md) | architecture | module map, data flow of one training step, where each decision is recorded |
 | [`roadmap.md`](roadmap.md) | roadmap | the single current plan, phase by phase, with the Done ledger |
 | [`../CLAUDE.md`](../CLAUDE.md) | conventions | how Claude works in this repository (change documents, review notes, tooling) |
+| [`coding-standards.md`](coding-standards.md) | reference | where each convention is enforced here: tiers, named tolerances, the contracts the ADRs fix, the Markdown rules, the checks that replace prose |
 
 ## Design documents (`design/`) — the mathematics behind the code
 
@@ -68,3 +69,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `analysis` | [`2026-10-06-analysis.md`](changes/2026-10-06-analysis.md) |
 | `run-layout` | [`2026-10-07-run-layout.md`](changes/2026-10-07-run-layout.md) |
 | `normal-forms-basin` | [`2026-10-08-normal-forms-basin.md`](changes/2026-10-08-normal-forms-basin.md) |
+| `conventions-docs` | [`2026-10-25-conventions-docs.md`](changes/2026-10-25-conventions-docs.md) |

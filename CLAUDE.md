@@ -1,84 +1,67 @@
 # Working conventions for Claude in this repository
 
+Joon's personal rules are in his global `CLAUDE.md`; the conventions they rest on —
+design, naming, typing, the JAX ecosystem — are in the `code-conventions` skill. This
+file carries what is particular to this repository: how work is recorded, and the facts
+Claude cannot infer from the code. [`docs/coding-standards.md`](docs/coding-standards.md)
+says where each convention is enforced here, and which checks stand in for prose.
+
+## Start of a session
+
+1. Read `docs/index.md`, then `docs/architecture.md` (the module map and the data flow),
+   then the current phase of `docs/roadmap.md`.
+2. Find the branch's change document `docs/changes/<YYYY-MM-DD>-<branch>.md`. Its
+   **Review notes** table is the current state of the review: rows with *Thoughts* or
+   *Modifications* filled in are instructions for this session.
+3. Read the ADRs in `docs/decisions/` that cover the area being touched.
+
 ## Change documents
 
-Every branch that Claude works on has a companion document
-`docs/changes/<YYYY-MM-DD>-<branch>.md`, committed together with the code. It is
-the reviewer's map of the change, not a changelog:
+Every branch Claude works on has a companion document
+`docs/changes/<YYYY-MM-DD>-<branch>.md`, committed together with the code. It is the
+reviewer's map of the change, not a changelog. Sections: **Summary**, what the branch
+does and why; **Files**, every file touched, one line each, confirmable against `git diff
+--stat`; **Design**, decisions not obvious from the code, each with the alternative that
+was rejected, linking an ADR when the decision is structural; **Bugs fixed**, with the
+symptom; **Tests**, what they pin down and how to run them; **Open issues**, with the
+reason; **Review notes**.
 
-- **Summary**: what the branch does and why, in a few sentences.
-- **Files**: every file touched, one line each, saying what changed there. A
-  reviewer should be able to confirm the list against `git diff --stat`.
-- **Design**: decisions that are not obvious from the code, with the alternative
-  that was rejected and why.
-- **Bugs fixed**: pre-existing bugs found on the way, with the symptom.
-- **Tests**: what the new tests pin down, and how to run them.
-- **Open issues**: things deliberately left alone, with the reason.
-- **Review notes**: a table with columns *Change* | *Thoughts* | *Modifications*.
-  Claude pre-populates one row per file touched, with *Change* = the file name
-  plus a one-line summary of what changed there, and leaves *Thoughts* and
-  *Modifications* blank. Joon fills those in while vetting; Claude reads them
-  at the start of the next session on that branch and treats them as the
-  current state of the review.
+*Review notes* is a table *Change* | *Thoughts* | *Modifications*. Claude pre-populates
+one row per file touched — *Change* is the file name plus a one-line summary — and leaves
+the other two columns blank. Joon fills them in while vetting; Claude reads them at the
+start of the next session on that branch and never edits them except when asked.
 
-Claude updates the document in the same commit as any later change on the
-branch, and never edits *Review notes* except when asked to.
+Claude updates the change document in the same commit as any later change on the branch.
+
+## End of a session
+
+- The change document is updated: Files, Design, Tests, and a review row per new file.
+- `docs/roadmap.md` is the single current plan. Finished items are appended to its
+  **Done** ledger, never inserted and never deleted; the phase tables are kept correct
+  now. It is updated in the same commit as the work that changes it, never on its own,
+  and `git log -p docs/roadmap.md` is the project diary.
+- `docs/architecture.md` is updated when a module moves, is renamed, added or removed.
+- `docs/index.md` lists every document under `docs/`, with its status.
+- `uv run python scripts/check_md_math.py` reports 0 problems when Markdown changed.
+- `uv run ty check src/deep_isochron/model/invertible` stays clean.
 
 ## Repository facts
 
-- Python 3.13, `uv sync --group dev`; run tests with `uv run pytest`.
-  Hypothesis profiles: `--hypothesis-profile=dev` (10 examples, quick),
-  default (50), `ci` (300, derandomised). `-n 4` (pytest-xdist) helps.
-- Tests install the jaxtyping/beartype import hook, so shape annotations are
-  checked at runtime: the first occurrence of an axis name must be a plain
-  name (`" K"`, not `" K+1"`), and `{self.attr}` expressions are allowed.
-- Pre-commit hooks run through `prek` (ruff check --fix, ruff format,
-  whitespace fixers).
-- Every concrete `AbstractBijection` must be registered in `tests/registry.py`
-  (or listed in `UNTESTED` with a reason); `tests/test_registry.py` enforces it.
-- Implement an `eqx.AbstractVar` (`dim`, `smoothness`, `num_params`, ...) as
-  `eqx.field(static=True, init=False)` — with `default=` when the value is fixed
-  by the class, assigned in `__init__` when derived. Never a bare class
-  attribute, `ClassVar` or property: type checkers reject those as overrides
-  (ADR-0004). `ty check src/deep_isochron/model/invertible` must stay clean.
-- Scalar bijections hold one unconstrained leaf `raw`; constrained parameters
-  come from `constrain(raw)` (ADR-0001); `constrain(0)` is the identity
-  (ADR-0002). Templates are instances with `raw=None`. Constraint primitives are
-  plain Python objects created *inside* `constrain`, never stored as fields
-  (ADR-0005).
-- Design decisions live in `docs/decisions/` as numbered ADRs; a change
-  document's *Design* section links to them. `docs/architecture.md` is the
-  module map and data flow — read it first in a new session, and update it in
-  the same commit as a change that moves or renames a module.
-- Markdown must render on GitHub *and* in VS Code's preview. GitHub runs Markdown
-  before MathJax, so: no line-length limit (ruff formats Python only) but an inline
-  formula `$…$` never crosses a line; display math only as a standalone block (`$$`
-  alone on a line, formula, `$$` alone on a line), never `$$…$$` inside a paragraph;
-  inside inline math no backslash + ASCII punctuation (`\,` `\;` `\{` `\|` `\\` →
-  `\thinspace` `\medspace` `\lbrace` `\Vert`, matrices in blocks), no `*` (use
-  `\ast`), spaces around `<` `>`, and no `_` right after `}` `)` `|` (write `\mathbf e_r`,
-  `C_{\rm loc}^{k}`, `\vert_{E}`), because such an `_` opens Markdown emphasis.
-  `uv run python scripts/check_md_math.py` emulates GitHub and must report 0 problems;
-  run it before committing a Markdown change. Every document under `docs/` starts
-  with a frontmatter block (`type`, `status`, `updated`, plus
-  `verified_by`/`sources`/`id` where relevant; see `docs/index.md`), updated in the
-  same commit as the document.
-- American English throughout (code, docstrings, documents): *center*, *normalize*,
-  *optimizer*, *behavior*, *initialization*. Identifiers follow (`normalize_phase_plane`).
-- Docstrings follow the equinox/diffrax convention (e.g. `diffrax.diffeqsolve`,
-  `equinox.nn.Conv`): a one-paragraph summary, then `**Arguments:**` (one `- \`name\`:`
-  entry per argument, continuation lines indented four spaces), `**Returns:**`,
-  `**Raises:**` as needed; class docstrings use `**Attributes:**`; names in single
-  backticks. Existing docstrings are migrated when their file is touched, not in a
-  sweep. (Chosen so that MkDocs can render the API later.)
-- Jit and vmap: a function that is naturally jit- and vmap-compatible is left
-  undecorated — the caller jits at the level they want. A function that is not
-  (a host-side driver with Python control flow or informative errors) jits the
-  subcomponents it calls, e.g. `_settle = eqx.filter_jit(settle)` next to the
-  driver. Result objects are fixed-shape `eqx.Module` pytrees so that functions of
-  them jit and vmap as they stand; per-call records of varying length are returned
-  separately, not stored on them.
-- `docs/roadmap.md` is the single, current plan. Finished items move to its
-  *Done* ledger (not deleted), which is chronological: new rows are always
-  appended at the end, never inserted; it is updated in the same commit as the
-  work that changes it, never on its own; history is `git log -p docs/roadmap.md`.
+- Python 3.13; `uv sync --group dev`; `uv run pytest`, where `-n 4` (pytest-xdist) helps.
+  Hypothesis profiles: `--hypothesis-profile=dev` (10 examples), default (50), `ci`
+  (300, derandomized).
+- The jaxtyping/beartype import hook runs in the tests, so shape annotations are checked
+  at runtime: the first occurrence of an axis name is a plain name (`" K"`, not
+  `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a
+  string forward reference.
+- Pre-commit runs through `prek`: ruff check `--fix`, ruff format, whitespace fixers.
+- Design decisions are numbered ADRs in `docs/decisions/`, and a change document's
+  *Design* section links to them. The contracts those ADRs fix, together with this
+  repository's tiers, tolerances and checks, are in `docs/coding-standards.md`.
+- Documents under `docs/` open with a frontmatter block (`type`, `status`, `updated`,
+  plus `verified_by` / `sources` / `id` where relevant), updated in the same commit as
+  the document. Markdown has to render on GitHub as well as in VS Code's preview;
+  `scripts/check_md_math.py` is the arbiter, and the rules it enforces are recorded in
+  `docs/coding-standards.md`.
+- Provenance labels in design documents: **[cited]** from a named source, **[code]**
+  verified in the tree, **[deduced]** Claude's inference. Keep them.
