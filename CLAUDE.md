@@ -54,7 +54,8 @@ Claude updates the change document in the same commit as any later change on the
   at runtime: the first occurrence of an axis name is a plain name (`" K"`, not
   `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a
   string forward reference.
-- Pre-commit runs through `prek`: ruff check `--fix`, ruff format, whitespace fixers.
+- Pre-commit runs through `prek`; the hooks are listed in `prek.toml`, and what each
+  check is for is in `docs/coding-standards.md`.
 - Design decisions are numbered ADRs in `docs/decisions/`, and a change document's
   *Design* section links to them. The contracts those ADRs fix, together with this
   repository's tiers, tolerances and checks, are in `docs/coding-standards.md`.

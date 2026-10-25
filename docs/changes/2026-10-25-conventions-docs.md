@@ -19,7 +19,7 @@ every rule removed from it has a new home that the file points at. No code chang
 
 | File | Change |
 |---|---|
-| `CLAUDE.md` | pruned; gains a *Start of a session* and an *End of a session* section and a pointer to the new standards document |
+| `CLAUDE.md` | pruned; gains a *Start of a session* and an *End of a session* section and a pointer to the new standards document; the hook list becomes a pointer to `prek.toml`, since restating it went stale as soon as hooks were added |
 | `docs/coding-standards.md` | **new** — tiers and commands, named tolerances and solvers, the contracts with their ADR numbers, the Markdown rules, the checks, deliberate exceptions |
 | `docs/index.md` | the new document listed under *Read first*; the branch's change document listed; `updated` bumped |
 | `scripts/check_spelling.py` | **new** — the rule for the `-ise` / `-isation` / `-yse` families, with the closed exception list |
