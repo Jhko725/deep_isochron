@@ -104,8 +104,10 @@ class PoincareMap(eqx.Module):
     - `throw`: Whether a missing crossing is a runtime error, as in diffrax, or
         reported as ``tau = inf`` (static).
 
-    **Raises:** `ValueError` at construction for an unknown `direction`, a
-    non-positive `t_max`, or a `departure` outside ``(0, 1)``.
+    **Raises:**
+
+    `ValueError` at construction for an unknown `direction`, a non-positive `t_max`, or
+    a `departure` outside ``(0, 1)``.
     """
 
     ode: AbstractODE
@@ -153,9 +155,10 @@ class PoincareMap(eqx.Module):
 
         - `x`: The starting point, shape ``(dim,)``.
 
-        **Returns:** ``(P(x), tau(x))``, shapes ``(dim,)`` and ``()``;
-        ``tau = inf`` when no crossing is found and `throw` is ``False``.
-        Differentiable in `x`.
+        **Returns:**
+
+        ``(P(x), tau(x))``, shapes ``(dim,)`` and ``()``; ``tau = inf`` when no crossing
+        is found and `throw` is ``False``. Differentiable in `x`.
         """
         y, tau = _first_return(self, jnp.asarray(x, dtype=float))
         if self.throw:
@@ -170,8 +173,10 @@ class PoincareMap(eqx.Module):
     def iterate(self, x: Float[ArrayLike, " dim"], k: int) -> tuple[Array, Array]:
         """`k` applications of the map from `x`, by ``lax.scan``.
 
-        **Returns:** ``(iterates, taus)`` with shapes ``(k+1, dim)`` and ``(k,)``;
-        ``iterates[0]`` is `x`.
+        **Returns:**
+
+        ``(iterates, taus)`` with shapes ``(k+1, dim)`` and ``(k,)``; ``iterates[0]`` is
+        `x`.
         """
         x = jnp.asarray(x, dtype=float)
 
@@ -196,13 +201,17 @@ class PoincareMap(eqx.Module):
         - `tol`: The distance to an earlier iterate that counts as a return.
         - `max_iter`: The bound on the number of map iterations.
 
-        **Returns:** ``(fixed_point, iteration)``, the `FixedPoint` and the
-        `FixedPointIteration` that produced it.
+        **Returns:**
 
-        **Raises:** `ValueError` for ``direction="both"``, since consecutive
-        crossings of a two-sided map alternate sides and a cycle is never its fixed
-        point; `NotConvergedError` after `max_iter` steps or when a return is
-        missing, with the unfinished ``(fixed_point, iteration)`` in ``last``.
+        ``(fixed_point, iteration)``, the `FixedPoint` and the `FixedPointIteration`
+        that produced it.
+
+        **Raises:**
+
+        `ValueError` for ``direction="both"``, since consecutive crossings of a
+        two-sided map alternate sides and a cycle is never its fixed point;
+        `NotConvergedError` after `max_iter` steps or when a return is missing, with the
+        unfinished ``(fixed_point, iteration)`` in ``last``.
         """
         if self.direction == "both":
             raise ValueError("fixed_point needs a one-sided map; use iterate.")
@@ -300,8 +309,10 @@ def _first_return_jvp(primals, tangents):
     $d\tau = -\langle n, J\thinspace dx\rangle / \langle n, v\rangle$ and
     $dy = J\thinspace dx + v\thinspace d\tau$ (Parker & Chua 1989, Eq. 5.21).
 
-    **Raises:** `NotImplementedError` for a tangent in the map itself: the map is
-    differentiable in the point only, not in the ODE's parameters or the section.
+    **Raises:**
+
+    `NotImplementedError` for a tangent in the map itself: the map is differentiable in
+    the point only, not in the ODE's parameters or the section.
     """
     pmap, x = primals
     pmap_dot, x_dot = tangents

@@ -61,8 +61,9 @@ class AbstractFlowIntegration(eqx.Module):
         - `args`: Passed through to the vector field.
         - `config`: The solver settings.
 
-        **Returns:** A ``diffrax.Solution`` with cartesian ``.ys``, shape
-        ``(time, 2)``.
+        **Returns:**
+
+        A ``diffrax.Solution`` with cartesian ``.ys``, shape ``(time, 2)``.
         """
 
 
@@ -102,8 +103,9 @@ class RadiusSquaredIntegration(AbstractFlowIntegration):
         """Solve in $(r^2, \\theta)$ and map back; see
         `AbstractFlowIntegration.__call__`.
 
-        **Raises:** `TypeError` for a normal form that is not an
-        ``AbstractEvenNormalForm``.
+        **Raises:**
+
+        `TypeError` for a normal form that is not an ``AbstractEvenNormalForm``.
         """
         from .base import AbstractEvenNormalForm
 
@@ -178,7 +180,9 @@ def resolve_integration(
     """The integration object for `integration`, an instance or a name in
     ``INTEGRATIONS``.
 
-    **Raises:** `ValueError` for an unknown name.
+    **Raises:**
+
+    `ValueError` for an unknown name.
     """
     if isinstance(integration, AbstractFlowIntegration):
         return integration

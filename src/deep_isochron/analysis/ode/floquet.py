@@ -165,12 +165,15 @@ def periodic_schur(
     - `q1`: A unit vector that is an eigenvector of the product for its dominant
         eigenvalue: the flow direction at mesh point 0 for an attracting cycle.
 
-    **Returns:** A `PeriodicSchur` whose `multipliers` are the eigenvalues of the
-    product.
+    **Returns:**
 
-    **Raises:** `NotImplementedError` for ``dim > 2``: the seed fixes one Schur vector
-    only, and the transverse block would need the periodic QR iteration (SLICOT
-    ``MB03WD``, in Python through ``slycot.math.mb03wd``).
+    A `PeriodicSchur` whose `multipliers` are the eigenvalues of the product.
+
+    **Raises:**
+
+    `NotImplementedError` for ``dim > 2``: the seed fixes one Schur vector only, and the
+    transverse block would need the periodic QR iteration (SLICOT ``MB03WD``, in Python
+    through ``slycot.math.mb03wd``).
     """
     dim = jacobians.shape[-1]
     if dim > 2:
@@ -241,8 +244,10 @@ def divergence_integral(cycle: LimitCycle) -> Float[Array, ""]:
     the direction in which the orbit attracts; the integrand is the forward field's
     divergence either way.
 
-    **Raises:** `ValueError` unless ``cycle.dim == 2``, since in higher dimension the
-    integral is the sum of all exponents.
+    **Raises:**
+
+    `ValueError` unless ``cycle.dim == 2``, since in higher dimension the integral is
+    the sum of all exponents.
     """
     if cycle.dim != 2:
         raise ValueError("the Liouville route is defined for planar orbits only.")
@@ -292,7 +297,9 @@ def floquet_periodic_schur(cycle: LimitCycle) -> Floquet:
     $10^{-16}$ keeps its digits; the chain runs in the direction in which the orbit
     attracts and the result is reported in forward time.
 
-    **Returns:** A `Floquet` with `closure` and, in the plane, `vectors` set.
+    **Returns:**
+
+    A `Floquet` with `closure` and, in the plane, `vectors` set.
     """
     f = cycle.ode.rhs(0.0, cycle.x0s[0])
     ps = periodic_schur(segment_jacobians(cycle), f / jnp.linalg.norm(f))
@@ -316,8 +323,10 @@ def floquet_monodromy(cycle: LimitCycle) -> Floquet:
     FitzHugh–Nagumo where $\mu \approx 1.7\cdot10^{-12}$, so this route is a
     cross-check on `floquet_periodic_schur`, not the method.
 
-    **Returns:** A `Floquet` with `multipliers` sorted by modulus descending;
-    `closure` and `vectors` are ``None``.
+    **Returns:**
+
+    A `Floquet` with `multipliers` sorted by modulus descending; `closure` and `vectors`
+    are ``None``.
     """
     mult = multipliers_from_monodromy(monodromy(segment_jacobians(cycle)))
     if cycle.reverse_time:  # the reversed flow's {1, 1/μ}
@@ -336,10 +345,14 @@ def floquet_liouville(cycle: LimitCycle) -> Floquet:
     """The Floquet data of `cycle` from the planar divergence integral: the
     cross-check independent of all linear algebra, exact in the plane.
 
-    **Returns:** A `Floquet` whose trivial multiplier is assumed exactly, so
-    `trivial_error`, `closure` and `vectors` are ``None``.
+    **Returns:**
 
-    **Raises:** `ValueError` for a non-planar cycle.
+    A `Floquet` whose trivial multiplier is assumed exactly, so `trivial_error`,
+    `closure` and `vectors` are ``None``.
+
+    **Raises:**
+
+    `ValueError` for a non-planar cycle.
     """
     log_mu = divergence_integral(cycle)
     zero = jnp.zeros_like(log_mu)
@@ -364,12 +377,14 @@ def floquet(cycle: LimitCycle, *, method: FloquetMethod = "periodic_schur") -> F
     - `method`: ``"periodic_schur"`` (the method), ``"monodromy"`` or
         ``"liouville"``; each is also callable directly as ``floquet_<method>``.
 
-    **Returns:** A `Floquet`, in forward time whatever the direction the cycle was
-    found in.
+    **Returns:**
 
-    **Raises:** `ValueError` for an unknown `method` or for ``"liouville"`` on a
-    non-planar cycle; `NotImplementedError` for ``"periodic_schur"`` with
-    ``cycle.dim > 2``.
+    A `Floquet`, in forward time whatever the direction the cycle was found in.
+
+    **Raises:**
+
+    `ValueError` for an unknown `method` or for ``"liouville"`` on a non-planar cycle;
+    `NotImplementedError` for ``"periodic_schur"`` with ``cycle.dim > 2``.
     """
     routes = {
         "periodic_schur": floquet_periodic_schur,

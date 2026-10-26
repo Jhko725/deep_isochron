@@ -37,8 +37,9 @@ class CrossSection(eqx.Module):
 
     - `point`, `normal`: As above, with `normal` a unit vector.
 
-    **Raises:** `ValueError` unless both are vectors of one dimension and the normal
-    is nonzero.
+    **Raises:**
+
+    `ValueError` unless both are vectors of one dimension and the normal is nonzero.
     """
 
     point: Float[Array, " dim"]
@@ -70,8 +71,10 @@ class CrossSection(eqx.Module):
         - `t`: The time at which the field is evaluated; irrelevant for an
             autonomous system.
 
-        **Raises:** `ValueError` at an equilibrium, where there is no flow direction
-        to be normal to.
+        **Raises:**
+
+        `ValueError` at an equilibrium, where there is no flow direction to be normal
+        to.
         """
         point = jnp.asarray(point, dtype=float)
         f = ode.rhs(t, point)

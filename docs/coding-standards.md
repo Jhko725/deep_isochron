@@ -154,7 +154,9 @@ needs 30 lines gets them, with the reason in its review row.
 function computes or does, in the active voice with the function as the actor, and then
 carries everything the caller needs for that call, in the equinox form: `**Arguments:**`,
 one bullet per argument; `**Returns:**`; `**Raises:**` when the function raises on its
-own. The precision or validity limits of that function, and the citation for a formula
+own. Each header stands on its own line, followed by a blank line and then the bullets
+or the paragraph, as diffrax writes them; a one-argument function whose opening
+sentence names its argument needs no `**Arguments:**` list. The precision or validity limits of that function, and the citation for a formula
 it implements (author, year and locator), belong here, not in the module docstring.
 
 **A class docstring** opens the same way and documents the fields in an

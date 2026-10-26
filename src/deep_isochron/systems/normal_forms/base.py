@@ -79,7 +79,9 @@ class AbstractNormalForm(AbstractODE):
         """Validate `integration` and store it as `default_integration`; called from
         every concrete constructor.
 
-        **Raises:** `ValueError` for a name not in ``integration.INTEGRATIONS``.
+        **Raises:**
+
+        `ValueError` for a name not in ``integration.INTEGRATIONS``.
         """
         from .integration import resolve_integration
 
@@ -209,8 +211,9 @@ class AbstractNormalForm(AbstractODE):
         chart in which the flow is linear, $\dot\Theta = \omega_1$ and
         $\dot\Psi = \kappa\Psi$ (design document §7).
 
-        **Returns:** ``(Θ, Ψ)`` with $\Theta \in (-\pi, \pi]$; both ``nan`` outside
-        the basin.
+        **Returns:**
+
+        ``(Θ, Ψ)`` with $\Theta \in (-\pi, \pi]$; both ``nan`` outside the basin.
         """
         r, theta = self.to_polar(u)
         r_in, r_out = self.basin_radii()
@@ -237,7 +240,9 @@ class AbstractNormalForm(AbstractODE):
         the parameters through the implicit function theorem. A subclass with an
         explicit inverse, such as Hopf, overrides it.
 
-        **Returns:** The radius, or ``nan`` for a `psi` above the range of $\Psi$.
+        **Returns:**
+
+        The radius, or ``nan`` for a `psi` above the range of $\Psi$.
         """
         return _radius_from_isostable(self, psi)
 
@@ -295,8 +300,10 @@ class AbstractNormalForm(AbstractODE):
         - `Theta`: The phase, a scalar.
         - `r`: The radii, shape ``(n,)``.
 
-        **Returns:** The cartesian points on $\theta = \Theta - h(r)$ (design
-        document §5.1), shape ``(n, 2)``; ``nan`` at radii outside the basin.
+        **Returns:**
+
+        The cartesian points on $\theta = \Theta - h(r)$ (design document §5.1), shape
+        ``(n, 2)``; ``nan`` at radii outside the basin.
         """
         r_in, r_out = self.basin_radii()
         inside = (r > r_in) & (r < r_out)

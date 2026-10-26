@@ -1,8 +1,8 @@
 """From the ``model`` config group to an ``AbstractPhaseAmplitudeModel``.
 
-Leaf objects are Hydra ``_target_`` entries instantiated as written; what a builder adds
-is the part a config cannot express — PRNG keys split per layer and the alternating
-``flip`` of the coupling layers. ``model.kind`` selects the builder.
+Leaf objects are Hydra ``_target_`` entries instantiated as written; a builder adds
+what a config cannot express, PRNG keys split per layer and the alternating ``flip`` of
+the coupling layers. ``model.kind`` selects the builder.
 """
 
 from __future__ import annotations
@@ -21,8 +21,9 @@ from .instantiate import instantiate
 
 
 def build_inn(inn_cfg: DictConfig, key: PRNGKeyArray) -> SequentialINN:
-    """``blocks`` × (``linear`` + ``coupling``) with per-layer keys and alternating
-    ``flip``; both layer configs are ``_target_`` templates instantiated per block."""
+    """A ``SequentialINN`` of ``blocks`` times a ``linear`` and a ``coupling`` layer,
+    with per-layer keys split from `key` and alternating ``flip``; both layer configs
+    of `inn_cfg` are ``_target_`` templates instantiated per block."""
     layers: list[AbstractBijection] = []
     for i, k in enumerate(jax.random.split(key, inn_cfg.blocks)):
         k_lin, k_cpl = jax.random.split(k)
@@ -34,6 +35,11 @@ def build_inn(inn_cfg: DictConfig, key: PRNGKeyArray) -> SequentialINN:
 def build_model(
     model_cfg: DictConfig, key: PRNGKeyArray
 ) -> AbstractPhaseAmplitudeModel:
+    """The model that `model_cfg` describes: a ``ConjugateLatentDynamics`` for
+    ``kind: conjugacy``, a ``PhaseAmplitudeAutoencoder`` for ``kind: autoencoder``.
+
+    **Raises:** `ValueError` for another kind.
+    """
     kind = model_cfg.kind
     if kind == "conjugacy":
         latent = instantiate(model_cfg.latent_dynamics)

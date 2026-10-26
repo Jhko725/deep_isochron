@@ -85,7 +85,9 @@ def shooting_residual(
     - `y`: The unknowns ``(points, period)``, shapes ``(m, dim)`` and ``()``.
     - `args`: The fixed data.
 
-    **Returns:** ``(matching, phase)``, shapes ``(m, dim)`` and ``()``.
+    **Returns:**
+
+    ``(matching, phase)``, shapes ``(m, dim)`` and ``()``.
     """
     points, period = y
     ode, section, config, reverse_time = args
@@ -129,9 +131,13 @@ def multiple_shooting(
     - `throw`: Whether a failure to converge is a runtime error, as in optimistix;
         otherwise the result carries a ``nan`` residual.
 
-    **Returns:** The `ShootingResult`.
+    **Returns:**
 
-    **Raises:** `ValueError` unless `points` has shape ``(m, dim)`` with ``m >= 1``.
+    The `ShootingResult`.
+
+    **Raises:**
+
+    `ValueError` unless `points` has shape ``(m, dim)`` with ``m >= 1``.
     """
     if not isinstance(config.adjoint, dfx.ForwardMode):
         config = config.with_adjoint(dfx.ForwardMode())

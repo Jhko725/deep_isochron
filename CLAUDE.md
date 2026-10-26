@@ -32,6 +32,9 @@ the other two columns blank. Joon fills them in while vetting; Claude reads them
 start of the next session on that branch and never edits them except when asked.
 
 Claude updates the change document in the same commit as any later change on the branch.
+A new review row is appended after the table's last line, never inserted by matching
+the text of an existing row: Joon's edits change that text, and an edit anchored on it
+fails silently.
 
 ## End of a session
 

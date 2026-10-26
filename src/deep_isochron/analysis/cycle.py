@@ -41,8 +41,10 @@ class Cycle:
     - `resolution`: The number of points of the dense sampling used by the point
         queries.
 
-    **Raises:** `ValueError` at construction for shapes other than the above, fewer
-    than one harmonic, or a non-positive period.
+    **Raises:**
+
+    `ValueError` at construction for shapes other than the above, fewer than one
+    harmonic, or a non-positive period.
     """
 
     center: Float[np.ndarray, " 2"]
@@ -110,7 +112,9 @@ class Cycle:
 
         - `x`: The query points, shape ``(..., 2)``.
 
-        **Returns:** The phases in ``[0, 2π)``, shape ``(...)``.
+        **Returns:**
+
+        The phases in ``[0, 2π)``, shape ``(...)``.
         """
         x = np.asarray(x, dtype=float)
         pts = self.points()  # (R, 2)
@@ -162,10 +166,13 @@ class Cycle:
         - `harmonics`: The Fourier order ``K``.
         - `note`: Free text recorded on the result.
 
-        **Returns:** The `Cycle`, with `residual` the RMS misfit.
+        **Returns:**
 
-        **Raises:** `ValueError` for mismatched shapes, or fewer than ``2K + 1``
-        points.
+        The `Cycle`, with `residual` the RMS misfit.
+
+        **Raises:**
+
+        `ValueError` for mismatched shapes, or fewer than ``2K + 1`` points.
         """
         phi = np.asarray(phases, dtype=float)
         pts = np.asarray(points, dtype=float)

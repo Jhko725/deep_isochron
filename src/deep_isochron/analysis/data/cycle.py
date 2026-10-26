@@ -135,7 +135,9 @@ def density_coefficients(
     - `t`: The sample times, increasing, shape ``(n,)``; ``None`` for the sample mean.
     - `window`: ``(t_start, t_end)``; the whole of `t` when ``None``.
 
-    **Returns:** The complex coefficients, shape ``(K,)``.
+    **Returns:**
+
+    The complex coefficients, shape ``(K,)``.
     """
     k = np.arange(1, harmonics + 1)
     if t is None:
@@ -169,9 +171,13 @@ def phase_from_protophase(
     - `harmonics`: ``K``, when the coefficients are estimated from `psi` itself.
     - `coefficients`: The coefficients ``F``, when already known.
 
-    **Returns:** ``(φ, F)``.
+    **Returns:**
 
-    **Raises:** `ValueError` when neither `harmonics` nor `coefficients` is given.
+    ``(φ, F)``.
+
+    **Raises:**
+
+    `ValueError` when neither `harmonics` nor `coefficients` is given.
     """
     if coefficients is None:
         if harmonics is None:
@@ -209,12 +215,16 @@ def estimate_cycle(
     - `tolerance`: The factor within which the earlier tail revolutions must fit the
         last revolution's curve for `converged`.
 
-    **Returns:** The `CycleEstimate`. Its `cycle` is always the fit to the whole tail,
-    which averages the most; when `converged` is ``False`` it is biased toward the
-    transient and `tail_periods` should be reduced.
+    **Returns:**
 
-    **Raises:** `ValueError` for mismatched shapes, ``tail_periods < 1``, or a
-    trajectory that completes fewer than `tail_periods` revolutions.
+    The `CycleEstimate`. Its `cycle` is always the fit to the whole tail, which averages
+    the most; when `converged` is ``False`` it is biased toward the transient and
+    `tail_periods` should be reduced.
+
+    **Raises:**
+
+    `ValueError` for mismatched shapes, ``tail_periods < 1``, or a trajectory that
+    completes fewer than `tail_periods` revolutions.
     """
     ys = _as_batch(ys)
     t = np.asarray(ts, dtype=float)

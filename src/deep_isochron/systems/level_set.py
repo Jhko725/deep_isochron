@@ -82,7 +82,9 @@ def guckenheimer_meloon(c: float = 0.07) -> LevelSetCycle:
 
     - `c`: The level, in ``(0, 1/3)`` so that the level set is a closed orbit.
 
-    **Raises:** `ValueError` for `c` outside that interval.
+    **Raises:**
+
+    `ValueError` for `c` outside that interval.
     """
     if not 0 < c < 1 / 3:
         raise ValueError(
@@ -101,7 +103,9 @@ def cassini(a: float = 1.0, b: float = 1.1) -> LevelSetCycle:
 
     - `a`, `b`: The oval's parameters.
 
-    **Raises:** `ValueError` unless ``a < b < a√2``.
+    **Raises:**
+
+    `ValueError` unless ``a < b < a√2``.
     """
     if not a < b < a * 2**0.5:
         raise ValueError("a < b < a√2 is needed for a single non-convex oval.")

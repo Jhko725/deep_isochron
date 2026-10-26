@@ -1,10 +1,12 @@
-"""From the ``data`` and ``windows``/``validation`` config groups to loaders.
+"""From the ``data``, ``windows`` and ``validation`` config groups to loaders.
 
-The ``data`` group is the *generation* config (``configs/data/*.yaml``, shared with
-``scripts/generate_data.py``): ``build_source`` instantiates its system, sampler and
+The ``data`` group is the generation config in ``configs/data/``, shared with
+``scripts/generate_data.py``: ``build_source`` instantiates its system, sampler and
 solver exactly as the generation script does, computes the metadata hash with
-``generation_metadata`` and loads ``<out_dir>/<name>-<hash>.nc``. It never generates —
-a missing file is an error naming the command to run (ADR-0011: generation is explicit).
+``generation_metadata`` and loads ``<out_dir>/<name>-<hash>.nc``. It never generates;
+a missing file is an error naming the command to run, since generation is explicit
+(ADR-0011). ``Loaders.from_config`` builds the training stream and the validation
+dataset, and ``build_evaluator`` the ``Evaluator``.
 """
 
 from __future__ import annotations
@@ -33,6 +35,7 @@ from .instantiate import instantiate
 
 
 def _generation_args(data_cfg: DictConfig) -> tuple:
+    """``(system, ic_sampler, ts, solver)`` instantiated from the ``data`` group."""
     system = instantiate(data_cfg.system)
     ic_sampler = instantiate(data_cfg.ic_sampler)
     solver = instantiate(data_cfg.solver)
@@ -41,13 +44,14 @@ def _generation_args(data_cfg: DictConfig) -> tuple:
 
 
 def dataset_file(data_cfg: DictConfig) -> Path:
-    """Where the dataset of this generation config lives (whether or not it exists):
-    ``<out_dir>/<name>-<config_hash>.nc`` with the hash ``generate`` would record.
+    """Where the dataset of this generation config lives, whether or not it exists:
+    ``<out_dir>/<name>-<config_hash>.nc`` with the hash `generate` would record.
 
-    Datasets are float64 (``generate_data.py`` enables x64), and the hash covers the
-    system's parameters as the arrays hold them, so it is computed under x64 whatever
-    the caller's setting — otherwise a run with ``x64: false`` would look for a file
-    whose name was hashed from float32-rounded parameters."""
+    Datasets are float64, and the hash covers the system's parameters as the arrays
+    hold them, so it is computed under x64 whatever the caller's setting; otherwise a
+    run with ``x64: false`` would look for a file whose name was hashed from
+    float32-rounded parameters.
+    """
     with jax.enable_x64(True):
         system, ic_sampler, ts, solver = _generation_args(data_cfg)
         meta = generation_metadata(
@@ -64,9 +68,10 @@ def dataset_file(data_cfg: DictConfig) -> Path:
 
 
 def generate_dataset(data_cfg: DictConfig) -> Path:
-    """Generate the dataset of a ``data`` config and save it at ``dataset_file(cfg)``
-    (what ``scripts/generate_data.py`` does; the resolved config goes into the file's
-    ``extra`` metadata). The one place generation happens."""
+    """Generate the dataset of a ``data`` config and save it at ``dataset_file(cfg)``,
+    with the resolved config in the file's ``extra`` metadata: what
+    ``scripts/generate_data.py`` does, and the one place generation happens. The path
+    is returned."""
     with jax.enable_x64(True):  # datasets are float64, whatever the caller runs in
         system, ic_sampler, ts, solver = _generation_args(data_cfg)
         source = generate(
@@ -85,8 +90,11 @@ def generate_dataset(data_cfg: DictConfig) -> Path:
 
 
 def build_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
-    """Load the dataset the ``data`` config describes; fail loudly if it was not
-    generated (``scripts/generate_data.py --config-name <name>``)."""
+    """Load the dataset the ``data`` config describes.
+
+    **Raises:** `FileNotFoundError`, naming the generation command, when the file
+    does not exist; training never generates.
+    """
     path = dataset_file(data_cfg)
     if not path.exists():
         raise FileNotFoundError(
@@ -100,25 +108,26 @@ def build_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
 
 
 def load_or_generate_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
-    """For notebooks: ``build_source`` if the dataset file exists, else
-    ``generate_dataset`` first. Training runs (``setup``/``train``) still never generate
-    (ADR-0011): this is the explicit opt-in."""
+    """`build_source`, after `generate_dataset` when the file does not exist: the
+    explicit opt-in for notebooks, since training runs never generate (ADR-0011)."""
     if not dataset_file(data_cfg).exists():
         generate_dataset(data_cfg)
     return build_source(data_cfg)
 
 
 def reference_normal_form(data_cfg: DictConfig) -> AbstractNormalForm | None:
-    """The normal form the data were generated from, when they were — the
-    ``Evaluator``'s ground truth for phase and amplitude; ``None`` otherwise (FHN)."""
+    """The normal form the data were generated from, the ``Evaluator``'s ground
+    truth for phase and amplitude, or ``None`` for an observed system such as
+    FitzHugh–Nagumo."""
     system = instantiate(data_cfg.system)
     return system if isinstance(system, AbstractNormalForm) else None
 
 
 def validation_t_split(cfg: DictConfig, source: TimeSeriesDataSource) -> float | None:
-    """``validation.t_split`` as a time: the configured value; or, when it is ``null``
-    and the training sampler is ``mixed``, the sampler's own boundary ``ts[split_idx]``
-    so training and validation agree on what the transient is; else ``None``."""
+    """``validation.t_split`` as a time: the configured value, or, when it is ``null``
+    and the training sampler is ``mixed``, the sampler's own boundary
+    ``ts[split_idx]``, so that training and validation agree on what the transient
+    is; ``None`` otherwise."""
     v = cfg.validation
     if v.t_split is not None:
         return float(v.t_split)
@@ -130,10 +139,17 @@ def validation_t_split(cfg: DictConfig, source: TimeSeriesDataSource) -> float |
 
 @dataclass(frozen=True)
 class Loaders:
-    """The run's loaders (``from_config``). ``train`` is the device-prefetched stream
-    the trainer consumes; ``train_batches`` the underlying finite ``MapDataset``
-    (sliced at ``start_step`` already) for inspection; ``val`` the finite validation
-    dataset for an ``Evaluator``."""
+    """The run's loaders, built by `from_config`.
+
+    **Attributes:**
+
+    - `train`: The device-prefetched stream the trainer consumes.
+    - `train_batches`: The underlying finite ``MapDataset``, already sliced at the
+        start step, for inspection.
+    - `val`: The finite validation dataset for an ``Evaluator``.
+    - `batches_per_epoch`, `num_windows`: The training source's.
+    - `train_source`, `val_source`: The two halves of the split.
+    """
 
     train: grain.IterDataset
     train_batches: grain.MapDataset
@@ -153,8 +169,11 @@ class Loaders:
         start_step: int = 0,
     ) -> Loaders:
         """Split the trajectories, build the batched training stream from
-        ``start_step`` (resume = the slice ``[start_step:]`` of the same deterministic
-        dataset) and the finite validation dataset."""
+        `start_step`, which makes a resume the slice ``[start_step:]`` of the same
+        deterministic dataset, and the finite validation dataset.
+
+        **Raises:** `ValueError` for a `start_step` beyond the run's batches.
+        """
         v = cfg.validation
         train_source, val_source = source.split_trajectories(v.fraction, seed=v.seed)
         wsrc = build_window_source(cfg, train_source)
@@ -183,8 +202,11 @@ class Loaders:
 def build_window_source(
     cfg: DictConfig, source: TimeSeriesDataSource
 ) -> WindowBatchSource:
-    """The run's batched window source (``windows.sampling.kind``: uniform / weighted /
-    mixed), sized to cover ``num_steps``."""
+    """The run's batched window source, by ``windows.sampling.kind`` (``uniform``,
+    ``weighted`` or ``mixed``), sized to cover ``num_steps``.
+
+    **Raises:** `ValueError` for an unknown kind, or ``mixed`` without ``split_idx``.
+    """
     w = cfg.windows
     s = w.sampling
     kind = s.kind
@@ -225,9 +247,9 @@ def build_window_source(
 def build_evaluator(
     cfg: DictConfig, source: TimeSeriesDataSource, loaders: Loaders
 ) -> Evaluator:
-    """The run's ``Evaluator``: the validation dataset, the generating normal form as
-    reference when there is one, and ``validation.t_split`` resolved against the
-    sampler."""
+    """The run's ``Evaluator``: the validation dataset of `loaders`, the generating
+    normal form as reference when there is one, and ``validation.t_split`` resolved
+    against the sampler."""
     return Evaluator(
         loaders.val,
         reference=reference_normal_form(cfg.data),

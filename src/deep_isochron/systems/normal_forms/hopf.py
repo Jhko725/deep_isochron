@@ -40,7 +40,9 @@ class HopfNormalForm(AbstractEvenNormalForm):
     - `raw_a`: The unconstrained leaf of `a` (ADR-0001).
     - `w`, `w0`: As above, as scalar arrays.
 
-    **Raises:** `ValueError` for ``a <= 0``.
+    **Raises:**
+
+    `ValueError` for ``a <= 0``.
     """
 
     raw_a: Float[Array, ""]

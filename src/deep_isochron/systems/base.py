@@ -71,7 +71,9 @@ class SolverConfig(eqx.Module):
         - `adjoint`: The replacement, for instance ``diffrax.ForwardMode()`` for a
             solve that ``jax.jacfwd`` will differentiate.
 
-        **Returns:** A new ``SolverConfig``; `self` is unchanged.
+        **Returns:**
+
+        A new ``SolverConfig``; `self` is unchanged.
         """
         return copy.replace(self, adjoint=adjoint)
 
@@ -103,7 +105,9 @@ def diffeqsolve(
     - `args`: Passed through to `rhs`.
     - `config`: The solver, tolerances, step budget, adjoint and `throw` flag.
 
-    **Returns:** The ``diffrax.Solution``.
+    **Returns:**
+
+    The ``diffrax.Solution``.
     """
     return dfx.diffeqsolve(
         dfx.ODETerm(rhs),
@@ -149,7 +153,9 @@ class AbstractODE(eqx.Module):
         - `u`: The state, shape ``(dim,)``.
         - `args`: Unused; present for diffrax.
 
-        **Returns:** ``du/dt``, shape ``(dim,)``.
+        **Returns:**
+
+        ``du/dt``, shape ``(dim,)``.
         """
 
     def in_basin(self, u: Float[Array, " {self.dim}"]) -> Bool[Array, ""]:
@@ -165,7 +171,9 @@ class AbstractODE(eqx.Module):
 
         - `u`: The state, shape ``(dim,)``.
 
-        **Returns:** A scalar boolean array.
+        **Returns:**
+
+        A scalar boolean array.
         """
         del u
         return jnp.asarray(True)
@@ -205,10 +213,12 @@ class AbstractODE(eqx.Module):
         - `args`: Passed through to `rhs`.
         - `config`: The solver settings; ``DEFAULT_SOLVER_CONFIG`` when omitted.
 
-        **Returns:** The ``diffrax.Solution``: ``.ys`` is the trajectory, shape
-        ``(time, dim)``; ``.result`` the outcome, to compare with
-        ``diffrax.RESULTS.successful`` (elementwise under ``vmap`` when
-        ``config.throw`` is ``False``); ``.stats`` the step counts.
+        **Returns:**
+
+        The ``diffrax.Solution``: ``.ys`` is the trajectory, shape ``(time, dim)``;
+        ``.result`` the outcome, to compare with ``diffrax.RESULTS.successful``
+        (elementwise under ``vmap`` when ``config.throw`` is ``False``); ``.stats`` the
+        step counts.
         """
         return diffeqsolve(self.rhs, ts, u0, args, config)
 
@@ -229,8 +239,10 @@ class AbstractODE(eqx.Module):
         - `args`: Passed through to `rhs`.
         - `config`: The solver settings.
 
-        **Returns:** The state, shape ``(dim,)``, differentiable in `u0` and `t` under
-        the mode that ``config.adjoint`` supports.
+        **Returns:**
+
+        The state, shape ``(dim,)``, differentiable in `u0` and `t` under the mode that
+        ``config.adjoint`` supports.
         """
         ts = jnp.stack([jnp.zeros_like(t), jnp.asarray(t)])
         ys = cast(Array, self.flow(ts, u0, args, config=config).ys)

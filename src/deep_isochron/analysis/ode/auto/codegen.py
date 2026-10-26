@@ -101,8 +101,10 @@ def internal_indices(n_params: int) -> Idx:
     ``max(n_params, RESERVED_LOW)``, so that for up to ten parameters the period lands
     on ``PAR(11)``, as AUTO's ``IPS = 2`` stage requires.
 
-    **Raises:** `NotImplementedError` for more than ten parameters, where the period
-    would not be ``PAR(11)`` (see `RESERVED_LOW`).
+    **Raises:**
+
+    `NotImplementedError` for more than ten parameters, where the period would not be
+    ``PAR(11)`` (see `RESERVED_LOW`).
     """
     if n_params > RESERVED_LOW:
         raise NotImplementedError(
@@ -174,7 +176,9 @@ def rhs_block(sym: SymbolicODE, indent: str = "        ") -> str:
     - `sym`: The symbolic system.
     - `indent`: The indentation of every statement.
 
-    **Returns:** The Fortran text, with a trailing newline.
+    **Returns:**
+
+    The Fortran text, with a trailing newline.
     """
     n = sym.dim
     to_auto = {s: sp.Symbol(f"U({i + 1})") for i, s in enumerate(sym.states)}
@@ -260,7 +264,9 @@ class AutoProblem:
         """The AUTO slot of the system parameter named `parameter`; ``slot("c")`` is
         ``3`` for FitzHugh–Nagumo.
 
-        **Raises:** `KeyError` for a name the system does not have.
+        **Raises:**
+
+        `KeyError` for a name the system does not have.
         """
         for i, name in self.parameters.items():
             if name == parameter:
@@ -280,11 +286,15 @@ def write_problem(
     - `workdir`: Where the four files go.
     - `name`: The equation name, ``"isochron"`` by default.
 
-    **Returns:** The `AutoProblem` describing what was written.
+    **Returns:**
 
-    **Raises:** `NotImplementedError` for a system that is not planar, since the
-    generic file's segment slicing and the stable-direction construction assume
-    ``dim == 2``, or that has more than ten parameters.
+    The `AutoProblem` describing what was written.
+
+    **Raises:**
+
+    `NotImplementedError` for a system that is not planar, since the generic file's
+    segment slicing and the stable-direction construction assume ``dim == 2``, or that
+    has more than ten parameters.
     """
     sym = ode.symbolic().validate()
     if sym.dim != 2:

@@ -46,7 +46,9 @@ class BautinNormalForm(AbstractEvenNormalForm):
     - `raw_a`, `raw_b`: The unconstrained leaves of `a` and `b` (ADR-0001).
     - `w`, `w0`: As above, as scalar arrays.
 
-    **Raises:** `ValueError` for ``a <= 0`` or ``b <= -1``.
+    **Raises:**
+
+    `ValueError` for ``a <= 0`` or ``b <= -1``.
     """
 
     raw_a: Float[Array, ""]

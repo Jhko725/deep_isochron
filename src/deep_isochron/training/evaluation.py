@@ -1,31 +1,23 @@
 """Held-out evaluation against the model contract (roadmap C3, ADR-0009).
 
-``Evaluator(val_data, reference=…)`` is a callable ``model -> {name: float}`` for
-``Trainer.train(evaluate=…)``; it works on any ``AbstractPhaseAmplitudeModel`` and adds
-what each model kind can report:
-
-- **prediction**: ``val/mse`` (trajectory MSE over the validation windows — the default
-  checkpoint-selection metric) and ``val/final_mse`` (error at the window's last time);
-  with ``t_split``, also ``val/mse_early`` / ``val/mse_late`` — the same error over the
-  windows that start before / at-or-after ``t_split``, so the transient's fit is not
-  drowned by the many near-periodic windows (``docs/design/validation-split.md``); the
-  checkpointer can select on ``val/mse_early``;
-- **learned physics**, both kinds: ``period`` and ``kappa`` (the normal form's closed
-  forms for the conjugacy model; ``2π/|ω|`` and ``κ`` of
-  ``PhaseAmplitudeLatentDynamics`` for the autoencoder); the conjugacy model also
-  reports its normal form's parameters (``nf/a``, ``nf/b``, …) and, on a grid over the
-  validation data's bounding box, the bijection's max round-trip error ``H⁻¹(H(x)) − x``
-  and the min/max singular value of its Jacobian — per layer for a ``SequentialINN``
-  (``jac/sv_min/<i>``);
-- **against a reference** normal form, when the data were generated from one
-  (``reference=nf``, the design document's §7 chart as ground truth):
-  ``phase/circ_std``, the circular standard deviation of ``Θ_model − Θ_exact`` over the
-  validation points, minimized over the two orientations (a phase is learned up to a
-  constant and a sign), and ``amplitude/corr``, ``|corr(A_model, Ψ_exact)|`` (an
-  amplitude is learned up to scale, so correlation is the scale-free comparison).
-
-For FitzHugh–Nagumo there is no reference until Phase E: prediction error and the
-learned period are what is reported."""
+``Evaluator`` is a callable ``model -> {name: float}`` for
+``Trainer.train(evaluate=…)``. It works on any ``AbstractPhaseAmplitudeModel`` and
+reports five groups. The prediction metrics are ``val/mse``, the trajectory MSE over
+the validation windows and the default checkpoint-selection metric, and
+``val/final_mse``, the error at the window's last time; with ``t_split``, also
+``val/mse_early`` and ``val/mse_late`` over the windows that start before and at or
+after it, so that the transient's fit is not drowned by the many near-periodic windows
+(``docs/design/validation-split.md``). The learned physics are ``period`` and
+``kappa`` for both model kinds, and for the conjugacy model its normal form's
+parameters as ``nf/<name>``. The latent extent metrics detect a map that flings points
+toward the latent origin or far outside the cycle. The bijection diagnostics, for the
+conjugacy model, are the round-trip error and the Jacobian singular values on a grid
+over the data's bounding box, per layer for a ``SequentialINN``. And against a
+reference normal form, when the data were generated from one, ``phase/circ_std`` and
+``amplitude/corr`` measure the agreement of the learned phase and amplitude with the
+exact chart; ``phase_amplitude_agreement`` says why those two statistics. For
+FitzHugh–Nagumo there is no reference until Phase E.
+"""
 
 from __future__ import annotations
 
@@ -53,8 +45,9 @@ from .losses import Batch, final_mse, trajectory_mse
 def bounding_box_grid(
     bounds: Float[Array, "2 dim"], num: int = 32, margin: float = 0.05
 ) -> Float[Array, "m dim"]:
-    """A regular grid over the axis-aligned box ``bounds = (lo, hi)`` (``num`` per axis
-    for planar data, ``8`` beyond), widened by ``margin`` of each side's extent."""
+    """A regular grid over the axis-aligned box ``bounds = (lo, hi)``, shape
+    ``(m, dim)``: `num` points per axis for planar data and 8 beyond, widened by
+    `margin` of each side's extent."""
     lo, hi = bounds[0], bounds[1]
     pad = margin * (hi - lo)
     lo, hi = lo - pad, hi + pad
@@ -65,13 +58,15 @@ def bounding_box_grid(
 
 
 def circular_std(angles: Float[Array, " n"]) -> Float[Array, ""]:
-    """``sqrt(-2 ln R̄)`` with ``R̄`` the mean resultant length (see
-    ``phase_amplitude_agreement`` for why this is the right spread of angles)."""
+    """The circular standard deviation ``sqrt(-2 ln R̄)`` of `angles`, with ``R̄`` the
+    mean resultant length; `phase_amplitude_agreement` says why this is the right
+    spread of angles."""
     return circular_std_from_resultant(jnp.abs(jnp.mean(jnp.exp(1j * angles))))
 
 
 @eqx.filter_jit
 def prediction_errors(model, batch: Batch) -> tuple[Float[Array, ""], Float[Array, ""]]:
+    """The trajectory MSE and the final error of `model` on one `batch`."""
     t, x = jnp.asarray(batch["t"]), jnp.asarray(batch["u"])
     x_pred, _ = eqx.filter_vmap(model)(t, x[:, 0])
     return trajectory_mse(x_pred, x), final_mse(x_pred, x)
@@ -81,10 +76,11 @@ def prediction_errors(model, batch: Batch) -> tuple[Float[Array, ""], Float[Arra
 def prediction_sums(
     model, batch: Batch, t_split: Float[Array, ""]
 ) -> dict[str, Float[Array, ""]]:
-    """Sufficient statistics of one batch for the prediction metrics: sums over windows
-    of the per-window trajectory MSE and final error, the window count, and the same
-    sums restricted to windows that **start before** ``t_split`` (the transient bucket;
-    design document ``validation-split.md``). Summed over batches by ``Evaluator``."""
+    """The sufficient statistics of one `batch` for the prediction metrics: the sums
+    over windows of the per-window trajectory MSE and final error, the window count,
+    and the same sums restricted to the windows that start before `t_split`, the
+    transient bucket (``docs/design/validation-split.md``). `Evaluator` sums them over
+    batches."""
     t, x = jnp.asarray(batch["t"]), jnp.asarray(batch["u"])
     x_pred, _ = eqx.filter_vmap(model)(t, x[:, 0])
     per_window = eqx.filter_vmap(trajectory_mse)(x_pred, x)
@@ -103,14 +99,15 @@ def prediction_sums(
 def latent_extent(
     model: AbstractPhaseAmplitudeModel, points: Float[Array, "n dim"]
 ) -> dict[str, Array]:
-    """Where the model sends the data: over ``points`` (every sample of the validation
-    windows), the extremes of the amplitude ``A(x)`` and — for a conjugacy model — of
-    the latent radius ``|H(x)|``, plus the count of points whose amplitude is not finite
-    and, for a conjugacy model, whose image ``H(x)`` is not finite. Combined
-    across batches by ``Evaluator`` (min/max/sum). This is the detector for a learned
-    map that flings points toward the latent origin (``r_min → 0``, ``amp_min → −∞``,
-    where the normal form's closed forms overflow) or far outside the cycle (``r_max``
-    large, where ``Ψ`` saturates and the chart's inverse loses its conditioning)."""
+    """Where `model` sends `points`: the extremes of the amplitude ``A(x)`` and, for a
+    conjugacy model, of the latent radius ``|H(x)|``, with the counts of points whose
+    amplitude or image is not finite. `Evaluator` combines them across batches.
+
+    This is the detector for a learned map that flings points toward the latent
+    origin, where ``r_min → 0`` and ``amp_min → −∞`` and the normal form's closed
+    forms overflow, or far outside the cycle, where ``r_max`` is large, ``Ψ``
+    saturates and the chart's inverse loses its conditioning.
+    """
     amp = jax.vmap(model.amplitude)(points)
     finite = jnp.isfinite(amp)
     safe = jnp.where(finite, amp, 0.0)
@@ -131,6 +128,7 @@ def latent_extent(
 
 
 def _combine_extent(acc: dict[str, Array] | None, part: dict[str, Array]):
+    """`acc` combined with `part`: minima, maxima and sums by key suffix."""
     if acc is None:
         return dict(part)
     out = {}
@@ -150,9 +148,10 @@ def phase_amplitude_sums(
     reference: AbstractNormalForm,
     points: Float[Array, "n dim"],
 ) -> dict[str, Array]:
-    """Sufficient statistics of one batch for the phase and amplitude agreement:
-    ``Σ exp(i(±Θ_model − Θ_ref))`` for both orientations and the moments of
-    ``(A_model, Ψ_ref)``; summed over batches by ``Evaluator``."""
+    """The sufficient statistics of one batch of `points` for the phase and amplitude
+    agreement of `model` with `reference`: ``Σ exp(i(±Θ_model − Θ_ref))`` for both
+    orientations and the moments of ``(A_model, Ψ_ref)``. `Evaluator` sums them over
+    batches."""
     theta = jax.vmap(model.phase)(points)
     amp = jax.vmap(model.amplitude)(points)
     exact = jax.vmap(reference.to_phase_amplitude)(points)
@@ -170,18 +169,20 @@ def phase_amplitude_sums(
 
 
 def phase_amplitude_agreement(sums: dict[str, Array]) -> tuple[Array, Array]:
-    """``(circ_std, |corr|)`` from summed ``phase_amplitude_sums``.
+    """``(circ_std, |corr|)`` from the summed `phase_amplitude_sums`.
 
-    Why the circular standard deviation rather than an MSE of the angle difference: the
-    learned phase is determined only up to a constant (design document §5.4), so the
-    difference ``Δ = Θ_model − Θ_ref`` has an unknown mean, and ``Δ`` lives on the
-    circle, so a model right to 0.01 rad can show ``|Δ| ≈ 2π`` near ``±π``. The circular
-    standard deviation ``sqrt(−2 ln R̄)``, ``R̄ = |mean exp(iΔ)|`` (Mardia & Jupp,
-    *Directional Statistics*, 1999; SciPy's ``circstd``), is invariant to the offset and
-    to wrapping, and for small spread equals the ordinary standard deviation of ``Δ``
-    after removing its mean — the RMS phase error in radians. The better of the two
-    orientations is kept (a phase is learned up to a sign too). The amplitude is learned
-    up to scale, so ``|corr(A_model, Ψ_ref)|`` is its scale-free comparison."""
+    The circular standard deviation rather than an MSE of the angle difference,
+    because the learned phase is determined only up to a constant (design document
+    §5.4), so the difference ``Δ = Θ_model − Θ_ref`` has an unknown mean, and ``Δ``
+    lives on the circle, so a model right to 0.01 rad can show ``|Δ| ≈ 2π`` near
+    ``±π``. The circular standard deviation ``sqrt(−2 ln R̄)`` with
+    ``R̄ = |mean exp(iΔ)|`` (Mardia & Jupp 1999; SciPy's ``circstd``) is invariant to
+    the offset and to wrapping, and for small spread equals the ordinary standard
+    deviation of ``Δ`` after removing its mean: the RMS phase error in radians. The
+    better of the two orientations is kept, since a phase is learned up to a sign too.
+    The amplitude is learned up to scale, so ``|corr(A_model, Ψ_ref)|`` is its
+    scale-free comparison.
+    """
     n = sums["n"]
     spread = jnp.minimum(
         circular_std_from_resultant(jnp.abs(sums["z_plus"]) / n),
@@ -195,6 +196,7 @@ def phase_amplitude_agreement(sums: dict[str, Array]) -> tuple[Array, Array]:
 
 
 def circular_std_from_resultant(r: Array) -> Array:
+    """``sqrt(-2 ln r)`` for a mean resultant length `r`, clipped to ``(0, 1]``."""
     return jnp.sqrt(-2.0 * jnp.log(jnp.clip(r, 1e-300, 1.0)))
 
 
@@ -202,8 +204,10 @@ def circular_std_from_resultant(r: Array) -> Array:
 def bijection_grid_metrics(
     bijection: AbstractBijection, grid: Float[Array, "m dim"]
 ) -> dict[str, Float[Array, ""]]:
-    """Max round-trip error and min/max Jacobian singular value on ``grid``; per layer
-    too for a ``SequentialINN`` (the Jacobian of layer ``i`` at that layer's input)."""
+    """The maximum round-trip error ``H⁻¹(H(x)) − x`` and the minimum and maximum
+    Jacobian singular value of `bijection` on `grid`, as ``roundtrip/max``,
+    ``jac/sv_min`` and ``jac/sv_max``; per layer too for a ``SequentialINN``, as
+    ``jac/sv_min/<i>``, with the Jacobian of layer ``i`` at that layer's input."""
 
     def layer_metrics(f, x):
         svs = jnp.linalg.svd(jax.vmap(f.jacobian)(x), compute_uv=False)
@@ -222,8 +226,9 @@ def bijection_grid_metrics(
 
 
 def learned_physics(model: AbstractPhaseAmplitudeModel) -> dict[str, Array]:
-    """``period``, ``kappa`` and, for the conjugacy model, the normal form's
-    parameters."""
+    """``period`` and ``kappa`` of `model`: the normal form's closed forms for the
+    conjugacy model, with its parameters as ``nf/<name>``; ``2π/|ω|`` and ``κ`` of
+    ``PhaseAmplitudeLatentDynamics`` for the autoencoder; empty otherwise."""
     out: dict[str, Array] = {}
     if isinstance(model, ConjugateLatentDynamics):
         nf = model.latent_dynamics
@@ -242,36 +247,49 @@ def learned_physics(model: AbstractPhaseAmplitudeModel) -> dict[str, Array]:
 
 @dataclass
 class Evaluator:
-    """``evaluate(model)`` over a **finite, re-iterable** collection of validation
-    batches — a ``validation_windows(...).batch(B)`` dataset (the intended source), or
-    a list from ``collect_batches``. It is iterated to exhaustion on every call, so each
-    evaluation sees the same windows and the metric is comparable across steps
-    (levanter's eval-loop shape; ADR-0009). The bounding-box grid for the bijection
-    diagnostics is taken from the data on the first pass."""
+    """The validation metrics of a model over a finite, re-iterable collection of
+    batches, iterated to exhaustion on every call so that each evaluation sees the
+    same windows and the metric is comparable across steps (ADR-0009).
+
+    **Attributes:**
+
+    - `val_data`: The batches: a ``validation_windows(...).batch(B)`` dataset, the
+        intended source, or a list from `collect_batches`.
+    - `reference`: The normal form the data were generated from, when there is one;
+        the ground truth for phase and amplitude.
+    - `grid_points`: Points per axis of the bounding-box grid for the bijection
+        diagnostics; the grid is taken from the data on the first pass.
+    - `t_split`: Splits the prediction error by window start: windows starting before
+        it, the transient, give ``val/mse_early``, the rest ``val/mse_late``, and
+        ``val/mse`` stays the overall mean. ``None`` for no split
+        (``docs/design/validation-split.md``).
+    """
 
     val_data: Iterable[dict[str, Array | np.ndarray]]
     reference: AbstractNormalForm | None = None
     grid_points: int = 32
     t_split: float | None = None
-    """Split the prediction error by window start: windows starting before ``t_split``
-    (the transient) give ``val/mse_early``, the rest ``val/mse_late``; ``val/mse`` stays
-    the overall mean. ``None``: no split. See ``docs/design/validation-split.md``."""
     _grid: Array | None = field(default=None, init=False, repr=False)
 
     def _batches(self) -> Iterable[dict[str, Array | np.ndarray]]:
-        """One pass over the validation data; a grain ``MapDataset`` is read with a
-        single thread so evaluation does not start 16 reader threads next to JAX."""
+        """One pass over the validation data; a grain dataset is read with a single
+        thread so that evaluation does not start 16 reader threads next to JAX."""
         if isinstance(self.val_data, grain.MapDataset | grain.IterDataset):
             return single_threaded(self.val_data)
         return self.val_data
 
     @property
     def grid(self) -> Float[Array, "m dim"]:
+        """The bounding-box grid, built from the data on first use."""
         if self._grid is None:
             self._grid = bounding_box_grid(self._bounds(), self.grid_points)
         return self._grid
 
     def _bounds(self) -> Float[Array, "2 dim"]:
+        """The per-coordinate minimum and maximum over the validation data.
+
+        **Raises:** `ValueError` when the data are empty.
+        """
         lo = hi = None
         for batch in self._batches():
             u = np.asarray(batch["u"]).reshape(-1, np.shape(batch["u"])[-1])
@@ -282,6 +300,11 @@ class Evaluator:
         return jnp.stack((jnp.asarray(lo), jnp.asarray(hi)))
 
     def __call__(self, model: AbstractPhaseAmplitudeModel) -> dict[str, float]:
+        """The metrics of `model` over one pass of the validation data, as floats;
+        an empty bucket of the split is reported as ``nan`` rather than hidden.
+
+        **Raises:** `ValueError` when the data are empty.
+        """
         t_split = jnp.asarray(-jnp.inf if self.t_split is None else self.t_split)
         pred: dict[str, Array] | None = None
         sums: dict[str, Array] | None = None
@@ -336,7 +359,7 @@ class Evaluator:
 
 
 def collect_batches(loader: Iterable[Batch], num: int) -> list[dict[str, np.ndarray]]:
-    """The first ``num`` batches of a loader, as NumPy on the host."""
+    """The first `num` batches of `loader`, as NumPy arrays on the host."""
     out: list[dict[str, np.ndarray]] = []
     for batch in loader:
         out.append({k: np.asarray(v) for k, v in batch.items()})

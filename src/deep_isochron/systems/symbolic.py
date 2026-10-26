@@ -64,9 +64,11 @@ class SymbolicODE(NamedTuple):
     def validate(self) -> SymbolicODE:
         """Check the template conventions and return `self`.
 
-        **Raises:** `ValueError` when the number of expressions differs from the number
-        of states, a parameter symbol is not named after its key, or an expression has
-        a free symbol that is neither a state nor a parameter.
+        **Raises:**
+
+        `ValueError` when the number of expressions differs from the number of states, a
+        parameter symbol is not named after its key, or an expression has a free symbol
+        that is neither a state nor a parameter.
         """
         if len(self.rhs) != len(self.states):
             raise ValueError(
@@ -120,7 +122,9 @@ class CompiledExpressions(NamedTuple):
         - `owner`: The object whose attributes hold the parameter values.
         - `values`: One value per input symbol, in the order of `inputs`.
 
-        **Returns:** A list with one array per expression.
+        **Returns:**
+
+        A list with one array per expression.
         """
         inputs = dict(zip(self.inputs, values, strict=True))
         params = {name: getattr(owner, name) for name in self.params}
@@ -138,7 +142,9 @@ def compile_expressions(
     - `inputs`: The symbols supplied positionally at each call.
     - `params`: The attribute names of the remaining free symbols.
 
-    **Returns:** The compiled expressions.
+    **Returns:**
+
+    The compiled expressions.
     """
     module = sympy2jax.SymbolicModule(
         list(exprs), extra_funcs=EXTRA_FUNCS, make_array=False
@@ -210,7 +216,9 @@ class AbstractSymbolicODE(AbstractODE):
         - `u`: The state, shape ``(dim,)``.
         - `args`: Unused.
 
-        **Returns:** ``du/dt``, shape ``(dim,)``.
+        **Returns:**
+
+        ``du/dt``, shape ``(dim,)``.
         """
         del t, args
         components = type(self)._compiled(self, *u)

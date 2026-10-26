@@ -117,7 +117,7 @@ then — Parked).
 Order: O1 → O2 (done 2026-10-20) → O3 → O4 (one survey, shared references), then O5 → O6, with M alongside
 each; D2/D3 when a run asks for them; E7 continuously.
 
-## Phase P — `prose` (current; rounds 0–2 landed 2026-10-26)
+## Phase P — `prose` (current; rounds 0–3 landed 2026-10-26)
 
 Docstrings and documents revised under the `clear-prose` skill, with the missing public
 docstrings written. The standard is ADR-0018 and `docs/coding-standards.md` § Docstrings:
@@ -130,7 +130,7 @@ lives in the ADRs. Each round is one commit, reviewed before the next starts; th
 | P0 | Standards: ADR-0018, the coding-standards sections, `docs/references.md` with every citation normalized, `scripts/check_references.py`, ruff `D100`–`D103` with the frontier in `per-file-ignores` | *done 2026-10-26* |
 | P1 | `systems/` (all twelve modules) and `analysis/ode/auto/` | *done 2026-10-26*: `D` on for both |
 | P2 | `analysis/` (all eleven modules) | *done 2026-10-26*: `D` on; nothing needed moving, ADR-0015 and `analysis.md` §2–3 already held everything cut |
-| P3 | `data/`, `training/`, `experiment/` | `D` on for the three |
+| P3 | `data/`, `training/`, `experiment/` (24 modules) | *done 2026-10-26*: `D` on for the three; the `**Returns:**`/`**Raises:**` header form fixed tree-wide |
 | P4 | `model/invertible/*`, `model/*` (the most missing docstrings) | `D` on for `model/` |
 | P5 | `tests/`: one-sentence docstrings per module and test, `helpers.py`, `strategies.py` | `D` on for `tests/` |
 | P6 | Documents: ADRs, `architecture.md`, `coding-standards.md` in full; `analysis.md`, `cubic-bspline.md`, `training-step-performance.md`, `validation-split.md` paragraph and word passes | `check_md_math.py` 0, citations and equations unchanged by a mechanical diff |
@@ -205,3 +205,4 @@ The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when 
 | 2026-10-26 | `prose` | P0: ADR-0018 (map/contract docstrings, one bibliography); `docs/coding-standards.md` § Docstrings and § References; `docs/references.md` with every in-text citation normalized to `(Key, locator)` and the five per-document reference lists removed; `scripts/check_references.py` in `prek` and CI; ruff `D100`–`D103` with the frontier in `per-file-ignores` | `docs/changes/2026-10-26-prose.md`, ADR-0018 |
 | 2026-10-26 | `prose` | P1: docstrings of `systems/` and `analysis/ode/auto/` revised to the map/contract split, 30 missing public docstrings written, module docstrings cut to pointers at `normal-forms.md` and ADR-0013/0016; ruff `D` on for both directories | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-26 | `prose` | P2: docstrings of `analysis/` revised; `floquet.py`'s 70-line and `poincare.py`'s 57-line module docstrings become maps with pointers at ADR-0014/0015 and `analysis.md` §2–3; 8 missing public docstrings written; `Hairer et al. 1993` added to the bibliography; ruff `D` on for `analysis/` | `docs/changes/2026-10-26-prose.md` |
+| 2026-10-26 | `prose` | P3: docstrings of `data/`, `training/`, `experiment/` revised, 72 missing public docstrings written; the 64 inline `**Returns:**`/`**Raises:**` headers from P1–P2 put on their own line as diffrax writes them, and the form written into the standard; `CLAUDE.md` gains the review-row rule; ruff `D` on for the three packages | `docs/changes/2026-10-26-prose.md` |

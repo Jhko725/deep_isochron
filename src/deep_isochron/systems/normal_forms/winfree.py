@@ -46,7 +46,9 @@ class WinfreeNormalForm(AbstractNormalForm):
 
     - `a`, `w`: As above, static floats.
 
-    **Raises:** `ValueError` for ``a >= 1``, where the cycle would not attract.
+    **Raises:**
+
+    `ValueError` for ``a >= 1``, where the cycle would not attract.
     """
 
     a: float = eqx.field(static=True)

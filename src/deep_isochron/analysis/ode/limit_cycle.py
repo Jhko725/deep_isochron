@@ -94,9 +94,11 @@ class LimitCycle(eqx.Module):
 
         - `n_points`: The number of sample times.
 
-        **Returns:** ``(times, points)`` with shapes ``(n,)`` and ``(n, dim)``,
-        ``points[0] == x0s[0]``, in forward time order; a reverse-time orbit is
-        sampled backward and reordered.
+        **Returns:**
+
+        ``(times, points)`` with shapes ``(n,)`` and ``(n, dim)``, ``points[0] ==
+        x0s[0]``, in forward time order; a reverse-time orbit is sampled backward and
+        reordered.
         """
         x0 = self.x0s[0]
         times = jnp.linspace(0.0, 1.0, n_points, endpoint=False) * self.period
@@ -110,7 +112,9 @@ class LimitCycle(eqx.Module):
         """$+1$ for a counterclockwise orbit, by the signed area of the polygon of
         `n_points` samples, and $-1$ for a clockwise one.
 
-        **Raises:** `ValueError` for a non-planar orbit.
+        **Raises:**
+
+        `ValueError` for a non-planar orbit.
         """
         if self.dim != 2:
             raise ValueError("orientation is defined for planar orbits only.")
@@ -138,7 +142,9 @@ def settle(
     - `config`: The solver settings.
     - `reverse_time`: Whether to integrate the time-reversed flow.
 
-    **Returns:** The state, shape ``(dim,)``.
+    **Returns:**
+
+    The state, shape ``(dim,)``.
     """
     sign = -1.0 if reverse_time else 1.0
     return ode.flow_to(sign * t_settle, jnp.asarray(x0, dtype=float), config=config)
@@ -169,9 +175,13 @@ def initial_guess(
     - `max_returns`: The bound on the number of map iterations.
     - `reverse_time`: Whether to iterate the map of the time-reversed flow.
 
-    **Returns:** ``(section, fixed_point)``.
+    **Returns:**
 
-    **Raises:** `ValueError` at an equilibrium; `NotConvergedError` from the map.
+    ``(section, fixed_point)``.
+
+    **Raises:**
+
+    `ValueError` at an equilibrium; `NotConvergedError` from the map.
     """
     section = CrossSection.normal_to_flow(ode, p)
     pmap = PoincareMap(ode, section, config, t_max=t_max, reverse_time=reverse_time)
@@ -205,7 +215,9 @@ def polish(
         ``atol = 1e-2 tol``.
     - `reverse_time`: Whether to shoot in the time-reversed flow.
 
-    **Returns:** The `ShootingResult`.
+    **Returns:**
+
+    The `ShootingResult`.
     """
     sign = -1.0 if reverse_time else 1.0
     x_hat = jnp.asarray(x_hat, dtype=float)
@@ -291,15 +303,18 @@ def find_limit_cycle(
     - `tol`: The Levenberg–Marquardt tolerance of the shooting, ``rtol = tol`` and
         ``atol = 1e-2 tol``: the accuracy of the result.
 
-    **Returns:** A `LimitCycle`: the converged mesh `x0s`, the `period`, the shooting
-    `residual`, the `settle` record, the `section`, and the `ode`, `config` and
-    `reverse_time` the orbit was found with.
+    **Returns:**
 
-    **Raises:** `ValueError` for an `x0` that is not a vector or lies outside
-    ``ode.in_basin`` in forward time, or for a non-positive `t_settle`;
-    `NotConvergedError`, naming the stage, when the settled point leaves the finite
-    domain, the map does not return, shooting does not converge, or a guard rejects
-    the solution.
+    A `LimitCycle`: the converged mesh `x0s`, the `period`, the shooting `residual`, the
+    `settle` record, the `section`, and the `ode`, `config` and `reverse_time` the orbit
+    was found with.
+
+    **Raises:**
+
+    `ValueError` for an `x0` that is not a vector or lies outside ``ode.in_basin`` in
+    forward time, or for a non-positive `t_settle`; `NotConvergedError`, naming the
+    stage, when the settled point leaves the finite domain, the map does not return,
+    shooting does not converge, or a guard rejects the solution.
     """
     x0 = jnp.asarray(x0, dtype=float)
     if x0.ndim != 1:

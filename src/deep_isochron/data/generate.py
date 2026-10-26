@@ -1,11 +1,13 @@
-"""Trajectory generation: ``generate(system, ic_sampler, ts, n, ...)`` -> a data source.
+"""Trajectory generation: ``generate`` turns a system, a sampler of initial conditions
+and a time grid into a ``TimeSeriesDataSource``.
 
-Initial conditions are drawn by an ``AbstractICSampler`` (a small equinox module so that
-its configuration is recorded in the metadata), the system's ``flow`` is vmapped over
-them with ``throw=False``, and any failed integration is reported *loudly* with the
-indices of the offending initial conditions rather than silently dropped. The returned
-source carries a grouped ``DatasetMetadata`` (``system``, ``sampling``, ``grid``,
-``solve``, ``provenance``) whose ``config_hash`` names the file: ``<name>-<hash>.nc``.
+Initial conditions are drawn by an ``AbstractICSampler``, a small equinox module so
+that its configuration is recorded in the metadata; the system's ``flow`` is vmapped
+over them with ``throw=False``, and a failed integration is reported with the indices
+of the offending initial conditions rather than dropped. The returned source carries a
+grouped ``DatasetMetadata`` whose ``config_hash`` names the file, ``<name>-<hash>.nc``;
+``generation_metadata`` computes that metadata without generating, which is how the
+experiment layer finds a dataset. ADR-0008 has the format, ADR-0013 the basin rule.
 """
 
 from __future__ import annotations
@@ -42,8 +44,6 @@ from .dataset import (
 from .initial_conditions import AbstractICSampler
 
 
-# ------------------------------------------------------------------- provenance ---
-# --------------------------------------------------------------------- generate ---
 def generate(
     system: AbstractODE,
     ic_sampler: AbstractICSampler,
@@ -56,15 +56,29 @@ def generate(
     extra: dict[str, Any] | None = None,
     outside_basin: Literal["error", "resample"] = "error",
 ) -> TimeSeriesDataSource:
-    """Integrate ``n_trajectories`` initial conditions of ``system`` on the grid ``ts``.
+    """Integrate `n_trajectories` initial conditions of `system` on the grid `ts`.
 
-    ``seed`` seeds the initial-condition draw (recorded in the metadata).
-    ``integration`` applies to ``AbstractNormalForm`` systems only (``None`` → the
-    system's ``default_integration``, ``"closed_form"``). Failed integrations raise
-    ``RuntimeError`` naming the indices. Initial conditions outside the system's basin
-    (``system.in_basin``; a phaseless set) are an error, or with
-    ``outside_basin="resample"`` are replaced by further draws until ``n_trajectories``
-    lie inside — with a warning, and the count in ``metadata.provenance.rejected_ics``.
+    **Arguments:**
+
+    - `system`: The ODE.
+    - `ic_sampler`: The sampler of initial conditions.
+    - `ts`: The time grid, shape ``(time,)``.
+    - `n_trajectories`: How many trajectories to generate.
+    - `seed`: The seed of the initial-condition draw, recorded in the metadata.
+    - `config`: The solver settings; `throw` is forced off so that failures are
+        reported per trajectory.
+    - `integration`: For an ``AbstractNormalForm`` only; ``None`` is the system's
+        `default_integration`.
+    - `extra`: Free metadata recorded under ``extra``.
+    - `outside_basin`: What to do with initial conditions outside ``system.in_basin``:
+        ``"error"`` raises; ``"resample"`` replaces them by further draws until
+        `n_trajectories` lie inside, with a warning and the count in
+        ``metadata.provenance.rejected_ics``.
+
+    **Returns:** The `TimeSeriesDataSource` with its metadata and provenance.
+
+    **Raises:** `RuntimeError` naming the indices of failed integrations;
+    `ValueError` for initial conditions outside the basin under ``"error"``.
     """
     ts = jnp.asarray(ts)
     u0, rejected = _sample_in_basin(
@@ -132,9 +146,10 @@ def _sample_in_basin(
     n: int,
     outside_basin: str,
 ) -> tuple[Array, int]:
-    """``n`` initial conditions inside ``system``'s basin and how many draws were
-    rejected on the way. ``"error"``: any rejection raises; ``"resample"``: redraw
-    (``n`` at a time, fresh keys) until ``n`` are accepted, then warn."""
+    """`n` initial conditions inside the basin of `system`, and how many draws were
+    rejected on the way. Under ``"error"`` any rejection raises; under ``"resample"``
+    the sampler is redrawn, `n` at a time with fresh keys, until `n` are accepted, and
+    a warning reports the count."""
     if outside_basin not in ("error", "resample"):
         raise ValueError(
             f"outside_basin must be 'error' or 'resample', got {outside_basin!r}."
@@ -190,10 +205,17 @@ def generation_metadata(
     extra: dict[str, Any] | None = None,
     outside_basin: str = "error",
 ) -> DatasetMetadata:
-    """The metadata ``generate`` would record for these arguments, **without
-    generating** — provenance left at its defaults. Its ``config_hash`` is the one the
-    generated file carries, so ``dataset_path(root, name, generation_metadata(...))`` is
-    where a dataset of this configuration lives (``experiment.build_source``)."""
+    """The metadata that `generate` would record for these arguments, without
+    generating, with the provenance left at its defaults.
+
+    Its ``config_hash`` is the one the generated file carries, so
+    ``dataset_path(root, name, generation_metadata(...))`` is where a dataset of this
+    configuration lives; ``experiment.build_source`` relies on that. The arguments are
+    those of `generate`.
+
+    **Raises:** `ValueError` for an `integration` on a system that is not a normal
+    form.
+    """
     ts = jnp.asarray(ts)
     config = copy.replace(config, throw=False)
     if isinstance(system, AbstractNormalForm):
@@ -219,5 +241,5 @@ def generation_metadata(
 
 
 def dataset_path(root: str | Path, name: str, meta: DatasetMetadata) -> Path:
-    """``<root>/<name>-<config_hash>.nc``."""
+    """The path ``<root>/<name>-<config_hash>.nc`` of the dataset `meta` describes."""
     return Path(root) / f"{name}-{meta.config_hash}.nc"
