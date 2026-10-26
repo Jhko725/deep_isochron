@@ -109,12 +109,12 @@ documents still holds.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `CLAUDE.md`: pruned to protocol, change-document contract and repository facts; session and end-of-session sections added; pointer to the standards document | | |
-| `docs/coding-standards.md` (new): tiers, named values, contracts with ADR numbers, Markdown rules, checks, exceptions | | |
-| `docs/index.md`: the new document under *Read first*, and the branch's change document | | |
-| `scripts/check_spelling.py` (new): the `-ise` / `-isation` / `-yse` rule with its exception list; 23 findings here, none of them false | | |
-| `pyproject.toml`: `[tool.codespell]`; `TID251` + banned-api | | |
-| `prek.toml`: codespell, `check_spelling`, `check_md_math` hooks | | |
-| `.github/workflows/ci.yml`: codespell, `check_spelling`, the `ty: ignore` grep | | |
-| `scripts/bench_dataloader.py`: `noqa: TID251` on the ADR-0010 measurement | | |
-| `docs/changes/2026-10-25-conventions-docs.md`: this document | | |
+| `CLAUDE.md`: pruned to protocol, change-document contract and repository facts; session and end-of-session sections added; pointer to the standards document | Looks good. | None |
+| `docs/coding-standards.md` (new): tiers, named values, contracts with ADR numbers, Markdown rules, checks, exceptions | Looks good. | None |
+| `docs/index.md`: the new document under *Read first*, and the branch's change document | Looks good. | None |
+| `scripts/check_spelling.py` (new): the `-ise` / `-isation` / `-yse` rule with its exception list; 23 findings here, none of them false | Had a lookthrough. | None |
+| `pyproject.toml`: `[tool.codespell]`; `TID251` + banned-api | Confirmed. | None |
+| `prek.toml`: codespell, `check_spelling`, `check_md_math` hooks | Looks good. | None |
+| `.github/workflows/ci.yml`: codespell, `check_spelling`, the `ty: ignore` grep | Confirmed. | None |
+| `scripts/bench_dataloader.py`: `noqa: TID251` on the ADR-0010 measurement | Confirmed. | None |
+| `docs/changes/2026-10-25-conventions-docs.md`: this document | Looks good. | None |
