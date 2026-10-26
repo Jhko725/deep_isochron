@@ -1,19 +1,17 @@
-"""Laws of the data layer (``deep_isochron.data``).
+"""The laws of the data layer, ``deep_isochron.data``, in five groups.
 
-1. source        a grain random-access source over whole trajectories; shape checks;
-                 ``copy.replace`` splits — split_time partitions the time axis,
-                 split_trajectories partitions the trajectories deterministically
-2. metadata      grouped; attrs round trip through JSON; config_hash covers the four
-                 generation groups and nothing in provenance/extra
-3. disk          save -> load round-trips arrays and metadata through one file; dtype
-                 mismatch is loud; missing metadata cannot be saved
-4. device        importing the package initializes no JAX backend; to_device yields
-                 device arrays in order; resolve_device picks JAX's default only when
-                 the process is scoped to a card
-5. generate      shapes, u0 == ys[:, 0], metadata groups, trajectories equal the flow,
-                 config_hash stable / sensitive, failures raise with indices
-
-Windowing (``data.windows``) is ``tests/test_windows.py``.
+The source is a grain random-access source over whole trajectories with shape checks,
+and its ``copy.replace`` splits partition the time axis (``split_time``) or the
+trajectories, deterministically (``split_trajectories``). The metadata is grouped, its
+attrs round-trip through JSON, and ``config_hash`` covers the four generation groups
+and nothing in provenance or extra. On disk, ``save`` then ``load`` round-trips arrays
+and metadata through one file, a dtype mismatch raises, and a source without metadata
+cannot be saved. On the device side, importing the package initializes no JAX backend,
+``to_device`` yields device arrays in order, and ``resolve_device`` picks JAX's default
+only when the process is scoped to a card. ``generate`` is checked for shapes,
+``u0 == ys[:, 0]``, the metadata groups, trajectories equal to the flow, a hash that is
+stable and sensitive, and failures that raise with indices. Windowing
+(``data.windows``) is ``tests/test_windows.py``.
 """
 
 import subprocess
@@ -72,6 +70,9 @@ def _meta(**kw) -> DatasetMetadata:
 
 # ------------------------------------------------------------------- 1. source -----
 def test_source_protocol_and_views():
+    """``len``, `dim`, `trajectory_length`, the ``{"t", "u"}`` element and `u0` of a
+    3-trajectory source read back its arrays; a time axis of the wrong length is
+    rejected at construction."""
     src = _source(n=3, T=10)
     assert len(src) == 3 and src.dim == 2 and src.trajectory_length == 10
     el = src[1]
@@ -84,6 +85,8 @@ def test_source_protocol_and_views():
 
 
 def test_split_time_partitions():
+    """`split_time(6)` of a 10-step source gives lengths 6 and 4 whose concatenation
+    is the original, keeps the metadata object, and rejects the indices 0 and 10."""
     src = _source(n=2, T=10, metadata=_meta())
     a, b = src.split_time(6)
     assert a.trajectory_length == 6 and b.trajectory_length == 4
@@ -96,6 +99,9 @@ def test_split_time_partitions():
 
 
 def test_split_trajectories_partitions_and_is_seeded():
+    """`split_trajectories(0.3, seed)` of 10 trajectories gives 7 and 3 that together
+    are the original rows, the same rows for the same seed and different ones for
+    another; a fraction of 1.0 is rejected."""
     src = _source(n=10, T=5)
     train, held = src.split_trajectories(0.3, seed=1)
     assert train.num_trajectories == 7 and held.num_trajectories == 3
@@ -110,6 +116,9 @@ def test_split_trajectories_partitions_and_is_seeded():
 
 # ----------------------------------------------------------------- 2. metadata -----
 def test_metadata_attrs_round_trip_and_hash():
+    """`to_attrs` is one JSON string per group plus the hash and inverts through
+    `from_attrs`; the 8-character `config_hash` ignores provenance and extra and
+    changes with the grid, the solve and the sampling groups."""
     m = _meta()
     attrs = m.to_attrs()
     groups = {"system", "sampling", "grid", "solve", "provenance", "extra"}
@@ -129,6 +138,8 @@ def test_metadata_attrs_round_trip_and_hash():
 
 # --------------------------------------------------------------------- 3. disk -----
 def test_save_load_round_trip(tmp_path):
+    """`save` writes one file from which `load` returns the same `ts`, `ys` and
+    metadata, nested dicts included."""
     src = _source(metadata=_meta())
     path = src.save(tmp_path / "d.nc")
     assert path.exists() and len(list(tmp_path.iterdir())) == 1  # one file
@@ -139,6 +150,8 @@ def test_save_load_round_trip(tmp_path):
 
 
 def test_load_dtype_mismatch_is_loud(tmp_path):
+    """Loading a float32 file with ``dtype=np.float64`` raises a `TypeError` naming
+    the stored dtype; asking for float32 returns float32."""
     base = _source()
     src = TimeSeriesDataSource(base.ts, base.ys.astype(np.float32), _meta())
     path = src.save(tmp_path / "f32.nc")
@@ -148,16 +161,18 @@ def test_load_dtype_mismatch_is_loud(tmp_path):
 
 
 def test_save_requires_metadata(tmp_path):
+    """A source without metadata cannot be saved."""
     with pytest.raises(ValueError, match="metadata"):
         _source().save(tmp_path / "x.nc")
 
 
 # ------------------------------------------------------------------- 4. device ------
 def test_importing_the_package_does_not_initialize_a_jax_backend():
-    """grain worker processes import the package to unpickle the source; if that
-    initialized JAX they would each grab a CUDA context and preallocate GPU memory
-    (seen on a V100: every worker OOM at import). Module-level constraint primitives
-    compute their shift lazily for this reason."""
+    """A fresh interpreter that imports `data`, `training` and `model` has no JAX
+    backend initialized. Grain worker processes import the package to unpickle the
+    source; if the import initialized JAX, each worker would take a CUDA context and
+    preallocate GPU memory, which ran a V100 out of memory. The module-level
+    constraint primitives compute their shift lazily for this reason."""
     code = (
         "import jax._src.xla_bridge as xb; import deep_isochron.data, "
         "deep_isochron.training, deep_isochron.model; print(bool(xb._backends))"
@@ -169,8 +184,8 @@ def test_importing_the_package_does_not_initialize_a_jax_backend():
 
 
 def test_to_device_yields_device_arrays():
-    """grain's two-stage prefetch: batches arrive as JAX arrays on the device, in the
-    same order and with the same values as the host pipeline."""
+    """Through grain's two-stage prefetch, `to_device` yields float64 JAX arrays in
+    the same order and with the same values as the host pipeline."""
     src = _source(n=3, T=10)
     host = list(validation_windows(src, 4).batch(2))
     dev = list(to_device(validation_windows(src, 4).batch(2), jax.devices()[0]))
@@ -182,6 +197,10 @@ def test_to_device_yields_device_arrays():
 
 # ----------------------------------------------------------------- 5. generate -----
 def test_generate_bautin():
+    """`generate` on the Bautin normal form has the right shapes and ``u0 == ys[:, 0]``,
+    fills every metadata group, reproduces the system's own `flow` to `TOL["flow"]`,
+    hashes the same config the same and another seed differently, and names the
+    dataset file after the hash."""
     nf = BautinNormalForm(1.0, 0.5, 2.0, 0.5)
     ts = jnp.linspace(0.0, 1.0, 6)
     src = generate(nf, UniformAnnulus(0.3, 2.0), ts, 5, seed=3, config=SOLVERS["data"])
@@ -216,6 +235,9 @@ def test_generate_bautin():
 
 
 def test_generate_fhn_and_failure():
+    """`generate` on FitzHugh–Nagumo records its parameters and an empty integration,
+    draws `u0` inside the box, rejects an `integration` for an ODE, and raises a
+    `RuntimeError` naming the failed integrations when `max_steps` is too small."""
     ode = FitzhughNagumo()
     ts = jnp.linspace(0.0, 2.0, 5)
     box = UniformBox([-2.0, -1.0], [2.0, 1.0])
@@ -237,9 +259,10 @@ def test_generate_fhn_and_failure():
 
 
 def test_generate_handles_initial_conditions_outside_the_basin():
-    """Winfree's model has a phaseless disk r <= a: initial conditions drawn there are
-    an error by default, or are replaced by further draws with ``outside_basin=
-    "resample"`` (warning; count in the provenance; the mode is hashed)."""
+    """Winfree's model has a phaseless disk ``r <= a``. Initial conditions drawn there
+    are an error by default; with ``outside_basin="resample"`` they are replaced by
+    further draws, with a warning, a count in the provenance and the mode in the hash,
+    and a sampler that never enters the disk counts zero."""
     nf = WinfreeNormalForm(a=0.5)
     ts = jnp.linspace(0.0, 1.0, 4)
     sampler = UniformAnnulus(0.1, 2.0)  # 0.1 < r < 0.5 is the hole
@@ -270,6 +293,8 @@ def test_generate_handles_initial_conditions_outside_the_basin():
 
 
 def test_resolve_device_explicit_index_and_cpu_default():
+    """`resolve_device(0)` and `resolve_device()` both give the first device on a
+    single-device host, and an index past the last device raises `IndexError`."""
     from deep_isochron.data import resolve_device
 
     assert resolve_device(0) == jax.devices()[0]
@@ -279,9 +304,10 @@ def test_resolve_device_explicit_index_and_cpu_default():
 
 
 def test_resolve_device_refuses_unassigned_accelerators(monkeypatch):
-    """Several accelerators visible and no ``*_VISIBLE_DEVICES`` variable: no silent
-    pick. (The fakes cannot pass the return annotation's runtime check, so the
-    scheduler-scoped branch is covered by the CPU test above: one device → index 0.)"""
+    """With two accelerators visible and no ``*_VISIBLE_DEVICES`` variable set,
+    `resolve_device()` raises rather than picking one. The fakes cannot pass the
+    return annotation's runtime check, so the scheduler-scoped branch is covered by
+    the CPU test above, where one device gives index 0."""
     from deep_isochron.data import resolve_device
 
     class Fake:

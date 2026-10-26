@@ -115,6 +115,7 @@ def test_latent_flow_is_rotation_and_decay(omega, kappa, y0):
 
 
 def test_latent_dynamics_requires_a_stable_cycle():
+    """``kappa = 0`` is rejected and ``kappa = -2`` is reported by `params`."""
     with pytest.raises(ValueError):
         PhaseAmplitudeLatentDynamics(1.0, 0.0)
     assert PhaseAmplitudeLatentDynamics(1.0, -2.0).params() == {
@@ -155,6 +156,8 @@ def test_encoder_normalization(y):
 
 
 def test_autoencoder_shapes_and_derived_quantities():
+    """`encode` gives three latents with the first two on the unit circle, `phase` is
+    in ``[-π, π]``, `amplitude` is the third latent, and `cycle_point` is planar."""
     model = PhaseAmplitudeAutoencoder(2, mlp_width=8, key=jax.random.key(0))
     x = jnp.array([0.3, -1.2])
     y = model.encode(x)
@@ -216,6 +219,8 @@ def test_loss_detects_wrong_latent_frequency_and_takes_weights():
 
 
 def test_loss_is_differentiable_through_the_mlps():
+    """The gradient of `PhaseAutoencoderLoss` through an untrained autoencoder is
+    finite, nonzero somewhere, and nonzero on `omega`."""
     nf = HopfNormalForm(1.0, 2.0, 0.5)
     model = PhaseAmplitudeAutoencoder(2, mlp_width=8, key=jax.random.key(1))
     grads = eqx.filter_grad(lambda m, b: PhaseAutoencoderLoss()(m, b)[0])(

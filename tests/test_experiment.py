@@ -1,22 +1,20 @@
-"""The experiment layer (``deep_isochron.experiment``, ``configs/``): composing the
-shipped configs builds every object, a run trains end to end on CPU and can be reopened
-and resumed.
+"""The experiment layer, ``deep_isochron.experiment`` with ``configs/``: composing the
+shipped configs builds every object, and a run trains end to end on CPU, reopens and
+resumes.
 
-1. compose         ``configs/train.yaml`` composes with every group's shipped options
-2. data            ``dataset_file`` is where ``generate_dataset`` writes;
-                   ``build_source`` refuses to generate; loaders have the configured
-                   shapes; resume slices
-3. model/trainer   both model kinds and both losses build from their configs
-4. run             ``train`` for a few steps writes config, metadata and checkpoints;
-                   ``load_model`` returns the final model; a resumed run continues the
-                   step count and the data stream
-5. from_config     the notebook path: ``Experiment.from_config`` then a hand-rolled
-                   ``trainer.train``, ``run.checkpointer()`` reopens with ``load_run``;
-                   a hand-built model reopens through ``template``; ``Run.from_config``
-                   refuses an existing run; ``resume=True`` continues in place and
-                   records config changes;
-                   ``load_or_generate_source`` generates once; ``build_logger`` takes an
-                   existing wandb run
+In five groups. Composition: ``configs/train.yaml`` composes with every group's
+shipped options. Data: `dataset_file` is where `generate_dataset` writes,
+`build_source` refuses to generate, the loaders have the configured shapes, and a
+resume slices the stream. Model and trainer: both model kinds and both losses build
+from their configs. The run: `train` for a few steps writes config, metadata and
+checkpoints, `load_model` returns the final model, and a resumed run continues the
+step count and the data stream. The notebook path: `Experiment.from_config` then a
+hand-rolled `trainer.train` with `run.checkpointer()` reopens with `load_run`, a
+hand-built model reopens through a template, `Run.from_config` refuses an existing
+run, ``resume=True`` continues in place and records config changes,
+`load_or_generate_source` generates once, and `build_logger` takes an existing wandb
+run. The fixture is a 12-trajectory Bautin dataset generated once per module, and
+every run is 3 steps.
 """
 
 import json
@@ -104,11 +102,15 @@ def tiny(data_dir: Path, *overrides: str) -> DictConfig:
     ],
 )
 def test_shipped_configs_compose(overrides):
+    """`compose` with each shipped group option returns a config with positive
+    `num_steps` and batch size."""
     cfg = compose(*overrides)
     assert cfg.num_steps > 0 and cfg.windows.batch > 0
 
 
 def test_compose_group_is_the_groups_node():
+    """`compose_group("data", "fhn", ...)` is the `data` node of the full composition,
+    with the same `dataset_file`; the same holds for the `model` group."""
     data = compose_group("data", "fhn", "n_trajectories=500")
     assert data.name == "fitzhugh_nagumo" and data.n_trajectories == 500
     full = compose("data=fhn", "data.n_trajectories=500").data
@@ -119,12 +121,17 @@ def test_compose_group_is_the_groups_node():
 
 # ------------------------------------------------------------------- 2. data ------
 def test_build_source_requires_the_generated_file(tmp_path):
+    """`build_source` raises `FileNotFoundError` on a missing dataset rather than
+    generating it."""
     cfg = compose(*TINY_DATA, f"data.out_dir={tmp_path}")
     with pytest.raises(FileNotFoundError, match="never generates"):
         build_source(cfg.data)
 
 
 def test_loaders_shapes_and_resume_slice(data_dir):
+    """`Loaders.from_config` splits 12 trajectories 9/3 at ``fraction=0.25``, yields
+    batches of shape ``(16, 10, 2)``, resumes at `start_step` on the same stream,
+    rejects a start beyond the stream, and builds the weighted and mixed samplers."""
     cfg = tiny(data_dir)
     source = build_source(cfg.data)
     dev = jax.devices()[0]
@@ -148,6 +155,11 @@ def test_loaders_shapes_and_resume_slice(data_dir):
 
 # ----------------------------------------------------------- 3. model/trainer -----
 def test_models_and_trainers_build(data_dir):
+    """`build_model` and `build_trainer` give the conjugacy model with ``2 * blocks``
+    transforms and its loss, the autoencoder and its loss, and reject an unknown
+    kind; the default optimizer leaves the model fixed on a zero gradient, `adamw`
+    decays the bijection and not the latent dynamics, and `clip_norm` chains a second
+    optimizer state."""
     cfg = tiny(data_dir)
     model = build_model(cfg.model, jax.random.key(0))
     assert isinstance(model, ConjugateLatentDynamics)
@@ -184,6 +196,9 @@ def test_models_and_trainers_build(data_dir):
 
 # -------------------------------------------------------------------- 4. run ------
 def test_train_writes_a_run_and_load_model_reads_it_back(data_dir, tmp_path):
+    """A 3-step `train` writes ``config.yaml`` and a ``metadata.json`` that holds the
+    dataset size, the whole composed config and the git sha; `load_model` and
+    `load_run` return the final model and step."""
     cfg = tiny(data_dir)
     run_dir = tmp_path / "run"
     state = train(cfg, run_dir)
@@ -204,6 +219,8 @@ def test_train_writes_a_run_and_load_model_reads_it_back(data_dir, tmp_path):
 
 
 def test_resume_continues_steps_and_stream(data_dir, tmp_path):
+    """A run resumed from a 3-step run with ``num_steps=5`` ends at step 5 and
+    consumes batches 3 and 4 of the same deterministic stream."""
     cfg = tiny(data_dir)
     first = tmp_path / "first"
     train(cfg, first)
@@ -242,6 +259,7 @@ def test_validation_split_follows_the_mixed_sampler(data_dir, tmp_path):
 
 
 def test_autoencoder_run(data_dir, tmp_path):
+    """The autoencoder model, loss and Yawata schedule train for 3 steps."""
     cfg = tiny(data_dir, "model=autoencoder", "loss=autoencoder", "schedule=yawata")
     state = train(cfg, tmp_path / "ae")
     assert int(state.step) == 3
@@ -302,6 +320,10 @@ def test_hand_built_model_reopens_through_a_template(data_dir, tmp_path):
 
 
 def test_run_create_refuses_an_existing_run_and_resume_is_explicit(data_dir, tmp_path):
+    """`Experiment.from_config` and `train` raise `FileExistsError` on an existing run
+    directory; ``resume=True`` continues it in place to step 5 and records the changed
+    `num_steps` and learning rate; ``resume=True`` with ``cfg.resume`` is rejected, and
+    a resume without a checkpoint raises `FileNotFoundError`."""
     cfg = tiny(data_dir)
     run_dir = tmp_path / "run"
     (run_dir / ".hydra").mkdir(parents=True)  # Hydra makes the directory first: fine
@@ -332,6 +354,8 @@ def test_run_create_refuses_an_existing_run_and_resume_is_explicit(data_dir, tmp
 
 
 def test_warm_start_from_another_run_is_recorded(data_dir, tmp_path):
+    """A run with ``resume=<other run>`` warm-starts from that run's step 3 and records
+    the source run and step under ``metadata["resumed_from"]``."""
     cfg = tiny(data_dir)
     train(cfg, tmp_path / "first")
     state = train(
@@ -346,6 +370,8 @@ def test_warm_start_from_another_run_is_recorded(data_dir, tmp_path):
 
 
 def test_load_or_generate_source_generates_once(tmp_path):
+    """`load_or_generate_source` writes the dataset on the first call and loads it,
+    without rewriting, on the second."""
     cfg = compose(*TINY_DATA, f"data.out_dir={tmp_path}")
     assert not dataset_file(cfg.data).exists()
     source = load_or_generate_source(cfg.data)
@@ -356,6 +382,10 @@ def test_load_or_generate_source_generates_once(tmp_path):
 
 
 def test_build_logger_takes_an_existing_wandb_run(data_dir, tmp_path):
+    """`build_logger` with a `wandb_run` logs to it, thinned to every 50th step with
+    the epoch added, even when the config's wandb mode is off; `build_evaluator`
+    carries the config's `t_split`."""
+
     class FakeRun:
         def __init__(self):
             self.logged = []

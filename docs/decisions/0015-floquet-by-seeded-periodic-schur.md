@@ -4,6 +4,7 @@ id: ADR-0015
 status: accepted; amended 2026-10-20 (review round 5 - jit rule, light FixedPoint)
 updated: 2026-10-27
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-19/20 after the O2 survey and his notebook prototype)
+sources: [Bojanczyk et al. 1992, Lust 2001, Dieci et al. 1997, Guckenheimer & Meloon 2000, Fairgrieve & Jepson 1991, Mauroy & Mezić 2018 (Remark 4), Wilson & Moehlis 2016, Kvalheim & Revzen 2021 (Prop. 5), BifurcationKit source (`PeriodicSchurBifurcationKit.jl`)]
 ---
 
 # ADR-0015 — Floquet multipliers by a seeded periodic Schur chain on the shooting mesh; `LimitCycle` as a module
@@ -68,7 +69,7 @@ of $R$). The chain closes on $Q_{m+1} = Q_1D$ with $D = \mathrm{diag}(\pm1)$: $D
 carries the multipliers' signs (a negative multiplier appears in the closure, not in
 the factors; in the plane $D = I$ always, $\det M > 0$), and the defect
 $\Vert Q_{m+1} - Q_1D\Vert$ with $\vert\mu_0 - 1\vert$ is the trivial-multiplier
-diagnostic (Guckenheimer & Meloon §5.4). The trace of the return-map Jacobian is *not*
+diagnostic (Guckenheimer & Meloon 2000, §5.4). The trace of the return-map Jacobian is *not*
 an estimator: $\mathrm{tr}\thinspace DP = (1 + \mu) - 1$ leaks the trivial multiplier's
 error ($\sim10^{-9}$) onto $\mu$ (found on the prototype's FHN run: $3.5\cdot10^{-9}$
 for $\mu = 1.7\cdot10^{-12}$); `return_map_multiplier` takes the eigenvalue and
@@ -133,15 +134,3 @@ of this branch decorated the kernels and kept kernel/driver pairs
 - Open: `dim \geq 3` (deflate $f$, periodic QR on the transverse block through
   `slycot`, or BifurcationKit-style section-reduced products); the forward-direction
   stability argument without a citation; strategy objects for `method`.
-
-## Sources
-
-Bojanczyk et al. 1992, *The periodic Schur decomposition. Algorithms and
-applications*, Proc. SPIE 1770:31–42. Lust 2001, *Improved numerical Floquet
-multipliers*, Int. J. Bifurcation Chaos 11(9):2389–2410. Dieci et al. 1997, *On the
-computation of Lyapunov exponents for continuous dynamical systems*, SIAM J. Numer.
-Anal. 34(1):402–423. Guckenheimer & Meloon 2000, SIAM J. Sci. Comput.
-22(3):951–985. Fairgrieve & Jepson 1991, *O.K. Floquet multipliers*, SIAM J. Numer.
-Anal. 28(5):1446–1462. Mauroy & Mezić 2018, Chaos 28:073108 (Remark 4). Wilson &
-Moehlis 2016, Phys. Rev. E 94:052213. Kvalheim & Revzen 2021 (Prop. 5).
-BifurcationKit's `PeriodicSchurBifurcationKit.jl` (read in the source).

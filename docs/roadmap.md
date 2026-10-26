@@ -132,9 +132,9 @@ lives in the ADRs. Each round is one commit, reviewed before the next starts; th
 | P2 | `analysis/` (all eleven modules) | *done 2026-10-26*: `D` on; nothing needed moving, ADR-0015 and `analysis.md` §2–3 already held everything cut |
 | P3 | `data/`, `training/`, `experiment/` (24 modules) | *done 2026-10-26*: `D` on for the three; the `**Returns:**`/`**Raises:**` header form fixed tree-wide |
 | P4 | `model/invertible/*`, `model/*`, `plotting/`, `utils/` (the most missing docstrings) | *done 2026-10-26*: `D` on for the three; the numbered reference blocks of `model/invertible/` replaced by keys |
-| P5 | `tests/`: one-sentence docstrings per module and test, `helpers.py`, `strategies.py` | `D` on for `tests/` |
+| P5 | `tests/`: one-sentence docstrings per module and test, `helpers.py`, `strategies.py` | *done 2026-10-27*: `D` on for `tests/` and `scripts/`; only notebooks and `src/Isochron2PBVP` exempt |
 | P6 | Documents: ADRs, `architecture.md`, `coding-standards.md` in full; `analysis.md`, `cubic-bspline.md`, `training-step-performance.md`, `validation-split.md` paragraph and word passes | *done 2026-10-27*: 23 files, invariants compared mechanically; ADR-0018's example and claim corrected |
-| P7 | `docs/design/normal-forms.md`, alone (966 lines; manuscript source) | same |
+| P7 | `docs/design/normal-forms.md`, alone (966 lines; manuscript source) | *done 2026-10-27*: invariants unchanged by the comparison |
 
 The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when `phase` is reviewed, not here.
 
@@ -209,3 +209,4 @@ The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when 
 | 2026-10-26 | `prose` | P4: docstrings of `model/`, `plotting/`, `utils/` revised, 120 missing public docstrings written; the 13 numbered reference entries of `model/invertible/` replaced by bibliography keys, three entries added; ruff `D` on for the three packages, `tests/**` the last exemption | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-27 | `prose` | P4b: the 66 inline docstring headers left after P3 fixed and `scripts/check_docstring_headers.py` added to `prek` and CI; `src/Isochron2PBVP` excluded from ruff and ty, which is what failed CI on `master` | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-27 | `prose` | P6: the 17 ADRs, `architecture.md`, `coding-standards.md` and four design documents revised under the prose rules with citations, equations, numbers and cross-references held fixed by a mechanical comparison; ADR-0018's drifted-forms example restored and its wrong claim about ADR-0015 corrected; P5 (`tests/`) and P7 (`normal-forms.md`) remain | `docs/changes/2026-10-26-prose.md` |
+| 2026-10-27 | `prose` | P5 and P7: docstrings for every test and script (`D` on everywhere but notebooks and `src/Isochron2PBVP`); `normal-forms.md` revised with every equation and citation unchanged; the architecture map brought up to the tree; ADR-0015's Sources folded into `sources:`. Phase P complete | `docs/changes/2026-10-26-prose.md` |

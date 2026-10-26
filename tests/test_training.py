@@ -1,25 +1,22 @@
-"""The training package (roadmap C1–C5, ADR-0009).
+"""The training package (roadmap C1–C5, ADR-0009), in six groups.
 
-1. losses      building blocks on known inputs; ``AbstractLoss`` weights the named terms
-               in order; the two project losses expose their terms; the autoencoder loss
-               vanishes on the exact chart (as in ``test_baseline``) and reproduces the
-               paper's ``α_k``.
-2. schedules   ``Constant``; ``StepSchedule`` follows its function; ``ThresholdSwitch``
-               flips once and stays; a schedule of the wrong length is rejected.
-3. loggers     ``DelayedLogger`` forwards one call late and flushes on ``close``;
-               ``ListLogger``/``PrintLogger`` thinning.
-4. trainer     a toy linear fit converges; ``TrainerState`` is deterministic in its key
-               and respects the trainable filter; the loop stops on ``StopIteration``;
-               evaluation is called every ``eval_every`` and at the end; the schedule
-               state advances inside the jitted step; the float64 guard.
-5. evaluation  on exact models (identity-bijection conjugacy; exact-chart autoencoder)
-               every error is zero and the physics scalars are the normal form's; the
-               bounding-box grid covers the data.
-6. checkpoint  Orbax: save → restore gives ``tree_equal`` on the whole state (including
-               the schedule state and the key); the best-by-metric and latest steps are
-               kept; a missing metric is a ``KeyError``.
-
-Run: ``uv run pytest tests/test_training.py``.
+The losses: the building blocks on known inputs, `AbstractLoss` weighting the named
+terms in order, the two project losses exposing their terms, and the autoencoder loss
+vanishing on the exact chart (as in ``test_baseline``) and reproducing the paper's
+``α_k``. The schedules: `Constant`, `StepSchedule` following its function,
+`ThresholdSwitch` flipping once and staying, a schedule of the wrong length rejected.
+The loggers: `DelayedLogger` forwarding one call late and flushing on ``close``,
+`ListLogger` and `PrintLogger` thinning. The trainer: a toy linear fit converging,
+`TrainerState` deterministic in its key and respecting the trainable filter, the loop
+stopping when the loader ends, evaluation every ``eval_every`` steps and at the end,
+the schedule state advancing inside the jitted step, the float64 guard. The
+evaluation: on exact models (the identity-bijection conjugacy and the exact-chart
+autoencoder) every error is zero and the physics scalars are the normal form's, and
+the bounding-box grid covers the data. The checkpointer: Orbax save then restore gives
+``tree_equal`` on the whole state, the schedule state and the key included, the
+best-by-metric and latest steps are kept, and a missing metric is a `KeyError`. The
+fixtures are a linear model with its loss and batches, an exact autoencoder built
+from a normal form's chart, and batches of windows on the Bautin form.
 """
 
 import io
@@ -90,14 +87,19 @@ class LinearModel(eqx.Module):
     b: jax.Array
 
     def __call__(self, x):
+        """``W x + b``."""
         return self.w @ x + self.b
 
 
 class LinearLoss(AbstractLoss):
+    """The mean squared error of `LinearModel`'s output against ``batch["t"]``, as the
+    one named term ``"mse"``."""
+
     weight_names: tuple[str, ...] = eqx.field(static=True, init=False, default=("mse",))
     default_weights: tuple[float, ...] = eqx.field(static=True, default=(1.0,))
 
     def terms(self, model, batch):
+        """The ``"mse"`` term and no auxiliaries."""
         pred = jax.vmap(model)(batch["u"])
         return {"mse": jnp.mean((pred - batch["t"]) ** 2)}, {}
 
@@ -107,6 +109,7 @@ B_TRUE = jnp.array([0.3, -0.7])
 
 
 def linear_batches(n, batch=64, seed=0):
+    """`n` batches of Gaussian inputs with targets ``W_TRUE x + B_TRUE``."""
     rng = np.random.default_rng(seed)
     for _ in range(n):
         x = rng.normal(size=(batch, 2))
@@ -114,6 +117,7 @@ def linear_batches(n, batch=64, seed=0):
 
 
 def linear_model(key=jax.random.key(0)):
+    """A `LinearModel` with small random weights."""
     kw, kb = jax.random.split(key)
     return LinearModel(
         0.1 * jax.random.normal(kw, (2, 2)), 0.1 * jax.random.normal(kb, (2,))
@@ -121,6 +125,10 @@ def linear_model(key=jax.random.key(0)):
 
 
 def _exact_autoencoder(nf):
+    """A `PhaseAmplitudeAutoencoder` whose encoder and decoder are `nf`'s exact
+    phase–amplitude chart and whose latent dynamics carry `nf`'s frequency and
+    Floquet exponent."""
+
     def encode(u):
         theta, psi = nf.to_phase_amplitude(u)
         return jnp.stack((jnp.cos(theta), jnp.sin(theta), psi))
@@ -137,6 +145,7 @@ NF = BautinNormalForm(1.0, 0.5, 2.0, 0.7)
 
 
 def _nf_batches(nf=NF, n_traj=24, length=9, batch=8, num=2):
+    """`num` batches of whole-trajectory windows generated from `nf` near its cycle."""
     src = generate(
         nf,
         OnCycleGaussian.from_normal_form(nf, 100, 0.4),
@@ -149,6 +158,9 @@ def _nf_batches(nf=NF, n_traj=24, length=9, batch=8, num=2):
 
 # ------------------------------------------------------------------------ 1. losses --
 def test_loss_building_blocks():
+    """`trajectory_mse`, `final_mse`, `step_weighted_consistency`, `alpha_schedule` and
+    `batch_center_of_mass` give their hand-computed values on small arrays, including
+    the ``L ≥ 1`` and ``L → 0`` limits of the schedule."""
     pred = jnp.array([[[1.0, 0.0], [0.0, 2.0]]])  # (1 batch, 2 time, 2 dim)
     target = jnp.zeros((1, 2, 2))
     assert_close(trajectory_mse(pred, target), (1 + 4) / 2)
@@ -165,6 +177,8 @@ def test_loss_building_blocks():
 
 
 def test_abstract_loss_weights_named_terms_in_order():
+    """The total of a one-term loss is the term at the default weight, three times the
+    term at weight 3, and half of it at a default weight of 0.5."""
     loss = LinearLoss()
     batch = {"u": jnp.ones((4, 2)), "t": jnp.zeros((4, 2))}
     model = LinearModel(jnp.eye(2), jnp.zeros(2))
@@ -197,6 +211,10 @@ def test_project_losses_expose_their_terms_and_vanish_on_exact_models():
 
 # --------------------------------------------------------------------- 2. schedules --
 def test_schedules():
+    """`Constant` returns its weights; `StepSchedule` follows its function of the step;
+    `ThresholdSwitch` starts on stage 1, flips to stage 2 once ``pha`` falls below its
+    threshold and stays flipped; a wrong-length schedule, and a `Trainer` whose
+    schedule length disagrees with its loss, are rejected."""
     c = Constant((1.0, 2.0))
     assert_close(c.weights(c.init(), jnp.asarray(5)), jnp.array([1.0, 2.0]))
 
@@ -225,6 +243,8 @@ def test_schedules():
 
 # ----------------------------------------------------------------------- 3. loggers --
 def test_delayed_logger_is_one_step_late_and_flushes_on_close():
+    """`DelayedLogger` forwards each record on the next `log` call, forwards the last
+    one on `close`, and a second `close` forwards nothing."""
     inner = ListLogger()
     log = DelayedLogger(inner)
     log.log({"a": jnp.asarray(1.0)}, 1)
@@ -238,6 +258,8 @@ def test_delayed_logger_is_one_step_late_and_flushes_on_close():
 
 
 def test_print_logger_thins_and_formats():
+    """`PrintLogger(every=2, keys=("loss",))` prints steps 2 and 4 only, each as
+    ``step N | loss: value``."""
     out = io.StringIO()
     with redirect_stdout(out):
         logger = PrintLogger(every=2, keys=("loss",))
@@ -249,6 +271,8 @@ def test_print_logger_thins_and_formats():
 
 # ----------------------------------------------------------------------- 4. trainer --
 def test_toy_linear_fit_converges_and_logs_every_step():
+    """400 Adam steps on the linear fixture recover ``W_TRUE`` and ``B_TRUE`` to 1e-2,
+    with one logged record per step and the final loss below 1e-4."""
     trainer = Trainer(optax.adam(0.05), LinearLoss())
     log = ListLogger()
     state = trainer.train(
@@ -267,6 +291,8 @@ def test_toy_linear_fit_converges_and_logs_every_step():
 
 
 def test_trainer_state_is_deterministic_and_respects_the_trainable_filter():
+    """Two states from the same key take the same step and advance their training
+    key; with nothing trainable the model does not move while the step counts."""
     trainer = Trainer(optax.adam(0.05), LinearLoss())
     batch = {"u": jnp.ones((4, 2)), "t": jnp.zeros((4, 2))}
     s1 = trainer.init(linear_model(), key=jax.random.key(3))
@@ -285,6 +311,8 @@ def test_trainer_state_is_deterministic_and_respects_the_trainable_filter():
 
 
 def test_trainer_runs_to_loader_end_without_num_steps(recwarn):
+    """Without `num_steps`, `train` stops when the 5-batch loader ends, without a
+    warning."""
     trainer = Trainer(optax.adam(0.05), LinearLoss())
     state = trainer.train(linear_model(), linear_batches(5), key=jax.random.key(0))
     assert int(state.step) == 5
@@ -292,6 +320,9 @@ def test_trainer_runs_to_loader_end_without_num_steps(recwarn):
 
 
 def test_trainer_stops_on_exhausted_loader_and_evaluates_on_schedule():
+    """A loader of 7 batches under ``num_steps=100`` ends the run at step 7 with a
+    warning; `evaluate` is called at steps 3, 6 and the final 7; ``eval_every=0``
+    and a missing key are rejected."""
     trainer = Trainer(optax.adam(0.05), LinearLoss())
     calls: list[int] = []
 
@@ -347,6 +378,8 @@ def test_threshold_switch_flips_inside_the_jitted_step():
 
 
 def test_float64_guard():
+    """`check_batch_dtype` accepts float64 arrays with x64 on, rejects them with x64
+    off naming the dtype, and accepts float32 with x64 off."""
     batch64 = {"u": np.zeros((2, 2)), "t": np.zeros(2)}
     check_batch_dtype(batch64, x64_enabled=True)
     with pytest.raises(TypeError, match="float64"):
@@ -356,6 +389,11 @@ def test_float64_guard():
 
 # -------------------------------------------------------------------- 5. evaluation --
 def test_evaluation_on_exact_models_is_exact():
+    """On the identity-bijection conjugacy and the exact-chart autoencoder the
+    `Evaluator`'s errors are at the integrator's floor, the period, ``kappa`` and the
+    normal-form parameters are the reference's, and the conjugacy-only metrics are
+    absent for the autoencoder; a wrong frequency is detected, and an empty
+    evaluator is rejected."""
     batches = _nf_batches()
     evaluator = Evaluator(batches, reference=NF)
     identity = ConjugateLatentDynamics(
@@ -520,6 +558,9 @@ def test_evaluator_splits_the_prediction_error_by_window_start():
 
 
 def test_bounding_box_grid_and_circular_std():
+    """`bounding_box_grid` with ``num=3`` spans the points' box with 9 grid points;
+    `circular_std` is zero on a constant angle, invariant to ``2π``, and large on
+    angles spread around the circle."""
     pts = jnp.array([[0.0, 0.0], [2.0, 4.0]])  # (lo, hi)
     grid = bounding_box_grid(pts, num=3, margin=0.0)
     assert grid.shape == (9, 2)
@@ -533,6 +574,10 @@ def test_bounding_box_grid_and_circular_std():
 
 # -------------------------------------------------------------------- 6. checkpoint --
 def test_orbax_checkpointer_round_trip(tmp_path):
+    """Over a 20-step run with ``save_every=5`` the checkpointer keeps the best (10)
+    and the latest (20) steps; restoring the latest gives `tree_equal` on the whole
+    state and training resumes from step 20; saving without the metric raises
+    `KeyError`."""
     sw = ThresholdSwitch((1.0,), (5.0,), {"mse": 1e-3})
     trainer = Trainer(optax.adam(0.05), LinearLoss(), sw)
     ck = OrbaxCheckpointer(tmp_path / "ckpt", save_every=5, metric="val/mse")

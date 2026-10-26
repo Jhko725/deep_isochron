@@ -1,15 +1,11 @@
-"""Laws of ``deep_isochron.systems`` that are not normal-form mathematics: the flow
-machinery, and facts about the specific observed systems at their default parameters.
+"""The laws of ``deep_isochron.systems`` that are not normal-form mathematics: the
+flow machinery, and facts about the observed systems at their default parameters.
 
-1. flow               vmap over initial conditions == loop; SolverConfig honored (a
-                      loose tolerance changes the answer, a tight one does not); flow
-                      reports failure in Solution.result with throw=False; SolverConfig
-                      is hashable and leafless
-2. observed systems   FitzHugh–Nagumo: equilibrium, its eigenvalues and the period of
-                      the cycle, all from Langfield et al. 2014 for
-                      Winfree's parameters; Hodgkin–Huxley: gating variables in [0, 1],
-                      the neuron spikes
-
+Section 1 tests `flow`: `vmap` over initial conditions equals a loop, `SolverConfig`
+is honored, failure is reported in ``Solution.result`` with ``throw=False``, and the
+config is hashable and leafless. Section 2 checks FitzHugh–Nagumo's equilibrium,
+eigenvalues and period against Langfield et al. 2014 for Winfree's parameters, and
+that Hodgkin–Huxley's gating variables stay in ``[0, 1]`` while the neuron spikes.
 The normal forms' own laws are in ``test_normal_forms.py``.
 """
 
@@ -35,6 +31,8 @@ from tests.helpers import assert_close, SOLVERS, TOL
     ids=["fhn", "bautin"],
 )
 def test_vmap_over_initial_conditions_matches_loop(ode):
+    """`filter_vmap` of `flow` over five initial conditions equals five single
+    flows to `TOL["identity"]`."""
     ts = jnp.linspace(0.0, 2.0, 11)
     u0s = jax.random.normal(jax.random.key(0), (5, ode.dim))
     batched = eqx.filter_vmap(ode.flow, in_axes=(None, 0))(ts, u0s).ys
@@ -44,6 +42,8 @@ def test_vmap_over_initial_conditions_matches_loop(ode):
 
 
 def test_solver_config_is_honoured():
+    """A loose `SolverConfig` changes the FitzHugh–Nagumo trajectory, and the tight
+    stiff solver agrees with the tight non-stiff one to `TOL["flow"]`."""
     ode = FitzhughNagumo()
     ts = jnp.linspace(0.0, 20.0, 41)
     u0 = jnp.array([0.5, 0.1])
@@ -61,6 +61,8 @@ def test_solver_config_is_honoured():
 
 
 def test_flow_reports_failure_without_raising():
+    """With ``throw=False`` and eight steps `flow` returns an unsuccessful
+    ``result`` instead of raising; the tight solver succeeds."""
     ode = FitzhughNagumo()
     ts = jnp.linspace(0.0, 50.0, 11)
     config = SolverConfig(max_steps=8, throw=False)
@@ -71,6 +73,7 @@ def test_flow_reports_failure_without_raising():
 
 
 def test_solver_config_is_hashable_and_leafless():
+    """`SolverConfig` hashes and has no array leaves, so it is a static argument."""
     cfg = SolverConfig(solver=dfx.Kvaerno5(), rtol=1e-4)
     hash(cfg)
     assert jax.tree.leaves(eqx.filter(cfg, eqx.is_array)) == []
@@ -110,6 +113,8 @@ def test_fitzhugh_nagumo_period():
 
 
 def test_hodgkin_huxley_gating_variables_stay_in_unit_interval():
+    """Over 50 ms with the stiff solver the Hodgkin–Huxley gates stay in ``[0, 1]``
+    and the membrane potential crosses zero (the neuron spikes at ``I = 30``)."""
     ode = HodgekinHuxley()
     ts = jnp.linspace(0.0, 50.0, 501)
     u0 = jnp.array([-65.0, 0.05, 0.6, 0.32])

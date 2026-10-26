@@ -1,5 +1,6 @@
-"""Every concrete bijection must be registered for testing (or excluded with a reason)
-."""
+"""Every concrete bijection is registered for testing in ``tests/registry.py``, or
+excluded there with a reason: the registry's coverage, its scalar templates' type,
+stale exclusions, declared smoothness and the ADR-0004 rule on abstract fields."""
 
 import importlib
 import inspect
@@ -15,11 +16,13 @@ from tests.registry import SCALAR_TEMPLATES, UNTESTED, VECTOR_BUILDERS
 
 
 def _import_all_submodules():
+    """Import every submodule of ``model.invertible`` so that subclasses exist."""
     for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
         importlib.import_module(m.name)
 
 
 def concrete_bijections() -> set[type]:
+    """Every non-abstract subclass of `AbstractBijection` in the package."""
     _import_all_submodules()
     out, stack = set(), [AbstractBijection]
     while stack:
@@ -31,6 +34,8 @@ def concrete_bijections() -> set[type]:
 
 
 def test_every_bijection_is_registered(key):
+    """Each concrete bijection has a scalar template, a vector builder or an
+    `UNTESTED` reason."""
     covered = {type(t) for t in SCALAR_TEMPLATES.values()}
     covered |= {type(b(key)) for b in VECTOR_BUILDERS.values()}
     missing = concrete_bijections() - covered - set(UNTESTED)
@@ -39,6 +44,7 @@ def test_every_bijection_is_registered(key):
 
 
 def test_scalar_templates_are_scalar():
+    """Every `SCALAR_TEMPLATES` entry is an `AbstractScalarBijection`."""
     bad = {
         n
         for n, t in SCALAR_TEMPLATES.items()

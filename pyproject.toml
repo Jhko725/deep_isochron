@@ -62,14 +62,11 @@ select = ["E", "F", "I001", "TID251", "D100", "D101", "D102", "D103"]
 convention = "google"  # the section parser; only the selected D rules run
 
 [tool.ruff.lint.per-file-ignores]
-# Docstrings are required where the prose pass (branch `prose`, 2026-10-26) has been:
-# each round removes its modules from this list. Notebooks, the coworker's
-# src/Isochron2PBVP, scripts, and test modules other than helpers.py and strategies.py
+# Docstrings are required everywhere the prose pass (branch `prose`, 2026-10-26) went:
+# the package, its tests and its scripts. Notebooks and the coworker's src/Isochron2PBVP
 # stay exempt.
 "*.ipynb" = ["D"]
 "src/Isochron2PBVP/**" = ["D"]
-"scripts/**" = ["D"]
-"tests/**" = ["D"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "dataclasses.replace".msg = "use copy.replace (Python 3.13, this project's floor)"

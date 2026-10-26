@@ -2,19 +2,17 @@
 ADR-0016). Nothing here needs AUTO; the one test that needs a Fortran compiler is
 ``slow`` and skipped without ``gfortran``.
 
-1. rhs.inc       the printed ``F(i)`` and ``A(i,j)`` are the template's expressions and
-                 their exact Jacobian — parsed back from the Fortran text into SymPy
-                 (no compiler) and compared at random points; every physical line fits
-                 the width; the FitzHugh–Nagumo output equals the golden file (which is
-                 the coworker's hand-written ``RHS`` up to term order)
-2. indices       the block after the system's slots: period on ``PAR(11)`` for up to
-                 ten parameters, contiguous, named; more than ten rejected
-3. the generic   every ``PAR(`` reference in the generic file is a named slot that
-   file          ``indices.inc`` declares; the two ``INCLUDE`` lines are present
-4. write_problem lays down the four files, the ``PAR`` dict and slot lookup, a source
-                 hash that is stable; non-planar systems are rejected
-5. f2py (slow)   the generated ``RHS`` compiled with gfortran agrees with the JAX
-                 ``rhs`` and ``jacfwd(rhs)``
+Section 1 tests ``rhs.inc``: the printed ``F(i)`` and ``A(i,j)`` are the template's
+expressions and their exact Jacobian, parsed back from the Fortran text into SymPy
+and compared at random points; every physical line fits the width; the
+FitzHugh–Nagumo output equals the golden file, which is the coworker's hand-written
+``RHS`` up to term order. Section 2 tests the index block after the system's slots:
+the period on ``PAR(11)`` for up to ten parameters, contiguous and named, more than
+ten rejected. Section 3 checks that every ``PAR(`` reference in the generic file is a
+named slot that ``indices.inc`` declares. Section 4 tests `write_problem`: the four
+files, the ``PAR`` dict and slot lookup, a stable source hash, non-planar systems
+rejected. Section 5 (slow) compiles the generated ``RHS`` with gfortran through f2py
+and compares it with the JAX ``rhs`` and ``jacfwd(rhs)``.
 """
 
 import re
@@ -84,6 +82,8 @@ def _fortran_to_sympy(expr: str, n_states: int, n_params: int) -> sp.Expr:
 @settings(max_examples=10)
 @given(data=st.data())
 def test_rhs_block_prints_the_field_and_its_jacobian(ode, data):
+    """`rhs_block` prints every ``F(i)`` and ``A(i,j)``, and each, parsed back into
+    SymPy, equals the template's expression and Jacobian entry at a drawn point."""
     sym = ode.symbolic()
     stmts = _statements(rhs_block(sym))
     n = sym.dim
@@ -121,6 +121,8 @@ def test_rhs_block_prints_the_field_and_its_jacobian(ode, data):
 
 @pytest.mark.parametrize("ode", PLANAR, ids=repr)
 def test_rhs_block_lines_fit_the_width(ode):
+    """Every line of `rhs_block` is at most ``codegen.LINE_WIDTH`` wide, and a
+    continuation line follows exactly the lines that end in ``&``."""
     lines = rhs_block(ode.symbolic()).splitlines()
     assert all(len(line) <= codegen.LINE_WIDTH for line in lines)
     # a wrapped statement: trailing `&` on the line, leading `&` on the continuation
@@ -129,6 +131,8 @@ def test_rhs_block_lines_fit_the_width(ode):
 
 
 def test_fitzhugh_nagumo_rhs_block_matches_the_golden_file():
+    """`rhs_block` for FitzHugh–Nagumo equals ``tests/golden/fitzhugh_nagumo_rhs.inc``
+    byte for byte."""
     golden = (GOLDEN / "fitzhugh_nagumo_rhs.inc").read_text()
     assert rhs_block(FitzhughNagumo().symbolic()) == golden
 
@@ -136,6 +140,8 @@ def test_fitzhugh_nagumo_rhs_block_matches_the_golden_file():
 # ----------------------------------------------------------------- 2. indices ----
 @pytest.mark.parametrize("n", range(0, 11))
 def test_internal_indices_follow_the_system_block(n):
+    """For ``n`` system parameters the internal slots start at ``PAR(11)`` and are
+    contiguous, ``last`` is the final one, and `fortran_constants` names each."""
     idx = internal_indices(n)
     assert idx.period == 11
     values = [
@@ -150,12 +156,15 @@ def test_internal_indices_follow_the_system_block(n):
 
 
 def test_more_than_ten_parameters_is_not_supported_yet():
+    """`internal_indices` raises `NotImplementedError` for eleven parameters."""
     with pytest.raises(NotImplementedError):
         internal_indices(11)
 
 
 # ----------------------------------------------------------- 3. generic file -----
 def test_generic_file_uses_only_named_slots_that_indices_inc_declares():
+    """The generic file includes both ``.inc`` files, refers to ``PAR`` only through
+    ``IP_*`` names, and every name is declared in `indices_block`."""
     src = generic_source()
     assert "INCLUDE 'rhs.inc'" in src and "INCLUDE 'indices.inc'" in src
     referenced = set(re.findall(r"PAR\((IP_[A-Z0-9_]+)", src))
@@ -171,6 +180,9 @@ def test_generic_file_uses_only_named_slots_that_indices_inc_declares():
 
 # ----------------------------------------------------------- 4. write_problem ----
 def test_write_problem_lays_down_the_files(tmp_path):
+    """`write_problem` writes the four files, returns the ``PAR`` dict, parameter map
+    and slot lookup, puts ``NDIM``, ``NPAR`` and ``THL`` in the constants file, and
+    gives a source hash that is stable across runs and differs between systems."""
     ode = FitzhughNagumo()
     problem = write_problem(ode, tmp_path, name="fhn")
     assert sorted(p.name for p in tmp_path.iterdir()) == [
@@ -191,6 +203,7 @@ def test_write_problem_lays_down_the_files(tmp_path):
 
 
 def test_non_planar_systems_are_rejected(tmp_path):
+    """`write_problem` raises `NotImplementedError` for Hodgkin–Huxley."""
     with pytest.raises(NotImplementedError, match="planar"):
         write_problem(HodgekinHuxley(), tmp_path)
 

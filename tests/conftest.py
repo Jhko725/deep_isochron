@@ -43,4 +43,5 @@ settings.load_profile("default")
 
 @pytest.fixture(scope="session")
 def key():
+    """The session's PRNG key, ``jax.random.key(0)``."""
     return jax.random.key(0)

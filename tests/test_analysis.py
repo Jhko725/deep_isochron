@@ -1,14 +1,12 @@
-"""Phase E analysis (``deep_isochron.analysis``), against the normal forms as oracles.
+"""The data side of ``deep_isochron.analysis``, against the normal forms as oracles.
 
-1. Cycle            the closed curve: evaluation, derivative, nearest phase / distance,
-                    least-squares construction from points, validation
-2. estimate_cycle   E1 — the cycle from trajectory tails: Bautin and Hopf give the unit
-                    circle and ``nf.period()``; an affine image gives the image curve
-                    with the phase still uniform in time (the protophase→phase step);
-                    pooled trajectories; with measurement noise the error shrinks with
-                    the sample; ``converged`` is ``False`` on a tail that is still
-                    transient; FitzHugh–Nagumo against Langfield et al. (slow); the
-                    orientation (winding) follows the sign of ``w``; input checks
+Section 1 tests `Cycle`, the closed curve: evaluation, derivative, nearest phase and
+distance, least-squares construction from points, and validation. Section 2 tests
+`estimate_cycle`, the cycle from trajectory tails: Bautin and Hopf give the unit circle
+and ``nf.period()``, an affine image gives the image curve with the phase still
+uniform in time, pooled trajectories agree with a single one, measurement noise
+averages out, a transient tail is reported as not converged, the winding follows the
+sign of ``w``, and FitzHugh–Nagumo matches Langfield et al. 2014 (slow).
 """
 
 import jax.numpy as jnp
@@ -43,6 +41,9 @@ def circular_offset(a, b):
 
 # ------------------------------------------------------------------ 1. Cycle --------
 def test_circle_evaluation_derivative_and_queries():
+    """A `Cycle.circle` evaluates to its parametrization, its derivative is the
+    tangent, and `nearest_phase`, `distance` and `nearest_point` are exact on a ray
+    from the center."""
     c = Cycle.circle(2.0, period=3.0, center=(1.0, -1.0))
     phi = c.phases(16)
     pts = c(phi)
@@ -65,6 +66,9 @@ def test_circle_evaluation_derivative_and_queries():
 
 
 def test_from_points_recovers_a_fourier_curve_and_reports_the_residual():
+    """`Cycle.from_points` recovers a three-harmonic curve from 500 unordered samples
+    to `TOL["closed_form"]`, reports a residual at the noise level when the samples
+    are noisy, and raises for fewer points than coefficients."""
     rng = np.random.default_rng(0)
     truth = Cycle(
         center=np.array([0.3, -0.2]),
@@ -85,6 +89,8 @@ def test_from_points_recovers_a_fourier_curve_and_reports_the_residual():
 
 
 def test_cycle_validation():
+    """`Cycle` raises `ValueError` for a zero period and for coefficient arrays whose
+    shape is not ``(K, 2)``."""
     with pytest.raises(ValueError, match="period"):
         Cycle.circle(1.0, period=0.0)
     with pytest.raises(ValueError, match="K, 2"):
@@ -98,6 +104,9 @@ def test_cycle_validation():
     ids=["bautin", "hopf"],
 )
 def test_estimate_cycle_recovers_the_unit_circle_and_period(nf):
+    """`estimate_cycle` on Bautin and Hopf trajectory tails gives the unit circle, the
+    period of the normal form, a winding of 1, and a phase that is the polar angle
+    up to one constant."""
     ys, ts = trajectories(nf)
     est = estimate_cycle(ys, ts, tail_periods=3.0)
     assert est.converged and est.winding == 1
@@ -141,6 +150,8 @@ def test_estimate_cycle_on_an_affine_image_keeps_the_phase_uniform_in_time():
 
 
 def test_estimate_cycle_pools_trajectories_and_accepts_a_single_one():
+    """A single trajectory and four pooled ones give the same period and curve, with
+    three period samples per trajectory."""
     nf = BautinNormalForm(1.0, 0.5, 2.0, 1.0)
     ys, ts = trajectories(nf, n=4)
     single = estimate_cycle(ys[0], ts)
@@ -151,6 +162,9 @@ def test_estimate_cycle_pools_trajectories_and_accepts_a_single_one():
 
 
 def test_measurement_noise_is_averaged_out_and_shrinks_with_the_sample():
+    """With Gaussian noise of ``sigma = 0.05`` on the Bautin trajectories the residual
+    is at the noise level, the curve error is within a loose multiple of the
+    coefficient standard error, and four times the sample roughly halves it."""
     nf = BautinNormalForm(1.0, 0.5, 2.0, 1.0)
     rng = np.random.default_rng(1)
     sigma = 0.05
@@ -175,6 +189,8 @@ def test_measurement_noise_is_averaged_out_and_shrinks_with_the_sample():
 
 
 def test_a_transient_tail_is_reported_as_not_converged():
+    """A slowly contracting Bautin cycle (``κ = −0.2``) is not converged after five
+    periods from a small annulus and is after forty."""
     nf = BautinNormalForm(0.1, 0.5, 2.0)  # κ = −0.2: the deviation halves per period
     ys, ts = trajectories(nf, periods=5.0, r=(0.2, 0.5), n=4)
     assert not estimate_cycle(ys, ts, tail_periods=3.0).converged
@@ -183,6 +199,9 @@ def test_a_transient_tail_is_reported_as_not_converged():
 
 
 def test_winding_follows_the_rotation_direction():
+    """A Bautin normal form with negative ``w`` gives winding −1 and a curve that is
+    traversed clockwise (negative signed area), with the phase still advancing with
+    time."""
     ys, ts = trajectories(BautinNormalForm(1.0, 0.5, -2.0, -1.0))
     est = estimate_cycle(ys, ts)
     assert est.winding == -1 and est.converged
@@ -219,6 +238,10 @@ def test_fitzhugh_nagumo_cycle_matches_langfield_et_al():
 
 
 def test_protophase_helpers_and_input_checks():
+    """`protophase` is monotone along a trajectory; `phase_from_protophase` is the
+    identity on a uniform protophase and undoes a sinusoidal warp; the time-integral
+    `density_coefficients` agree with the sample mean over a closed period and ignore
+    samples outside the window; too short a tail raises `ValueError`."""
     ys, ts = trajectories(BautinNormalForm(1.0, 0.5, 2.0, 1.0), periods=2.0, n=2)
     psi = protophase(ys, np.zeros(2))
     assert psi.shape == ys.shape[:2] and np.all(np.diff(psi, axis=-1) > 0)
@@ -255,6 +278,7 @@ def test_protophase_helpers_and_input_checks():
 
 
 def test_jax_arrays_are_accepted():
+    """`estimate_cycle` accepts JAX arrays and returns NumPy arrays."""
     ys, ts = trajectories(BautinNormalForm(1.0, 0.5, 2.0, 1.0), n=2)
     est = estimate_cycle(jnp.asarray(ys), jnp.asarray(ts))
     assert isinstance(est.cycle.center, np.ndarray) and est.converged

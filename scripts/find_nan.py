@@ -39,6 +39,7 @@ from deep_isochron.training.evaluation import latent_extent
 
 
 def nonfinite_leaves(tree) -> list[str]:
+    """The key paths of the array leaves of `tree` that hold a non-finite value."""
     out = []
     for path, leaf in jax.tree_util.tree_leaves_with_path(tree):
         if isinstance(leaf, jax.Array) and not bool(jnp.all(jnp.isfinite(leaf))):
@@ -47,6 +48,7 @@ def nonfinite_leaves(tree) -> list[str]:
 
 
 def available_steps(run_dir: Path) -> list[int]:
+    """The checkpointed steps of the run in `run_dir`."""
     ckpt = OrbaxCheckpointer(Run.open(run_dir).checkpoint_dir, metric=None)
     try:
         return ckpt.steps
@@ -55,6 +57,8 @@ def available_steps(run_dir: Path) -> list[int]:
 
 
 def describe_extent(model, batch) -> str:
+    """The latent extent of `model` over the states of `batch`, one ``key=value`` per
+    statistic."""
     u = jnp.asarray(batch["u"])
     ext = latent_extent(model, u.reshape(-1, u.shape[-1]))
     parts = [f"{k}={float(v):.4g}" for k, v in ext.items() if k != "n"]
@@ -62,6 +66,7 @@ def describe_extent(model, batch) -> str:
 
 
 def main() -> None:
+    """Load a run's checkpoint and step it until a gradient turns non-finite."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("run_dir", type=Path)
     ap.add_argument("--step", type=int, default=None, help="checkpoint step (latest)")

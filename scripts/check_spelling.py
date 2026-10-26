@@ -124,6 +124,7 @@ def walk(paths: Iterable[Path]) -> Iterator[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Check the files under `argv`; return 1 if any word is flagged."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", type=Path, default=[Path(".")])
     arguments = parser.parse_args(argv)

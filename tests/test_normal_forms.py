@@ -1,26 +1,15 @@
-"""Laws of the normal forms (``deep_isochron.systems.normal_forms``), generic over the
-parameters (Hypothesis draws both forms). The tests implement §10 of
+"""The laws of the normal forms (``deep_isochron.systems.normal_forms``), generic over
+the parameters, which Hypothesis draws for every form; the tests implement §10 of
 ``docs/design/normal-forms.md``.
 
-1. structure      Θ advances at rate ω₁; Ψ decays at rate κ — exactly, by autodiff of
-                  the defining identities, and again along the integrated flow;
-                  κ = ρ'(1) = grad(log_growth_rate)(1) (no factor 2); h(1) = Ψ(1) = 0;
-                  Ψ'(1) = 1 and Ψ < 0 inside (Wilson–Moehlis); public r-views equal the
-                  _sq hooks; cartesian rhs == polar rhs pushed through the chart; the
-                  Jacobian at the origin is ρ(0) I + ω(0) J and the explicit Hopf
-                  Jacobian of §2; isochron / limit_cycle consistency; Ψ's limits; Hopf
-                  == Bautin(b=0); Bautin's unstable outer cycle for -1 < b < 0
-2. charts         to_phase_amplitude ∘ from_phase_amplitude == id on the basin; the root
-                  solve is differentiable in Ψ and in the parameters (implicit function
-                  theorem vs finite differences); unreachable Ψ gives nan
-3. integrations   cartesian / polar / r_squared / closed_form agree away from the
-                  origin; Hopf closed_form equals the explicit r(t) of §6.1; cartesian
-                  is finite at the origin; unknown name rejected; each integration is
-                  static under filter_jit (one trace each)
-4. basins         Winfree's model with a hole (Langfield et al. 2025, §4.1): not even in
-                  r, basin (a, ∞); its closed forms satisfy the identities (via the
-                  shared tests) and its isochrons are the paper's Eq. 12; nan outside
-                  the basin; the a → 0 limits; r_squared refuses non-even forms
+Section 1 pins the structure: ``Θ`` advances at rate ``ω₁`` and ``Ψ`` decays at rate
+``κ``, exactly by autodiff of the defining identities and again along the integrated
+flow; ``κ = ρ'(1)``; the Wilson–Moehlis normalization ``Ψ'(1) = 1``; the cartesian
+field against the polar one pushed through the chart; the Jacobians of §2; Hopf as
+Bautin with ``b = 0``; Bautin's unstable outer cycle for ``-1 < b < 0``. Section 2
+tests the phase–amplitude chart and its differentiable root solve. Section 3 checks
+that the four integrations agree and are static under `filter_jit`. Section 4 covers
+Winfree's model with a hole (Langfield et al. 2025, §4.1) and the basin logic.
 
 The shared laws run over ``all_normal_forms`` (even forms and Winfree); laws that need
 the even family's ``_sq`` data or the origin run over ``normal_forms`` only. Facts about
@@ -77,6 +66,7 @@ angles = st.floats(-3.1, 3.1)
 
 
 def _point(r, theta):
+    """The cartesian point at polar coordinates ``(r, theta)``."""
     return jnp.array([r * jnp.cos(theta), r * jnp.sin(theta)])
 
 
@@ -89,9 +79,10 @@ def _in_basin(nf, r):
 # ------------------------------------------------------- 1. normal-form structure --
 @given(nf=all_normal_forms, r=radii)
 def test_phase_and_isostable_identities(nf, r):
+    """The exact (autodiff) form of ``dΘ/dt = ω₁`` and ``dΨ/dt = κΨ`` along the flow,
+    ``ω(r) + h'(r) r ρ(r) == ω₁`` and ``Ψ'(r) r ρ(r) == κ Ψ(r)`` (design document §4,
+    §5)."""
     r = _in_basin(nf, r)
-    """Exact (autodiff) form of dΘ/dt = ω₁ and dΨ/dt = κΨ along the flow:
-    ω(r) + h'(r) r ρ(r) == ω₁  and  Ψ'(r) r ρ(r) == κ Ψ(r)  (design document §4, §5)."""
     _check_identities(nf, jnp.asarray(r))
 
 
@@ -109,6 +100,7 @@ def test_identities_hold_inside_the_outer_cycle(a, b, w, frac):
 
 
 def _check_identities(nf, r):
+    """Assert the two identities of `test_phase_and_isostable_identities` at `r`."""
     rdot = r * nf.log_growth_rate(r)
     lhs_phase = nf.angular_rate(r) + jax.grad(nf.phase_shift)(r) * rdot
     assert_close(
@@ -148,6 +140,9 @@ def test_hopf_floquet_multiplier_is_the_polar_monodromy(a, w, w0):
 
 @given(nf=all_normal_forms)
 def test_normal_form_closed_forms_are_consistent(nf):
+    """On the cycle ``h``, ``Ψ`` and ``ρ`` vanish; ``κ = ρ'(1)`` with no factor 2 and
+    is negative; ``Ψ'(1) = 1``; the period and multiplier follow from ``ω`` and ``κ``;
+    ``Ψ`` is negative inside the cycle and positive outside."""
     one = jnp.asarray(1.0)
     assert_close(nf.phase_shift(one), 0.0, atol=TOL["identity"])
     assert_close(nf.isostable(one), 0.0, atol=TOL["identity"])
@@ -257,6 +252,8 @@ def test_hopf_jacobian_explicit(a, w, w0, x, y):
 
 @given(nf=all_normal_forms, r=radii, theta=angles)
 def test_cartesian_rhs_is_polar_rhs_in_the_chart(nf, r, theta):
+    """`rhs` equals `rhs_polar` pushed forward through `from_polar`, and the polar
+    chart round-trips."""
     u = _point(_in_basin(nf, r), theta)
     pushed = jax.jvp(
         nf.from_polar, (nf.to_polar(u),), (nf.rhs_polar(0.0, nf.to_polar(u)),)
@@ -293,6 +290,8 @@ def test_phase_and_amplitude_along_the_flow(nf, r, theta):
 
 @given(nf=all_normal_forms, phi=angles, r=radii)
 def test_isochron_and_limit_cycle(nf, phi, r):
+    """`isochron` points have phase ``phi``, the one at radius 1 is `limit_cycle(phi)`,
+    and `phase` of a cycle point is its phase."""
     pts = nf.isochron(phi, jnp.array([_in_basin(nf, r), 1.0]))
     assert_close(jax.vmap(nf.phase)(pts), jnp.full(2, phi), atol=TOL["closed_form"])
     assert_close(pts[1], nf.limit_cycle(jnp.asarray(phi)), atol=TOL["closed_form"])
@@ -303,6 +302,8 @@ def test_isochron_and_limit_cycle(nf, phi, r):
 
 @given(a=st.floats(0.2, 3.0), w=st.floats(0.5, 3.0), w0=st.floats(-2.0, 2.0), r=radii)
 def test_hopf_is_bautin_with_b_zero(a, w, w0, r):
+    """`HopfNormalForm` and `BautinNormalForm` with ``b = 0`` have the same ``h``,
+    ``Ψ``, ``κ`` and vector field."""
     hopf, bautin = HopfNormalForm(a, w, w0), BautinNormalForm(a, 0.0, w, w0)
     r = jnp.asarray(r)
     for f, g in (
@@ -336,6 +337,8 @@ def test_bautin_negative_b_has_unstable_outer_cycle(b, a):
 
 
 def test_bautin_rejects_unstable_cycle():
+    """Constructing Bautin with ``b = -1`` or Hopf with ``a = 0`` raises
+    `ValueError`."""
     with pytest.raises(ValueError):
         BautinNormalForm(b=-1.0)
     with pytest.raises(ValueError):
@@ -345,6 +348,8 @@ def test_bautin_rejects_unstable_cycle():
 # ------------------------------------------------------------------- 2. charts -----
 @given(nf=all_normal_forms, r=radii, theta=angles)
 def test_phase_amplitude_chart_round_trip(nf, r, theta):
+    """`to_phase_amplitude` gives a phase in ``[-π, π]``, `from_phase_amplitude`
+    inverts it on the basin, and `radius_from_isostable` inverts `isostable`."""
     r = _in_basin(nf, r)
     u = _point(r, theta)
     z = nf.to_phase_amplitude(u)
@@ -383,6 +388,8 @@ def test_radius_from_isostable_is_differentiable(nf, r):
 
 
 def test_radius_from_isostable_unreachable_and_basin_edge():
+    """`radius_from_isostable` is ``nan`` above ``Ψ(∞)`` and, for ``b < 0``, finds a
+    large ``Ψ`` just inside the outer cycle."""
     nf = BautinNormalForm(1.3, 0.5, 2.0, 0.7)
     assert jnp.isnan(nf.radius_from_isostable(jnp.asarray(0.3)))  # above Ψ(∞) ≈ 0.2887
     nf = BautinNormalForm(1.0, -0.5, 1.0)
@@ -395,6 +402,9 @@ def test_radius_from_isostable_unreachable_and_basin_edge():
 @given(nf=all_normal_forms, r=radii, theta=angles)
 @settings(deadline=None)
 def test_integrations_agree(nf, r, theta):
+    """The default integration is ``closed_form``, and ``cartesian``, ``polar`` and
+    (for even forms) ``r_squared`` agree with it to `TOL["flow"]` with a tight
+    solver."""
     ts = jnp.linspace(0.0, 2.0, 9)
     u0 = _point(_in_basin(nf, r), theta)
     ref = nf.flow(ts, u0, integration="closed_form").ys  # exact (§6)
@@ -441,6 +451,8 @@ def test_hopf_closed_form_is_explicit(a, w, w0, r0):
 
 
 def test_cartesian_integration_is_finite_at_the_origin():
+    """The cartesian flow from the origin stays at the origin, and its Jacobian with
+    respect to the initial condition is finite."""
     nf = BautinNormalForm(1.0, 0.5, 2.0, 0.5)
     ts = jnp.linspace(0.0, 1.0, 5)
     ys = nf.flow(ts, jnp.zeros(2), integration="cartesian").ys
@@ -454,6 +466,7 @@ def test_cartesian_integration_is_finite_at_the_origin():
 
 
 def test_unknown_integration_rejected():
+    """`flow` raises `ValueError` for an unknown integration name."""
     with pytest.raises(ValueError, match="Unknown integration"):
         BautinNormalForm().flow(
             jnp.linspace(0, 1, 3), jnp.ones(2), integration="spherical"
@@ -575,6 +588,8 @@ def test_bautin_closed_forms_are_finite_up_to_the_float_range(a, b, w):
 
 
 def test_r_squared_integration_refuses_non_even_forms():
+    """The ``r_squared`` integration raises `TypeError` on Winfree's model, which is
+    not an `AbstractEvenNormalForm`."""
     nf = WinfreeNormalForm()
     with pytest.raises(TypeError, match="AbstractEvenNormalForm"):
         nf.flow(jnp.linspace(0.0, 1.0, 3), _point(0.6, 0.0), integration="r_squared")

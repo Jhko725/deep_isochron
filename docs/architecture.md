@@ -77,9 +77,9 @@ deep_isochron
 ├── data/                    one netCDF4 file per dataset (xarray)       ── ADR-0008
 │   ├── dataset.py           DatasetMetadata (grouped); TimeSeriesDataSource = whole
 │   │                        trajectories (frozen dataclass; splits; save/load)
-│   ├── generate.py          IC samplers (UniformBox, UniformAnnulus, OnCycleGaussian);
-│   │                        generate(system, sampler, ts, n, seed=…) with
-│   │                        loud failures and config_hash
+│   ├── initial_conditions.py  AbstractICSampler; UniformBox, UniformAnnulus, OnCycleGaussian
+│   ├── generate.py          generate(system, sampler, ts, n, seed=…) with loud failures;
+│   │                        generation_metadata, dataset_path
 │   ├── device.py            consuming any pipeline next to JAX: single_threaded();
 │   │                        to_device(ds, device); resolve_device()
 │   └── windows/             two ways to cut windows (ADR-0008 D2, D3) — see its __init__
@@ -99,7 +99,7 @@ deep_isochron
 │   │                        PTP phase → period by regression → Fourier curve → converged;
 │   │                        orientation(points) (signed area of a closed polygon)
 │   ├── errors.py            NotConvergedError (stage, message, last iterate)
-│   └── ode/                 from an AbstractODE (O1, O2 landed; O3–O6 to come) ── ADR-0014/15
+│   └── ode/                 from an AbstractODE (status: roadmap Phase E)     ── ADR-0014/15
 │       │                    results are fixed-shape eqx.Modules; functions of them
 │       │                    (f(cycle, …)) jit/vmap as they stand and are left unjitted;
 │       │                    the host-side drivers jit the stages they call
@@ -155,6 +155,7 @@ deep_isochron
 │                            create refuses an existing run, resume is explicit);
 │                            Experiment.from_config(cfg, run_dir); train = Experiment.from_config().train();
 │                            load_run / load_model (template= for hand-built models)
+├── plotting/                matplotlib style (configure_rcparams); plot_source_trajectories
 └── utils/                   shared helpers
     ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian (constraints, normal forms)
     └── provenance.py        git_state(), package_version() — for dataset and run metadata
@@ -164,10 +165,13 @@ scripts/train.py                                Hydra entry point: one training 
 scripts/generate_data.py (+ configs/data/)      Hydra entry point for data generation
 scripts/find_nan.py                             first non-finite gradient of a run, with the latent extent
 scripts/check_md_math.py                        GitHub-safe Markdown math check
+scripts/check_spelling.py                       the -ise families (American English)
+scripts/check_references.py                     every citation resolves to docs/references.md
+scripts/check_docstring_headers.py              **Arguments:** and the like on their own line
 scripts/README.md                               what each script does and how to call it
 scripts/bench_dataloader.py                     data-pipeline vs training-step benchmark
                                                 (also --config <overrides>: a config's own run)
-.github/workflows/ci.yml                        lint · ty · math · tests; slow + end-to-end run
+.github/workflows/ci.yml                        lint · ty · math · spelling · citations · tests; slow + end-to-end run
 ```
 
 ## The invertible package
@@ -307,9 +311,10 @@ and `split_trajectories(frac, seed)` are `copy.replace` with sliced arrays; `sav
 (with an optional dtype assertion) are the only I/O; `dataset` is the xarray view.
 
 `generate(system, ic_sampler, ts, n, *, seed, config, integration, extra)` draws initial
-conditions from an `AbstractICSampler` (`UniformBox`, `UniformAnnulus`), vmaps `flow` with
-`throw=False`, and raises naming any failed indices. `scripts/generate_data.py` is the
-Hydra entry point over `configs/data/*.yaml`.
+conditions from an `AbstractICSampler` (`UniformBox`, `UniformAnnulus`,
+`OnCycleGaussian`), vmaps `flow` with `throw=False`, and raises naming any failed
+indices. `scripts/generate_data.py` is the Hydra entry point over
+`configs/data/*.yaml`.
 
 Training runs read batches of windows from a `WindowBatchSource`
 (`data/windows/batched.py`, ADR-0008 Decision 3). Element `i` is the `i`-th batch of the
@@ -422,3 +427,4 @@ at runtime by the jaxtyping/beartype import hook (`conftest.py`).
 | [0014](decisions/0014-limit-cycle-by-shooting.md) | the limit cycle from the vector field: first-return map on a flow-normal section, multiple shooting with AD Jacobians and LM; `PoincareMap` as the abstraction; reverse time for repelling cycles |
 | [0015](decisions/0015-floquet-by-seeded-periodic-schur.md) | Floquet multipliers by the periodic Schur chain on the shooting mesh, seeded with the flow direction and run in the attracting direction; monodromy and Liouville as checks; `LimitCycle` an `eqx.Module` carrying its ODE and configuration; `f(cycle)` signatures |
 | [0016](decisions/0016-symbolic-systems.md) | systems declared once in SymPy; JAX `rhs` and normal-form hooks derived (compiled per class in `__init_subclass__`); AUTO-07p Fortran assembled by `INCLUDE` from generated `rhs.inc`/`indices.inc` |
+| [0018](decisions/0018-docstrings-map-and-contract.md) | docstrings: the module docstring is the map, a function docstring the contract; `**Attributes:**` lists; one bibliography `references.md` with `(Key, locator)` citations |

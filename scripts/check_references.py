@@ -89,6 +89,7 @@ def citations(file: Path) -> Iterator[tuple[int, str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Check the citations under `argv`; return 1 if any key does not resolve."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("paths", nargs="*", type=Path)
     arguments = parser.parse_args(argv)
