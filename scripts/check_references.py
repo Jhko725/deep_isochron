@@ -60,7 +60,7 @@ def bibliography_keys(path: Path = BIBLIOGRAPHY) -> set[str]:
 
 
 def iter_files(paths: list[Path]) -> Iterator[Path]:
-    """Every ``.py`` and ``.md`` file under ``paths``, minus the excluded directories."""
+    """Every ``.py`` and ``.md`` file under `paths`, minus the excluded directories."""
     for path in paths:
         candidates = [path] if path.is_file() else sorted(path.rglob("*"))
         for file in candidates:

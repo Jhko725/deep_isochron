@@ -1,3 +1,6 @@
+"""The coupling layer, which lifts a scalar bijection to the plane by conditioning its
+parameters on the other coordinates (Papamakarios et al. 2021)."""
+
 from collections.abc import Callable
 
 import equinox as eqx
@@ -26,39 +29,58 @@ _NON_SMOOTH_ACTIVATIONS = frozenset(
 
 
 def _as_template[B: AbstractScalarBijection](bijection: B) -> B:
-    """The bijection with every ``raw`` leaf set to ``None`` (recursively, for chains):
-    a hashable static configuration with zero trainable size. By contract ``raw`` is the
-    only array leaf of a scalar bijection, so dropping all array leaves results in the
-    static template."""
+    """`bijection` with every ``raw`` leaf set to ``None``, recursively for chains: a
+    hashable static configuration with zero trainable size. By contract ``raw`` is
+    the only array leaf of a scalar bijection, so dropping every array leaf gives the
+    template."""
     return eqx.partition(bijection, eqx.is_array)[1]
 
 
 class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
-    """An invertible coupling flow layer, as described in [1].
+    r"""A coupling layer (Papamakarios et al. 2021).
 
-    Inputs are split into a constant and coupling part. The constant part is passed to a
-    *conditioner* — any module ``x_const -> raw`` with ``raw`` of length
-    ``template.num_params * dim_coupled`` — whose output is mapped, through
-    ``template.from_unconstrained``, into one scalar bijection per coupled dimension.
-    Output is obtained by concatenating the two pieces.
+    The input is split into a constant part and a coupled part. The constant part is
+    passed to a conditioner, any module ``x_const -> raw`` with `raw` of length
+    ``template.num_params * dim_coupled``, whose output is mapped through
+    ``template.from_unconstrained`` into one scalar bijection per coupled dimension;
+    the output concatenates the two pieces. The default conditioner is an MLP with a
+    zero-initialized final layer, and since ``from_unconstrained(0)`` is the identity
+    for every scalar bijection, a fresh layer is the identity map. A custom
+    conditioner must output zeros at init for the same to hold, as
+    ``PolarCouplingFlow``'s zero-initialized ``TruncatedFourier`` does.
 
-    The default conditioner is an MLP with a zero-initialized final layer; since
-    ``from_unconstrained(0)`` is the identity for every scalar bijection, a fresh layer
-    is the identity map. A custom ``conditioner`` must output zeros at init for the same
-    to hold (``PolarCouplingFlow`` uses a zero-initialized ``TruncatedFourier``).
+    The layer is jointly $C^k$ in its input when the template is $C^k$ and the
+    conditioner is at least $C^k$; `smoothness` reports the template's value, and the
+    constructor rejects the non-smooth ``jax.nn`` activations of the default MLP when
+    the template is $C^1$ or better. Any other activation, and any custom
+    conditioner, is assumed to be $C^\infty$.
 
-    **Regularity.** The layer is jointly C^k in its input when the template is C^k and
-    the conditioner is at least C^k; ``smoothness`` reports the template's value, and
-    the constructor rejects the non-smooth ``jax.nn`` activations of the default MLP
-    when the template is C^1 or better. Any other activation, and any custom
-    conditioner, is assumed to be C^∞ (``gelu``, ``tanh``, ``softplus``, ``sin``, ...).
+    **Arguments:**
 
-    [1] G. Papamakarios et al. Normalizing Flows for Probabilistic Modeling and
-    Inference. JMLR 22 (2021)."""
+    - `dim`: The input and output dimension, at least 2.
+    - `bijection`: The scalar template; its ``raw`` leaves are dropped.
+    - `split_idx`: The size of the constant part; ``dim // 2`` by default.
+    - `flip`: Whether to reverse the input before splitting, which swaps the roles
+        of the halves.
+    - `mlp_width`, `mlp_depth`, `activation`, `dtype`, `key`: The default MLP
+        conditioner; `key` is required unless `conditioner` is given.
+    - `conditioner`: A custom module ``x_const -> raw``, which overrides the MLP
+        options.
+
+    **Attributes:**
+
+    - `conditioner`: The conditioner.
+    - `template`: The bijection with ``raw=None``: a hashable static field with zero
+        trainable size, since `from_unconstrained` only needs its static
+        configuration.
+    - `dim`, `smoothness`, `split_idx`, `flip`: As above.
+
+    **Raises:** `ValueError` for ``dim < 2``, a `split_idx` outside ``(0, dim)``, a
+    missing `key`, or a non-smooth activation with a $C^1$ or smoother template;
+    `TypeError` for a template that is not an ``AbstractScalarBijection``.
+    """
 
     conditioner: Callable[[Float[Array, " dim_const"]], Float[Array, " raw"]]
-    # A template: the bijection with `raw=None`, so that it is a hashable static field
-    # with zero trainable size; `from_unconstrained` only needs its static config.
     template: B = eqx.field(static=True)
 
     dim: int = eqx.field(static=True)
@@ -80,16 +102,6 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
         *,
         key: PRNGKeyArray | None = None,
     ):
-        """**Arguments:**
-
-        - ``dim``: input/output dimension (``>= 2``).
-        - ``bijection``: scalar template; its ``raw`` leaves are dropped.
-        - ``split_idx``: size of the constant part (default ``dim // 2``).
-        - ``flip``: reverse the input before splitting (swaps the roles of the halves).
-        - ``mlp_width``, ``mlp_depth``, ``activation``, ``dtype``, ``key``: the default
-          MLP conditioner; ``key`` is required unless ``conditioner`` is given.
-        - ``conditioner``: custom module ``x_const -> raw``; overrides the MLP options.
-        """
         if dim < 2:
             raise ValueError("Dimension of a coupling flow cannot be less than 2.")
         self.dim = dim
@@ -136,12 +148,13 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
 
     @property
     def dim_coupled(self) -> int:
+        """The size of the coupled part, ``dim - split_idx``."""
         return self.dim - self.split_idx
 
     def split(
         self, x: Float[Array, " dim"]
     ) -> tuple[Float[Array, " dim_const"], Float[Array, " dim-dim_const"]]:
-        """Split the input array into the constant and the coupled part."""
+        """``(x_const, x_coupled)``, after the flip when `flip` is set."""
         x = jnp.flip(x) if self.flip else x
         x_const, x_coupled = jnp.split(x, [self.split_idx])
         return x_const, x_coupled
@@ -151,26 +164,30 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
         y_const: Float[Array, " dim_const"],
         y_coupled: Float[Array, " dim_coupled"],
     ) -> Float[Array, " dim_const+dim_coupled"]:
+        """The concatenation of the two parts, flipped back when `flip` is set."""
         y = jnp.concatenate((y_const, y_coupled))
         return jnp.flip(y) if self.flip else y
 
     def make_bijection(self, x_const: Float[Array, " dim_const"]) -> B:
-        """Returns a vmapped bijection, corresponding to a dim=1 bijection for each
-        dimension of x(y)_coupled.
-
-        This vmapped bijection must be called under vmap block, as outlined in equinox
-        docs (https://docs.kidger.site/equinox/tricks/; see Ensembling section.)"""
+        """The scalar bijections of the coupled dimensions for `x_const`, stacked
+        along a leading axis: one template filled per dimension from the
+        conditioner's output. The stacked bijection must be called under ``vmap``, as
+        in equinox's ensembling trick (https://docs.kidger.site/equinox/tricks/)."""
         raw = self.conditioner(x_const)
         params = rearrange(raw, "(D C) -> D C", D=self.dim_coupled)
         return eqx.filter_vmap(self.template.from_unconstrained)(params)
 
     def __call__(self, x: Float[Array, " dim"]) -> Float[Array, " dim"]:
+        """The coupled part transformed by the bijections the constant part
+        conditions; the constant part passes through."""
         x_const, x_coupled = self.split(x)
         bijection = self.make_bijection(x_const)
         y_coupled = eqx.filter_vmap(lambda bij, x_: bij(x_))(bijection, x_coupled)
         return self.combine(x_const, y_coupled)
 
     def inverse(self, y: Float[Array, " dim"]) -> Float[Array, " dim"]:
+        """The inverse, by the same bijections, since the constant part is
+        unchanged."""
         y_const, y_coupled = self.split(y)
         bijection = self.make_bijection(y_const)
         x_coupled = eqx.filter_vmap(lambda bij, y_: bij.inverse(y_))(

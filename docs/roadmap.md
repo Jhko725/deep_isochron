@@ -131,7 +131,7 @@ lives in the ADRs. Each round is one commit, reviewed before the next starts; th
 | P1 | `systems/` (all twelve modules) and `analysis/ode/auto/` | *done 2026-10-26*: `D` on for both |
 | P2 | `analysis/` (all eleven modules) | *done 2026-10-26*: `D` on; nothing needed moving, ADR-0015 and `analysis.md` §2–3 already held everything cut |
 | P3 | `data/`, `training/`, `experiment/` (24 modules) | *done 2026-10-26*: `D` on for the three; the `**Returns:**`/`**Raises:**` header form fixed tree-wide |
-| P4 | `model/invertible/*`, `model/*` (the most missing docstrings) | `D` on for `model/` |
+| P4 | `model/invertible/*`, `model/*`, `plotting/`, `utils/` (the most missing docstrings) | *done 2026-10-26*: `D` on for the three; the numbered reference blocks of `model/invertible/` replaced by keys |
 | P5 | `tests/`: one-sentence docstrings per module and test, `helpers.py`, `strategies.py` | `D` on for `tests/` |
 | P6 | Documents: ADRs, `architecture.md`, `coding-standards.md` in full; `analysis.md`, `cubic-bspline.md`, `training-step-performance.md`, `validation-split.md` paragraph and word passes | `check_md_math.py` 0, citations and equations unchanged by a mechanical diff |
 | P7 | `docs/design/normal-forms.md`, alone (966 lines; manuscript source) | same |
@@ -206,3 +206,4 @@ The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when 
 | 2026-10-26 | `prose` | P1: docstrings of `systems/` and `analysis/ode/auto/` revised to the map/contract split, 30 missing public docstrings written, module docstrings cut to pointers at `normal-forms.md` and ADR-0013/0016; ruff `D` on for both directories | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-26 | `prose` | P2: docstrings of `analysis/` revised; `floquet.py`'s 70-line and `poincare.py`'s 57-line module docstrings become maps with pointers at ADR-0014/0015 and `analysis.md` §2–3; 8 missing public docstrings written; `Hairer et al. 1993` added to the bibliography; ruff `D` on for `analysis/` | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-26 | `prose` | P3: docstrings of `data/`, `training/`, `experiment/` revised, 72 missing public docstrings written; the 64 inline `**Returns:**`/`**Raises:**` headers from P1–P2 put on their own line as diffrax writes them, and the form written into the standard; `CLAUDE.md` gains the review-row rule; ruff `D` on for the three packages | `docs/changes/2026-10-26-prose.md` |
+| 2026-10-26 | `prose` | P4: docstrings of `model/`, `plotting/`, `utils/` revised, 120 missing public docstrings written; the 13 numbered reference entries of `model/invertible/` replaced by bibliography keys, three entries added; ruff `D` on for the three packages, `tests/**` the last exemption | `docs/changes/2026-10-26-prose.md` |

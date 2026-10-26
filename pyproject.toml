@@ -63,9 +63,6 @@ convention = "google"  # the section parser; only the selected D rules run
 "*.ipynb" = ["D"]
 "src/Isochron2PBVP/**" = ["D"]
 "scripts/**" = ["D"]
-"src/deep_isochron/model/**" = ["D"]
-"src/deep_isochron/plotting/**" = ["D"]
-"src/deep_isochron/utils/**" = ["D"]
 "tests/**" = ["D"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]

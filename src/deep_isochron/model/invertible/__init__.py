@@ -1,3 +1,7 @@
+"""The invertible layers: scalar bijections in the ``raw``/``constrain`` shape, the
+coupling layers that lift them to the plane, the bi-Lipschitz linear layer, and the
+splines (ADR-0001 to ADR-0006, ADR-0010)."""
+
 from .affine import (
     Affine as Affine,
     AffineCoupling as AffineCoupling,

@@ -1,36 +1,39 @@
-"""Numerical helpers shared by the invertible constraints and the normal forms:
-bounded positive scale transforms and the polar ↔ Cartesian change of coordinates."""
+"""Numerical helpers shared by the invertible constraints and the normal forms: the
+bounded positive scale transforms and the polar-to-cartesian change of coordinates."""
 
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
 
 def inv_softplus(x: Float[ArrayLike, "*shape"]) -> Float[Array, "*shape"]:
+    """The inverse of ``softplus``, ``log(exp(x) - 1)``, for ``x > 0``."""
     return jnp.log(jnp.expm1(x))
 
 
 def squashed_exp(x, a: float = 2.0):
-    """Bounded positive scale transform: ``exp(a * tanh(x / a))``.
+    """The bounded positive scale transform ``exp(a * tanh(x / a))``.
 
-    Strictly increasing and bounded away from both 0 and infinity, with range
-    ``(exp(-a), exp(a)) ~ (0.135, 7.39)`` for a=2.  Unlike ``softplus`` (bounded below
-    but unbounded above), a large positive conditioner output cannot drive the
-    scale to infinity, which removes the overflow/NaN mechanism for the cubic
-    generator's ``a, b`` coefficients.
+    It is strictly increasing and bounded away from both 0 and infinity, with range
+    ``(exp(-a), exp(a))``, about ``(0.135, 7.39)`` for ``a = 2``. Unlike ``softplus``,
+    bounded below but not above, a large positive conditioner output cannot drive the
+    scale to infinity, which removes the overflow mechanism for the cubic generator's
+    ``a`` and ``b``.
     """
     return jnp.exp(a * jnp.tanh(x / a))
 
 
 def inv_squashed_exp(y, a: float = 2.0):
-    """Raw x such that ``squashed_exp(x) == y`` (for y in (exp(-a), exp(a)))."""
+    """The ``x`` with ``squashed_exp(x, a) == y``, for `y` in ``(exp(-a), exp(a))``."""
     return a * jnp.arctanh(jnp.log(y) / a)
 
 
 def cartesian_to_polar(xy: Float[Array, " 2 *rest"]) -> Float[Array, " 2 *rest"]:
+    """``(r, θ)`` of ``(x, y)``, with ``θ`` in ``(-π, π]``."""
     x, y = xy
     return jnp.stack((jnp.hypot(x, y), jnp.arctan2(y, x)))
 
 
 def polar_to_cartesian(rtheta: Float[Array, " 2 *rest"]) -> Float[Array, " 2 *rest"]:
+    """``(x, y)`` of ``(r, θ)``."""
     r, theta = rtheta
     return jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)))
