@@ -92,9 +92,10 @@ def generate_dataset(data_cfg: DictConfig) -> Path:
 def build_source(data_cfg: DictConfig) -> TimeSeriesDataSource:
     """Load the dataset the ``data`` config describes.
 
-    **Raises:** `FileNotFoundError`, naming the generation command, when the file
-    does not exist; training never generates.
-    """
+    **Raises:**
+
+    `FileNotFoundError`, naming the generation command, when the file does not exist;
+    training never generates."""
     path = dataset_file(data_cfg)
     if not path.exists():
         raise FileNotFoundError(
@@ -172,8 +173,9 @@ class Loaders:
         `start_step`, which makes a resume the slice ``[start_step:]`` of the same
         deterministic dataset, and the finite validation dataset.
 
-        **Raises:** `ValueError` for a `start_step` beyond the run's batches.
-        """
+        **Raises:**
+
+        `ValueError` for a `start_step` beyond the run's batches."""
         v = cfg.validation
         train_source, val_source = source.split_trajectories(v.fraction, seed=v.seed)
         wsrc = build_window_source(cfg, train_source)
@@ -205,8 +207,9 @@ def build_window_source(
     """The run's batched window source, by ``windows.sampling.kind`` (``uniform``,
     ``weighted`` or ``mixed``), sized to cover ``num_steps``.
 
-    **Raises:** `ValueError` for an unknown kind, or ``mixed`` without ``split_idx``.
-    """
+    **Raises:**
+
+    `ValueError` for an unknown kind, or ``mixed`` without ``split_idx``."""
     w = cfg.windows
     s = w.sampling
     kind = s.kind

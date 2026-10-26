@@ -36,7 +36,9 @@ from jaxtyping import Array, ArrayLike, Bool, Float
 class SolverConfig(eqx.Module):
     """Every numerical setting of a flow, in one hashable object with no array leaves.
 
-    **Attributes:** as for ``diffrax.diffeqsolve``.
+    **Attributes:**
+
+    as for ``diffrax.diffeqsolve``.
 
     - `solver`: The diffrax solver; ``Tsit5`` by default, diffrax's own recommendation
         for a non-stiff problem.

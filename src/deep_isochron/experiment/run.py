@@ -117,9 +117,10 @@ class Run:
         ``metadata["resumed"]["config_changes"]`` and ``config.yaml`` is rewritten.
         The config and the metadata are written either way.
 
-        **Raises:** `FileExistsError` when `run_dir` already holds a run and `resume`
-        is off; `FileNotFoundError` when it holds no checkpoint to resume from.
-        """
+        **Raises:**
+
+        `FileExistsError` when `run_dir` already holds a run and `resume` is off;
+        `FileNotFoundError` when it holds no checkpoint to resume from."""
         if resume:
             return cls._resume(cfg, run_dir, metadata)
         d = Path(run_dir)
@@ -164,9 +165,10 @@ class Run:
         resume may have changed it, with the checkpoints' ``custom_metadata`` as the
         fallback.
 
-        **Raises:** `FileNotFoundError` when `run_dir` holds no run, or checkpoints
-        without any config.
-        """
+        **Raises:**
+
+        `FileNotFoundError` when `run_dir` holds no run, or checkpoints without any
+        config."""
         d = Path(run_dir)
         if not cls.exists(d):
             raise FileNotFoundError(
@@ -319,8 +321,9 @@ class Experiment:
         - `checkpointer`: The checkpointer; ``run.checkpointer()`` when ``None``.
         - `group`, `wandb_run`: Passed to `build_logger`.
 
-        **Returns:** The final state. A wandb run that `build_logger` created is
-        finished afterwards.
+        **Returns:**
+
+        The final state. A wandb run that `build_logger` created is finished afterwards.
         """
         cfg = self.cfg
         owned_wandb = None

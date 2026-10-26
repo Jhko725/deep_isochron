@@ -87,9 +87,10 @@ class BiLipschitzLinear(AbstractBijection):
     - `bias`: The bias, or ``None``.
     - `max_lipschitz`: ``L`` (static).
 
-    **Raises:** `ValueError` for ``max_lipschitz <= 1``, which leaves no room for
-    ``s``, or an unknown `init`.
-    """
+    **Raises:**
+
+    `ValueError` for ``max_lipschitz <= 1``, which leaves no room for ``s``, or an
+    unknown `init`."""
 
     raw_U: Float[Array, "{self.dim} {self.dim}"]
     raw_V: Float[Array, "{self.dim} {self.dim}"]

@@ -112,8 +112,9 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
     - `min_rel_knot_width`, `min_rel_coeff_incr`: The floors of the two blocks.
     - `newton_iters`: The iterations of the inverse solve.
 
-    **Raises:** `ValueError` for fewer than 4 bins or a bad range.
-    """
+    **Raises:**
+
+    `ValueError` for fewer than 4 bins or a bad range."""
 
     raw: Float[Array, " {self.num_params}"] | None
     num_params: int = eqx.field(static=True, init=False)

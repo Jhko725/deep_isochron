@@ -155,8 +155,9 @@ class AbstractScalarBijection[P: tuple](AbstractBijection):
     def _init_raw(self, raw: Float[Array, " {self.num_params}"] | None):
         """`raw` validated for a subclass ``__init__``: ``None`` keeps a template.
 
-        **Raises:** `ValueError` for a shape other than ``(num_params,)``.
-        """
+        **Raises:**
+
+        `ValueError` for a shape other than ``(num_params,)``."""
         if raw is not None:
             raw = jnp.asarray(raw)
             if raw.shape != (self.num_params,):
@@ -234,9 +235,9 @@ class ScalarChain(AbstractScalarBijection[tuple]):
 class SequentialINN(AbstractBijection):
     """The composition of vector bijections of one `dim`, applied left to right.
 
-    **Raises:** `ValueError` for no transforms, or transforms of different
-    dimensions.
-    """
+    **Raises:**
+
+    `ValueError` for no transforms, or transforms of different dimensions."""
 
     transforms: tuple[AbstractBijection, ...]
     dim: int = eqx.field(static=True, init=False)

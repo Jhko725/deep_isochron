@@ -75,11 +75,14 @@ def generate(
         `n_trajectories` lie inside, with a warning and the count in
         ``metadata.provenance.rejected_ics``.
 
-    **Returns:** The `TimeSeriesDataSource` with its metadata and provenance.
+    **Returns:**
 
-    **Raises:** `RuntimeError` naming the indices of failed integrations;
-    `ValueError` for initial conditions outside the basin under ``"error"``.
-    """
+    The `TimeSeriesDataSource` with its metadata and provenance.
+
+    **Raises:**
+
+    `RuntimeError` naming the indices of failed integrations; `ValueError` for initial
+    conditions outside the basin under ``"error"``."""
     ts = jnp.asarray(ts)
     u0, rejected = _sample_in_basin(
         system, ic_sampler, jax.random.key(seed), n_trajectories, outside_basin
@@ -213,9 +216,9 @@ def generation_metadata(
     configuration lives; ``experiment.build_source`` relies on that. The arguments are
     those of `generate`.
 
-    **Raises:** `ValueError` for an `integration` on a system that is not a normal
-    form.
-    """
+    **Raises:**
+
+    `ValueError` for an `integration` on a system that is not a normal form."""
     ts = jnp.asarray(ts)
     config = copy.replace(config, throw=False)
     if isinstance(system, AbstractNormalForm):

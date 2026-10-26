@@ -158,8 +158,9 @@ class EpochLogger(Logger):
     forwarding to `inner`: the run's unit is the step (ADR-0011 §4), and the epoch is
     reported alongside.
 
-    **Raises:** `ValueError` for a non-positive `batches_per_epoch`.
-    """
+    **Raises:**
+
+    `ValueError` for a non-positive `batches_per_epoch`."""
 
     def __init__(self, inner: Logger, batches_per_epoch: int) -> None:
         if batches_per_epoch < 1:

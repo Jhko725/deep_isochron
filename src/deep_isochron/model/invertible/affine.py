@@ -81,8 +81,9 @@ class Affine(AbstractScalarBijection[AffineParams]):
     - `clamp`: The log-scale bound ``a``, positive; 2 by default, a scale in
         ``(0.135, 7.39)``.
 
-    **Raises:** `ValueError` for a non-positive `clamp`.
-    """
+    **Raises:**
+
+    `ValueError` for a non-positive `clamp`."""
 
     raw: Float[Array, " 2"] | None
     clamp: float = eqx.field(static=True)

@@ -84,8 +84,9 @@ class ThresholdSwitch(AbstractLossSchedule[Bool[Array, ""]]):
     - `before`, `after`: The two weight tuples, of one length.
     - `thresholds`: Term name to threshold.
 
-    **Raises:** `ValueError` when the two tuples differ in length.
-    """
+    **Raises:**
+
+    `ValueError` when the two tuples differ in length."""
 
     before: tuple[float, ...] = eqx.field(static=True)
     after: tuple[float, ...] = eqx.field(static=True)

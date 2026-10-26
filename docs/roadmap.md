@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-26
+updated: 2026-10-27
 sources: [joon, claude]
 ---
 
@@ -207,3 +207,4 @@ The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when 
 | 2026-10-26 | `prose` | P2: docstrings of `analysis/` revised; `floquet.py`'s 70-line and `poincare.py`'s 57-line module docstrings become maps with pointers at ADR-0014/0015 and `analysis.md` §2–3; 8 missing public docstrings written; `Hairer et al. 1993` added to the bibliography; ruff `D` on for `analysis/` | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-26 | `prose` | P3: docstrings of `data/`, `training/`, `experiment/` revised, 72 missing public docstrings written; the 64 inline `**Returns:**`/`**Raises:**` headers from P1–P2 put on their own line as diffrax writes them, and the form written into the standard; `CLAUDE.md` gains the review-row rule; ruff `D` on for the three packages | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-26 | `prose` | P4: docstrings of `model/`, `plotting/`, `utils/` revised, 120 missing public docstrings written; the 13 numbered reference entries of `model/invertible/` replaced by bibliography keys, three entries added; ruff `D` on for the three packages, `tests/**` the last exemption | `docs/changes/2026-10-26-prose.md` |
+| 2026-10-27 | `prose` | P4b: the 66 inline docstring headers left after P3 fixed and `scripts/check_docstring_headers.py` added to `prek` and CI; `src/Isochron2PBVP` excluded from ruff and ty, which is what failed CI on `master` | `docs/changes/2026-10-26-prose.md` |

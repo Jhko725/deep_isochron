@@ -65,8 +65,9 @@ class PhaseAmplitudeLatentDynamics(AbstractLatentDynamics):
     - `omega`: As above.
     - `raw_decay`: The unconstrained leaf of ``-kappa``.
 
-    **Raises:** `ValueError` for ``kappa >= 0``.
-    """
+    **Raises:**
+
+    `ValueError` for ``kappa >= 0``."""
 
     omega: Float[Array, ""]
     raw_decay: Float[Array, ""]

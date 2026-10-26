@@ -1,7 +1,7 @@
 ---
 type: reference
 status: current
-updated: 2026-10-26
+updated: 2026-10-27
 ---
 
 # Coding standards
@@ -22,7 +22,7 @@ look when a task touches tiers, tolerances, contracts or checks.
 | Types | `uv run ty check src/deep_isochron/model/invertible`, clean, with no `# ty: ignore` |
 | Markdown | `uv run python scripts/check_md_math.py`, 0 problems |
 | Citations | `uv run python scripts/check_references.py`, every key resolves |
-| Docstrings | `uv run ruff check`, with `D100`–`D103` selected for the modules the prose pass has reached |
+| Docstrings | `uv run ruff check`, with `D100`–`D103` selected for the modules the prose pass has reached; `uv run python scripts/check_docstring_headers.py`, 0 problems |
 
 Read the baseline before editing — the branch change document's *Tests* and *Open
 issues*, the pinned `xfail`s, the `UNTESTED` entries in `tests/registry.py` — rather than
@@ -95,6 +95,7 @@ This section says what each check is for; read the file for the current values.
 | both Markdown previews | `scripts/check_md_math.py` | `prek`, CI |
 | every citation resolves to `docs/references.md` | `scripts/check_references.py` | `prek`, CI |
 | a docstring on every public module, class, method and function | ruff `D100`–`D103`, `per-file-ignores` naming the modules not yet reached | `prek`, CI |
+| `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after | `scripts/check_docstring_headers.py` | `prek`, CI |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
 
 One deliberate exemption: `scripts/bench_dataloader.py` times `jax.scipy.linalg.expm` against
@@ -155,9 +156,11 @@ function computes or does, in the active voice with the function as the actor, a
 carries everything the caller needs for that call, in the equinox form: `**Arguments:**`,
 one bullet per argument; `**Returns:**`; `**Raises:**` when the function raises on its
 own. Each header stands on its own line, followed by a blank line and then the bullets
-or the paragraph, as diffrax writes them; a one-argument function whose opening
-sentence names its argument needs no `**Arguments:**` list. The precision or validity limits of that function, and the citation for a formula
-it implements (author, year and locator), belong here, not in the module docstring.
+or the paragraph, as diffrax writes them (`scripts/check_docstring_headers.py`); a
+one-argument function whose opening sentence names its argument needs no
+`**Arguments:**` list. The precision or validity limits of that function, and the
+citation for a formula it implements (author, year and locator), belong here, not in
+the module docstring.
 
 **A class docstring** opens the same way and documents the fields in an
 `**Attributes:**` list, as diffrax does; a field carries no attribute docstring of its

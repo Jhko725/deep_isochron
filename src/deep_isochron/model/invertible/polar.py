@@ -21,8 +21,9 @@ class OffsetedBijection(AbstractScalarBijection[tuple]):
     `smoothness` to ``f``; usable standalone, as a chain member, or as a coupling
     template. ``raw`` lives in the wrapped bijection.
 
-    **Raises:** `TypeError` for a wrapped object that is not a scalar bijection.
-    """
+    **Raises:**
+
+    `TypeError` for a wrapped object that is not a scalar bijection."""
 
     bijection: AbstractScalarBijection
     raw: Float[Array, " num_params"] | None = eqx.field(
@@ -230,8 +231,9 @@ class PolarCouplingFlow(AbstractBijection):
     - `eps_r`: The radius regularization.
     - `key`: Unused, kept for builder compatibility; the layer is zero-initialized.
 
-    **Raises:** `TypeError` for a template that is not a scalar bijection.
-    """
+    **Raises:**
+
+    `TypeError` for a template that is not a scalar bijection."""
 
     conditioner: TruncatedFourier
     center: Float[Array, " 2"]

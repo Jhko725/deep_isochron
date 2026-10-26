@@ -46,8 +46,9 @@ class AbstractSpline[P: tuple](AbstractScalarBijection[P]):
         """``(lo, hi)`` as floats from any two-element sequence, since configs give
         lists.
 
-        **Raises:** `ValueError` for another length or ``lo >= hi``.
-        """
+        **Raises:**
+
+        `ValueError` for another length or ``lo >= hi``."""
         if len(xy_range) != 2:
             raise ValueError("xy_range must have two entries, (lo, hi).")
         lo, hi = float(xy_range[0]), float(xy_range[1])

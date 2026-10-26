@@ -75,10 +75,11 @@ class CouplingFlow[B: AbstractScalarBijection](AbstractBijection):
         configuration.
     - `dim`, `smoothness`, `split_idx`, `flip`: As above.
 
-    **Raises:** `ValueError` for ``dim < 2``, a `split_idx` outside ``(0, dim)``, a
-    missing `key`, or a non-smooth activation with a $C^1$ or smoother template;
-    `TypeError` for a template that is not an ``AbstractScalarBijection``.
-    """
+    **Raises:**
+
+    `ValueError` for ``dim < 2``, a `split_idx` outside ``(0, dim)``, a missing `key`,
+    or a non-smooth activation with a $C^1$ or smoother template; `TypeError` for a
+    template that is not an ``AbstractScalarBijection``."""
 
     conditioner: Callable[[Float[Array, " dim_const"]], Float[Array, " raw"]]
     template: B = eqx.field(static=True)

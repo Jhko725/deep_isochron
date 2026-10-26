@@ -28,7 +28,9 @@ A_CONSTRAINT = GreaterThan(0.0)
 class HopfNormalForm(AbstractEvenNormalForm):
     r"""$\dot r = a r (1 - r^2)$, $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$.
 
-    **Arguments:** (constrained values)
+    **Arguments:**
+
+    (constrained values)
 
     - `a`: The radial rate, positive.
     - `w`: $\omega_1$, the frequency on the cycle.

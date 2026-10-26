@@ -50,8 +50,9 @@ class Checkpointer(abc.ABC):
         final step, so that a run always ends with its last state on disk, whatever
         ``save_every`` is.
 
-        **Returns:** Whether a checkpoint was written.
-        """
+        **Returns:**
+
+        Whether a checkpoint was written."""
 
     def close(self) -> None:
         """Release whatever the checkpointer holds; a no-op by default."""
@@ -145,10 +146,13 @@ class OrbaxCheckpointer(Checkpointer):
         checkpoints are kept afterwards is the preservation policy: the latest, plus
         the best `keep_best` by `metric`.
 
-        **Returns:** Whether a checkpoint was written.
+        **Returns:**
 
-        **Raises:** `KeyError` when `metrics` lacks `metric`.
-        """
+        Whether a checkpoint was written.
+
+        **Raises:**
+
+        `KeyError` when `metrics` lacks `metric`."""
         if self.metric is not None and self.metric not in metrics:
             raise KeyError(
                 f"checkpoint metric {self.metric!r} missing from metrics "

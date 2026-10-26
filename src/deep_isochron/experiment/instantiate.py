@@ -42,8 +42,9 @@ def instantiate(cfg: Mapping[str, Any] | DictConfig, **overrides: Any) -> Any:
     - `overrides`: Keyword arguments that take precedence, such as the per-layer
         ``key`` and ``flip`` a config cannot express.
 
-    **Raises:** `ValueError` without a ``_target_``.
-    """
+    **Raises:**
+
+    `ValueError` without a ``_target_``."""
     if isinstance(cfg, DictConfig | ListConfig):
         plain = OmegaConf.to_container(cfg, resolve=True)
     else:

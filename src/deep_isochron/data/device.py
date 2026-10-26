@@ -48,8 +48,9 @@ def to_device(
         or the scheduler decides which card a job uses, never this function.
     - `cpu_buffer_size`, `device_buffer_size`: The two buffer depths.
 
-    **Returns:** The prefetching ``IterDataset``.
-    """
+    **Returns:**
+
+    The prefetching ``IterDataset``."""
     ds = single_threaded(dataset)  # one reader; the two prefetch stages buffer
     return grain.experimental.device_put(
         ds,
@@ -78,9 +79,10 @@ def resolve_device(index: int | None = None) -> jax.Device:
     anyway, so the loader's batches and the model agree without further
     configuration.
 
-    **Raises:** `ValueError`, listing the devices, when several accelerators are
-    visible and no such variable is set, as on a login node or in an interactive shell
-    on a shared machine.
+    **Raises:**
+
+    `ValueError`, listing the devices, when several accelerators are visible and no such
+    variable is set, as on a login node or in an interactive shell on a shared machine.
     """
     devices = jax.devices()
     if index is not None:

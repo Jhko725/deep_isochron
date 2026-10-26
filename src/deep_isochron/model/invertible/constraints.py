@@ -140,8 +140,9 @@ class GreaterThan(_Shifted):
         that ``GreaterThan(0.0)`` maps 0 to 1, a unit scale, and ``GreaterThan(-1.0)``
         maps 0 to 0, a vanishing coefficient.
 
-    **Raises:** `ValueError` unless ``at_zero > lower``.
-    """
+    **Raises:**
+
+    `ValueError` unless ``at_zero > lower``."""
 
     def __init__(self, lower: float, at_zero: float | None = None):
         at_zero = lower + 1.0 if at_zero is None else at_zero
@@ -190,8 +191,9 @@ class BoundedPositive(_Shifted):
         ``(exp(-a), exp(a))``. ``lower + 1`` by default.
     - `a`: The squashing scale; 2 by default.
 
-    **Raises:** `ValueError` for an `at_zero` outside the image.
-    """
+    **Raises:**
+
+    `ValueError` for an `at_zero` outside the image."""
 
     def __init__(
         self, lower: float = 0.0, at_zero: float | None = None, a: float = 2.0
@@ -234,8 +236,9 @@ class Interval(_Shifted):
     - `at_zero`: The image of ``raw = 0``, strictly inside the interval; the midpoint
         by default.
 
-    **Raises:** `ValueError` otherwise.
-    """
+    **Raises:**
+
+    `ValueError` otherwise."""
 
     def __init__(self, lo: float, hi: float, at_zero: float | None = None):
         if not lo < hi:
@@ -284,9 +287,10 @@ class Widths(Constraint):
     - `min_rel`: The minimum relative width, non-negative. ``n * min_rel < 1`` is
         checked per call, because ``n`` is the length of the raw vector.
 
-    **Raises:** `ValueError` for a negative `min_rel` at construction, and for
-    ``n * min_rel >= 1`` at a call.
-    """
+    **Raises:**
+
+    `ValueError` for a negative `min_rel` at construction, and for ``n * min_rel >= 1``
+    at a call."""
 
     def __init__(self, total, min_rel: float = 1e-3):
         if min_rel < 0:

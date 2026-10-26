@@ -33,7 +33,9 @@ class BautinNormalForm(AbstractEvenNormalForm):
     r"""$\dot r = a r (1 - r^2)(1 + b r^2)$,
     $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$.
 
-    **Arguments:** (constrained values)
+    **Arguments:**
+
+    (constrained values)
 
     - `a`: The radial rate, positive.
     - `b`: The quintic coefficient, above $-1$.

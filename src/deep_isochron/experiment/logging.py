@@ -34,9 +34,10 @@ def build_logger(
     - `wandb_run`: An existing run, from ``wandb.init`` in a notebook; it is logged
         to as it is, whatever ``wandb.mode`` says, and is the caller's to finish.
 
-    **Returns:** ``(logger, wandb_run_or_None)``; the logger is one-step delayed, so
-    the host never waits on the current step.
-    """
+    **Returns:**
+
+    ``(logger, wandb_run_or_None)``; the logger is one-step delayed, so the host never
+    waits on the current step."""
     loggers: list[Logger] = [
         PrintLogger(every=cfg.log_every, keys=("loss", "val/mse", "period", "epoch"))
     ]

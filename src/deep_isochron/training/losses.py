@@ -95,8 +95,9 @@ class AbstractLoss(eqx.Module):
         ``init=True`` static field, because equinox warns about float leaves in
         ``init=False`` fields.
 
-    **Raises:** `ValueError` at construction when the two differ in length.
-    """
+    **Raises:**
+
+    `ValueError` at construction when the two differ in length."""
 
     weight_names: eqx.AbstractVar[tuple[str, ...]]
     default_weights: eqx.AbstractVar[tuple[float, ...]]
@@ -137,11 +138,14 @@ class AbstractLoss(eqx.Module):
         - `weights`: The weights, shape ``(num_weights,)``, in the order of
             `weight_names`; `default_weights` when ``None``.
 
-        **Returns:** ``(Σ_i weights[i] · terms[weight_names[i]], terms | aux)``.
+        **Returns:**
 
-        **Raises:** `ValueError` when `terms` returns other keys than `weight_names`,
-        or an `aux` key clashes with a term.
-        """
+        ``(Σ_i weights[i] · terms[weight_names[i]], terms | aux)``.
+
+        **Raises:**
+
+        `ValueError` when `terms` returns other keys than `weight_names`, or an `aux`
+        key clashes with a term."""
         w = jnp.asarray(self.default_weights if weights is None else weights)
         batch = {k: jnp.asarray(v) for k, v in batch.items()}  # NumPy batches welcome
         terms, aux = self.terms(model, batch)

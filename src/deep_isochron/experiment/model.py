@@ -38,8 +38,9 @@ def build_model(
     """The model that `model_cfg` describes: a ``ConjugateLatentDynamics`` for
     ``kind: conjugacy``, a ``PhaseAmplitudeAutoencoder`` for ``kind: autoencoder``.
 
-    **Raises:** `ValueError` for another kind.
-    """
+    **Raises:**
+
+    `ValueError` for another kind."""
     kind = model_cfg.kind
     if kind == "conjugacy":
         latent = instantiate(model_cfg.latent_dynamics)

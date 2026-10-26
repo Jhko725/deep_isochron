@@ -48,8 +48,9 @@ class MonotonicRQSpline(AbstractSpline[RQSplineParams]):
     - `raw`: The raw parameters; the identity when omitted.
     - `min_rel_width`, `min_derivative`: The floors.
 
-    **Raises:** `ValueError` for fewer than 1 bin or a bad range.
-    """
+    **Raises:**
+
+    `ValueError` for fewer than 1 bin or a bad range."""
 
     raw: Float[Array, " {self.num_params}"] | None
     num_params: int = eqx.field(static=True, init=False)

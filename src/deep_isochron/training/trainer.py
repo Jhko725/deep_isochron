@@ -126,8 +126,9 @@ def check_batch_dtype(batch: Batch, *, x64_enabled: bool | None = None) -> None:
     """Refuse float64 data when ``jax_enable_x64`` is off, since ``jnp.asarray`` would
     silently round it to float32 and every tolerance in the project assumes float64.
 
-    **Raises:** `TypeError` for a float64 array in `batch` with x64 off.
-    """
+    **Raises:**
+
+    `TypeError` for a float64 array in `batch` with x64 off."""
     if x64_enabled is None:
         x64_enabled = bool(jax.config.jax_enable_x64)
     for name, value in batch.items():
@@ -151,8 +152,9 @@ class Trainer(Generic[M]):
     - `is_trainable`: Which leaves the optimizer updates; the inexact arrays by
         default.
 
-    **Raises:** `ValueError` when the schedule's weight count differs from the loss's.
-    """
+    **Raises:**
+
+    `ValueError` when the schedule's weight count differs from the loss's."""
 
     def __init__(
         self,
@@ -248,11 +250,14 @@ class Trainer(Generic[M]):
             ``scripts/find_nan.py``. The check lives at the evaluations because the
             loop itself never reads device values.
 
-        **Returns:** The final state.
+        **Returns:**
 
-        **Raises:** `ValueError` for a missing `key`, a non-positive `eval_every` or
-        a negative `num_steps`; `FloatingPointError` as above.
-        """
+        The final state.
+
+        **Raises:**
+
+        `ValueError` for a missing `key`, a non-positive `eval_every` or a negative
+        `num_steps`; `FloatingPointError` as above."""
         if isinstance(model_or_state, TrainerState):
             state = model_or_state
         else:

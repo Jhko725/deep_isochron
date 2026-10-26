@@ -60,9 +60,10 @@ class WindowBatchSource:
     - `epochs`: The run's length in epochs.
     - `lo`, `hi`: The valid starts.
 
-    **Raises:** `ValueError` for conflicting or missing length arguments, a batch
-    larger than an epoch, or a range that does not fit.
-    """
+    **Raises:**
+
+    `ValueError` for conflicting or missing length arguments, a batch larger than an
+    epoch, or a range that does not fit."""
 
     def __init__(
         self,
@@ -174,8 +175,9 @@ class WindowBatchSource:
     def __getitem__(self, index: int) -> Batch:
         """Batch `index` by one gather.
 
-        **Raises:** `IndexError` outside ``[0, len(self))``.
-        """
+        **Raises:**
+
+        `IndexError` outside ``[0, len(self))``."""
         if not 0 <= index < len(self):
             raise IndexError(index)
         traj, start = self._draw(index)
@@ -218,9 +220,9 @@ def mixed_ranges(
     `length` that start before ``ts[split_idx]`` and windows that start at or after
     it.
 
-    **Raises:** `ValueError` unless `split_idx` leaves at least one window on each
-    side.
-    """
+    **Raises:**
+
+    `ValueError` unless `split_idx` leaves at least one window on each side."""
     T = source.trajectory_length
     if not length <= split_idx <= T - length:
         raise ValueError(

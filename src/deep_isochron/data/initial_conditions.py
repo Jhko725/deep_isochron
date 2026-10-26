@@ -40,8 +40,9 @@ class AbstractICSampler(eqx.Module):
 class UniformBox(AbstractICSampler):
     """Uniform on the box ``[lo, hi]`` with per-coordinate bounds.
 
-    **Raises:** `ValueError` unless `lo` and `hi` have one shape with ``lo < hi``.
-    """
+    **Raises:**
+
+    `ValueError` unless `lo` and `hi` have one shape with ``lo < hi``."""
 
     lo: Float[Array, " dim"]
     hi: Float[Array, " dim"]
@@ -62,8 +63,9 @@ class UniformAnnulus(AbstractICSampler):
     """Uniform in angle and in radius on ``[r_min, r_max]`` about `center`, planar;
     it avoids the origin of a normal form.
 
-    **Raises:** `ValueError` unless ``0 <= r_min < r_max``.
-    """
+    **Raises:**
+
+    `ValueError` unless ``0 <= r_min < r_max``."""
 
     r_min: float
     r_max: float
@@ -99,8 +101,9 @@ class OnCycleGaussian(AbstractICSampler):
         integration of one orbit of an observed system.
     - `gamma2`: The noise scale $\gamma_2$, non-negative; the paper's is 0.5.
 
-    **Raises:** `ValueError` otherwise.
-    """
+    **Raises:**
+
+    `ValueError` otherwise."""
 
     cycle_points: Float[Array, "points dim"]
     gamma2: float

@@ -82,11 +82,14 @@ def windows(
     - `weight`: The start weight function, for a weighted start.
     - `start_range`: The start indices ``[lo, hi)``, for a restricted uniform start.
 
-    **Returns:** The ``grain.MapDataset``.
+    **Returns:**
 
-    **Raises:** `ValueError` when both `weight` and `start_range` are given, or the
-    length or range does not fit.
-    """
+    The ``grain.MapDataset``.
+
+    **Raises:**
+
+    `ValueError` when both `weight` and `start_range` are given, or the length or range
+    does not fit."""
     _check_range(length, source.trajectory_length, start_range)
     if weight is not None and start_range is not None:
         raise ValueError("weight and start_range are alternatives; pass one.")
@@ -115,9 +118,9 @@ def mixed_windows(
     """An infinite stream interleaving windows that start before ``ts[split_idx]``,
     the transient, and windows that start at or after it, in the ratio `weights`.
 
-    **Raises:** `ValueError` unless `split_idx` leaves at least one window on each
-    side.
-    """
+    **Raises:**
+
+    `ValueError` unless `split_idx` leaves at least one window on each side."""
     T = source.trajectory_length
     if not length <= split_idx <= T - length:
         raise ValueError(

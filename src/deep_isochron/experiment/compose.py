@@ -31,8 +31,9 @@ def compose(
     ``"data=fhn"`` or ``"windows.batch=4096"``; `config_dir` defaults to the checkout's
     ``configs/``.
 
-    **Raises:** `FileNotFoundError` when the directory does not exist.
-    """
+    **Raises:**
+
+    `FileNotFoundError` when the directory does not exist."""
     directory = Path(config_dir) if config_dir is not None else CONFIG_DIR
     if not directory.is_dir():
         raise FileNotFoundError(f"config directory {directory} not found")

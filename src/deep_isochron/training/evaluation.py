@@ -288,8 +288,9 @@ class Evaluator:
     def _bounds(self) -> Float[Array, "2 dim"]:
         """The per-coordinate minimum and maximum over the validation data.
 
-        **Raises:** `ValueError` when the data are empty.
-        """
+        **Raises:**
+
+        `ValueError` when the data are empty."""
         lo = hi = None
         for batch in self._batches():
             u = np.asarray(batch["u"]).reshape(-1, np.shape(batch["u"])[-1])
@@ -303,8 +304,9 @@ class Evaluator:
         """The metrics of `model` over one pass of the validation data, as floats;
         an empty bucket of the split is reported as ``nan`` rather than hidden.
 
-        **Raises:** `ValueError` when the data are empty.
-        """
+        **Raises:**
+
+        `ValueError` when the data are empty."""
         t_split = jnp.asarray(-jnp.inf if self.t_split is None else self.t_split)
         pred: dict[str, Array] | None = None
         sums: dict[str, Array] | None = None

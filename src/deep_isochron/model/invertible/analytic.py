@@ -142,12 +142,13 @@ def _sinh_overflow_logabs_z(x, beta, mu, nu, power):
     """The overflow mask and ``log|z|`` shared by the all-order-safe ``sinh``
     helpers, for ``z = exp(mu) (exp(nu) sinh x + beta)``.
 
-    **Returns:** ``(big, log_abs_z, sign_z)``. ``big`` marks where ``|z|**power`` is
-    too large for the direct primitive path, so that the asymptote is used there;
-    ``log_abs_z`` and ``sign_z`` are computed from double-``where`` safe inputs, so
-    they are non-singular to all orders wherever ``big`` is false, and the unused
-    overflow branch never poisons the reverse-mode gradient at the ``s = 0``
-    singularity.
+    **Returns:**
+
+    ``(big, log_abs_z, sign_z)``. ``big`` marks where ``|z|**power`` is too large for
+    the direct primitive path, so that the asymptote is used there; ``log_abs_z`` and
+    ``sign_z`` are computed from double-``where`` safe inputs, so they are non-singular
+    to all orders wherever ``big`` is false, and the unused overflow branch never
+    poisons the reverse-mode gradient at the ``s = 0`` singularity.
 
     In the overflow regime ``log|s|`` must not be formed from the raw
     ``s = exp(nu) sinh x + beta``: its value is fine, but its second and third

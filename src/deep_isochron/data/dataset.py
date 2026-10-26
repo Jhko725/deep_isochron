@@ -194,8 +194,9 @@ class TimeSeriesDataSource:
     - `ys`: The trajectories, shape ``(trajectory, time, dim)``.
     - `metadata`: The `DatasetMetadata`, or ``None`` for a source built in memory.
 
-    **Raises:** `ValueError` at construction when the shapes do not match.
-    """
+    **Raises:**
+
+    `ValueError` at construction when the shapes do not match."""
 
     ts: Float[np.ndarray, " time"]
     ys: Float[np.ndarray, "trajectory time dim"]
@@ -267,8 +268,9 @@ class TimeSeriesDataSource:
         """``(before, after)``: every trajectory cut at time index `idx`, which must
         lie strictly inside the time axis.
 
-        **Raises:** `ValueError` otherwise.
-        """
+        **Raises:**
+
+        `ValueError` otherwise."""
         if not 0 < idx < self.trajectory_length:
             raise ValueError(
                 f"idx must be in (0, {self.trajectory_length}), got {idx}."
@@ -284,8 +286,9 @@ class TimeSeriesDataSource:
         """``(train, held_out)``: a random fraction `frac` of the trajectories held
         out, at least one, drawn with `seed`.
 
-        **Raises:** `ValueError` for `frac` outside ``(0, 1)``.
-        """
+        **Raises:**
+
+        `ValueError` for `frac` outside ``(0, 1)``."""
         if not 0 < frac < 1:
             raise ValueError("frac must be in (0, 1).")
         n = self.num_trajectories
@@ -299,8 +302,9 @@ class TimeSeriesDataSource:
         """Write the netCDF4 file, arrays and metadata together, creating the parent
         directory; the path is returned.
 
-        **Raises:** `ValueError` without metadata.
-        """
+        **Raises:**
+
+        `ValueError` without metadata."""
         if self.metadata is None:
             raise ValueError("save() requires metadata; pass DatasetMetadata.")
         path = Path(path)
@@ -318,8 +322,9 @@ class TimeSeriesDataSource:
         - `dtype`: When given, the dtype the trajectories must have, so that a
             mismatch is loud instead of silently mixing precisions with the model.
 
-        **Raises:** `TypeError` on a dtype mismatch.
-        """
+        **Raises:**
+
+        `TypeError` on a dtype mismatch."""
         with xr.open_dataset(path, engine=ENGINE) as ds:
             ds = ds.load()
         if dtype is not None and ds["ys"].dtype != np.dtype(dtype):

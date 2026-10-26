@@ -20,8 +20,9 @@ def _check_range(length: int, T: int, start_range: tuple[int, int] | None):
     """The valid start indices ``(lo, hi)`` for windows of `length` in `T` samples,
     restricted to `start_range` when given.
 
-    **Raises:** `ValueError` for a length or range that does not fit.
-    """
+    **Raises:**
+
+    `ValueError` for a length or range that does not fit."""
     if not 1 <= length <= T:
         raise ValueError(f"window length must be in [1, {T}], got {length}.")
     lo, hi = (0, T - length + 1) if start_range is None else start_range
@@ -54,8 +55,9 @@ def transient_weight(boost: float, tau: float) -> WeightFn:
     window is drawn ``1 + boost`` times as often as the late ones, decaying over
     `tau`.
 
-    **Raises:** `ValueError` for a negative `boost` or a non-positive `tau`.
-    """
+    **Raises:**
+
+    `ValueError` for a negative `boost` or a non-positive `tau`."""
     if boost < 0 or tau <= 0:
         raise ValueError("boost must be >= 0 and tau > 0.")
 
@@ -68,9 +70,9 @@ def transient_weight(boost: float, tau: float) -> WeightFn:
 def start_weights(weight: WeightFn, ts: np.ndarray, lo: int, hi: int) -> np.ndarray:
     """`weight` evaluated on the start times ``ts[lo:hi]``, shape ``(hi - lo,)``.
 
-    **Raises:** `ValueError` unless the values are non-negative, not all zero, and one
-    per start.
-    """
+    **Raises:**
+
+    `ValueError` unless the values are non-negative, not all zero, and one per start."""
     w = np.asarray(weight(ts[lo:hi]), dtype=np.float64)
     if w.shape != (hi - lo,) or np.any(w < 0) or not np.any(w > 0):
         raise ValueError("weight must map the start times to a non-negative vector.")
