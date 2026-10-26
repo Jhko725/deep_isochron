@@ -125,7 +125,7 @@ imaginary part at the origin).
   science. `ConjugateLatentDynamics.latent_dynamics` is typed `AbstractNormalForm`
   accordingly (phase and amplitude are transported closed forms).
 - `HopfLatentDynamics` deleted. The non-invertible baseline is the phase autoencoder of
-  Yawata et al. (2024) (B12): `PhaseAmplitudeLatentDynamics(omega, kappa)` replaced
+  Yawata et al. 2024 (B12): `PhaseAmplitudeLatentDynamics(omega, kappa)` replaced
   `LinearLatentDynamics`; its latent space is the normal forms' `(Θ, Ψ)` chart (design
   document §5.3).
 - The numerical counterparts (`analysis/`) are Phase E; the namespace is reserved.

@@ -14,7 +14,7 @@ ordered product of the segment Jacobians $M_i = \partial_x\Phi_{T/m}(x_i)$. Form
 product and taking eigenvalues loses the small multiplier: by Bauer–Fike the eigenvalues
 of the product carry an absolute error $\varepsilon\Vert M\Vert$, so a multiplier $\mu$
 loses $\log_{10}(\max\vert\lambda\vert/\vert\mu\vert)$ digits (Lust 2001, Eq. 10). The
-periodic Schur decomposition (Bojanczyk, Golub & Van Dooren 1992) finds orthogonal $Q_i$
+periodic Schur decomposition (Bojanczyk et al. 1992 finds orthogonal $Q_i$
 with every $R_i = Q_{i+1}^{\top}M_iQ_i$ upper triangular, cyclically, so that
 $\mu_j = \prod_i (R_i)_{jj}$ — a product of per-segment factors of moderate size,
 accumulated here as a sum of logarithms (Lust 2001, §3; his Table 5). Their general
@@ -23,7 +23,7 @@ eigenvector of the trivial multiplier, dominant for an attracting cycle — so t
 is seeded with $q_1 = f(x_1)/\Vert f(x_1)\Vert$ (Guckenheimer & Meloon 2000 transform to
 cross-section coordinates in the same spirit) and built by the forward QR chain
 $M_iQ_i = Q_{i+1}R_i$ with positive diagonals: the discrete QR method for Lyapunov
-exponents over one period (Dieci, Russell & Van Vleck 1997, §3 and Claim 2: it "computes
+exponents over one period (Dieci et al. 1997, §3 and Claim 2: it "computes
 the real parts of the Floquet exponents of the computed approximation to the monodromy
 matrix exactly"). The forward direction propagates the dominant direction, which is
 self-correcting; the chain run backward through the transposes propagates the
@@ -160,8 +160,7 @@ def _frame_from(q1: Float[Array, " dim"]) -> Float[Array, "dim dim"]:
 
 
 def _qr_positive(A: Float[Array, "dim dim"]) -> tuple[Array, Array]:
-    """``A = Q R`` with the diagonal of ``R`` positive (the convention of Dieci,
-    Russell & Van Vleck 1997, Eq. 3.3): the sign of row ``i`` of ``R`` and column
+    """``A = Q R`` with the diagonal of ``R`` positive (the convention of Dieci et al. 1997, Eq. 3.3): the sign of row ``i`` of ``R`` and column
     ``i`` of ``Q`` are flipped together, which keeps the factorization exact."""
     Q, R = jnp.linalg.qr(A)
     s = jnp.where(jnp.diag(R) < 0, -1.0, 1.0)

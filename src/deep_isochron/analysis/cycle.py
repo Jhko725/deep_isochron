@@ -9,8 +9,7 @@ The curve is a truncated Fourier series in the phase ``φ ∈ [0, 2π)``,
 with the convention that **φ advances uniformly in time along the cycle**,
 ``φ(t) = φ_0 + 2πt/T``: on the cycle, φ *is* the asymptotic phase up to a constant (the
 isochron phase restricted to the orbit), so a point of the cycle and its phase are
-interchangeable and a learned phase can be compared against ``nearest_phase``. Revzen &
-Guckenheimer (2008, 2012) model the orbit the same way ("an order 11 Fourier series
+interchangeable and a learned phase can be compared against ``nearest_phase``. Revzen & Guckenheimer 2008 and 2012 model the orbit the same way ("an order 11 Fourier series
 model of the orbit").
 
 Distances and nearest phases are computed against a dense sampling of the curve

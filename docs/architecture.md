@@ -69,7 +69,7 @@ deep_isochron
 │   │                        __call__; phase_sensitivity derived      ── both models
 │   ├── conjugacy.py         ConjugateLatentDynamics = bijection + normal form + SolverConfig
 │   ├── latent_dynamics.py   PhaseAmplitudeLatentDynamics(omega, kappa): rotation ⊕ decay
-│   ├── autoencoder.py       PhaseAmplitudeAutoencoder — Yawata et al. (2024) baseline;
+│   ├── autoencoder.py       PhaseAmplitudeAutoencoder — Yawata et al. 2024 baseline;
 │   │                        phase(x), phase_sensitivity(θ)
 │   └── utils.py             zero_final_layer
 ├── data/                    one netCDF4 file per dataset (xarray)       ── ADR-0008
@@ -271,13 +271,13 @@ the normal form's closed forms transported by the bijection (`Θ = Θ_NF ∘ H`,
 autoencoder of Yawata et al. (Chaos 34, 063111, 2024), as mapped in
 `docs/design/normal-forms.md` §5.3. `PhaseAmplitudeLatentDynamics(omega, kappa)` is the
 closed-form flow on `R³` — `(Y₁, Y₂)` rotating at `omega`, `Y₃` decaying at `kappa < 0`
-(Eqs. (12)–(14)); `PhaseAmplitudeAutoencoder` is an MLP encoder whose first two outputs
-are normalized to the unit circle (Eqs. (15)–(16)), an MLP decoder, and that flow;
-`phase(x) = atan2(Y₂, Y₁)` (Eq. (19)) and `phase_sensitivity(θ)` by `jax.grad` at the
-decoded cycle point (Eq. (20)). Its latent space is exactly the `(Θ, Ψ)` chart of a
+(Eqs. 12–14); `PhaseAmplitudeAutoencoder` is an MLP encoder whose first two outputs
+are normalized to the unit circle (Eqs. 15–16), an MLP decoder, and that flow;
+`phase(x) = atan2(Y₂, Y₁)` (Eq. 19) and `phase_sensitivity(θ)` by `jax.grad` at the
+decoded cycle point (Eq. 20). Its latent space is exactly the `(Θ, Ψ)` chart of a
 normal form (`(cos Θ, sin Θ, Ψ)`), which is what `tests/test_baseline.py` checks; the
-loss `PhaseAutoencoderLoss` (Eqs. (21)–(26)) lives in `training/losses.py` and the
-near-cycle training distribution is the `OnCycleGaussian` sampler (Eqs. (27)–(28)). It
+loss `PhaseAutoencoderLoss` (Eqs. 21–26) lives in `training/losses.py` and the
+near-cycle training distribution is the `OnCycleGaussian` sampler (Eqs. 27–28). It
 does not use `AbstractODE`.
 
 ## Data

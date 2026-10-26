@@ -394,7 +394,7 @@ def test_limit_cycle_on_the_guckenheimer_meloon_algebraic_orbit():
 
 @pytest.mark.slow
 def test_limit_cycle_fitzhugh_nagumo_against_langfield():
-    """Langfield, Krauskopf & Osinga (2014), Sec. III: T_Γ ≈ 11.2279, clockwise."""
+    """Langfield et al. 2014, Sec. III: T_Γ ≈ 11.2279, clockwise."""
     lc = find_limit_cycle(FitzhughNagumo(), jnp.array([3.0, 3.0]), t_settle=10.0, m=8)
     assert_close(lc.period, 11.2279, atol=2e-3)
     assert_close(lc.period, lc.settle.tau, atol=1e-6)  # brute force agrees with polish
@@ -582,7 +582,7 @@ def test_floquet_on_the_guckenheimer_meloon_orbit():
 def test_floquet_fitzhugh_nagumo_shows_the_conditioning_floors():
     """FHN's cycle is strongly attracting (μ ≈ 1.7e-12): the periodic Schur chain and
     Liouville agree to 1e-8 relative; the explicit monodromy's eigenvalue is at its
-    ε‖M‖/μ floor (≈ 1e-4 relative, Lust 2001 Eq. 10); the return-map Jacobian's
+    ε‖M‖/μ floor (≈ 1e-4 relative, Lust 2001, Eq. 10); the return-map Jacobian's
     eigenvalue is at the solver's absolute floor and wrong by orders of magnitude;
     the trivial multiplier reports the orbit's accuracy regardless."""
     lc = find_limit_cycle(FitzhughNagumo(), jnp.array([3.0, 3.0]), t_settle=10.0, m=8)

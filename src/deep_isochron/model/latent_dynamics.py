@@ -1,11 +1,11 @@
 r"""Latent dynamics of the non-invertible phase-autoencoder baseline.
 
 ``PhaseAmplitudeLatentDynamics`` is the latent flow of Yawata et al., *Phase autoencoder
-for limit-cycle oscillators*, Chaos 34, 063111 (2024), Eqs. (12)–(14): the first two
+for limit-cycle oscillators*, Chaos 34, 063111 (2024), Eqs. 12–14: the first two
 latent variables rotate on the unit circle at a learned constant frequency $\omega$, the
 third decays as $e^{\kappa\tau}$ with a learned $\kappa < 0$ (their $\lambda$; "we
 assume that $\lambda$ is negative"). Written as a flow continuous in $t$ rather than
-their one-step map $f_{\rm step}$ (Eq. (18)), which the paper itself intends to hold
+their one-step map $f_{\rm step}$ (Eq. 18), which the paper itself intends to hold
 "for all $\tau > 0$". In the notation of ``docs/design/normal-forms.md`` §5.3 the latent
 space is the phase–amplitude chart $\mathbf Y = (\cos\Theta, \sin\Theta, \Psi)$ and the
 flow is $\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$.
@@ -41,7 +41,7 @@ DECAY_CONSTRAINT = GreaterThan(0.0)
 
 
 class PhaseAmplitudeLatentDynamics(AbstractLatentDynamics):
-    r"""Rotation ⊕ decay on $\mathbb R^3$ (Yawata et al. 2024, Eqs. (12)–(14)):
+    r"""Rotation ⊕ decay on $\mathbb R^3$ (Yawata et al. 2024, Eqs. 12–14):
 
     $$(Y_1, Y_2)(t) = R(\omega (t - t_0))\,(Y_1, Y_2)(t_0), \qquad
     Y_3(t) = e^{\kappa (t - t_0)}\, Y_3(t_0),$$

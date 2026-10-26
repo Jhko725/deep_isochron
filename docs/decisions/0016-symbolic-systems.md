@@ -12,7 +12,7 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-22, p
 
 ## Context
 
-The isochrons of FitzHugh–Nagumo are to be computed by continuation of a two-point boundary value problem in AUTO-07p (Langfield, Krauskopf & Osinga 2014; a coworker's reproduction in `src/Isochron2PBVP`, multi-segment form). AUTO needs the vector field and its Jacobian as a Fortran `RHS` subroutine. Written by hand, that is a second copy of the physics next to the JAX `rhs`, and a third once the Jacobian is typed — and the Jacobian is not optional, because the adjoint stages of the extended system integrate `Aᵀw`. The project will want isochrons of other planar systems (the normal forms, for an end-to-end check against their closed-form phase), so the tie must be generic, not an FHN test.
+The isochrons of FitzHugh–Nagumo are to be computed by continuation of a two-point boundary value problem in AUTO-07p (Langfield et al. 2014; a coworker's reproduction in `src/Isochron2PBVP`, multi-segment form). AUTO needs the vector field and its Jacobian as a Fortran `RHS` subroutine. Written by hand, that is a second copy of the physics next to the JAX `rhs`, and a third once the Jacobian is typed — and the Jacobian is not optional, because the adjoint stages of the extended system integrate `Aᵀw`. The project will want isochrons of other planar systems (the normal forms, for an end-to-end check against their closed-form phase), so the tie must be generic, not an FHN test.
 
 ## Decisions
 

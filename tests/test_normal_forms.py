@@ -19,7 +19,7 @@ parameters (Hypothesis draws both forms). The tests implement §10 of
                   static under filter_jit (one trace each)
 4. basins         Winfree's model with a hole (Langfield et al. 2025, §4.1): not even in
                   r, basin (a, ∞); its closed forms satisfy the identities (via the
-                  shared tests) and its isochrons are the paper's Eq. (12); nan outside
+                  shared tests) and its isochrons are the paper's Eq. 12; nan outside
                   the basin; the a → 0 limits; r_squared refuses non-even forms
 
 The shared laws run over ``all_normal_forms`` (even forms and Winfree); laws that need
@@ -484,7 +484,7 @@ def test_integrations_are_static_under_filter_jit():
     w=st.floats(-2.0, 2.0),
 )
 def test_winfree_structure(a, w):
-    """Langfield et al. (2025) §4.1 (*cited*): unit circle attracting with period 2π,
+    """Langfield et al. 2025, §4.1 (*cited*): unit circle attracting with period 2π,
     clockwise; r = a a repelling cycle, the closed disk r <= a phaseless. *Deduced*:
     κ = a − 1, κᵤ = a(1 − a); Ψ → −∞ at the inner edge and saturates at (1 − a)^{1/a}
     outside; nan outside the basin."""
@@ -520,7 +520,7 @@ def test_winfree_structure(a, w):
 
 @given(theta=st.floats(0.0, 1.0), r=st.floats(0.3, 5.0))
 def test_winfree_isochrons_are_langfield_eq_12(theta, r):
-    """Eq. (12), a = 0.25, ω = −0.5:
+    """Eq. 12, a = 0.25, ω = −0.5:
     ψ(r) = 2π( ω/(2πa) [ln(r/(r−a)) − ln(1/(1−a))] − ϑ ) is the polar angle of the
     isochron of phase ϑ ∈ [0, 1) at radius r > a; our phase of that point is Θ = −2πϑ
     (Θ = θ on the cycle, Θ̇ = ω₁ = −1)."""

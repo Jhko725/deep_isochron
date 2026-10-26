@@ -20,7 +20,7 @@ of the explicit monodromy $M = M_m\cdots M_1$ — is limited by rounding to a re
 error $\varepsilon\Vert M\Vert/\mu$ (Lust 2001, Eq. 10): $10^{-4}$ for FitzHugh–Nagumo
 ($\mu \approx 1.7\cdot10^{-12}$), nothing at all for the Cassini oval
 ($\mu \approx 10^{-16}$). Joon prototyped the periodic Schur decomposition of
-Bojanczyk, Golub & Van Dooren (1992) on the shooting-segment Jacobians
+Bojanczyk et al. 1992 on the shooting-segment Jacobians
 (`prototype_analysis.ipynb`, 2026-10-20); the chain as first written (backward, by
 RQ) did not close, which fixed the direction rule below.
 
@@ -35,8 +35,7 @@ periodic QR *iteration*; here one Schur vector is known analytically — the flo
 direction $f(x_1)$, the eigenvector of the trivial multiplier and the *dominant* one
 for an attracting cycle — so $Q_1$ is seeded with it and the decomposition is
 completed by the forward QR chain $M_i \thinspace Q_i = Q_{i+1} \thinspace R_i$ with positive diagonals: the
-discrete QR method for Lyapunov exponents over one period (Dieci, Russell & Van Vleck
-1997, §3, Claim 2), the seed in the spirit of Guckenheimer & Meloon's transformation to
+discrete QR method for Lyapunov exponents over one period (Dieci et al. 1997, §3, Claim 2), the seed in the spirit of Guckenheimer & Meloon's transformation to
 cross-section coordinates (2000, §2 algorithm). In the plane the transverse block is
 $1\times1$, so no iteration remains. *Why forward*: the chain propagates the first
 Schur vector; propagated forward it is the dominant direction and self-correcting,
@@ -134,10 +133,9 @@ of this branch decorated the kernels and kept kernel/driver pairs
 
 ## Sources
 
-Bojanczyk, Golub & Van Dooren 1992, *The periodic Schur decomposition. Algorithms and
+Bojanczyk et al. 1992, *The periodic Schur decomposition. Algorithms and
 applications*, Proc. SPIE 1770:31–42. Lust 2001, *Improved numerical Floquet
-multipliers*, Int. J. Bifurcation Chaos 11(9):2389–2410. Dieci, Russell & Van Vleck
-1997, *On the computation of Lyapunov exponents for continuous dynamical systems*,
+multipliers*, Int. J. Bifurcation Chaos 11(9):2389–2410. Dieci et al. 1997, *On the computation of Lyapunov exponents for continuous dynamical systems*,
 SIAM J. Numer. Anal. 34(1):402–423. Guckenheimer & Meloon 2000, SIAM J. Sci. Comput.
 22(3):951–985. Fairgrieve & Jepson 1991, *O.K. Floquet multipliers*, SIAM J. Numer.
 Anal. 28(5):1446–1462. Mauroy & Mezić 2018, Chaos 28:073108 (Remark 4). Wilson &

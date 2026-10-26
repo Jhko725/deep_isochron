@@ -66,7 +66,7 @@ class LevelSetCycle(AbstractODE):
 
 
 def guckenheimer_meloon(c: float = 0.07) -> LevelSetCycle:
-    """Guckenheimer & Meloon (2000) §5.1: the orbit on ``x² − y² + 2y³/3 + c = 0``,
+    """Guckenheimer & Meloon 2000, §5.1: the orbit on ``x² − y² + 2y³/3 + c = 0``,
     ``c ∈ (0, 1/3)``, with their time scale (``s = 1/2``)."""
     if not 0 < c < 1 / 3:
         raise ValueError(

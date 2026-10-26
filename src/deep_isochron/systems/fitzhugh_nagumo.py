@@ -1,5 +1,4 @@
-r"""The FitzHugh–Nagumo model in Winfree's parametrization (Langfield, Krauskopf &
-Osinga 2014, Eq. 15; their $a = 0.7$, $b = 0.8$, $c = 3$, $z = -0.4$), with the
+r"""The FitzHugh–Nagumo model in Winfree's parametrization (Langfield et al. 2014, Eq. 15; their $a = 0.7$, $b = 0.8$, $c = 3$, $z = -0.4$), with the
 time scaling of Winfree's original:
 
 $$\dot x = c\bigl(y + x - x^3/3 + z\bigr), \qquad \dot y = -(x - a + b\thinspace y)/c.$$

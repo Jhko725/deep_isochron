@@ -95,7 +95,7 @@ normal_forms = st.one_of(
     ),
 )
 def test_latent_flow_is_rotation_and_decay(omega, kappa, y0):
-    """Eqs. (12)–(14): the radius in the (Y1, Y2) plane is preserved, the angle advances
+    """Eqs. 12–14: the radius in the (Y1, Y2) plane is preserved, the angle advances
     by ω t, Y3 decays as e^{κt}; and the flow is a semigroup in t."""
     dyn = PhaseAmplitudeLatentDynamics(omega, kappa)
     assert_close(dyn.kappa, kappa, rtol=TOL["closed_form"])
@@ -143,7 +143,7 @@ def test_exact_chart_conjugates_the_normal_form_to_the_latent_flow(nf, r, theta)
 # ------------------------------------------------------------------ autoencoder ---
 @given(y=st.tuples(st.floats(-3, 3), st.floats(-3, 3), st.floats(-3, 3)))
 def test_encoder_normalization(y):
-    """Eqs. (15)–(16): ``(Y1, Y2)`` on the unit circle, ``Y3`` untouched."""
+    """Eqs. 15–16: ``(Y1, Y2)`` on the unit circle, ``Y3`` untouched."""
     y = jnp.asarray(y)
     if y[0] ** 2 + y[1] ** 2 < 1e-6:
         return
@@ -163,7 +163,7 @@ def test_autoencoder_shapes_and_derived_quantities():
     assert bool(jnp.abs(model.phase(x)) <= jnp.pi)
     assert model.amplitude(x) == y[2]
     assert model.cycle_point(jnp.asarray(0.7)).shape == (2,)
-    z = model.phase_sensitivity(jnp.asarray(0.7))  # Eq. (20), by autodiff
+    z = model.phase_sensitivity(jnp.asarray(0.7))  # Eq. 20, by autodiff
     assert z.shape == (2,) and bool(jnp.all(jnp.isfinite(z)))
     ts = jnp.linspace(0.0, 1.0, 5)
     xt, yt = model(ts, x)
@@ -229,7 +229,7 @@ def test_loss_is_differentiable_through_the_mlps():
 
 # --------------------------------------------------------------------- sampler ---
 def test_on_cycle_gaussian_sampler():
-    """Eqs. (27)–(28): cycle point + γ₂ σ ⊙ ξ; γ₂ = 0 gives points of the cycle;
+    """Eqs. 27–28: cycle point + γ₂ σ ⊙ ξ; γ₂ = 0 gives points of the cycle;
     seeded; shapes; metadata."""
     nf = BautinNormalForm(1.0, 0.5, 2.0, 1.0)
     on_cycle = OnCycleGaussian.from_normal_form(nf, 100, gamma2=0.0)

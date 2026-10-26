@@ -50,13 +50,13 @@ def step_weighted_consistency(
 ) -> Float[Array, " dim"]:
     """Per-component ``Σ_k α_k · mean_b (y − y_pred)²[:, k]`` over the prediction steps
     ``k = 1..K`` (the window's first point is the initial condition, not a prediction).
-    Yawata et al. (2024), Eqs. (22)–(23) before the split into phase and deviation."""
+    Yawata et al. 2024, Eqs. 22–23 before the split into phase and deviation."""
     err = jnp.mean((y - y_pred)[:, 1:] ** 2, axis=0)  # (K, dim)
     return jnp.sum(step_weights[:, None] * err, axis=0)
 
 
 def alpha_schedule(num_steps: int, phase_loss: Float[Array, ""]) -> Float[Array, " K"]:
-    """``α_k = k^{−min(1, L_pha)}``, ``k = 1..K`` (Yawata et al. 2024, Eq. (24)): early
+    """``α_k = k^{−min(1, L_pha)}``, ``k = 1..K`` (Yawata et al. 2024, Eq. 24): early
     in training (``L_pha > 1``) short-range predictions dominate; as ``L_pha → 0`` all
     steps count equally. ``phase_loss`` enters under ``stop_gradient``."""
     k = jnp.arange(1, num_steps + 1, dtype=phase_loss.dtype)
@@ -65,7 +65,7 @@ def alpha_schedule(num_steps: int, phase_loss: Float[Array, ""]) -> Float[Array,
 
 def batch_center_of_mass(y: Float[Array, "batch 2"]) -> Float[Array, ""]:
     """``‖mean_b y‖²`` — the squared center of mass of a batch of points on the latent
-    unit circle (Yawata et al. 2024, Eq. (25)); small when the phases spread evenly."""
+    unit circle (Yawata et al. 2024, Eq. 25); small when the phases spread evenly."""
     return jnp.sum(jnp.mean(y, axis=0) ** 2)
 
 
@@ -143,7 +143,7 @@ class ConjugacyTrajectoryLoss(AbstractLoss):
 
 
 class PhaseAutoencoderLoss(AbstractLoss):
-    r"""Yawata et al. (Chaos 34, 063111, 2024), Eqs. (21)–(26): ``recon`` (21), ``pha``
+    r"""Yawata et al. (Chaos 34, 063111, 2024), Eqs. 21–26: ``recon`` (21), ``pha``
     (22, components 1–2) and ``amp`` (23, component 3) of the ``α_k``-weighted latent
     consistency over the window's ``K`` prediction steps, and ``aux`` (25), the center
     of mass of the batch's ``(Y₁, Y₂)`` at ``t₀``. ``α_k`` (24) uses the current
@@ -169,7 +169,7 @@ class PhaseAutoencoderLoss(AbstractLoss):
         y = encode(x)
         y_pred = jax.vmap(model.latent_dynamics)(t, y[:, 0])
         num_steps = x.shape[1] - 1
-        # α_k needs the unweighted phase error first (Eq. (24))
+        # α_k needs the unweighted phase error first (Eq. 24)
         pha_raw = jnp.sum(
             step_weighted_consistency(y, y_pred, jnp.ones(num_steps, x.dtype))[:2]
         )
@@ -190,7 +190,7 @@ class PhaseAutoencoderLoss(AbstractLoss):
 
 
 YAWATA_STAGE_1 = (1.0, 0.5, 0.5, 2.0)
-"""Loss weights of Yawata et al. (2024), Sec. IV.A, initial stage."""
+"""Loss weights of Yawata et al. 2024, Sec. IV.A, initial stage."""
 YAWATA_STAGE_2 = (1.0, 5.0, 0.5, 0.0)
 """… after ``L_pha < 0.01`` and ``L_aux < 0.05``."""
 YAWATA_SWITCH_AT = {"pha": 0.01, "aux": 0.05}

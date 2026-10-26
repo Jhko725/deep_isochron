@@ -197,7 +197,7 @@ def test_winding_follows_the_rotation_direction():
 
 @pytest.mark.slow
 def test_fitzhugh_nagumo_cycle_matches_langfield_et_al():
-    """Langfield, Krauskopf & Osinga (2014), Sec. III: the FitzHugh–Nagumo cycle has
+    """Langfield et al. 2014, Sec. III: the FitzHugh–Nagumo cycle has
     period T_Γ ≈ 11.2279 and is traversed clockwise; the relaxation-type loop needs more
     harmonics than a normal form's."""
     import diffrax as dfx

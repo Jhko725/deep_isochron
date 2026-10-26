@@ -1,9 +1,9 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-05
+updated: 2026-10-26
 verified_by: joon (2026-10-05; §6.3 C9 update pending)
-sources: [JAX docs (async dispatch, data placement, profiling), XLA GPU runtime source, grain source and tutorial, CPython docs, NVIDIA CUDA Graphs blog, Serino et al. 2025]
+sources: ["JAX docs: async dispatch", "JAX docs: data placement", "JAX docs: jax.default_device", "JAX docs: profiling", "JAX docs: training cookbook", "JAX source: scipy linalg", "XLA source: conditional_thunk", "XLA source: while_thunk", "grain docs", "grain source: options.py", "Python docs: GIL", "Python docs: sys.setswitchinterval", "Python docs: multiprocessing", "NVIDIA blog: CUDA Graphs", Serino et al. 2025]
 ---
 
 # Where a JAX training step spends its time — and where ours did
@@ -366,18 +366,4 @@ launches, ≈ 17 µs per launch) and nearly flat in batch size.
 
 ## References
 
-- JAX, *Asynchronous dispatch* — https://docs.jax.dev/en/latest/async_dispatch.html
-- JAX, *Data placement* (committed / uncommitted) — https://docs.jax.dev/en/latest/201/placement.html
-- JAX, `jax.default_device` — https://docs.jax.dev/en/latest/_autosummary/jax.default_device.html
-- JAX, *Profiling computation* — https://docs.jax.dev/en/latest/profiling.html
-- JAX, *The training cookbook*, the training loop (one-step-delayed logging) — https://docs.jax.dev/en/latest/the-training-cookbook.html#the-training-loop
-- JAX source, `jax/_src/scipy/linalg.py` (`expm`, `_squaring`) — https://github.com/jax-ml/jax/blob/main/jax/_src/scipy/linalg.py
-- XLA GPU runtime, `conditional_thunk.cc` — https://github.com/openxla/xla/blob/main/xla/backends/gpu/runtime/conditional_thunk.cc
-- XLA GPU runtime, `while_thunk.cc` — https://github.com/openxla/xla/blob/main/xla/backends/gpu/runtime/while_thunk.cc
-- grain, *JAX training tutorial*, moving batches to the accelerator — https://google-grain.readthedocs.io/en/latest/tutorials/jax_training_tutorial.html
-- grain source, `grain/_src/python/options.py` (`ReadOptions`) — https://github.com/google/grain/blob/main/grain/_src/python/options.py
-- Python, glossary: *global interpreter lock* — https://docs.python.org/3/glossary.html#term-global-interpreter-lock
-- Python, `sys.setswitchinterval` — https://docs.python.org/3/library/sys.html#sys.setswitchinterval
-- Python, *multiprocessing* — start methods and *Safe importing of main module* — https://docs.python.org/3/library/multiprocessing.html
-- NVIDIA, *Getting Started with CUDA Graphs* — https://developer.nvidia.com/blog/cuda-graphs/
-- D. A. Serino et al., *Fast-slow neural networks for learning singularly perturbed dynamical systems*, J. Comput. Phys. 537, 114090 (2025) — the bi-Lipschitz linear layer.
+Every work cited above has its entry in [`references.md`](../references.md).

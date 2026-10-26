@@ -65,7 +65,7 @@ class UniformAnnulus(AbstractICSampler):
 
 
 class OnCycleGaussian(AbstractICSampler):
-    r"""Yawata et al. (Chaos 34, 063111, 2024), Eqs. (27)–(28): a point of the limit
+    r"""Yawata et al. (Chaos 34, 063111, 2024), Eqs. 27–28: a point of the limit
     cycle, drawn uniformly from ``cycle_points``, plus Gaussian noise
     $\gamma_2\,\sigma \odot \xi$ with $\sigma$ the per-coordinate standard deviation of
     the cycle points and $\xi \sim \mathcal N(0, I)$ (their $\gamma_2 = 0.5$). The

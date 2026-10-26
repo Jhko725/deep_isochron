@@ -1,9 +1,9 @@
 ---
 type: design
 status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative; §9 amendment of 2026-10-22 (ADR-0016) pending review
-updated: 2026-10-22
+updated: 2026-10-26
 verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
-sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014, Langfield et al. 2025]
+sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014, Langfield et al. 2025, Nakao 2016, Mauroy et al. 2013, Kato et al. 2021, Guckenheimer 1975, Winfree 2001, Guckenheimer & Holmes 1983, Chicone 2024, Kuznetsov 2004, Kidger 2021]
 ---
 
 # Normal forms — conventions, derivations, and the API they imply
@@ -50,7 +50,7 @@ $\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motion
 basin; lowercase $\theta$ is the polar angle. $\Psi$ and $\kappa$ follow Wilson & Moehlis
 (2016), who write the isostable coordinate as $\psi$ and the exponent as $\kappa$; we
 capitalize $\psi\to\Psi$ so that both coordinate functions $(\Theta,\Psi)$ are uppercase.
-Langfield, Krauskopf & Osinga (2014) use a period-normalized phase $\vartheta\in[0,1)$;
+Langfield et al. 2014 use a period-normalized phase $\vartheta\in[0,1)$;
 we use radians, $\Theta = 2\pi\vartheta$.
 
 "Even in $r$" means $\rho(r) = \tilde\rho(r^2)$ for a smooth $\tilde\rho$ — equivalently,
@@ -198,7 +198,7 @@ chosen over cubic Hopf). Hopf is Bautin with $b = 0$ throughout.
 
 ### 3.3 Winfree's model with a hole (not even; a phaseless disk)
 
-Langfield, Krauskopf, Lee & Osinga (2025, §4.1, Eqs. (10)–(13); after Winfree 1980) study
+Langfield et al. 2025, §4.1, Eqs. 10–13; after Winfree 1980) study
 
 $$
 \dot r = (1 - r)(r - a)\thinspace r, \qquad \dot\psi = -\bigl(1 + \omega (1 - r)\bigr),
@@ -212,11 +212,11 @@ $\vartheta \in [0, 1)$ is, for $r > a$,
 
 $$
 \psi(r) = 2\pi\left(\frac{\omega}{2\pi a}\left[\ln\frac{r}{r-a} - \ln\frac{1}{1-a}\right] - \vartheta\right)
-\qquad\text{(their Eq. (12)).}
+\qquad\text{(their Eq. 12).}
 $$
 
 In our symbols (*deduced* from §5.1–5.2; every identity checked by autodiff and the
-isochron against Eq. (12) numerically, `tests/test_normal_forms.py` §4), with the model's
+isochron against Eq. 12 numerically, `tests/test_normal_forms.py` §4), with the model's
 $\omega$ written `w` to keep $\omega(r)$ for the angular rate:
 
 | | Winfree ($0 \le a < 1$) |
@@ -230,7 +230,7 @@ $\omega$ written `w` to keep $\omega(r)$ for the angular rate:
 | basin | $a < r < \infty$; `basin_radii() = (a, ∞)` |
 | eigenvalues at $0$ | $-a \pm i(1 + w)$ — a *stable* focus **outside** the basin: not a conjugacy invariant of $\Gamma$ (hence `eigenvalues_origin` belongs to the even family only) |
 
-Equivalence with Eq. (12): on the isochron $\Theta_0$, $\theta = \Theta_0 - h(r)$; with
+Equivalence with Eq. 12: on the isochron $\Theta_0$, $\theta = \Theta_0 - h(r)$; with
 $\Theta_0 = -2\pi\vartheta$ (on $\Gamma$, $\Theta = \theta$ and $\dot\Theta = \omega_1 = -1$,
 so the point of period-fraction $\vartheta$ along the flow sits at angle $-2\pi\vartheta$)
 this is exactly $\psi(r)$ above.
@@ -370,7 +370,7 @@ $$
 \qquad(\text{Hopf: } \theta + \tfrac{\omega_1-\omega_0}{a}\ln r).
 $$
 
-For Hopf this is the Stuart–Landau phase function of Nakao (2016, App. D).
+For Hopf this is the Stuart–Landau phase function of Nakao 2016, App. D).
 
 **Isochrons** are $\Theta = \Theta_0$, i.e. the curves
 
@@ -408,15 +408,15 @@ $\theta = \Theta_0 - h(r)$ has none of these problems.
 ### 5.2 Isostable coordinate $\Psi$
 
 **Definition.** $\Psi$ is the Koopman eigenfunction of the generator with eigenvalue
-$\kappa$ (Mauroy, Mezić & Moehlis 2013; Kato et al. 2021, Eq. (2)/(12)):
+$\kappa$ (Mauroy et al. 2013; Kato et al. 2021, Eq. 2/(12)):
 
 $$
 \dot{\mathbf{u}}\cdot\nabla\Psi = \kappa\,\Psi \quad\text{on the basin.}
 $$
 
-Wilson & Moehlis (2016) define the same object for periodic orbits through the Poincaré
-map (their Eq. (5)) and fix its scale by **$\nabla\Psi\cdot\mathbf{v} = 1$ on $\Gamma$**
-(their Eq. (14)), where $\mathbf{v}$ is the right Floquet eigenvector for $\mu$. Any
+Wilson & Moehlis 2016 define the same object for periodic orbits through the Poincaré
+map (their Eq. 5) and fix its scale by **$\nabla\Psi\cdot\mathbf{v} = 1$ on $\Gamma$**
+(their Eq. 14), where $\mathbf{v}$ is the right Floquet eigenvector for $\mu$. Any
 $\Psi\mapsto C\Psi$ satisfies the same equation (Kato et al.: "the scale of the amplitude
 function is arbitrary"), so a normalization is a convention, not a modeling choice; it
 matters only when comparing $\nabla\Psi$ (the isostable response curve) with values
@@ -544,17 +544,17 @@ for this member is linear in the log chart, $\omega(r) = \omega_1 + \delta\ln r$
 $h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 + (\delta/\kappa)\ln r$ — logarithmic spirals, as for Hopf — and $\omega(0)$ undefined,
 consistent with the missing eigenvalues.
 
-**Relation to Yawata et al. (2024).** Their phase autoencoder maps the oscillator state
+**Relation to Yawata et al. 2024.** Their phase autoencoder maps the oscillator state
 $X$ to a three-dimensional latent $\mathbf Y = (Y_1, Y_2, Y_3) = f_{\rm enc}(X)$ with
-$Y_1^2 + Y_2^2 = 1$ (Eq. (11), enforced by normalizing the first two encoder outputs,
-Eqs. (15)–(16)), $(Y_1, Y_2)$ rotating at a constant learned frequency $\omega$ and $Y_3$
+$Y_1^2 + Y_2^2 = 1$ (Eq. 11, enforced by normalizing the first two encoder outputs,
+Eqs. 15–16), $(Y_1, Y_2)$ rotating at a constant learned frequency $\omega$ and $Y_3$
 decaying as $e^{\lambda\tau}$ per sampling interval $\tau$ with learned $\lambda < 0$
-(Eqs. (12)–(14)), "for all $\tau > 0$". The phase is $\Theta(X) = \arctan(Y_2/Y_1)$
-(Eq. (19)) and the phase sensitivity function is $Z(\theta) = \nabla_X\Theta\vert_{X = f_{\rm dec}(\theta)}$ by autodiff (Eq. (20)). Sec. VI identifies $Y_1 + iY_2$ with the
+(Eqs. 12–14), "for all $\tau > 0$". The phase is $\Theta(X) = \arctan(Y_2/Y_1)$
+(Eq. 19) and the phase sensitivity function is $Z(\theta) = \nabla_X\Theta\vert_{X = f_{\rm dec}(\theta)}$ by autodiff (Eq. 20). Sec. VI identifies $Y_1 + iY_2$ with the
 Koopman eigenfunction of exponent $i\omega$ and, for planar oscillators, $Y_3$ with the
 eigenfunction of exponent $\lambda$ — i.e. with $e^{i\Theta}$ and $\Psi$, $\lambda = \kappa$
 — while noting that the trained $Y_3$ is "closely related, though not equivalent" to it
-(their learned $\lambda$ differs from the true second Floquet exponent because Eq. (14)
+(their learned $\lambda$ differs from the true second Floquet exponent because Eq. 14
 "is not strictly satisfied by the trained phase autoencoder"; they report it is "not easy
 to realize in practice"). So their latent space is exactly the chart of §7,
 
@@ -576,7 +576,7 @@ $\mathsf D_{x_0}\psi_z\vert_{E^s} = \mathrm{id}$, the latter being the Wilson–
 of §5.2). What is *approximate* in Yawata et al. is the learned map, and it is trained
 near the cycle by construction: initial states are points of the cycle perturbed by
 Gaussian noise of $\gamma_2 = 0.5$ cycle-standard-deviations and evolved for
-$\gamma_1 = 3$ periods ($N_s = 1000$ orbits; Eqs. (27)–(28)), which is why their
+$\gamma_1 = 3$ periods ($N_s = 1000$ orbits; Eqs. 27–28), which is why their
 $\lambda$ is poorly determined. Which planar normal form one associates with the chart is
 a matter of choosing $\Psi(r)$: the log-polar member corresponds to $Y_3 = \ln r$, Hopf to
 $Y_3 = \tfrac12(1 - r^{-2})$, and so on.
@@ -596,8 +596,8 @@ costs), and why the log-polar member sits between the two.
 
 | Yawata et al. | this document | `deep_isochron` |
 |---|---|---|
-| $(Y_1, Y_2)/R$, $Y_3$ (Eqs. (15)–(16)) | $(\cos\Theta, \sin\Theta, \Psi)$ | `PhaseAmplitudeAutoencoder.encoder`: MLP, first two outputs normalized |
-| $f_{\rm step}$ with learned $\omega$, $\lambda$ (Eq. (18)) | $\Theta(t+\tau) = \Theta + \omega_1\tau$, $\Psi(t+\tau) = e^{\kappa\tau}\Psi$ | `PhaseAmplitudeLatentDynamics(omega, kappa)`: closed-form flow on $\mathbb R^3$, continuous in $t$ (replaces `LinearLatentDynamics`) |
+| $(Y_1, Y_2)/R$, $Y_3$ (Eqs. 15–16) | $(\cos\Theta, \sin\Theta, \Psi)$ | `PhaseAmplitudeAutoencoder.encoder`: MLP, first two outputs normalized |
+| $f_{\rm step}$ with learned $\omega$, $\lambda$ (Eq. 18) | $\Theta(t+\tau) = \Theta + \omega_1\tau$, $\Psi(t+\tau) = e^{\kappa\tau}\Psi$ | `PhaseAmplitudeLatentDynamics(omega, kappa)`: closed-form flow on $\mathbb R^3$, continuous in $t$ (replaces `LinearLatentDynamics`) |
 | $L_{\rm recon}$ (21); $L_{\rm pha}$, $L_{\rm dev}$ over $k = 1..K$ steps with $\alpha_k = k^{-\min(1, L_{\rm pha})}$ (22)–(24); $L_{\rm aux}$ = center of mass of $(Y_1,Y_2)$ in the batch (25), to escape the $\omega = 0$ solution; weights $(1, 0.5, 0.5, 2)$ then $(1, 5, 0.5, 0)$ once $L_{\rm pha} < 0.01$, $L_{\rm aux} < 0.05$ (26) | — | `PhaseAutoencoderLoss` over a window: reconstruction, latent consistency split into phase/amplitude parts, center-of-mass term; the $\alpha_k$ and weight schedules as config |
 | ICs on the cycle $+\thinspace\gamma_2\sigma\odot\xi$, evolved $\gamma_1 T$ (27)–(28) | near-cycle training distribution | an `AbstractICSampler` `OnCycleGaussian(cycle_points, gamma2)`; `limit_cycle(Θ)` for normal forms, a long integration for FHN |
 | $\Theta = \arctan(Y_2/Y_1)$, $Z = \nabla\Theta$ at $f_{\rm dec}(\theta)$ (19)–(20) | $\Theta$, $\nabla\Theta$ (§1) | `phase(x)`, `jax.grad` |
@@ -619,7 +619,7 @@ proper $C_{\rm loc}^{k,\alpha}$ embedding** $\psi = (\psi_\theta, \psi_z): Q\to 
 
 $$
 \psi_\theta\circ\Phi^t = e^{2\pi i t/\tau}\,\psi_\theta,\qquad \psi_z\circ\Phi^t = e^{tA}\psi_z
-\qquad(\text{their Eq. (21)}),
+\qquad(\text{their Eq. 21}),
 $$
 
 and when $A$ is real, $\psi: Q\to S^1\times E_{x_0}^s$ is a **diffeomorphism**. Their
@@ -761,7 +761,7 @@ returns `nan` outside it, and `in_basin(u)` is the test; `data.generate` uses it
 or resample initial conditions (`outside_basin`).
 
 $(\cos\Theta, \sin\Theta, \Psi)$ is the latent space of the phase autoencoder of
-Yawata et al. (2024); see §5.3.
+Yawata et al. 2024; see §5.3.
 
 ---
 
@@ -884,7 +884,7 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
   over the even family only. Winfree: $T = -2\pi$, $\kappa = a - 1$, $\kappa_u = a(1-a)$,
   $\Psi \to -\infty$ at $a^+$ and $\to (1-a)^{1/a}$ at $\infty$, `nan` outside the basin
   (`phase`, `amplitude`, `isostable`, `isochron`) while `rhs` stays finite; the isochron
-  equals Eq. (12) of Langfield et al. (2025) for $(a, w) = (0.25, -0.5)$; the $a = 0$
+  equals Eq. 12 of Langfield et al. 2025 for $(a, w) = (0.25, -0.5)$; the $a = 0$
   formulas are the $a \to 0$ limits; `r_squared` refuses it. `data.generate`: initial
   conditions in the hole raise, or are resampled with a warning, the count recorded and
   the mode hashed (`test_data.py`).
@@ -928,39 +928,4 @@ Nothing else remains open. Changes to any of the above go through this document 
 
 ## References
 
-- Langfield, P., Krauskopf, B., Lee, K. H. & Osinga, H. M. (2025). The global geometry of phase-resetting surfaces: the role of critical level sets and isochrons. *Commun. Nonlinear Sci. Numer. Simul.* **151**, 109043. (§3.3: Eqs. (10)–(13), Fig. 4.)
-
-- A. T. Winfree, *The Geometry of Biological Time*, 2nd ed., Springer (2001) — isochrons,
-  asymptotic phase.
-- J. Guckenheimer, Isochrons and phaseless sets, *J. Math. Biol.* 1, 259–273 (1975).
-- J. Guckenheimer, P. Holmes, *Nonlinear Oscillations, Dynamical Systems, and Bifurcations
-  of Vector Fields*, Springer (1983) — Floquet theory.
-- C. Chicone, *Ordinary Differential Equations with Applications*, 3rd ed., Springer
-  (2024) — Liouville's formula, Prop. 2.20.
-- Yu. A. Kuznetsov, *Elements of Applied Bifurcation Theory*, 3rd ed., Springer (2004),
-  Ch. 8 — the Bautin (generalized Hopf) normal form and its two-cycle regime.
-- H. Nakao, Phase reduction approach to synchronization of nonlinear oscillators,
-  *Contemp. Phys.* 57(2), 188–214 (2016) — phase function $\Theta(\mathbf{X})$; Stuart–Landau
-  isochrons (App. D).
-- A. Mauroy, I. Mezić, J. Moehlis, Isostables, isochrons, and Koopman spectrum for the
-  action–angle representation of stable fixed point dynamics, *Physica D* 261, 19–30
-  (2013) — isostables as level sets of a Koopman eigenfunction.
-- D. Wilson, J. Moehlis, Isostable reduction of periodic orbits, *Phys. Rev. E* 94, 052213
-  (2016) — isostable coordinates $\psi_i$ of limit cycles, Eq. (5); normalization
-  $\nabla\psi_i\cdot\mathbf v_i = 1$, Eq. (14).
-- Y. Kato, J. Zhu, W. Kurebayashi, H. Nakao, Asymptotic phase and amplitude for classical
-  and semiclassical stochastic oscillators via Koopman operator theory, *Mathematics*
-  9(18), 2188 (2021) — eigenfunction characterization of phase and amplitude, Eqs. (2),
-  (12); arbitrariness of the amplitude scale.
-- P. Langfield, B. Krauskopf, H. M. Osinga, Solving Winfree's puzzle: the isochrons in the
-  FitzHugh–Nagumo model, *Chaos* 24, 013131 (2014) — FHN isochrons; period-normalized
-  phase $\vartheta\in[0,1)$.
-- K. Yawata, K. Fukami, K. Taira, H. Nakao, Phase autoencoder for limit-cycle
-  oscillators, *Chaos* 34, 063111 (2024) — latent variables $(Y_1,Y_2,Y_3)$, Eqs.
-  (11)–(14); relation to Koopman eigenfunctions, App. B and Sec. VI.
-- M. D. Kvalheim, S. Revzen, Existence and uniqueness of global Koopman eigenfunctions
-  for stable fixed points and periodic orbits, *Physica D* 425, 132959 (2021);
-  arXiv:1911.11996v4 — Theorem 2 / Prop. 3 (global Floquet normal form, unique proper
-  embedding $Q\to S^1\times E^s$), Prop. 7 (principal eigenfunctions of a limit cycle),
-  Prop. 2 (global Sternberg linearization of a sink), Remark 6 ($C^\infty$ case).
-- P. Kidger, *On Neural Differential Equations*, DPhil thesis, Oxford (2021) — diffrax.
+Every work cited above has its entry in [`references.md`](../references.md).

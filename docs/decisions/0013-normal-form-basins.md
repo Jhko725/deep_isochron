@@ -14,9 +14,8 @@ design document `normal-forms.md` §1, §3, §7, §9, §11.
 ## Context
 
 To compare learned conjugacies against systems with *analytically known* isochrons, the
-next target is Winfree's planar model with a hole as used by Langfield, Krauskopf, Lee &
-Osinga (2025, §4.1): $\dot r = (1-r)(r-a)\thinspace r$, $\dot\psi = -(1 + \omega(1-r))$. Its
-isochrons are closed form (their Eq. (12)), the unit circle attracts, the circle $r = a$
+next target is Winfree's planar model with a hole as used by Langfield et al. 2025, §4.1): $\dot r = (1-r)(r-a)\thinspace r$, $\dot\psi = -(1 + \omega(1-r))$. Its
+isochrons are closed form (their Eq. 12), the unit circle attracts, the circle $r = a$
 is a repelling cycle bounding the basin, and the closed disk $r \le a$ is a phaseless set.
 Two of our conventions (ADR-0007, design document §1/§9 "Option B") rule it out: the
 defining data $\rho$, $\omega$ had to be *even* in $r$ (supplied in $s = r^2$, so that the

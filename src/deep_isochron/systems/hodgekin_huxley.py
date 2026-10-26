@@ -1,4 +1,4 @@
-r"""The Hodgkin–Huxley model as used by Yawata et al. (2024) for their phase
+r"""The Hodgkin–Huxley model as used by Yawata et al. 2024 for their phase
 autoencoder. The equations in the paper have typos; the rates below are those of
 the authors' source code
 (https://github.com/kyoukuntaro/PhaseAutoencoder/blob/main/utils/limitcycle.py).

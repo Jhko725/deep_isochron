@@ -12,7 +12,7 @@ is determined only up to scale, §5.4), so evaluations compare amplitudes up to 
 fitted on the data; a point of the learned **limit cycle** at a given phase; and the
 **prediction** ``x(t)`` from ``x(t₀)`` through the model's latent dynamics. Derived from
 these, once for all models: the phase sensitivity function ``Z(θ) = ∇ₓΘ`` on the cycle
-(Yawata et al. 2024, Eq. (20)) and the phase gradient anywhere.
+(Yawata et al. 2024, Eq. 20) and the phase gradient anywhere.
 """
 
 import abc
@@ -50,5 +50,5 @@ class AbstractPhaseAmplitudeModel(eqx.Module):
 
     def phase_sensitivity(self, theta: Float[Array, ""]) -> Float[Array, " obs_dim"]:
         """Phase sensitivity function ``Z(θ) = ∇ₓΘ`` at the cycle point of phase
-        ``θ`` (Yawata et al. 2024, Eq. (20))."""
+        ``θ`` (Yawata et al. 2024, Eq. 20)."""
         return self.phase_gradient(self.cycle_point(theta))

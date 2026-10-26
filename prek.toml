@@ -31,5 +31,6 @@ repo = "local"
 hooks = [
   { id = "check-spelling", name = "check-spelling (-ise families)", entry = "uv run python scripts/check_spelling.py", language = "system", types_or = ["python", "markdown", "toml", "yaml"] },
   { id = "check-md-math", name = "check-md-math (GitHub and VS Code previews)", entry = "uv run python scripts/check_md_math.py", language = "system", pass_filenames = false, files = "\\.md$" },
+  { id = "check-references", name = "check-references (citations resolve to docs/references.md)", entry = "uv run python scripts/check_references.py", language = "system", pass_filenames = false, types_or = ["python", "markdown"] },
 ]
 

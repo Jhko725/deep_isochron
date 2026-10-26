@@ -1,5 +1,5 @@
-r"""Winfree's planar model "with a hole" (Langfield, Krauskopf, Lee & Osinga 2025,
-Commun. Nonlinear Sci. Numer. Simul. 151, 109043, §4.1, Eqs. (10)–(13); after Winfree
+r"""Winfree's planar model "with a hole" (Langfield et al. 2025,
+Commun. Nonlinear Sci. Numer. Simul. 151, 109043, §4.1, Eqs. 10–13; after Winfree
 1980): in polar coordinates
 
 $$\dot r = (1 - r)(r - a)\,r, \qquad \dot\theta = -\bigl(1 + w\,(1 - r)\bigr),$$
@@ -9,19 +9,19 @@ periodic orbit with period $2\pi$; the circle $r = a$ is a repelling periodic or
 bounding the basin of attraction, and the closed disk $r \le a$ is the phaseless set;
 the origin is a stable equilibrium; the isochron of phase $\vartheta \in [0, 1)$ is
 $\psi(r) = 2\pi\bigl(\tfrac{\omega}{2\pi a}[\ln\tfrac{r}{r-a} - \ln\tfrac{1}{1-a}] -
-\vartheta\bigr)$, $r > a$ (their Eq. (12)).
+\vartheta\bigr)$, $r > a$ (their Eq. 12).
 
-In the design document's symbols (*deduced* from §5.1–5.2 and checked against Eq. (12)
+In the design document's symbols (*deduced* from §5.1–5.2 and checked against Eq. 12
 numerically; ``tests/test_normal_forms.py``):
 
 * $\rho(r) = (1 - r)(r - a)$ and $\omega(r) = -(1 + w(1 - r))$ are **not even** in $r$,
   so this is an ``AbstractNormalForm`` but not an ``AbstractEvenNormalForm``: the
-  cartesian field (their Eq. (11)) carries $\sqrt{x^2 + y^2}$;
+  cartesian field (their Eq. 11) carries $\sqrt{x^2 + y^2}$;
 * $\omega_1 = -1$ (clockwise; the signed ``period()`` is $-2\pi$),
   $\kappa = \rho'(1) = a - 1$; the inner cycle's exponent is
   $\kappa_u = a\,\rho'(a) = a(1 - a) > 0$;
 * $h(r) = \dfrac{w}{a}\Bigl[\ln\dfrac{r - a}{r} - \ln(1 - a)\Bigr]$, which is
-  $\theta = \Theta_0 - h(r)$ ⇔ Eq. (12) with $\Theta_0 = -2\pi\vartheta$;
+  $\theta = \Theta_0 - h(r)$ ⇔ Eq. 12 with $\Theta_0 = -2\pi\vartheta$;
   $h \to +\infty$ as $r \to a^+$ (every isochron spirals into the hole, their
   Fig. 4(a));
 * $\Psi(r) = \dfrac{r - 1}{r}\Bigl(\dfrac{(1 - a)\,r}{r - a}\Bigr)^{1/a}$ —

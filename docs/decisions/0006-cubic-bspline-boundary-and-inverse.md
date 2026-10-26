@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0006
 status: accepted
-updated: 2026-10-02
+updated: 2026-10-26
 verified_by: joon
 ---
 
@@ -12,7 +12,7 @@ verified_by: joon
 
 ## Context
 
-`CubicBSpline` ports the monotone non-uniform cubic B-spline flow of Hong & Chun [1] into
+`CubicBSpline` ports the monotone non-uniform cubic B-spline flow of Hong & Chun 2023 into
 the `AbstractSpline` frame: a strictly increasing map that is a spline on `xy_range = [a, b]`
 and the identity outside it. Two places in that port deviate from the reference algorithm,
 and the reasons were recorded only in the branch's change document. This ADR makes them
@@ -30,7 +30,7 @@ Two requirements drive both deviations:
 
 ## Decision 1 — boundary by Greville pinning, not by affine rescaling
 
-Algorithm 1 of [1] (its lines 13–17) enforces `f(0) = 0`, `f(1) = 1` by computing the
+Algorithm 1 of Hong & Chun 2023 (its lines 13–17) enforces `f(0) = 0`, `f(1) = 1` by computing the
 spline's provisional values at the two range endpoints and rescaling *all* coefficients
 affinely so the endpoint values land on `0` and `1`. That fixes the function values only;
 `f'` and `f''` at the endpoints are whatever the free coefficients make them, which is
@@ -39,7 +39,7 @@ continues as the identity outside the range.
 
 Here the **three outermost coefficients on each side are pinned to their Greville
 abscissae** `ξ_j = (t_{j+1} + t_{j+2} + t_{j+3}) / 3`. By the linear-precision case of
-Marsden's identity (de Boor [2], Ch. IX), `Σ_j ξ_j B_{j,4}(x) = x`, so on any stretch where
+Marsden's identity (de Boor 2001, Ch. IX), `Σ_j ξ_j B_{j,4}(x) = x`, so on any stretch where
 the coefficients equal the Greville abscissae the spline *is* the identity. Only the three
 pinned basis functions on each side are non-zero — together with their first two
 derivatives — at the range endpoint, so `f(a) = a`, `f'(a) = 1`, `f''(a) = 0` (and likewise
@@ -49,7 +49,7 @@ at `b`) hold for every value of the free coefficients. The derivation is in the 
 - **Rejected: pinning four coefficients per side.** Would make the two edge bins exactly
   the identity, losing a bin of flexibility on each side for no extra regularity (three
   already give `C²`, and a cubic B-spline is at most `C²` at a simple knot).
-- **Rejected: the "naïve" solution [1] mentions** — coefficients `0` for `t_j < 0` and `1`
+- **Rejected: the "naïve" solution Hong & Chun 2023 mention** — coefficients `0` for `t_j < 0` and `1`
   for `t_{j+k} > 1` — which the authors themselves reject as severely reducing expressive
   power near the endpoints; it also does not give `f' = 1` there.
 
@@ -63,7 +63,7 @@ pinned ends (`Widths` with `total` = the Greville span).
 
 On each bin the spline is a strictly increasing cubic in the local coordinate `u ∈ [0, 1]`,
 so `f⁻¹` is a cubic root. The reference implementation uses the root formula of Peters
-(2016), a modification of Blinn (2007) (as cited in [1]); the authors report that "about once
+2016, a modification of Blinn 2007 (as cited in Hong & Chun 2023); the authors report that "about once
 in ten times" training produces an outlier with large reverse KL and offer, as "one possible
 explanation", "the numerical instability of the cubic equation root-finding formula", noting
 that in floating point "it is impossible to guarantee whether the root-finding formula will
@@ -91,7 +91,7 @@ What the scheme guarantees, for any parameters and any `y` in the range: the roo
 the bracket at every iteration and the iterate never leaves `[0, 1]`, so the inverse is
 always finite and in-bin; the iterate converges to the root (every accepted Newton step
 strictly shrinks the bracket and the step length vanishes only at the root, since `f'` is
-bounded below by Theorem 1 of [1]); and convergence is quadratic once close. What it does
+bounded below by Theorem 1 of Hong & Chun 2023); and convergence is quadratic once close. What it does
 *not* guarantee is a uniform `2^{-newton_iters}` worst-case error: that bound holds for the
 bisection fall-back steps alone, and an accepted Newton step may shrink the bracket by less
 than half. The earlier docstring claim to that effect was corrected on this branch
@@ -101,15 +101,12 @@ than half. The earlier docstring claim to that effect was corrected on this bran
 
 - `CubicBSpline` is `C²` as declared and identity at `raw = 0` (uniform knots, Greville
   coefficients), so it is a valid coupling template under ADR-0002.
-- Expressiveness in the two edge bins is reduced relative to [1]; if that matters in
+- Expressiveness in the two edge bins is reduced relative to Hong & Chun 2023; if that matters in
   practice, the lever is `num_bins`, not the boundary rule.
-- Periodic boundary conditions (Theorem 2 of [1]) are a different pinning rule on the same
+- Periodic boundary conditions (Theorem 2 of Hong & Chun 2023) are a different pinning rule on the same
   machinery — an endpoint-handling option on `AbstractSpline`, parked to Phase E of the
   roadmap.
 
 ## References
 
-[1] S. Hong and S. Y. Chun. Neural Diffeomorphic Non-uniform B-spline Flows. AAAI (2023).
-    arXiv:2304.04555.
-[2] C. de Boor. A Practical Guide to Splines, revised ed. Springer (2001). Ch. IX
-    (Marsden's identity, the Greville abscissae) and Ch. X (the derivative formula).
+Every work cited above has its entry in [`references.md`](../references.md).

@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # `deep_isochron` documentation — index
@@ -21,7 +21,8 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`architecture.md`](architecture.md) | architecture | module map, data flow of one training step, where each decision is recorded |
 | [`roadmap.md`](roadmap.md) | roadmap | the single current plan, phase by phase, with the Done ledger |
 | [`../CLAUDE.md`](../CLAUDE.md) | conventions | how Claude works in this repository (change documents, review notes, tooling) |
-| [`coding-standards.md`](coding-standards.md) | reference | where each convention is enforced here: tiers, named tolerances, the contracts the ADRs fix, the Markdown rules, the checks that replace prose |
+| [`coding-standards.md`](coding-standards.md) | reference | where each convention is enforced here: tiers, named tolerances, the contracts the ADRs fix, the Markdown rules, the docstring and citation forms, the checks that replace prose |
+| [`references.md`](references.md) | reference | the one bibliography: every work the documents, docstrings and tests cite, by key, with DOI and the locators used |
 
 ## Design documents (`design/`) — the mathematics behind the code
 
@@ -55,6 +56,8 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | [0014](decisions/0014-limit-cycle-by-shooting.md) | accepted (review pending) | `analysis.ode.limit_cycle`: shooting on the time-T flow (not collocation), Poincaré section normal to the flow, `PoincareMap` as the one abstraction with `direction`/`reverse_time`, frozen-dataclass results, Liouville/multiplier interpretation deferred to O2 |
 | [0015](decisions/0015-floquet-by-seeded-periodic-schur.md) | accepted (review pending) | `analysis.ode.floquet`: the seeded periodic Schur chain on the shooting-segment Jacobians (forward, in the attracting direction) as the method, explicit monodromy and Liouville as checks, `Literal` method dispatch; `LimitCycle`/`FixedPoint` as `eqx.Module`s carrying the ODE and configuration (amends ADR-0012 §3, ADR-0014 §3) |
 | [0016](decisions/0016-symbolic-systems.md) | accepted (review pending) | systems declared once in SymPy (`AbstractSymbolicODE._symbolic_template`; normal forms' `_symbolic_rates[_sq]`), JAX `rhs`/hooks derived and compiled per class in `__init_subclass__`; AUTO-07p Fortran by `INCLUDE` of generated `rhs.inc`/`indices.inc` (amends ADR-0007) |
+| 0017 | reserved | the AUTO-07p isochron pipeline (branch `auto-isochrons`, roadmap O7 step 2) |
+| [0018](decisions/0018-docstrings-map-and-contract.md) | accepted (review pending) | docstrings: the module docstring is the map, a function docstring the contract, reasoning in the ADRs; `**Attributes:**` lists; one bibliography `references.md` with `(Key, locator)` citations and `check_references.py`; ruff `D100`–`D103` switched on round by round |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 
@@ -70,3 +73,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `run-layout` | [`2026-10-07-run-layout.md`](changes/2026-10-07-run-layout.md) |
 | `normal-forms-basin` | [`2026-10-08-normal-forms-basin.md`](changes/2026-10-08-normal-forms-basin.md) |
 | `conventions-docs` | [`2026-10-25-conventions-docs.md`](changes/2026-10-25-conventions-docs.md) |
+| `prose` | [`2026-10-26-prose.md`](changes/2026-10-26-prose.md) |

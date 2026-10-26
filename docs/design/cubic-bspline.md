@@ -1,15 +1,15 @@
 ---
 type: design
 status: agreed
-updated: 2026-10-02
+updated: 2026-10-26
 verified_by: joon (review 2026-10-02)
-sources: [Hong & Chun]
+sources: [Hong & Chun 2023, de Boor 2001]
 ---
 
 # `CubicBSpline` — the mathematics behind the code
 
 Companion to [ADR-0006](../decisions/0006-cubic-bspline-boundary-and-inverse.md), which
-records *why* the boundary and inverse differ from Hong & Chun [1]. This note records
+records *why* the boundary and inverse differ from Hong & Chun 2023. This note records
 *what* the code computes: index conventions, the parametrization, the boundary argument,
 the piecewise power-basis form, and what the inverse does and does not guarantee. File:
 `src/deep_isochron/model/invertible/splines/cubic.py`.
@@ -43,7 +43,7 @@ arbitrary values). Arrays are 0-based:
 | `xs` = `knots[2:K+3]` | `K + 1` | `t_i` (the range knots)          |
 
 So `coeffs[i]` and `_greville(knots)[i]` refer to the same basis function `B_{i−3,4}`,
-whose Greville abscissa is `ξ_j = (t_{j+1} + t_{j+2} + t_{j+3}) / 3` (de Boor [2], Ch. IX).
+whose Greville abscissa is `ξ_j = (t_{j+1} + t_{j+2} + t_{j+3}) / 3` (de Boor 2001, Ch. IX).
 
 ## 2. Parametrization (`constrain`)
 
@@ -57,13 +57,13 @@ width `b − a`; the four exterior widths scale by the same factor. `_knots` acc
 shifts so that `t_0 = a` exactly, and snaps `t_K = b` exactly (so the range endpoints are
 knots regardless of rounding, as nflows does).
 
-*Deviation from [1].* Lines 1–3 of Algorithm 1 normalize the whole extended width vector
+*Deviation from Hong & Chun 2023.* Lines 1–3 of Algorithm 1 normalize the whole extended width vector
 (all `s − r + 2k − 4` widths, in the paper's indexing) to sum to 1 and then place the
 knots so that `t_r = 0`. Read literally, that leaves the position of `t_s` depending on
 the exterior widths; the paper's lines 13–17 then compensate by rescaling the
 *coefficients* so that `f(1) = 1`. Normalizing only the interior widths removes the need:
 `t_K = b` by construction. (This reading of lines 1–3 is deduced from the algorithm as
-summarized in [1]; the deviation itself is a design choice, not a correction.)
+summarized in Hong & Chun 2023; the deviation itself is a design choice, not a correction.)
 
 **Coefficients.** The pinned ends are `α_{-3}, α_{-2}, α_{-1} = ξ_{-3}, ξ_{-2}, ξ_{-1}`
 and `α_{K−3}, α_{K−2}, α_{K−1} = ξ_{K−3}, ξ_{K−2}, ξ_{K−1}`. The `K − 3` free
@@ -81,8 +81,8 @@ class a valid coupling template (ADR-0002).
 
 ## 3. Monotonicity and the `C²` boundary
 
-**Monotonicity.** The derivative of a spline is a spline of one order lower (de Boor [2],
-(X.12); stated as Theorem 1 of [1] for this setting):
+**Monotonicity.** The derivative of a spline is a spline of one order lower (de Boor 2001, Ch. X, Eq.
+(X.12); stated as Theorem 1 of Hong & Chun 2023 for this setting):
 
 ```
 f'(x) = Σ_j 3 · (α_j − α_{j−1}) / (t_{j+3} − t_j) · B_{j,3}(x)      on [t_0, t_K].
@@ -90,10 +90,10 @@ f'(x) = Σ_j 3 · (α_j − α_{j−1}) / (t_{j+3} − t_j) · B_{j,3}(x)      o
 
 With strictly increasing coefficients and positive knot spacings every term is positive
 and the `B_{j,3}` are a non-negative partition of unity, so `f' > 0`. The floors give a
-positive lower bound (`l < f' < u` in the notation of [1]); the map is bi-Lipschitz on the
+positive lower bound (`l < f' < u` in the notation of Hong & Chun 2023); the map is bi-Lipschitz on the
 range.
 
-**Linear precision.** Marsden's identity ([2], Ch. IX) specializes to
+**Linear precision.** Marsden's identity (de Boor 2001, Ch. IX) specializes to
 `Σ_j ξ_j B_{j,4}(x) = x` for all `x` in the knot span. Hence wherever only basis functions
 with `α_j = ξ_j` are active, `f(x) = x`.
 
@@ -162,8 +162,4 @@ recursively; nothing differentiates through the `fori_loop`.
 
 ## References
 
-[1] S. Hong and S. Y. Chun. Neural Diffeomorphic Non-uniform B-spline Flows. AAAI (2023).
-    arXiv:2304.04555. — Algorithm 1 (parametrization), Theorem 1 (monotonicity and the
-    derivative formula), Discussion (root-formula instability and the 1-in-10 outliers).
-[2] C. de Boor. A Practical Guide to Splines, revised ed. Springer (2001). — Ch. IX
-    (Marsden's identity, Greville abscissae), Ch. X (derivative of a spline, eq. (X.12)).
+Every work cited above has its entry in [`references.md`](../references.md).

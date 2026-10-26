@@ -6,7 +6,7 @@ machinery, and facts about the specific observed systems at their default parame
                       reports failure in Solution.result with throw=False; SolverConfig
                       is hashable and leafless
 2. observed systems   FitzHugh–Nagumo: equilibrium, its eigenvalues and the period of
-                      the cycle, all from Langfield, Krauskopf & Osinga (2014) for
+                      the cycle, all from Langfield et al. 2014 for
                       Winfree's parameters; Hodgkin–Huxley: gating variables in [0, 1],
                       the neuron spikes
 
@@ -92,7 +92,7 @@ def test_fitzhugh_nagumo_fixed_point_eigenvalues():
 
 
 def test_fitzhugh_nagumo_period():
-    """Langfield et al. (2014), Sec. III: the stable periodic orbit has period
+    """Langfield et al. 2014, Sec. III: the stable periodic orbit has period
     T_Γ ≈ 11.2279 (clockwise). Measured from upward zero crossings of x - x* after the
     transient, with linear interpolation of the crossing times."""
     ode = FitzhughNagumo()

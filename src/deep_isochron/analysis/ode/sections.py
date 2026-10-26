@@ -5,7 +5,7 @@ $\Sigma = \lbrace x : \langle n, x - p\rangle = 0\rbrace$ given by a point $p$ a
 *unit* normal $n$. The one used throughout ``analysis.ode``
 is the hyperplane through a point of (or near) the orbit, **normal to the flow there**,
 $n = f(p)/\Vert f(p)\Vert$: it is transversal by construction, with the largest
-possible margin, and needs nothing but the vector field. Parker & Chua (1989, §2.1.2
+possible margin, and needs nothing but the vector field. Parker & Chua 1989, §2.1.2
 for cross-sections and the direction of a crossing; §5.5, "Choosing Σ": "let the
 program automatically set $h = f(x^{(0)})$ and $x_\Sigma = x^{(0)}$"); Guckenheimer &
 Meloon (2000, §2: cross-sections "defined in the algorithms as hyperplanes

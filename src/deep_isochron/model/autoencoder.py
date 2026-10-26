@@ -2,11 +2,11 @@ r"""The phase autoencoder of Yawata et al. (Chaos 34, 063111, 2024) — the non-
 baseline (``docs/design/normal-forms.md`` §5.3, roadmap B12).
 
 Encoder $f_{\rm enc}: \mathbb R^{d} \to \mathbb R^3$ whose first two outputs are
-normalized to the unit circle (Eqs. (15)–(16)), decoder $f_{\rm dec}: \mathbb R^3 \to
-\mathbb R^d$ (Eq. (17)), and a latent flow (``PhaseAmplitudeLatentDynamics``). The
-learned phase is $\Theta(X) = \mathrm{atan2}(Y_2, Y_1)$ (Eq. (19)); the phase
+normalized to the unit circle (Eqs. 15–16), decoder $f_{\rm dec}: \mathbb R^3 \to
+\mathbb R^d$ (Eq. 17), and a latent flow (``PhaseAmplitudeLatentDynamics``). The
+learned phase is $\Theta(X) = \mathrm{atan2}(Y_2, Y_1)$ (Eq. 19); the phase
 sensitivity function $Z(\theta) = \nabla_X \Theta$ at $X = f_{\rm dec}(\cos\theta,
-\sin\theta, 0)$ (Eq. (20)) comes from ``AbstractPhaseAmplitudeModel``, by autodiff.
+\sin\theta, 0)$ (Eq. 20) comes from ``AbstractPhaseAmplitudeModel``, by autodiff.
 
 Differences from the paper, deliberate: no batch normalization in the MLPs (their
 encoder: 2×100 ReLU + BN; decoder 3×100); the latent flow is continuous in $t$; input
@@ -25,7 +25,7 @@ from .latent_dynamics import AbstractLatentDynamics, PhaseAmplitudeLatentDynamic
 
 
 def normalize_phase_plane(y: Float[Array, "3"]) -> Float[Array, "3"]:
-    """Eqs. (15)–(16): ``(Y1, Y2) / sqrt(Y1² + Y2²)``, ``Y3`` untouched."""
+    """Eqs. 15–16: ``(Y1, Y2) / sqrt(Y1² + Y2²)``, ``Y3`` untouched."""
     radius = jnp.sqrt(y[0] ** 2 + y[1] ** 2)
     return jnp.stack((y[0] / radius, y[1] / radius, y[2]))
 
@@ -80,7 +80,7 @@ class PhaseAmplitudeAutoencoder(AbstractPhaseAmplitudeModel):
         return self.latent_dynamics.dim
 
     def encode(self, x: Float[Array, " obs_dim"]) -> Float[Array, " latent_dim"]:
-        """``f_enc``: the MLP followed by the unit-circle normalization (Eq. (16))."""
+        """``f_enc``: the MLP followed by the unit-circle normalization (Eq. 16)."""
         return normalize_phase_plane(self.encoder(x))
 
     def decode(self, y: Float[Array, " latent_dim"]) -> Float[Array, " obs_dim"]:

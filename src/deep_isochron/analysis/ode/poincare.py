@@ -3,7 +3,7 @@ r"""The Poincaré (first-return) map of a flow on a cross-section.
 ``PoincareMap`` turns the continuous flow of an ``AbstractODE`` and a ``CrossSection``
 $\Sigma$ into a discrete map: $P(x)$ is the point where the trajectory through $x$ next
 crosses $\Sigma$ in the selected direction, together with the time $\tau(x)$ it takes.
-Parker & Chua (1989) call the one-directional version the *one-sided* map $P_+$ (§2.4,
+Parker & Chua 1989 call the one-directional version the *one-sided* map $P_+$ (§2.4,
 §5.5) and build their Poincaré-map shooting method on it; the settle stage of
 ``find_limit_cycle`` is the iteration of $P_+$ to its fixed point (their brute force,
 §5.1.1, read on the section), and a cycle that cuts $\Sigma$ in $2K$ points is a

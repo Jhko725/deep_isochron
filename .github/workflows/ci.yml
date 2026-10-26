@@ -38,6 +38,8 @@ jobs:
       # what docs/coding-standards.md measured), check_spelling.py for the -ise families.
       - run: uvx codespell@2.4.3
       - run: uv run python scripts/check_spelling.py
+      # Every citation resolves to an entry in docs/references.md.
+      - run: uv run python scripts/check_references.py
       - run: uv run pytest --hypothesis-profile=ci -n 4 -m "not slow"
 
   slow:

@@ -19,7 +19,7 @@ Steps (all planar):
 3. **Tail**: the samples of the last ``tail_periods`` revolutions of ψ; the times at
    which ψ crosses successive multiples of 2π (linear interpolation) give one period
    sample per revolution per trajectory — a diagnostic (``period_samples``).
-4. **Phase**: the protophase→phase transformation of Kralemann et al. (2008): with
+4. **Phase**: the protophase→phase transformation of Kralemann et al. 2008: with
    ``F_k = ⟨e^{−ikψ}⟩`` the Fourier coefficients of the tail protophase's density in
    time, ``φ(ψ) = ψ + 2 Re Σ_{k≥1} F_k (e^{ikψ} − 1) / (ik)``, the cumulative density
    rescaled to 2π — the phase that advances uniformly in time on the cycle, i.e. the

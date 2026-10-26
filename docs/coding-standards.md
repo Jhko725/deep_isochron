@@ -1,7 +1,7 @@
 ---
 type: reference
 status: current
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # Coding standards
@@ -21,6 +21,8 @@ look when a task touches tiers, tolerances, contracts or checks.
 | Slow tier | add `-m slow`: FitzHugh–Nagumo's limit cycle, the autoencoder training test |
 | Types | `uv run ty check src/deep_isochron/model/invertible`, clean, with no `# ty: ignore` |
 | Markdown | `uv run python scripts/check_md_math.py`, 0 problems |
+| Citations | `uv run python scripts/check_references.py`, every key resolves |
+| Docstrings | `uv run ruff check`, with `D100`–`D103` selected for the modules the prose pass has reached |
 
 Read the baseline before editing — the branch change document's *Tests* and *Open
 issues*, the pinned `xfail`s, the `UNTESTED` entries in `tests/registry.py` — rather than
@@ -91,6 +93,8 @@ This section says what each check is for; read the file for the current values.
 | American English, the productive families | `scripts/check_spelling.py` | `prek`, CI |
 | `copy.replace` (this project's floor is Python 3.13); Cayley rotations | ruff `TID251` banned-api | `prek`, CI |
 | both Markdown previews | `scripts/check_md_math.py` | `prek`, CI |
+| every citation resolves to `docs/references.md` | `scripts/check_references.py` | `prek`, CI |
+| a docstring on every public module, class, method and function | ruff `D100`–`D103`, `per-file-ignores` naming the modules not yet reached | `prek`, CI |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
 
 One deliberate exemption: `scripts/bench_dataloader.py` times `jax.scipy.linalg.expm` against
@@ -129,6 +133,64 @@ The `ignore-words-list` in `pyproject.toml` covers the false positives this doma
 produces: the LaTeX contour-integral command, the numerator and denominator locals in
 `rational_quadratic.py`, two journal abbreviations, an author's surname, and a Fortran
 intent keyword.
+
+## Docstrings
+
+A docstring is read in an editor hover or at the top of a file, so it is short, and it
+tells the reader what the code is for and how it is shaped, not why it was chosen. The
+reasoning lives in the ADRs and the design documents, and a docstring cites them
+(ADR-0018). The prose rules are the `clear-prose` skill's; what follows is the shape.
+
+**The module docstring is the map.** Its first sentence says what the module provides.
+A paragraph then gives the design at the level a reader needs to navigate the file: the
+public objects, how they relate, and the invariants that span several functions (a
+direction rule, a jit rule, "planar only"). It names each route or variant in a phrase
+and gives none of them its accuracy, arguments or failure modes. The last line names the
+ADR or design document section that holds the reasoning and the citations. A module
+docstring is at most about 25 lines; this is a standard, not a check, so a module that
+needs 30 lines gets them, with the reason in its review row.
+
+**A function docstring is the contract.** It opens with one sentence saying what the
+function computes or does, in the active voice with the function as the actor, and then
+carries everything the caller needs for that call, in the equinox form: `**Arguments:**`,
+one bullet per argument; `**Returns:**`; `**Raises:**` when the function raises on its
+own. The precision or validity limits of that function, and the citation for a formula
+it implements (author, year and locator), belong here, not in the module docstring.
+
+**A class docstring** opens the same way and documents the fields in an
+`**Attributes:**` list, as diffrax does; a field carries no attribute docstring of its
+own, so that each attribute is described once.
+
+The test for a sentence: if deleting it from the module docstring would leave a caller
+of one function uninformed, it belongs in that function's docstring; if deleting it from
+a function docstring would leave a reader of the module unable to choose between
+functions, it belongs in the module docstring. A sentence that passes neither test is
+deleted. Material cut from a docstring that no document holds is moved rather than
+dropped: a finding to the design document, with its provenance label; a decision to the
+ADR, as a dated amendment.
+
+A test's docstring is one sentence: the property it pins down, and the oracle or fixture
+it is checked against. Math in a docstring is written as `$…$`, the same form as the
+documents; nothing renders docstrings, and the form reads in a hover.
+
+Every public module, class, function and method has a docstring (ruff `D100`–`D103`); a
+private helper gets one when its name does not say what it does. The rule is switched
+on module group by module group as the prose pass of 2026-10-26 reaches them, through
+`per-file-ignores` in `pyproject.toml`; the list there is the current frontier.
+
+## References
+
+One bibliography, `docs/references.md`, and one in-text form. The key is `Author Year`
+for one author (`Lust 2001`), `Author & Author Year` for two (`Wilson & Moehlis 2016`),
+`Author et al. Year` for three or more (`Dieci et al. 1997`), with a letter suffix on a
+collision (`Langfield et al. 2025a`). <!-- references:ignore: the example --> A locator follows the key after a comma, in one of
+the forms `Eq. 7`, `Eqs. 9–14`, `§3`, `Prop. 5`, `Theorem 2`, `Table 5`, `Fig. 9`,
+`pp. 210–214`, `Ch. 8`, `App. D`, `Remark 4`; several citations are separated by
+semicolons inside one pair of parentheses. Every key resolves to an entry in
+`docs/references.md`, which `scripts/check_references.py` enforces; the entry carries the
+full reference, a DOI or arXiv identifier, and the locators the repository uses. Design
+documents and ADRs carry no reference list of their own; their frontmatter `sources:`
+lists keys.
 
 ## Deliberate exceptions
 

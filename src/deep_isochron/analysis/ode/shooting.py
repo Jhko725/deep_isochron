@@ -14,9 +14,9 @@ removes the one-dimensional null direction of the matching equations along the f
 (sliding every point along the orbit at fixed $T$); it is admissible iff $\Sigma$ is
 transversal, which the flow-normal section guarantees. Splitting the period into $m$
 equal segments is the time rescaling of the BVP form $\dot x = T f(x)$ on $[0, 1]$
-(Doedel; Dednam & Botha 2015, Eq. (7)).
+(Doedel; Dednam & Botha 2015, Eq. 7).
 
-Why multiple shooting (Morrison, Riley & Zancanaro 1962; Keller 1968; Deuflhard 1980):
+Why multiple shooting (Morrison et al. 1962; Keller 1968; Deuflhard 1980):
 the error amplification over one segment is $e^{\kappa_u T/m}$ instead of
 $e^{\kappa_u T}$, so the Newton problem stays well conditioned on long or weakly
 attracting orbits; $m = 1$ is single shooting. The segments are independent initial
