@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0011
 status: accepted; amended 2026-10-07/13 (§6 - Run, Experiment.from_config, explicit resume, one construction style)
-updated: 2026-10-13
+updated: 2026-10-27
 verified_by: pending (Joon; decisions taken in discussion 2026-10-05)
 ---
 
@@ -14,11 +14,11 @@ taken with Joon before implementation).
 ## Context
 
 Phases A–C produced a trainer with injected side effects (ADR-0009), a finite batched
-data loader (ADR-0008 Decision 3) and a device policy (`resolve_device`). What was missing
-was the layer that turns a description of an experiment into a run: configuration,
-construction of the objects, the entry point, resuming, reopening a run for analysis, and
-CI. `scripts/generate_data.py` had already set a configuration style — Hydra YAML with
-`_target_` entries — and the notebook carried its own ad-hoc construction code.
+data loader (ADR-0008 Decision 3) and a device policy (`resolve_device`). The missing
+layer turns a description of an experiment into a run: configuration, construction of
+the objects, the entry point, resuming, reopening a run for analysis, and CI.
+`scripts/generate_data.py` had already set a configuration style, Hydra YAML with
+`_target_` entries, and the notebook carried its own ad-hoc construction code.
 
 ## Decisions
 
@@ -27,13 +27,13 @@ CI. `scripts/generate_data.py` had already set a configuration style — Hydra Y
 `configs/train.yaml` composes the groups `data/` (the generation configs, unchanged),
 `model/`, `loss/`, `schedule/`, `optimizer/`, `wandb/`, plus top-level fields (`seed`,
 `device`, `x64`, `num_steps`, `windows`, `validation`, `eval_every`, `log_every`,
-`checkpoint`, `resume`). Leaf objects — a normal form, a spline, an optimizer — are
-`_target_` mappings instantiated as written.
+`checkpoint`, `resume`). Leaf objects, such as a normal form, a spline or an optimizer,
+are `_target_` mappings instantiated as written.
 
 - *Rejected for now*: structured configs (dataclasses + `ConfigStore`), the roadmap's
-  original D1. Stronger typing and validation at the cost of a parallel schema for every
-  class; to be revisited if compositions grow or validation becomes a problem (Joon's
-  call: "re-evaluate later").
+  original D1. They give stronger typing and validation at the cost of a parallel schema
+  for every class, and are to be revisited if compositions grow or validation becomes a
+  problem (Joon's call: "re-evaluate later").
 - **Lists become tuples.** Hydra's `instantiate` can only produce lists, while the code
   types fixed-size parameters as tuples and the test suite's beartype hook enforces that.
   `experiment.instantiate` is a 30-line replacement: same `_target_` convention, nested
@@ -44,15 +44,15 @@ CI. `scripts/generate_data.py` had already set a configuration style — Hydra Y
 ### 2. Builders are pure functions of the config, in `deep_isochron.experiment`
 
 **Scope rule** (review round 1): the package only parses configs and instantiates
-objects. Anything with logic of its own lives in the module it belongs to —
+objects. Anything with logic of its own lives in the module it belongs to:
 `MultiLogger`/`EpochLogger` in `training.loggers`, `git_state` in `provenance` (shared
 with `data.generate`), the window source in `data.windows`. `compose(*overrides)` is the
-one convenience the package adds for notebooks and tests: the config exactly as
+one convenience the package adds for notebooks and tests, the config exactly as
 `scripts/train.py` composes it.
 
 `build_source(cfg.data)`, `Loaders.from_config(cfg, source, device, start_step)`,
 `build_model(cfg.model, key)`, `build_trainer(cfg)` (loss, schedule, optimizer),
-`build_logger(cfg, …)`; `run.train(cfg, run_dir)` strings them together, and
+`build_logger(cfg, …)`. `run.train(cfg, run_dir)` calls them in turn, and
 `scripts/train.py` is a ten-line Hydra `main` around it. Tests call `train` directly on
 tiny configs; notebooks compose the same configs with `hydra.compose` and call the same
 builders (D5), so there is one construction path.
@@ -69,7 +69,7 @@ computed under x64 regardless of the run's `x64` setting, because datasets are f
 and the hash covers the system's parameters as the arrays hold them.
 
 - *Rejected*: generating on a miss. "Any generation should be explicit and intended"
-  (Joon) — a training job on a GPU node must not silently spend ten minutes integrating.
+  (Joon); a training job on a GPU node must not silently spend ten minutes integrating.
 - `generate_dataset(cfg.data)` is the one place generation happens; the script calls it.
 
 ### 4. `num_steps` is the unit of a run; the loader covers it in whole epochs
@@ -97,39 +97,40 @@ it receives `config.yaml` (resolved), `metadata.json` (config, dataset hash, x64
 SHA, batches per epoch) and `checkpoints/` (Orbax, ADR-0009 §6, with the same metadata as
 `custom_metadata`). **The final step is always checkpointed**: `Checkpointer.save(...,
 force=True)` overrides the `save_every` policy for the last step, so `load_run` /
-`load_model(run_dir)` return the trained state without arithmetic on `save_every` —
-`OrbaxCheckpointer.save` now returns whether it saved, and the trainer forces when the
+`load_model(run_dir)` return the trained state without arithmetic on `save_every`.
+`OrbaxCheckpointer.save` returns whether it saved, and the trainer forces when the
 loop's last step was not saved. `load_run(run_dir, step)` rebuilds model and trainer from
 the stored config and restores. `resume=<run_dir>` restores that run's latest state and
-continues the *same* data stream from `state.step` — the slice `[step:]` of the
-deterministic batched dataset (ADR-0008 D3) — writing into the new run directory.
+continues the *same* data stream from `state.step`, the slice `[step:]` of the
+deterministic batched dataset (ADR-0008 D3), and writes into the new run directory.
 
 **Amended 2026-10-07 (branch `run-layout`).** The layout above is now one object,
 `experiment.Run` (`config.yaml`, `metadata.json`, `checkpoints/`), and the construction
 before the loop is `Experiment.from_config(cfg, run_dir)` (run, device, source, trainer,
-state, loaders, evaluator); `train(cfg, run_dir)` is `Experiment.from_config(...).train()`. Reasons and
-rules:
+state, loaders, evaluator); `train(cfg, run_dir)` is
+`Experiment.from_config(...).train()`. Reasons and rules:
 
 - *The notebook had no way to produce a reopenable run.* A hand-rolled `trainer.train`
   with a bare `OrbaxCheckpointer` stored no config, and `load_run` expected the layout. Now
-  `exp = Experiment.from_config(cfg, run_dir)` gives the notebook the same objects as the script, and
-  `exp.run.checkpointer()` writes checkpoints that carry the config, so `load_run` works
-  whichever loop ran. A model that never had a config reopens through
-  `load_run(dir, template=state)` — the only honest option, since Orbax stores array
-  leaves, not Equinox structure.
+  `exp = Experiment.from_config(cfg, run_dir)` gives the notebook the same objects as the
+  script, and `exp.run.checkpointer()` writes checkpoints that carry the config, so
+  `load_run` works whichever loop ran. A model that never had a config reopens through
+  `load_run(dir, template=state)`, the only option, since Orbax stores array leaves, not
+  Equinox structure.
 - *Never overwrite silently, resume explicitly* (Joon). `Run.from_config` refuses a directory
   that already holds a run (a config or checkpoints; a Hydra-created directory with only
-  `.hydra/` is not a run). Continuing a run is `Experiment.from_config(cfg, run_dir, resume=True)`: it
-  restores the latest checkpoint, rewrites `config.yaml` to the given `cfg`, and records
+  `.hydra/` is not a run). Continuing a run is
+  `Experiment.from_config(cfg, run_dir, resume=True)`: it restores the latest checkpoint,
+  rewrites `config.yaml` to the given `cfg`, and records
   `resumed = {from_step, config_changes, history}` in `metadata.json`, so a raised
-  `num_steps` or a changed learning rate is on record. `cfg.resume = <other run>` keeps its
-  meaning — warm-start a *new* run from that run's latest state — and records
+  `num_steps` or a changed learning rate is on record. `cfg.resume = <other run>` keeps
+  its meaning, a warm start of a *new* run from that run's latest state, and records
   `resumed_from = {run, step}`. Both at once is an error.
 - *`config.yaml` is the latest truth.* `Run.open` reads it first and falls back to the
   checkpoints' `custom_metadata` (fixed at directory creation, so it cannot follow a
   resume).
-- *One construction style* (review round 1, 2026-10-13): objects the experiment layer
-  owns — `Run`, `Loaders`, `Experiment` — construct themselves with a `from_config`
+- *One construction style* (review round 1, 2026-10-13): objects that the experiment
+  layer owns (`Run`, `Loaders`, `Experiment`) construct themselves with a `from_config`
   classmethod (`Run.from_config(cfg, run_dir, metadata, resume=...)`,
   `Loaders.from_config(cfg, source, device, start_step=...)`,
   `Experiment.from_config(cfg, run_dir, resume=...)`); library objects (model, loss,
@@ -139,14 +140,17 @@ rules:
 - `build_evaluator(cfg, source, loaders)` and `build_logger(..., wandb_run=...)` are
   exposed so the notebook's evaluator and logger are the script's; an existing wandb run
   is logged to as it is and is the caller's to finish. `load_or_generate_source(cfg.data)`
-  is the notebook's explicit opt-in to generation; `Experiment.from_config`/`train` still never generate.
+  is the notebook's explicit opt-in to generation; `Experiment.from_config`/`train` still
+  never generate.
 
 ## Consequences
 
-- `scripts/train.py` (new), `scripts/generate_data.py` (thin wrapper), `scripts/bench_dataloader.py --config …` benchmarks a training config's own pipeline and model.
-- `deep_isochron.experiment` (`instantiate`, `data`, `model`, `training`, `logging`,
-  `run`); `tests/test_experiment.py` composes every shipped config and runs tiny trainings
-  end to end, including reopening and resuming.
+- `scripts/train.py` is new, `scripts/generate_data.py` is a thin wrapper, and
+  `scripts/bench_dataloader.py --config …` benchmarks a training config's own pipeline
+  and model.
+- `deep_isochron.experiment` holds `instantiate`, `data`, `model`, `training`, `logging`
+  and `run`; `tests/test_experiment.py` composes every shipped config and runs tiny
+  trainings end to end, including reopening and resuming.
 - `Checkpointer.save` returns `bool` and takes `force`; `Trainer.train` forces the final
   checkpoint.
 - CI (`.github/workflows/ci.yml`): lint, `ty`, Markdown math, the `ci` Hypothesis profile

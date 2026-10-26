@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0010
 status: accepted
-updated: 2026-10-05
+updated: 2026-10-27
 verified_by: pending (Joon); V100 confirmation 2026-10-05 — step 88 → 33 ms
 ---
 
@@ -12,27 +12,29 @@ verified_by: pending (Joon); V100 confirmation 2026-10-05 — step 88 → 33 ms
 
 ## Context
 
-Background on asynchronous dispatch, launch-bound steps and why a GPU `conditional` is a
-host-device round trip: `docs/design/training-step-performance.md` (§1, §5.2–5.3).
+`docs/design/training-step-performance.md` (§1, §5.2–5.3) has the background on
+asynchronous dispatch, launch-bound steps, and why a GPU `conditional` is a host-device
+round trip.
 
 `BiLipschitzLinear` parametrizes `U, V ∈ SO(d)` from unconstrained leaves as
 `expm(raw − rawᵀ)`. Benchmarking the training step on a V100 (`scripts/bench_dataloader.py
 --hlo-stats`, change document 2026-10-04 round 2) found the step host-bound at ≈ 90 ms with
 the data already on the device, and the compiled step's loop census explained it:
 
-- 114 `while` loops, ≈ 15 400 kernel launches per step; 112 of the loops were
-  `16 iterations × 10 launches` — `jax.scipy.linalg.expm`'s squaring step, a
+- 114 `while` loops, ≈ 15 400 kernel launches per step. 112 of the loops were
+  `16 iterations × 10 launches`: `jax.scipy.linalg.expm`'s squaring step, a
   `lax.scan` of `max_squarings = 16` `lax.cond`s (JAX source, `_squaring`). Two rotations
   × 8 layers × (`__call__` and `inverse` both read `params`) × (primal and the Fréchet
   `expm` of the custom JVP) ≈ 112.
 - ≈ 1 700 `conditional` executions per step. On the GPU backend a conditional needs its
-  predicate on the host, so each is a device-to-host round trip the launching thread waits
-  for; the host can never run ahead of the device, hence dispatch ≈ total.
+  predicate on the host, so each is a device-to-host round trip that the launching thread
+  waits for. The host can never run ahead of the device, so dispatch ≈ total.
 - Measured on the V100: one 2×2 `expm` costs **0.649 ms** per call (16 round trips ≈ 40 µs
   each); the closed-form rotation of the same angle **0.049 ms**. 1 700 × 40 µs ≈ 70 ms is
   the step's fixed cost.
 
-All this for the exponential of a 2×2 skew-symmetric matrix, i.e. a rotation.
+All of this is the cost of the exponential of a 2×2 skew-symmetric matrix, which is a
+rotation.
 
 ## Decision
 
@@ -45,8 +47,8 @@ $$
 - `Q` is orthogonal with `det Q = +1` for every skew `A` (deduced: `(I − A)` and
   `(I + A)⁻¹` commute and `Qᵀ Q = (I + A)^{-\top}(I − A)^{\top}(I − A)(I + A)^{-1} = I`
   since `(I − A)ᵀ = I + A`; the determinant is continuous in `A`, nonzero, and `1` at
-  `A = 0`), and the eigenvalues of `I + A` are `1 + iλ`, so the solve is always well
-  conditioned — including at the extreme raw values `tests/test_linear.py` draws.
+  `A = 0`). The eigenvalues of `I + A` are `1 + iλ`, so the solve is always well
+  conditioned, including at the extreme raw values that `tests/test_linear.py` draws.
 - `Q = I` at `A = 0`: ADR-0002 holds, the identity initialization is unchanged.
 - Loop-free and conditional-free: for `dim = 2` the inverse is written out (`Q` is the
   rotation by `−2 arctan a`, `a = A[1, 0]`); for `dim > 2` one `jnp.linalg.solve` (an LU
@@ -80,9 +82,9 @@ values in `(1/L, L)`) cover the rest.
   `InvertibleLinear` for speed is off the table.
 - Measured on the V100 (2026-10-05, batch 512 × 50, 8 blocks): the compiled step has 2
   `while` loops (the root solve's 64 × 4 and 48 × 4), 0 conditionals, ≈ 1 900 launches;
-  the device-resident step went from **88 ms to 33 ms**, still with dispatch ≈ total — now
-  ≈ 17 µs per launch, i.e. launch-bound on the remaining root-solve iterations, which are
-  the next lever (`unroll`, fewer iterations; larger batches are nearly free).
+  the device-resident step went from **88 ms to 33 ms**, still with dispatch ≈ total, now
+  ≈ 17 µs per launch. The step is launch-bound on the remaining root-solve iterations,
+  which are the next lever (`unroll`, fewer iterations; larger batches are nearly free).
 - The step is no longer what bounds training: a batch of 512 windows takes 89 ms to slice
   in grain's per-element pipeline on that host (0.17 ms per window), so `to_device` runs at
   the fetch rate (93 ms). Vectorizing the window sampler at batch level (one fancy-indexed

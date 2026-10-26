@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0015
 status: accepted; amended 2026-10-20 (review round 5 - jit rule, light FixedPoint)
-updated: 2026-10-20
+updated: 2026-10-27
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-19/20 after the O2 survey and his notebook prototype)
 ---
 
@@ -15,8 +15,8 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-19/20
 
 The nontrivial Floquet multiplier $\mu$ of a planar cycle (and its exponent
 $\kappa = \log\mu/T$) is the rate of the amplitude coordinate and the one number,
-with $T$, that a learned conjugacy must reproduce. The textbook route — eigenvalues
-of the explicit monodromy $M = M_m\cdots M_1$ — is limited by rounding to a relative
+with $T$, that a learned conjugacy must reproduce. The textbook route, eigenvalues
+of the explicit monodromy $M = M_m\cdots M_1$, is limited by rounding to a relative
 error $\varepsilon\Vert M\Vert/\mu$ (Lust 2001, Eq. 10): $10^{-4}$ for FitzHugh–Nagumo
 ($\mu \approx 1.7\cdot10^{-12}$), nothing at all for the Cassini oval
 ($\mu \approx 10^{-16}$). Joon prototyped the periodic Schur decomposition of
@@ -31,17 +31,19 @@ RQ) did not close, which fixed the direction rule below.
 The multipliers are the diagonal products of the triangular factors
 $R_i = Q_{i+1}^{\top}M_iQ_i$ of the segment Jacobians, accumulated as
 $\sum_i \log R_{i,jj}$. Bojanczyk et al.'s general algorithm finds the Schur basis by a
-periodic QR *iteration*; here one Schur vector is known analytically — the flow
+periodic QR *iteration*. Here one Schur vector is known analytically: the flow
 direction $f(x_1)$, the eigenvector of the trivial multiplier and the *dominant* one
-for an attracting cycle — so $Q_1$ is seeded with it and the decomposition is
-completed by the forward QR chain $M_i \thinspace Q_i = Q_{i+1} \thinspace R_i$ with positive diagonals: the
-discrete QR method for Lyapunov exponents over one period (Dieci et al. 1997, §3, Claim 2), the seed in the spirit of Guckenheimer & Meloon's transformation to
-cross-section coordinates (2000, §2 algorithm). In the plane the transverse block is
-$1\times1$, so no iteration remains. *Why forward*: the chain propagates the first
-Schur vector; propagated forward it is the dominant direction and self-correcting,
-propagated backward through the transposes (the RQ chain of the prototype) it is the
-subdominant one and the chain does not close — a *deduced* rule, confirmed
-numerically, with no literature statement found. *Why not Liouville as the method*:
+for an attracting cycle. So $Q_1$ is seeded with it and the decomposition is
+completed by the forward QR chain $M_i \thinspace Q_i = Q_{i+1} \thinspace R_i$ with
+positive diagonals, the discrete QR method for Lyapunov exponents over one period
+(Dieci et al. 1997, §3, Claim 2), with the seed in the spirit of Guckenheimer &
+Meloon's transformation to cross-section coordinates (2000, §2 algorithm). In the
+plane the transverse block is $1\times1$, so no iteration remains. *Why forward*: the
+chain propagates the first Schur vector. Propagated forward it is the dominant
+direction and self-correcting; propagated backward through the transposes (the RQ
+chain of the prototype) it is the subdominant one and the chain does not close. That
+is a *deduced* rule, confirmed numerically, with no literature statement found. *Why
+not Liouville as the method*:
 $\kappa = T^{-1}\int_0^T\mathrm{div}f$ is exact and cheap in the plane, but it is planar
 only, gives no Floquet vectors and no accuracy diagnostic; it is kept as the planar
 cross-check (`method="liouville"`). *Why not the explicit monodromy*: the floor above;
@@ -61,7 +63,7 @@ reported multipliers and exponents are always forward-time (ADR-0014 §4).
 ### 3. Signs and diagnostics
 
 The QR factors are normalized to a positive diagonal (rows of $R$ and columns of $Q$
-flipped together, which keeps the factorization exact — the prototype flipped columns
+flipped together, which keeps the factorization exact; the prototype flipped columns
 of $R$). The chain closes on $Q_{m+1} = Q_1D$ with $D = \mathrm{diag}(\pm1)$: $D$
 carries the multipliers' signs (a negative multiplier appears in the closure, not in
 the factors; in the plane $D = I$ always, $\det M > 0$), and the defect
@@ -77,31 +79,32 @@ documents its absolute floor.
 Functions first (`segment_jacobians`, `periodic_schur`, `monodromy`,
 `multipliers_from_monodromy`, `divergence_integral`, `return_map_multiplier`), one
 dispatching driver returning a `Floquet` module (multipliers, exponents,
-trivial error, closure, Floquet vectors at every mesh point — the last two `None` for
+trivial error, closure, Floquet vectors at every mesh point, the last two `None` for
 the other routes). *Rejected for now*: strategy objects per method (ADR-0007 style),
-to be adopted when a method grows its own options (a quadrature choice, a `slycot`
-callback); the `Literal` turns into a strategy object without changing call sites.
+to be adopted when a method grows its own options, such as a quadrature choice or a
+`slycot` callback; the `Literal` turns into a strategy object without changing call
+sites.
 
 ### 5. `LimitCycle` and `FixedPoint` are `eqx.Module`s; the cycle carries its ODE and configuration; analysis functions take the cycle
 
 Amends ADR-0012 §3 and ADR-0014 §3 (host-side frozen dataclasses). A cycle is tightly
 coupled to its ODE and to the solver configuration it was found with, and every later
 analysis must integrate the same system the same way, so `LimitCycle` holds `ode`,
-`x0s` (the converged shooting mesh — what the periodic Schur chain needs), `period`,
-`residual`, `settle`, `section`, `config` (static), `reverse_time` (static); it samples
+`x0s` (the converged shooting mesh, which the periodic Schur chain needs), `period`,
+`residual`, `settle`, `section`, `config` (static), `reverse_time` (static). It samples
 itself (`sample(n_points)`, re-integrating; the sampled orbit is a derived quantity,
-no longer stored) and reports its `orientation()` (the signed-area test lives in
-`analysis.data.cycle`, since it acts on a discretized curve — review round 5). The
+no longer stored) and reports its `orientation()`; the signed-area test lives in
+`analysis.data.cycle`, since it acts on a discretized curve (review round 5). The
 cycle is a *fixed-shape* pytree: `FixedPoint` holds only `x`, `tau`, `k`,
 `contraction`, `converged`, and the search record (`taus`, `iterates`, per-cycle
 length) is returned by `fixed_point` separately as a `FixedPointIteration` and not
-stored on the cycle (review round 5, Joon). Signature rule for `analysis.ode`:
-functions of a cycle take the cycle, `f(cycle, ...)`, and are jit- and vmap-compatible
-as they stand — a batch of cycles of one mesh size (the ODE's parameters being leaves)
-is one `vmap`. Each Floquet route returns a `Floquet` (`floquet_periodic_schur`,
-`floquet_monodromy`, `floquet_liouville`); `floquet(cycle, method=)` dispatches.
-*Rejected*: storing a diffrax dense interpolant
-(`SaveAt(dense=True)`, 8th order for `Dopri8`) for resampling — its size is the step
+stored on the cycle (review round 5, Joon). The signature rule for `analysis.ode` is
+that functions of a cycle take the cycle, `f(cycle, ...)`, and are jit- and
+vmap-compatible as they stand; a batch of cycles of one mesh size (the ODE's parameters
+being leaves) is one `vmap`. Each Floquet route returns a `Floquet`
+(`floquet_periodic_schur`, `floquet_monodromy`, `floquet_liouville`);
+`floquet(cycle, method=)` dispatches. *Rejected*: storing a diffrax dense interpolant
+(`SaveAt(dense=True)`, 8th order for `Dopri8`) for resampling. Its size is the step
 count, a static-shape and consistency burden, for a resampling that costs a fraction
 of a second; revisit if resampling becomes hot.
 
@@ -109,8 +112,8 @@ of a second; revisit if resampling becomes hot.
 
 A function that is naturally jit- and vmap-compatible is left unjitted, so the caller
 chooses the level (`eqx.filter_jit(floquet)`, `eqx.filter_vmap(floquet)` over a batch of
-cycles, or neither); a function that is not — a host-side driver with Python control
-flow and informative errors — jits the subcomponents it calls. So `settle`, `polish`,
+cycles, or neither); a function that is not, a host-side driver with Python control
+flow and informative errors, jits the subcomponents that it calls. So `settle`, `polish`,
 `multiple_shooting`, `LimitCycle.sample`, `PoincareMap.__call__`/`iterate`,
 `segment_jacobians`, `periodic_schur`, `monodromy`, `divergence_integral` and the
 `floquet_*` routes carry no decorator; `find_limit_cycle` runs `eqx.filter_jit(settle)`
@@ -135,8 +138,9 @@ of this branch decorated the kernels and kept kernel/driver pairs
 
 Bojanczyk et al. 1992, *The periodic Schur decomposition. Algorithms and
 applications*, Proc. SPIE 1770:31–42. Lust 2001, *Improved numerical Floquet
-multipliers*, Int. J. Bifurcation Chaos 11(9):2389–2410. Dieci et al. 1997, *On the computation of Lyapunov exponents for continuous dynamical systems*,
-SIAM J. Numer. Anal. 34(1):402–423. Guckenheimer & Meloon 2000, SIAM J. Sci. Comput.
+multipliers*, Int. J. Bifurcation Chaos 11(9):2389–2410. Dieci et al. 1997, *On the
+computation of Lyapunov exponents for continuous dynamical systems*, SIAM J. Numer.
+Anal. 34(1):402–423. Guckenheimer & Meloon 2000, SIAM J. Sci. Comput.
 22(3):951–985. Fairgrieve & Jepson 1991, *O.K. Floquet multipliers*, SIAM J. Numer.
 Anal. 28(5):1446–1462. Mauroy & Mezić 2018, Chaos 28:073108 (Remark 4). Wilson &
 Moehlis 2016, Phys. Rev. E 94:052213. Kvalheim & Revzen 2021 (Prop. 5).

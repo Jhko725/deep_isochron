@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0014
 status: accepted; amended 2026-10-18 (review rounds 1–2); amended 2026-10-20 (ADR-0015)
-updated: 2026-10-20
+updated: 2026-10-27
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-17/18 after the O1 survey and his notebook prototype)
 ---
 
@@ -13,7 +13,7 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-17/18
 
 ## Context
 
-`analysis.ode` must give the reference objects a trained model is assessed against,
+`analysis.ode` must give the reference objects that a trained model is assessed against,
 starting with the periodic orbit $\gamma$ and its period $T$ of any planar `AbstractODE`
 (roadmap Phase E, replanned 2026-10-15). The literature offers brute force, single and
 multiple shooting (Newton on the time-$T$ flow), orthogonal collocation (AUTO), Taylor-series
@@ -28,44 +28,46 @@ multiple shooting by Levenberg–Marquardt) before this refactoring.
 
 The orbit is found by multiple shooting: unknowns $(x_1, \dots, x_m, T)$, residual
 $\Phi_{T/m}(x_i) - x_{i+1}$ (cyclic) plus one phase condition, solved by Levenberg–Marquardt
-(optimistix) with the Jacobian by forward-mode AD through the diffrax solve, $m$ fixed. *Why*: the segments are independent IVP solves (`vmap`), the Jacobian is
-the exact derivative of the numerical flow (the property Guckenheimer & Meloon identify
-as the source of accuracy), the adaptive solver's error control comes for free, and our
-orbits are attracting. *Rejected*: collocation (a BVP solver to write, no error control
-without mesh adaptation; its strengths — continuation, unstable orbits, Langfield-style
-isochron BVPs — are not O1's problem); a Taylor integrator (one order of magnitude at the
-roundoff floor, irrelevant at the 1e-10 we need); harmonic balance (ill-suited to
-relaxation oscillations).
+(optimistix) with the Jacobian by forward-mode AD through the diffrax solve, $m$ fixed.
+*Why*: the segments are independent IVP solves (`vmap`), the Jacobian is the exact
+derivative of the numerical flow (the property that Guckenheimer & Meloon identify as the
+source of accuracy), the adaptive solver's error control comes for free, and our orbits
+are attracting. *Rejected*: collocation, a BVP solver to write with no error control
+without mesh adaptation, whose strengths (continuation, unstable orbits, Langfield-style
+isochron BVPs) are not O1's problem; a Taylor integrator, one order of magnitude at the
+roundoff floor, irrelevant at the 1e-10 we need; harmonic balance, ill-suited to
+relaxation oscillations.
 
 ### 2. The phase condition is a Poincaré section normal to the flow
 
 $\Sigma$ through the settled point $p$ with unit normal $f(p)/\Vert f(p)\Vert$ pins the first
 shooting point: $\langle n, x_1 - p\rangle = 0$. It is transversal by construction and is
 what the shooting degeneracy needs (the Jacobian's null direction is the flow direction;
-any admissible condition must have a component along it). Parker & Chua's "Choosing Σ",
-BifurcationKit's `SectionSS` default. *Rejected*: Mees's iteration-dependent constraint
-$\langle f(x^{(i)}), \Delta x\rangle = 0$ (not a Newton on a fixed residual); Doedel's integral
-phase condition (the right one for *continuation*, needs a reference orbit we do not have
-in a one-off solve; evaluable by shooting through a quadrature state if a continuation is
-ever wanted); BifurcationKit's factor $T$ on the phase row (a row scaling with no stated
-rationale; we keep the row in state units).
+any admissible condition must have a component along it). It is Parker & Chua's
+"Choosing Σ" and BifurcationKit's `SectionSS` default. *Rejected*: Mees's
+iteration-dependent constraint $\langle f(x^{(i)}), \Delta x\rangle = 0$, which is not a
+Newton on a fixed residual; Doedel's integral phase condition, the right one for
+*continuation*, which needs a reference orbit we do not have in a one-off solve (it is
+evaluable by shooting through a quadrature state if a continuation is ever wanted);
+BifurcationKit's factor $T$ on the phase row, a row scaling with no stated rationale (we
+keep the row in state units).
 
 ### 3. `PoincareMap` is the one abstraction; results are lightweight containers
 
 A `PoincareMap(ode, section, config, t_max, direction, reverse_time)` is the discrete map
-the flow induces on the section. It unifies three operations the plan had as separate
-functions: the return time and point ($P(x)$), the settle stage (iterate $P$ to its fixed
+that the flow induces on the section. It unifies three operations that the plan had as
+separate functions: the return time and point ($P(x)$), the settle stage (iterate $P$ to its fixed
 point, with the minimum-period test as period-$k$ detection), and the brute-force
 multiplier (the contraction of the iterates). It is a differentiable function of the
 point through a custom JVP (Parker & Chua Eq. 5.21 for the point, implicit
 differentiation of the crossing for the time; no differentiation through the event), so
-`jax.jacfwd(P)` is $DP$ — the O2 hook.
-`direction` (positive / negative / both) and `reverse_time` are static constructor
-arguments — the map's identity, not per-call options; `fixed_point` is defined for the
-one-sided maps only. `LimitCycle` and `FixedPoint` (host-side) are frozen dataclasses of NumPy arrays
-(ADR-0012 §3); `ShootingResult` (the output of a jittable function) is a `NamedTuple` of
-arrays — kept lightweight until the package has enough functions for the shared
-abstractions to be chosen from what they actually share (ADR-0012 amendment).
+`jax.jacfwd(P)` is $DP$, the O2 hook. `direction` (positive / negative / both) and
+`reverse_time` are static constructor arguments, the map's identity rather than per-call
+options; `fixed_point` is defined for the one-sided maps only. `LimitCycle` and
+`FixedPoint` (host-side) are frozen dataclasses of NumPy arrays (ADR-0012 §3), and
+`ShootingResult` (the output of a jittable function) is a `NamedTuple` of arrays. Both
+are kept lightweight until the package has enough functions for the shared abstractions
+to be chosen from what they actually share (ADR-0012 amendment).
 
 ### 4. Reverse time finds repelling cycles
 
@@ -78,12 +80,12 @@ $\kappa_u = a(1 - a)$ as oracle.
 ### 5. Guards, and what is deferred
 
 `find_limit_cycle` reports the shooting residual and rejects the two extraneous solutions
-of shooting (an equilibrium; $T \to 0$; Parker & Chua §5.5). Properties *of* the orbit —
-the monodromy with its trivial-multiplier error (Guckenheimer & Meloon §5.4), the
-nontrivial multiplier, Liouville's cross-check $\exp\int\mathrm{div}f\thinspace dt$ — are
-functions of a `LimitCycle` and belong to O2 (review round 1, Joon 2026-10-18); symmetric forward/backward shooting for canard-type segments
-(Guckenheimer & Meloon §5.3) and per-point sections with variable segment times are
-documented, not built.
+of shooting (an equilibrium; $T \to 0$; Parker & Chua §5.5). Properties *of* the orbit
+are functions of a `LimitCycle` and belong to O2 (review round 1, Joon 2026-10-18): the
+monodromy with its trivial-multiplier error (Guckenheimer & Meloon §5.4), the nontrivial
+multiplier, Liouville's cross-check $\exp\int\mathrm{div}f\thinspace dt$. Symmetric
+forward/backward shooting for canard-type segments (Guckenheimer & Meloon §5.3) and
+per-point sections with variable segment times are documented, not built.
 
 ### 6. Implementation findings
 
@@ -124,14 +126,19 @@ documented, not built.
 - **`analysis` works through the `flow` contract alone** (`flow`, `flow_to`); which
   integration a system's `flow` performs is the *system's* choice. The normal forms'
   `flow` defaults to their *closed-form* chart, which as the input of an analysis (i)
-  makes the tests against them circular and (ii) loses precision at a basin edge — found
-  when the reverse-time Winfree run returned garbage at $r = a$ and a $10^{-7}$ period just
-  inside. So the tests construct them with `integration="cartesian"` (a constructor
-  argument, review round 2) and the closed forms stay the oracles. *Rejected* (round 1's
-  first fix, reverted in round 2): an `AbstractODE.integrate` that always solves `rhs`
-  numerically — a near-duplicate of `flow` on the base contract for a need the normal
-  forms already meet with their integration switch.
+  makes the tests against them circular and (ii) loses precision at a basin edge, found
+  when the reverse-time Winfree run returned meaningless values at $r = a$ and a
+  $10^{-7}$ period just inside. So the tests construct them with
+  `integration="cartesian"` (a constructor argument, review round 2) and the closed forms
+  stay the oracles. *Rejected* (round 1's first fix, reverted in round 2): an
+  `AbstractODE.integrate` that always solves `rhs` numerically, a near-duplicate of
+  `flow` on the base contract for a need that the normal forms already meet with their
+  integration switch.
 
 ## Amendment 2026-10-20 — ADR-0015
 
-§3's "frozen dataclasses of NumPy arrays" for `LimitCycle` and `FixedPoint` is superseded by ADR-0015 §5 (`eqx.Module`s carrying the ODE and configuration; the sampled orbit derived by `LimitCycle.sample`, not stored). The O2 hook of §3 (`jax.jacfwd(P)` as $DP$) is a diagnostic only: the multipliers come from the seeded periodic Schur chain on the shooting mesh.
+§3's "frozen dataclasses of NumPy arrays" for `LimitCycle` and `FixedPoint` is
+superseded by ADR-0015 §5: `eqx.Module`s carrying the ODE and configuration, with the
+sampled orbit derived by `LimitCycle.sample`, not stored. The O2 hook of §3
+(`jax.jacfwd(P)` as $DP$) is a diagnostic only: the multipliers come from the seeded
+periodic Schur chain on the shooting mesh.

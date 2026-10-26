@@ -6,10 +6,10 @@ updated: 2026-10-27
 
 # Coding standards
 
-Where this repository enforces the conventions, and which checks stand in for prose. The
-conventions themselves, with the reasoning behind them, are in the `code-conventions`
-skill; the pervasive ones are in the global `CLAUDE.md`. This document is the place to
-look when a task touches tiers, tolerances, contracts or checks.
+This document says where this repository enforces the conventions, and which checks stand
+in for prose. The conventions themselves, with the reasoning behind them, are in the
+`code-conventions` skill, and the pervasive ones are in the global `CLAUDE.md`. Read this
+document when a task touches tiers, tolerances, contracts or checks.
 
 ## Tiers and commands
 
@@ -24,22 +24,22 @@ look when a task touches tiers, tolerances, contracts or checks.
 | Citations | `uv run python scripts/check_references.py`, every key resolves |
 | Docstrings | `uv run ruff check`, with `D100`–`D103` selected for the modules the prose pass has reached; `uv run python scripts/check_docstring_headers.py`, 0 problems |
 
-Read the baseline before editing — the branch change document's *Tests* and *Open
-issues*, the pinned `xfail`s, the `UNTESTED` entries in `tests/registry.py` — rather than
-running the full suite to discover what is already red.
+Read the baseline before editing rather than running the full suite to discover what is
+already red: the branch change document's *Tests* and *Open issues*, the pinned
+`xfail`s, and the `UNTESTED` entries in `tests/registry.py`.
 
 ## Named values
 
-- **Tolerances**: `TOL` in `tests/helpers.py`, one entry per *kind of claim* rather than
-  per test — `jit_eager`, `identity`, `closed_form`, `join`, `jacobian`,
-  `bspline_inverse`, `flow`, `floquet`, the `cycle_*` family — each carrying its reason.
+- Tolerances are the entries of `TOL` in `tests/helpers.py`, one per *kind of claim*
+  rather than per test (`jit_eager`, `identity`, `closed_form`, `join`, `jacobian`,
+  `bspline_inverse`, `flow`, `floquet`, the `cycle_*` family), each carrying its reason.
   A number that *is* a law stays inline with a comment saying so: the asymptotic-slope
   bound in `test_sinh_asymptotically_linear`, finite-difference steps, a strategy's
   magnitude range.
-- **Solver configurations**: `SOLVERS` in `tests/helpers.py` — `tight`, `tight_stiff`,
-  `tight_long`, `stiff`, `data` — one line of reason each. `Tsit5` is the non-stiff
-  default, on diffrax's own recommendation.
-- **Exceptions to a law** belong in `tests/registry.py` with a stated reason, never in a
+- Solver configurations are the entries of `SOLVERS` in `tests/helpers.py` (`tight`,
+  `tight_stiff`, `tight_long`, `stiff`, `data`), with one line of reason each. `Tsit5` is
+  the non-stiff default, on diffrax's own recommendation.
+- Exceptions to a law belong in `tests/registry.py` with a stated reason, never in a
   silent tolerance bump. `IDENTITY_TOL` was deleted for that reason: since every vector
   bijection is the identity at init to round-off, an entry in it would have meant "this
   class is not", which is what the universal law forbids.
@@ -63,16 +63,16 @@ running the full suite to discover what is already red.
 
 ## Markdown that renders in both previews
 
-GitHub runs Markdown before MathJax; VS Code's preview parses `$…$` first. The rules
-`scripts/check_md_math.py` enforces, and the reason each exists:
+GitHub runs Markdown before MathJax, and VS Code's preview parses `$…$` first. These are
+the rules `scripts/check_md_math.py` enforces, with the reason each exists:
 
-- No line-length limit (ruff formats Python only), but an inline formula `$…$` never
-  crosses a line.
+- There is no line-length limit, since ruff formats Python only, but an inline formula
+  `$…$` never crosses a line.
 - Display math only as a standalone block: `$$` alone on a line, the formula, `$$` alone
   on a line. Never `$$…$$` inside a paragraph.
 - Inside inline math, no backslash followed by ASCII punctuation: `\,` `\;` `\{` `\|`
   `\\` become `\thinspace` `\medspace` `\lbrace` `\Vert`, and matrices move into blocks.
-- No `*` inside inline math — use `\ast`, since `x^*` loses its star and italicizes the
+- No `*` inside inline math: use `\ast`, since `x^*` loses its star and italicizes the
   rest of the paragraph.
 - Spaces around `<` and `>`.
 - No `_` immediately after `}` `)` `|`: write `\mathbf e_r`, `C_{\rm loc}^{k}`,
@@ -83,9 +83,9 @@ previews agree.
 
 ## Checks that replace prose
 
-The configuration lives in `pyproject.toml` (`[tool.codespell]`, and the `banned-api` table
-with `TID251` in ruff's `select`), with a comment there on each non-obvious setting.
-This section says what each check is for; read the file for the current values.
+The configuration lives in `pyproject.toml`, in `[tool.codespell]` and in the `banned-api`
+table with `TID251` in ruff's `select`, with a comment there on each non-obvious setting.
+This section says what each check is for; the file has the current values.
 
 | Rule | Check | Runs in |
 |---|---|---|
@@ -98,32 +98,32 @@ This section says what each check is for; read the file for the current values.
 | `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after | `scripts/check_docstring_headers.py` | `prek`, CI |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
 
-One deliberate exemption: `scripts/bench_dataloader.py` times `jax.scipy.linalg.expm` against
-the closed-form rotation, which is the measurement ADR-0010 rests on, so that one line
-carries `# noqa: TID251` with the reason. The ban is for code that *uses* `expm`, not for
-the benchmark that justified banning it.
+The one deliberate exemption is in `scripts/bench_dataloader.py`, which times
+`jax.scipy.linalg.expm` against the closed-form rotation. That timing is the measurement
+ADR-0010 rests on, so that one line carries `# noqa: TID251` with the reason. The ban is
+for code that *uses* `expm`, not for the benchmark that justified banning it.
 
 **Two spelling checks, because one tool cannot do both jobs.** `codespell` is a
 535-entry British-to-American word list: the right shape for irregulars (*behaviour*, <!-- codespell:ignore -->
-*centre*, *artefact*, *modelled*) and for typos — it is what caught `centerd`, <!-- codespell:ignore -->
+*centre*, *artefact*, *modelled*) and for typos, and it is what caught `centerd`, <!-- codespell:ignore -->
 `implemention`, `documention` and `constract`. It is the wrong shape for this <!-- codespell:ignore -->
 repository's vocabulary, because `-ise` is productive morphology and no list ships
 `discretise`, `parametrise`, `orthogonalise`, `diagonalise`, `linearise` or <!-- codespell:ignore -->
 `denormalise` [code: measured against codespell 2.4 and `breame`, 2026-10-25; both miss <!-- codespell:ignore -->
-all six]. `scripts/check_spelling.py` inverts the problem: it applies the rule
+all six]. `scripts/check_spelling.py` inverts the problem. It applies the rule
 (`-ise`/`-isation`/`-isable`/`-yse` take a `z`) and keeps the exception list, which is
-the part that *is* closed — the sixty-odd words where `-ise` is also correct in American
+the part that *is* closed: the sixty-odd words where `-ise` is also correct in American
 English, from `advertise` to `otherwise`. `-isation` and `-isable` have no exceptions at
-all; `-yses` is left out of the rule on purpose, since it is also the plural of `-ysis`
-(*the analyses*, which is correct).
+all, and `-yses` is left out of the rule on purpose, since it is also the plural of
+`-ysis` (*the analyses*, which is correct).
 
 **`docs/changes/` is skipped on purpose.** A landed change document is a record of what
-was said, and its *Review notes* table holds Joon's words verbatim — typos included
+was said, and its *Review notes* table holds Joon's words verbatim, typos included
 (*annotationns*, *spefics*, *useing*). `CLAUDE.md` says Claude never edits those columns, <!-- codespell:ignore: quoted typos -->
 and several lines quote a spelling *as* the thing that was fixed (the `centerd` typo, <!-- codespell:ignore: quoted typos -->
 `normalise_phase_plane` → `normalize_phase_plane`), so correcting them would destroy the
-history they exist to carry. The current documents — `design/`, `decisions/`,
-`roadmap.md`, `architecture.md`, `index.md` — are in scope.
+history they exist to carry. The current documents are in scope: `design/`,
+`decisions/`, `roadmap.md`, `architecture.md` and `index.md`.
 
 A quotation keeps its source's spelling even when that spelling is British. Where one
 appears, the line carries `<!-- codespell:ignore: cited quotation -->`; `design/analysis.md`
@@ -140,7 +140,7 @@ intent keyword.
 A docstring is read in an editor hover or at the top of a file, so it is short, and it
 tells the reader what the code is for and how it is shaped, not why it was chosen. The
 reasoning lives in the ADRs and the design documents, and a docstring cites them
-(ADR-0018). The prose rules are the `clear-prose` skill's; what follows is the shape.
+(ADR-0018). The prose rules are the `clear-prose` skill's; this section gives the shape.
 
 **The module docstring is the map.** Its first sentence says what the module provides.
 A paragraph then gives the design at the level a reader needs to navigate the file: the
@@ -185,17 +185,17 @@ on module group by module group as the prose pass of 2026-10-26 reaches them, th
 
 ## References
 
-One bibliography, `docs/references.md`, and one in-text form. The key is `Author Year`
-for one author (`Lust 2001`), `Author & Author Year` for two (`Wilson & Moehlis 2016`),
-`Author et al. Year` for three or more (`Dieci et al. 1997`), with a letter suffix on a
-collision (`Langfield et al. 2025a`). <!-- references:ignore: the example --> A locator follows the key after a comma, in one of
+The repository has one bibliography, `docs/references.md`, and one in-text form. The key
+is `Author Year` for one author (`Lust 2001`), `Author & Author Year` for two
+(`Wilson & Moehlis 2016`), `Author et al. Year` for three or more (`Dieci et al. 1997`),
+with a letter suffix on a collision (`Langfield et al. 2025a`). <!-- references:ignore: the example --> A locator follows the key after a comma, in one of
 the forms `Eq. 7`, `Eqs. 9–14`, `§3`, `Prop. 5`, `Theorem 2`, `Table 5`, `Fig. 9`,
-`pp. 210–214`, `Ch. 8`, `App. D`, `Remark 4`; several citations are separated by
+`pp. 210–214`, `Ch. 8`, `App. D`, `Remark 4`, and several citations are separated by
 semicolons inside one pair of parentheses. Every key resolves to an entry in
-`docs/references.md`, which `scripts/check_references.py` enforces; the entry carries the
-full reference, a DOI or arXiv identifier, and the locators the repository uses. Design
-documents and ADRs carry no reference list of their own; their frontmatter `sources:`
-lists keys.
+`docs/references.md`, which `scripts/check_references.py` enforces, and the entry carries
+the full reference, a DOI or arXiv identifier, and the locators the repository uses.
+Design documents and ADRs carry no reference list of their own; their frontmatter
+`sources:` lists keys.
 
 ## Deliberate exceptions
 

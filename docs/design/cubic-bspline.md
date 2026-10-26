@@ -1,7 +1,7 @@
 ---
 type: design
 status: agreed
-updated: 2026-10-26
+updated: 2026-10-27
 verified_by: joon (review 2026-10-02)
 sources: [Hong & Chun 2023, de Boor 2001]
 ---
@@ -106,8 +106,8 @@ equal their Greville abscissae the identity's values are reproduced: `f(a) = a`,
 1`, `f''(a) = 0`. The same argument with `B_{K−4}` (support `[t_{K−4}, t_K)`, vanishing
 with two derivatives at `t_K` from the left) handles `x = b`. Pinning a fourth coefficient
 per side would make the edge bins exactly the identity; pinning only two would leave
-`f''` free. Pinned by the tests `test_bspline_identity_join_regularity`,
-`test_join_regularity` and `test_bspline_is_c2_at_interior_knots` in `tests/test_splines.py`.
+`f''` free. The tests `test_bspline_identity_join_regularity`, `test_join_regularity` and
+`test_bspline_is_c2_at_interior_knots` in `tests/test_splines.py` pin the join.
 
 ## 4. Power-basis pieces (`pieces`)
 
@@ -116,9 +116,9 @@ For evaluation and inversion each bin's cubic is held in the local coordinate
 (Horner form in `_cubic`/`_dcubic`). The coefficients are the Taylor expansion at `t_j`,
 obtained from the derivative recursion applied twice (first and second divided
 differences `D`, `E` of the coefficients over the appropriate knot spans) and from the
-fact that `f'''` is constant on a bin. Rather than reproduce the algebra here, the code
-is pinned against an independent evaluation: `test_bspline_matches_scipy` compares `f`
-with `scipy.interpolate.BSpline(knots, coeffs, 3)` on random parameters. `ys`
+fact that `f'''` is constant on a bin. The algebra is not reproduced here; instead the
+code is pinned against an independent evaluation, `test_bspline_matches_scipy`, which
+compares `f` with `scipy.interpolate.BSpline(knots, coeffs, 3)` on random parameters. `ys`
 (`= p_j(0)` plus the endpoint `b`) and `knot_derivs` (`= c_1 / (t_{j+1} − t_j)`, plus `1`
 at `b`) are read off the same coefficients.
 
@@ -148,10 +148,10 @@ converge to the root, quadratically once `|u − u*|` is below `~ min p' / max |
 **Error bound.** A bisection step halves the bracket; an accepted Newton step shrinks it
 by a data-dependent factor that can be less than one half. So the uniform bound
 `|u − u*| ≤ 2^{−newton_iters}` holds for the *bisection fall-back alone*, and is **not**
-a worst case for the mixed iteration. In practice (and in the suite: round trips to
-`1e-8` and finite second derivatives of the inverse at `|raw| ≤ 30`,
-`test_bspline_inverse_converges_for_extreme_params`,
-`test_bspline_inverse_second_derivative`) 20 iterations reach round-off. If a hard bound
+a worst case for the mixed iteration. In practice 20 iterations reach round-off, and the
+suite pins that: round trips to `1e-8` and finite second derivatives of the inverse at
+`|raw| ≤ 30` (`test_bspline_inverse_converges_for_extreme_params`,
+`test_bspline_inverse_second_derivative`). If a hard bound
 is ever needed, forcing a bisection every other iteration gives `2^{−newton_iters/2}` at
 the price of slower typical convergence; it has not been needed.
 
