@@ -359,7 +359,9 @@ class Experiment:
         ``cfg.resume``, another run's directory, warm-starts a new run from that run's
         latest checkpoint instead.
 
-        **Raises:** `ValueError` for `resume` together with ``cfg.resume``;
+        **Raises:**
+
+        `ValueError` for `resume` together with ``cfg.resume``;
         `FileExistsError` and `FileNotFoundError` as `Run.from_config`.
         """
         run_dir = Path(run_dir)

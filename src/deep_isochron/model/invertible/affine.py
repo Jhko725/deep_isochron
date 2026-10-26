@@ -4,11 +4,9 @@ r"""Affine scalar bijections and the coupling layers built from them.
 ``raw``/``constrain`` shape (ADR-0001). As ``CouplingFlow`` templates they give the
 additive coupling layer of Dinh et al. 2015 (NICE) and the affine coupling layer of
 Dinh et al. 2017 (RealNVP); ``ResidualCoupling`` and ``AffineCoupling`` are thin
-constructors for exactly that, which replaced the standalone classes that duplicated
-``CouplingFlow``'s split, flip and MLP logic. Because ``constrain(0)`` is the identity
+constructors for exactly that. Because ``constrain(0)`` is the identity
 (ADR-0002) and the default conditioner is zero-initialized, both coupling layers are
-the identity map at init; the former ``ResidualCoupling`` was not, since its MLP had no
-zeroed final layer.
+the identity map at init.
 """
 
 from collections.abc import Callable
