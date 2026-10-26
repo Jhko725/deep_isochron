@@ -1,4 +1,5 @@
-"""Data-driven analysis: from sampled, possibly noisy trajectories."""
+"""Data-driven analysis: what sampled, possibly noisy trajectories can tell about the
+oscillator. E1, ``estimate_cycle``, is the limit cycle from trajectory tails."""
 
 from .cycle import (
     CycleEstimate as CycleEstimate,

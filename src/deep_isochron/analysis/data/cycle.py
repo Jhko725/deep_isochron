@@ -1,42 +1,25 @@
-"""E1 — the limit cycle from sampled trajectories (``estimate_cycle``).
+r"""``estimate_cycle``: the limit cycle from sampled trajectories (roadmap E1).
 
-Works on trajectory **tails** and needs no notion of settling time: the last
-``tail_periods`` revolutions of each trajectory are taken to lie on the cycle, and the
-estimate checks that assumption afterwards (``CycleEstimate.converged``). Noise is
-handled by averaging — a robust center, interpolated crossing times for the period, a
-density estimate for the phase, least squares for the curve — not by filtering.
-Literature and the reasons for each step: ``docs/design/analysis.md`` §E1.
+The estimate works on trajectory tails and needs no notion of settling time: the last
+``tail_periods`` revolutions of each trajectory are taken to lie on the cycle, and
+the estimate checks that assumption afterwards (``CycleEstimate.converged``). Noise
+is handled by averaging rather than filtering: a robust center, interpolated crossing
+times for the period samples, a density estimate for the phase, least squares for the
+curve.
 
-Steps (all planar):
+The steps, all planar, are the center (the median of the second half of every
+trajectory); the protophase, the unwrapped polar angle about the center, oriented to
+increase with time; the tail, the samples of the last ``tail_periods`` revolutions,
+with one period sample per revolution from the crossing times of the multiples of
+$2\pi$; the phase, by the protophase-to-phase transformation of Kralemann et al. 2008
+(``phase_from_protophase``), with the density coefficients averaged in time over
+exactly ``tail_periods`` revolutions (``density_coefficients``); the period, from the
+slope of the unwrapped phase against time by least squares over every tail sample;
+the curve, ``Cycle.from_points``; and the self-consistency check, that the earlier
+revolutions fit the curve of the last revolution as well as the last one does.
 
-1. **Center**: the median of the second half of every trajectory — any interior point
-   of the loop does; the protophase only needs to wind once per revolution.
-2. **Protophase** ``ψ(t) = unwrap(atan2(y − c_y, x − c_x))``, oriented so that it
-   increases with time (``winding = ±1`` is its sign): the polar angle about the center,
-   the natural protophase when the full planar state is observed (no Hilbert transform
-   needed — cf. Revzen & Guckenheimer 2008 and Kralemann et al. 2008, who work from
-   scalar observables).
-3. **Tail**: the samples of the last ``tail_periods`` revolutions of ψ; the times at
-   which ψ crosses successive multiples of 2π (linear interpolation) give one period
-   sample per revolution per trajectory — a diagnostic (``period_samples``).
-4. **Phase**: the protophase→phase transformation of Kralemann et al. 2008: with
-   ``F_k = ⟨e^{−ikψ}⟩`` the Fourier coefficients of the tail protophase's density in
-   time, ``φ(ψ) = ψ + 2 Re Σ_{k≥1} F_k (e^{ikψ} − 1) / (ik)``, the cumulative density
-   rescaled to 2π — the phase that advances uniformly in time on the cycle, i.e. the
-   asymptotic phase restricted to the orbit, up to a constant. ``F_k`` is a time
-   integral over exactly ``tail_periods`` revolutions per trajectory (trapezoid rule
-   with interpolated window ends), not a sample mean: a one-sample mismatch at the
-   window's edges would bias every ``F_k`` by ``1/n``.
-5. **Period**: ``2π`` over the slope of the unwrapped φ against time, by least squares
-   over every tail sample with one intercept per trajectory (Zielinski et al. 2014 find
-   fitting the whole series the most noise-robust period estimator; crossing-interval
-   estimates use two samples per revolution).
-6. **Curve**: least-squares Fourier series of the tail points against φ
-   (``Cycle.from_points``; Revzen & Guckenheimer's "order 11 Fourier series model of
-   the orbit").
-7. **Check**: the curve fitted to the last revolution alone is the reference; the
-   earlier revolutions must fit it as well as the last one does. A tail still in the
-   transient fits worse the further back it goes.
+``docs/design/analysis.md`` §1 has the literature and the reason for each step;
+ADR-0012 the layout.
 """
 
 from __future__ import annotations
@@ -51,34 +34,44 @@ from ..cycle import Cycle
 
 @dataclass(frozen=True)
 class CycleEstimate:
-    """``estimate_cycle``'s result: the ``Cycle`` and how it was arrived at."""
+    """The result of ``estimate_cycle``: the ``Cycle`` and how it was arrived at.
+
+    **Attributes:**
+
+    - `cycle`: The fitted curve, from the whole tail.
+    - `winding`: ``+1`` when the protophase increases with time (counterclockwise),
+        ``−1`` otherwise.
+    - `period_samples`: One period estimate per completed tail revolution per
+        trajectory, pooled, shape ``(m,)``.
+    - `revolutions`: The revolutions each trajectory completes about the center,
+        shape ``(N,)``.
+    - `residual_last`: The RMS misfit of the last revolution of every trajectory to
+        the curve fitted to those samples alone: the noise floor.
+    - `residual_earlier`: The RMS misfit of the earlier tail revolutions to that same
+        last-revolution curve.
+    - `converged`: ``residual_earlier <= tolerance · residual_last``: the earlier
+        revolutions lie on the curve the last one traces, so the tail is on the
+        cycle. ``False`` says the tail still contains transient; shorten
+        ``tail_periods`` or lengthen the trajectories. Trivially ``True`` for
+        ``tail_periods == 1``.
+    """
 
     cycle: Cycle
     winding: int
-    """``+1`` counterclockwise (the protophase increases with time), ``−1``
-    clockwise."""
     period_samples: Float[np.ndarray, " m"]
-    """One period estimate per completed tail revolution per trajectory (pooled)."""
     revolutions: Float[np.ndarray, " N"]
-    """Revolutions each trajectory completes about the center."""
     residual_last: float
-    """RMS misfit of the last revolution of every trajectory to the curve fitted to
-    those samples alone (the noise floor)."""
     residual_earlier: float
-    """RMS misfit of the earlier tail revolutions to that same last-revolution curve."""
     converged: bool
-    """``residual_earlier <= tolerance · residual_last`` — the earlier revolutions lie
-    on the curve the last one traces, so the tail is on the cycle; ``False`` says the
-    tail still contains transient (shorten ``tail_periods`` or lengthen the
-    trajectories).
-    Trivially ``True`` for ``tail_periods == 1``."""
 
     @property
     def period(self) -> float:
+        """The period of `cycle`."""
         return self.cycle.period
 
 
 def _as_batch(ys: ArrayLike) -> np.ndarray:
+    """`ys` as a float array of shape ``(N, T, 2)``, with one trajectory promoted."""
     ys = np.asarray(ys, dtype=float)
     if ys.ndim == 2:
         ys = ys[None]
@@ -88,7 +81,8 @@ def _as_batch(ys: ArrayLike) -> np.ndarray:
 
 
 def orientation(points: Float[ArrayLike, "n 2"]) -> int:
-    """+1 for a counterclockwise closed curve (positive signed area), −1 clockwise."""
+    """``+1`` for a counterclockwise closed curve of `points`, by its signed area,
+    ``−1`` for a clockwise one."""
     pts = np.asarray(points, dtype=float)
     x, y = pts[:, 0], pts[:, 1]
     area = 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
@@ -98,14 +92,14 @@ def orientation(points: Float[ArrayLike, "n 2"]) -> int:
 def protophase(
     ys: Float[np.ndarray, "N T 2"], center: Float[np.ndarray, " 2"]
 ) -> Float[np.ndarray, "N T"]:
-    """Unwrapped polar angle about ``center`` along each trajectory."""
+    """The unwrapped polar angle about `center` along each trajectory of `ys`."""
     rel = ys - center
     return np.unwrap(np.arctan2(rel[..., 1], rel[..., 0]), axis=-1)
 
 
 def _crossing_times(t: np.ndarray, psi: np.ndarray, levels: np.ndarray) -> np.ndarray:
-    """Times at which the monotone-on-average ``psi(t)`` first exceeds each level
-    (linear interpolation between the bracketing samples)."""
+    """The times at which `psi`, monotone on average, first exceeds each of
+    `levels`, by linear interpolation between the bracketing samples."""
     out = np.empty(len(levels))
     for j, level in enumerate(levels):
         idx = np.argmax(psi >= level)  # first index at or above the level
@@ -124,13 +118,25 @@ def density_coefficients(
     t: Float[np.ndarray, " n"] | None = None,
     window: tuple[float, float] | None = None,
 ) -> Complex[np.ndarray, " K"]:
-    """``F_k = ⟨e^{−ikψ}⟩``, ``k = 1..K``: the Fourier coefficients of the protophase's
-    density in time. Without ``t`` the sample mean (Kralemann et al.'s estimator).
-    With ``t`` (increasing) the time average by the trapezoid rule over ``window =
-    (t_start, t_end)`` — the ends outside the samples are filled by linear
-    interpolation of ψ — so that an integer number of revolutions can be averaged
-    exactly even when the samples do not start and end on a revolution boundary
-    (a sample mismatch of one at the window's edges biases every ``F_k`` by ``1/n``)."""
+    """The Fourier coefficients ``F_k = ⟨e^{−ikψ}⟩``, ``k = 1..K``, of the
+    protophase's density in time.
+
+    Without `t` this is the sample mean, the estimator of Kralemann et al. 2008. With
+    `t` it is the time average by the trapezoid rule over `window`, with the ends
+    outside the samples filled by linear interpolation of ``ψ``, so that an integer
+    number of revolutions can be averaged exactly even when the samples do not start
+    and end on a revolution boundary; a mismatch of one sample at the window's edges
+    would bias every ``F_k`` by ``1/n``.
+
+    **Arguments:**
+
+    - `psi`: The protophase samples, shape ``(n,)``.
+    - `harmonics`: ``K``.
+    - `t`: The sample times, increasing, shape ``(n,)``; ``None`` for the sample mean.
+    - `window`: ``(t_start, t_end)``; the whole of `t` when ``None``.
+
+    **Returns:** The complex coefficients, shape ``(K,)``.
+    """
     k = np.arange(1, harmonics + 1)
     if t is None:
         return np.mean(np.exp(-1j * np.outer(psi, k)), axis=0)
@@ -150,11 +156,23 @@ def phase_from_protophase(
     *,
     coefficients: Complex[np.ndarray, " K"] | None = None,
 ) -> tuple[Float[np.ndarray, " n"], Complex[np.ndarray, " K"]]:
-    """Kralemann et al.'s protophase→phase transformation
-    ``φ = ψ + 2 Re Σ_k F_k (e^{ikψ} − 1) / (ik)`` — the cumulative density of ψ rescaled
-    to 2π, so φ is uniform in time. ``F`` is ``coefficients`` when given, else estimated
-    from the sample itself with ``harmonics`` terms (``density_coefficients``). Returns
-    ``(φ, F)``; the correction is 2π-periodic in ψ, so the same formula unwraps."""
+    """The protophase-to-phase transformation of Kralemann et al. 2008,
+    ``φ = ψ + 2 Re Σ_k F_k (e^{ikψ} − 1) / (ik)``: the cumulative density of ``ψ``
+    rescaled to ``2π``, so that ``φ`` is uniform in time.
+
+    The correction is ``2π``-periodic in ``ψ``, so the same formula transforms an
+    unwrapped protophase.
+
+    **Arguments:**
+
+    - `psi`: The protophase samples, shape ``(n,)``.
+    - `harmonics`: ``K``, when the coefficients are estimated from `psi` itself.
+    - `coefficients`: The coefficients ``F``, when already known.
+
+    **Returns:** ``(φ, F)``.
+
+    **Raises:** `ValueError` when neither `harmonics` nor `coefficients` is given.
+    """
     if coefficients is None:
         if harmonics is None:
             raise ValueError("give harmonics or coefficients.")
@@ -174,20 +192,29 @@ def estimate_cycle(
     density_harmonics: int | None = None,
     tolerance: float = 2.0,
 ) -> CycleEstimate:
-    """The limit cycle from one trajectory ``(T, 2)`` or a collection ``(N, T, 2)`` on
-    the common grid ``ts``, using the last ``tail_periods`` revolutions of each.
+    """The limit cycle from the last `tail_periods` revolutions of each trajectory.
 
-    ``harmonics``: Fourier order of the curve (11 after Revzen & Guckenheimer; the
-    FitzHugh–Nagumo relaxation cycle needs about 24 for a residual below 1e-2).
-    ``density_harmonics``: order of the protophase-density expansion for the phase
-    (default ``2·harmonics + 2``; cheap, and its truncation is the phase's error — the
-    density of a strongly eccentric loop needs more terms than its curve).
-    ``tolerance``: ``converged`` when the earlier tail revolutions fit the last
-    revolution's curve within this factor of its own misfit. Raises if any trajectory
-    completes fewer than
-    ``tail_periods`` revolutions. The returned ``cycle`` is always the fit to the whole
-    tail (the most averaging); when ``converged`` is ``False`` it is biased toward the
-    transient and ``tail_periods`` should be reduced.
+    **Arguments:**
+
+    - `ys`: One trajectory, shape ``(T, 2)``, or a collection, shape ``(N, T, 2)``.
+    - `ts`: The common time grid, shape ``(T,)``.
+    - `tail_periods`: The number of revolutions taken to lie on the cycle, at least 1.
+    - `harmonics`: The Fourier order of the curve; 11 after Revzen & Guckenheimer
+        2008, while the FitzHugh–Nagumo relaxation cycle needs about 24 for a
+        residual below 1e-2.
+    - `density_harmonics`: The order of the protophase-density expansion for the
+        phase; ``2 harmonics + 2`` by default. It is cheap, and its truncation is the
+        phase's error: the density of a strongly eccentric loop needs more terms than
+        its curve.
+    - `tolerance`: The factor within which the earlier tail revolutions must fit the
+        last revolution's curve for `converged`.
+
+    **Returns:** The `CycleEstimate`. Its `cycle` is always the fit to the whole tail,
+    which averages the most; when `converged` is ``False`` it is biased toward the
+    transient and `tail_periods` should be reduced.
+
+    **Raises:** `ValueError` for mismatched shapes, ``tail_periods < 1``, or a
+    trajectory that completes fewer than `tail_periods` revolutions.
     """
     ys = _as_batch(ys)
     t = np.asarray(ts, dtype=float)

@@ -1,59 +1,31 @@
 r"""The Poincaré (first-return) map of a flow on a cross-section.
 
-``PoincareMap`` turns the continuous flow of an ``AbstractODE`` and a ``CrossSection``
-$\Sigma$ into a discrete map: $P(x)$ is the point where the trajectory through $x$ next
-crosses $\Sigma$ in the selected direction, together with the time $\tau(x)$ it takes.
-Parker & Chua 1989 call the one-directional version the *one-sided* map $P_+$ (§2.4,
-§5.5) and build their Poincaré-map shooting method on it; the settle stage of
-``find_limit_cycle`` is the iteration of $P_+$ to its fixed point (their brute force,
-§5.1.1, read on the section), and a cycle that cuts $\Sigma$ in $2K$ points is a
-period-$K$ orbit of $P_+$ (their §5.4), which is how the minimum-period test is
-expressed here.
+``PoincareMap`` turns the flow of an ``AbstractODE`` and a ``CrossSection`` $\Sigma$
+into a discrete map: $P(x)$ is the point where the trajectory through $x$ next crosses
+$\Sigma$ in the selected direction, and $\tau(x)$ the time it takes. Parker & Chua
+1989 call the one-directional version the one-sided map $P_+$ (§2.4, §5.5); the settle
+stage of ``find_limit_cycle`` iterates $P_+$ to its fixed point, their brute force
+(§5.1.1) read on the section, and a cycle that cuts $\Sigma$ in $2K$ points is a
+period-$K$ orbit of $P_+$ (§5.4), which is how the minimum-period test is expressed.
 
-**Direction.** ``"positive"`` counts crossings with $\langle n, v\rangle > 0$ for the
-field $v$ being integrated — Parker & Chua's positive direction (§2.1.2; footnote 4 of
-§5.5), with $v = -f$ in reverse time so that a point of a cycle on the section returns
-to itself after one period in either time direction; ``"negative"`` the opposite ones,
-``"both"`` every crossing. The one-sided maps are the ones with fixed points; $P_-$ on
-$(p, n)$ is $P_+$ on $(p, -n)$.
+The map has four settings. ``direction`` selects which crossings count:
+``"positive"`` those with $\langle n, v\rangle > 0$ for the field $v$ being
+integrated, ``"negative"`` the opposite ones, ``"both"`` every crossing; only the
+one-sided maps have fixed points. ``reverse_time`` integrates the time-reversed field,
+so the first-return map then finds a repelling cycle by iteration. ``departure`` is a
+short window after the start in which crossings are ignored, because diffrax reads a
+start on the section as a crossing at $t = 0$. ``throw`` chooses a runtime error or
+``tau = inf`` when no crossing is found within ``t_max``.
 
-**Reverse time** integrates the time-reversed field, so attracting and repelling
-cycles swap roles: the first-return map of the reversed flow finds a *repelling* cycle
-by iteration (Parker & Chua §5.1.1, footnote 1: brute force "can locate an unstable
-limit set of a system that can run in reverse time").
+The map is differentiable in $x$ through a custom JVP that never differentiates
+through the event: the fixed-time flow derivative over the known return time,
+projected onto $\Sigma$ along the flow (Parker & Chua Eq. 5.21). The eigenvalues of
+$DP$ are $0$, along the flow, and the nontrivial Floquet multipliers of a cycle
+through $x$ (their §5.3). ``__call__`` and ``iterate`` are jit- and vmap-compatible and
+left unjitted; ``fixed_point`` is a host-side driver over the jitted return solve.
 
-**Crossing location.** diffrax's ``Event`` with a real-valued condition and a Newton
-root finder (Shampine & Thompson 2000; the classical remedy for the error at the final
-step is Hénon 1982, see Tucker 2002). Starting *on* the section would trigger the event
-at $t = 0$ (diffrax reads the zero as a sign change), so the map first integrates for
-a short ``departure`` time (a fraction of ``t_max``) without the event, and detects
-crossings from there; a crossing inside the departure window is missed, which only
-matters for a starting point just short of the section. The guard is deliberately a
-separate solve rather than a time test inside the condition: in a reverse-time solve
-diffrax 0.7.2 passes the condition its *internal* (increasing) time, not the signed
-one, so a condition that reads ``t`` would be wrong there.
-
-**Derivative.** The map is a differentiable function of $x$ (``jax.jacfwd(P)(x)``,
-``jax.jvp``) through a custom JVP that never differentiates through the event: with
-$y = P(x)$ and $\tau$ known, differentiating the crossing condition
-$\langle n, \Phi_\tau(x) - p\rangle = 0$ gives
-
-$$
-d\tau = -\frac{\langle n, J\,dx\rangle}{\langle n, v\rangle}, \qquad
-dy = \Bigl[I - \frac{v\, n^{\top}}{\langle n, v\rangle}\Bigr] J\,dx,
-$$
-
-with $J = \partial_x\Phi_\tau(x)$ (forward-mode AD through the solver) and $v$ the
-velocity at $y$ — Parker & Chua Eq. (5.21), the fixed-time flow derivative projected
-onto $\Sigma$ along the flow. $DP$'s eigenvalues are $0$ (along the flow) and the
-nontrivial Floquet multipliers of a cycle through $x$ (their §5.3).
-
-**Jit.** ``__call__`` and ``iterate`` are jit- and vmap-compatible and left unjitted
-(the caller chooses the level); a missing crossing is a runtime error (``throw=True``,
-as in diffrax) or ``tau = inf`` (``throw=False``). ``fixed_point`` is a host-side driver
-(its state — a growing history searched for the minimal period — buys nothing from
-compilation for a stage that runs once per system) over the *jitted* return solve, and
-raises ``NotConvergedError`` with the iteration so far.
+ADR-0014 has the decisions, including why the departure guard is a separate solve;
+``docs/design/analysis.md`` §2 has the survey and the crossing-location literature.
 """
 
 from __future__ import annotations
@@ -74,22 +46,23 @@ from .sections import CrossSection
 
 
 Direction = Literal["positive", "negative", "both"]
+"""Which crossings of the section a map counts."""
 
 
 class FixedPoint(eqx.Module):
-    """A fixed point of a ``PoincareMap`` as settled by ``fixed_point`` — a light,
-    fixed-shape pytree (the iteration that produced it is returned separately, as a
-    ``FixedPointIteration``).
+    """A fixed point of a ``PoincareMap`` as settled by ``fixed_point``: a light,
+    fixed-shape pytree. The iteration that produced it is returned separately, as a
+    ``FixedPointIteration``.
 
     **Attributes:**
 
     - `x`: The last iterate, on the section.
-    - `tau`: The time of one full return to it (the sum of the last `k` map times).
-    - `k`: The minimal period of the map at the fixed point (1 for a cycle cutting the
-        section twice; static).
-    - `contraction`: The ratio of the last two distances `|x_i - x_{i-k}|` — the
-        brute-force estimate of the nontrivial Floquet multiplier (`nan` if fewer than
-        `2k` steps were taken).
+    - `tau`: The time of one full return to it, the sum of the last `k` map times.
+    - `k`: The minimal period of the map at the fixed point, 1 for a cycle cutting
+        the section twice (static).
+    - `contraction`: The ratio of the last two distances ``|x_i - x_{i-k}|``, the
+        brute-force estimate of the nontrivial Floquet multiplier; ``nan`` if fewer
+        than ``2k`` steps were taken.
     - `converged`: Whether the tolerance was met (static).
     """
 
@@ -101,22 +74,38 @@ class FixedPoint(eqx.Module):
 
 
 class FixedPointIteration(NamedTuple):
-    """The record of a ``fixed_point`` search (host-side NumPy): the return times
-    ``taus (n,)`` and the iterates ``(n+1, dim)``, ``iterates[0]`` the starting
-    point."""
+    """The record of a ``fixed_point`` search, as host-side NumPy arrays.
+
+    **Attributes:**
+
+    - `taus`: The return times, shape ``(n,)``.
+    - `iterates`: The iterates, shape ``(n+1, dim)``; ``iterates[0]`` is the starting
+        point.
+    """
 
     taus: Float[np.ndarray, " n"]
     iterates: Float[np.ndarray, "n+1 dim"]
 
 
 class PoincareMap(eqx.Module):
-    """First-return map of ``ode``'s flow to ``section``; see the module docstring.
+    """The first-return map of the flow of `ode` to `section`.
 
-    ``t_max`` bounds the integration time of one return; ``departure`` (fraction of
-    ``t_max``) is the window after the start during which crossings are ignored;
-    ``config`` sets the solver, and its ``rtol``/``atol`` also set the crossing root
-    finder's; ``throw`` selects a runtime error (default) or ``tau = inf`` when no
-    crossing is found within ``t_max``.
+    **Attributes:**
+
+    - `ode`: The system.
+    - `section`: The cross-section.
+    - `config`: The solver settings; its `rtol` and `atol` also set the crossing root
+        finder's.
+    - `t_max`: The bound on the integration time of one return (static).
+    - `direction`: Which crossings count; ``"positive"`` by default (static).
+    - `reverse_time`: Whether to integrate the time-reversed field (static).
+    - `departure`: The window after the start in which crossings are ignored, as a
+        fraction of `t_max` (static).
+    - `throw`: Whether a missing crossing is a runtime error, as in diffrax, or
+        reported as ``tau = inf`` (static).
+
+    **Raises:** `ValueError` at construction for an unknown `direction`, a
+    non-positive `t_max`, or a `departure` outside ``(0, 1)``.
     """
 
     ode: AbstractODE
@@ -129,6 +118,7 @@ class PoincareMap(eqx.Module):
     throw: bool = eqx.field(static=True, default=True)
 
     def __check_init__(self):
+        """Validate `direction`, `t_max` and `departure`."""
         if self.direction not in ("positive", "negative", "both"):
             raise ValueError("direction must be 'positive', 'negative' or 'both'.")
         if not self.t_max > 0:
@@ -139,14 +129,15 @@ class PoincareMap(eqx.Module):
     # ------------------------------------------------------------- properties ----
     @property
     def time_sign(self) -> float:
+        """$-1$ in reverse time, $+1$ otherwise."""
         return -1.0 if self.reverse_time else 1.0
 
     @property
     def event_direction(self) -> bool | None:
-        """diffrax's ``direction`` (up / down / either crossing of the signed
-        distance) for this map: relative to the field being integrated, so in reverse
-        time a positive crossing of the reversed field is a *down*-crossing of the
-        signed distance."""
+        """diffrax's event ``direction`` for this map: up, down or either crossing of
+        the signed distance. The map's direction is relative to the field being
+        integrated, so in reverse time a positive crossing of the reversed field is a
+        down-crossing of the signed distance."""
         if self.direction == "both":
             return None
         up = self.direction == "positive"
@@ -156,8 +147,16 @@ class PoincareMap(eqx.Module):
     def __call__(
         self, x: Float[ArrayLike, " dim"]
     ) -> tuple[Float[Array, " dim"], Float[Array, ""]]:
-        """``(P(x), tau(x))``: the next counted crossing and the positive time to it.
-        Jit- and vmap-compatible (left to the caller); differentiable in ``x``."""
+        """The next counted crossing from `x` and the positive time to it.
+
+        **Arguments:**
+
+        - `x`: The starting point, shape ``(dim,)``.
+
+        **Returns:** ``(P(x), tau(x))``, shapes ``(dim,)`` and ``()``;
+        ``tau = inf`` when no crossing is found and `throw` is ``False``.
+        Differentiable in `x`.
+        """
         y, tau = _first_return(self, jnp.asarray(x, dtype=float))
         if self.throw:
             tau = eqx.error_if(
@@ -169,8 +168,11 @@ class PoincareMap(eqx.Module):
         return y, tau
 
     def iterate(self, x: Float[ArrayLike, " dim"], k: int) -> tuple[Array, Array]:
-        """``k`` applications of the map by ``lax.scan``: the iterates ``(k+1, dim)``
-        (starting with ``x``) and the return times ``(k,)``."""
+        """`k` applications of the map from `x`, by ``lax.scan``.
+
+        **Returns:** ``(iterates, taus)`` with shapes ``(k+1, dim)`` and ``(k,)``;
+        ``iterates[0]`` is `x`.
+        """
         x = jnp.asarray(x, dtype=float)
 
         def step(carry, _):
@@ -183,10 +185,10 @@ class PoincareMap(eqx.Module):
     def fixed_point(
         self, x: Float[ArrayLike, " dim"], *, tol: float = 1e-8, max_iter: int = 100
     ) -> tuple[FixedPoint, FixedPointIteration]:
-        """Iterate the one-sided map until it returns to within `tol` of an earlier
-        iterate — a period-`k` orbit of the map, `k` minimal (Parker & Chua §5.4, the
-        minimum-period test), `k = 1` for a cycle that cuts the section twice. A
-        host-side driver over the jitted return solve.
+        """Iterate the one-sided map from `x` until it returns to within `tol` of an
+        earlier iterate: a period-`k` orbit of the map with `k` minimal, the
+        minimum-period test of Parker & Chua 1989, §5.4, where ``k = 1`` for a cycle
+        that cuts the section twice. A host-side driver over the jitted return solve.
 
         **Arguments:**
 
@@ -194,17 +196,13 @@ class PoincareMap(eqx.Module):
         - `tol`: The distance to an earlier iterate that counts as a return.
         - `max_iter`: The bound on the number of map iterations.
 
-        **Returns:**
+        **Returns:** ``(fixed_point, iteration)``, the `FixedPoint` and the
+        `FixedPointIteration` that produced it.
 
-        `(fixed_point, iteration)`: the `FixedPoint` and the `FixedPointIteration`
-        that produced it.
-
-        **Raises:**
-
-        - `ValueError` for `direction="both"`: consecutive crossings of a two-sided
-            map alternate sides, so a cycle is never its fixed point.
-        - `NotConvergedError` after `max_iter` steps or when a return is missing,
-            with the unfinished `(fixed_point, iteration)` in `last`.
+        **Raises:** `ValueError` for ``direction="both"``, since consecutive
+        crossings of a two-sided map alternate sides and a cycle is never its fixed
+        point; `NotConvergedError` after `max_iter` steps or when a return is
+        missing, with the unfinished ``(fixed_point, iteration)`` in ``last``.
         """
         if self.direction == "both":
             raise ValueError("fixed_point needs a one-sided map; use iterate.")
@@ -264,8 +262,9 @@ class PoincareMap(eqx.Module):
 def _first_return(
     pmap: PoincareMap, x: Float[Array, " dim"]
 ) -> tuple[Float[Array, " dim"], Float[Array, ""]]:
-    """``(P(x), tau(x))`` with ``tau = inf`` when no counted crossing occurs within
-    ``t_max``: a departure solve, then an event-terminated solve."""
+    """``(P(x), tau(x))``, with ``tau = inf`` when no counted crossing occurs within
+    ``t_max``: a departure solve without the event, then an event-terminated solve
+    with a Newton root finder at the configuration's tolerances."""
     sign_t = pmap.time_sign
     delta = pmap.departure * pmap.t_max
     x_dep = pmap.ode.flow_to(sign_t * delta, x, config=pmap.config)
@@ -295,6 +294,15 @@ def _first_return(
 
 @_first_return.def_jvp
 def _first_return_jvp(primals, tangents):
+    r"""The derivative of the map in $x$ without differentiating through the event:
+    with $y = P(x)$, $\tau$ known, $J = \partial_x\Phi_\tau(x)$ and $v$ the velocity at
+    $y$, differentiating $\langle n, \Phi_\tau(x) - p\rangle = 0$ gives
+    $d\tau = -\langle n, J\thinspace dx\rangle / \langle n, v\rangle$ and
+    $dy = J\thinspace dx + v\thinspace d\tau$ (Parker & Chua 1989, Eq. 5.21).
+
+    **Raises:** `NotImplementedError` for a tangent in the map itself: the map is
+    differentiable in the point only, not in the ODE's parameters or the section.
+    """
     pmap, x = primals
     pmap_dot, x_dot = tangents
     if pmap_dot is not None and any(
@@ -321,8 +329,7 @@ def _first_return_jvp(primals, tangents):
     return (y, tau), (dy, dtau)
 
 
-_first_return_jit = eqx.filter_jit(_first_return)
-"""The jitted return solve the host-side ``fixed_point`` drives."""
+_first_return_jit = eqx.filter_jit(_first_return)  # what fixed_point drives
 
 
 __all__ = ["Direction", "FixedPoint", "FixedPointIteration", "PoincareMap"]

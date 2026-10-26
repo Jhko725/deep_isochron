@@ -1,15 +1,15 @@
-"""ODE-side analysis: reference objects of a limit-cycle oscillator computed from its
-vector field (roadmap Phase E, O1–O6). Results are fixed-shape ``eqx.Module`` pytrees
-and the functions of them (``f(cycle, ...)``) are jit- and vmap-compatible and left
-unjitted — the caller chooses the level; the host-side drivers (``find_limit_cycle``,
-``fixed_point``) jit the stages they call.
+"""ODE-side analysis: the reference objects of a limit-cycle oscillator, computed from
+its vector field (roadmap Phase E, O1–O6).
 
-O1: ``CrossSection`` (a hyperplane), ``PoincareMap`` (the first-return map on it,
+O1 is the orbit: ``CrossSection``, ``PoincareMap`` (the first-return map on a section,
 differentiable in the point, with ``iterate`` and ``fixed_point``),
-``multiple_shooting`` (the polish on the time-T flow) and ``find_limit_cycle`` (settle
-→ return map → shooting → ``LimitCycle``, which samples itself), with its stages
-exported for reuse. O2: ``floquet`` (multipliers and exponents of a ``LimitCycle`` by
-the seeded periodic Schur chain, with the monodromy and Liouville routes as checks).
+``multiple_shooting``, and ``find_limit_cycle``, whose stages (settle, return map,
+shooting) are exported for reuse and whose result ``LimitCycle`` samples itself. O2 is
+``floquet``, the multipliers and exponents of a ``LimitCycle`` by the seeded periodic
+Schur chain, with the monodromy and Liouville routes as checks. Results are
+fixed-shape ``eqx.Module`` pytrees; the functions of them, ``f(cycle, ...)``, are jit-
+and vmap-compatible and left unjitted, and the host-side drivers ``find_limit_cycle``
+and ``fixed_point`` jit the stages they call.
 """
 
 from .floquet import (
