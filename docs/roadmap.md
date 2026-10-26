@@ -117,7 +117,7 @@ then — Parked).
 Order: O1 → O2 (done 2026-10-20) → O3 → O4 (one survey, shared references), then O5 → O6, with M alongside
 each; D2/D3 when a run asks for them; E7 continuously.
 
-## Phase P — `prose` (current; round 0 landed 2026-10-26)
+## Phase P — `prose` (current; rounds 0–1 landed 2026-10-26)
 
 Docstrings and documents revised under the `clear-prose` skill, with the missing public
 docstrings written. The standard is ADR-0018 and `docs/coding-standards.md` § Docstrings:
@@ -128,7 +128,7 @@ lives in the ADRs. Each round is one commit, reviewed before the next starts; th
 | # | Round | Done when |
 |---|---|---|
 | P0 | Standards: ADR-0018, the coding-standards sections, `docs/references.md` with every citation normalized, `scripts/check_references.py`, ruff `D100`–`D103` with the frontier in `per-file-ignores` | *done 2026-10-26* |
-| P1 | `systems/symbolic.py`, `analysis/ode/auto/codegen.py`, `systems/normal_forms/base.py`, `systems/{fitzhugh_nagumo,hodgekin_huxley}.py` (the `symbolic-systems` modules) | `D` on for `systems/` and `analysis/ode/auto/` |
+| P1 | `systems/` (all twelve modules) and `analysis/ode/auto/` | *done 2026-10-26*: `D` on for both |
 | P2 | `analysis/ode/*`, `analysis/cycle.py`, `analysis/data/cycle.py`; material cut from `floquet.py` lands in ADR-0015 and `analysis.md` §3 | `D` on for `analysis/` |
 | P3 | `data/`, `training/`, `experiment/` | `D` on for the three |
 | P4 | `model/invertible/*`, `model/*` (the most missing docstrings) | `D` on for `model/` |
@@ -203,3 +203,4 @@ The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when 
 | 2026-10-20 | `analysis` | O2: `analysis.ode.floquet` — `floquet(cycle, method=)` by the seeded periodic Schur chain (`segment_jacobians`, `periodic_schur`), the explicit `monodromy` and Liouville's `divergence_integral`, `return_map_multiplier`; `LimitCycle`/`FixedPoint` promoted to `eqx.Module`s carrying `ode` and `config`, `sample(n)`/`orientation()`, `f(cycle)` signatures; stage kernels jitted; design document §3; ADR-0015 | `docs/changes/2026-10-06-analysis.md`, ADR-0015, `docs/design/analysis.md` §3 |
 | 2026-10-22 | `symbolic-systems` | O7 step 1: `systems.symbolic` — `SymbolicODE`, `AbstractSymbolicODE._symbolic_template` with `rhs`/`params()` derived (sympy2jax, compiled per class in `__init_subclass__`); FHN and HH as templates; normal forms' defining data as `_symbolic_rates[_sq]` with the JAX hooks derived and `symbolic()`; `analysis.ode.auto.codegen` (`write_problem`, `Idx`, `rhs.inc`/`indices.inc`/`c.<name>`) and the generic `isochron_multiseg.f90` with named slots; `tests/test_symbolic.py`, `tests/test_auto_codegen.py` (golden file; `f2py` test when gfortran is present); ADR-0016; ADR-0007 amended | `docs/changes/2026-10-22-symbolic-systems.md`, ADR-0016, ADR-0007 |
 | 2026-10-26 | `prose` | P0: ADR-0018 (map/contract docstrings, one bibliography); `docs/coding-standards.md` § Docstrings and § References; `docs/references.md` with every in-text citation normalized to `(Key, locator)` and the five per-document reference lists removed; `scripts/check_references.py` in `prek` and CI; ruff `D100`–`D103` with the frontier in `per-file-ignores` | `docs/changes/2026-10-26-prose.md`, ADR-0018 |
+| 2026-10-26 | `prose` | P1: docstrings of `systems/` and `analysis/ode/auto/` revised to the map/contract split, 30 missing public docstrings written, module docstrings cut to pointers at `normal-forms.md` and ADR-0013/0016; ruff `D` on for both directories | `docs/changes/2026-10-26-prose.md` |

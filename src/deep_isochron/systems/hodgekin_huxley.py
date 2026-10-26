@@ -1,10 +1,12 @@
-r"""The Hodgkin–Huxley model as used by Yawata et al. 2024 for their phase
-autoencoder. The equations in the paper have typos; the rates below are those of
-the authors' source code
+r"""The Hodgkin–Huxley model as Yawata et al. 2024 use it for their phase autoencoder.
+
+The equations printed in the paper have typos; the rates below are those of the
+authors' source code
 (https://github.com/kyoukuntaro/PhaseAutoencoder/blob/main/utils/limitcycle.py).
-Declared symbolically (``AbstractSymbolicODE``); ``rhs`` is derived. The two
-removable singularities of $\alpha_m$, $\alpha_n$ are written with ``expm1`` so the
-compiled field keeps its precision near $V = -40$ and $V = -55$.
+The two removable singularities of $\alpha_m$ and $\alpha_n$ are written with
+``expm1``, so the compiled field keeps its precision near $V = -40$ and $V = -55$.
+The field is declared symbolically and ``rhs`` is derived (ADR-0016); the system is
+four-dimensional, so it is not a candidate for the planar AUTO pipeline.
 """
 
 import equinox as eqx

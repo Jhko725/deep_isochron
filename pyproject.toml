@@ -63,7 +63,16 @@ convention = "google"  # the section parser; only the selected D rules run
 "*.ipynb" = ["D"]
 "src/Isochron2PBVP/**" = ["D"]
 "scripts/**" = ["D"]
-"src/deep_isochron/**" = ["D"]
+"src/deep_isochron/__init__.py" = ["D"]  # the uv template's main(); see Open issues
+"src/deep_isochron/analysis/{cycle,errors}.py" = ["D"]
+"src/deep_isochron/analysis/data/**" = ["D"]
+"src/deep_isochron/analysis/ode/{floquet,limit_cycle,poincare,sections,shooting}.py" = ["D"]
+"src/deep_isochron/data/**" = ["D"]
+"src/deep_isochron/experiment/**" = ["D"]
+"src/deep_isochron/model/**" = ["D"]
+"src/deep_isochron/plotting/**" = ["D"]
+"src/deep_isochron/training/**" = ["D"]
+"src/deep_isochron/utils/**" = ["D"]
 "tests/**" = ["D"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]

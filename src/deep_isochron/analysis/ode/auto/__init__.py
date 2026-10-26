@@ -1,8 +1,9 @@
-"""Isochrons by AUTO-07p continuation (roadmap; ADR-0016 for the code generation,
-ADR-0017 — pending — for the pipeline). This subpackage never imports AUTO at module
-level: ``codegen`` writes the problem files from a system's ``symbolic()`` view and
-needs nothing but SymPy; the continuation pipeline (``isochron``, next branch) loads
-AUTO lazily through its runner.
+"""Isochrons of a planar system by AUTO-07p continuation (roadmap O7).
+
+``codegen`` writes the AUTO problem files from a system's ``symbolic()`` view and needs
+nothing but SymPy (ADR-0016). The continuation pipeline itself is the next branch
+(ADR-0017, pending) and will load AUTO lazily through its runner, so nothing in this
+subpackage imports AUTO at module level.
 """
 
 from .codegen import (

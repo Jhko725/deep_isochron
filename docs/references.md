@@ -117,9 +117,9 @@ Inconsistencies in the repository's citations found while compiling this file, f
 to settle; each entry above reflects the reading named here.
 
 - Gengel & Pikovsky: `design/analysis.md` §1.1 cites one work as "chapter in *Physics of Biological Oscillators*, Springer 2021; arXiv 2111.10300", which are two papers. The Springer chapter (arXiv:2004.13461) and the arXiv paper (arXiv:2111.10300, where the §7.1 and Eqs. 23–24 locators are) are both listed; the document's citation now points at the arXiv paper, `Gengel & Pikovsky 2022`.
-- Namura et al. 2022: the repository names the fourth author as Kato; the paper's is Ryota Kobayashi (arXiv:2203.01663). The entry has the paper's list.
+- Namura et al. 2022: the repository named the fourth author as Kato; the paper's is Ryota Kobayashi (arXiv:2203.01663). Confirmed by Joon 2026-10-26; the entry has the paper's list and the citing text now uses the key.
 - Zielinski et al. 2014: the author list could not be confirmed from a fetched page; the entry's list is flagged.
-- Langfield et al. 2025, the model with a hole: `design/normal-forms.md` cites §4.1 at one place and §3.3 at another; the code, ADR-0013 and the tests say §4.1.
+- Langfield et al. 2025, the model with a hole: §4.1, confirmed by Joon 2026-10-26 (the "§3.3" the compilation flagged in `design/normal-forms.md` is that document's own section).
 - Aprille & Trick 1972 and Andronov et al. 1973: the repository cites neither by title; the entries name the likely works (the autonomous-oscillator algorithm; the 1973 translation of *Qualitative Theory of Second-Order Dynamic Systems*).
 - Blinn 2007: the cubic series has two 2007 parts; the entry is Part 5, the one Peters 2016 modifies.
 - Perko 2001 and Stoer & Bulirsch 2002: editions inferred from the sections cited (3rd editions).

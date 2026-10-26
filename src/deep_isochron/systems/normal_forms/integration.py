@@ -1,33 +1,21 @@
 r"""Integration methods for ``AbstractNormalForm.flow``.
 
-The same normal form can be integrated in different coordinates; which one is best
-(accuracy near the origin, cost, behavior under ``vmap``) is an experimental question,
-so the choice is an object passed to ``flow(..., integration=...)`` — the diffrax
-pattern of passing a solver instance. Each integration is an ``eqx.Module`` with no
-array leaves, hence static under ``eqx.filter_jit``/``filter_vmap``: every integration
-traces separately and the dispatch costs nothing at run time. The names in
-``INTEGRATIONS`` are accepted as a shorthand for the default instances.
+The same normal form can be integrated in different coordinates, and which one is best
+near the origin, in cost, or under ``vmap`` is an experimental question. The choice is
+therefore an object passed to ``flow(..., integration=...)``, as diffrax passes a solver
+instance: each integration is an ``eqx.Module`` with no array leaves, so it is static
+under the filter transforms, every integration traces separately, and the dispatch
+costs nothing at run time. The names in ``INTEGRATIONS`` stand for the default
+instances.
 
-All integrations take cartesian ``u0`` and return a ``diffrax.Solution`` whose ``.ys``
-is the **cartesian** trajectory; the other fields (``result``, ``stats``, ``ts``) are
-diffrax's. (Dense output or saved solver state, if ever requested through
-``SolverConfig``, would be in the integration's own chart.)
-
-* ``CartesianIntegration`` — ``rhs`` on $\mathbb R^2$. Smooth at the origin; the only
-  method that can start *at* the origin.
-* ``PolarIntegration`` — ``rhs_polar`` on $(r, \theta)$; ``theta`` accumulates without
-  wrapping. Singular at $r = 0$ (``theta`` undefined), fine elsewhere.
-* ``RadiusSquaredIntegration`` — integrates $s = r^2$ ($\dot s = 2 s\tilde\rho(s)$, a
-  polynomial for the Hopf/Bautin forms, no square root) together with the phase
-  quadrature $\theta(t) = \theta_0 + \int_0^t \tilde\omega(s)\,dt$ as a second state;
-  recovers $r = \sqrt s$ on output. The former ``BautinNormalForm.solve``. Also
-  singular at the origin (through $\theta_0$ and $\sqrt s$'s derivative).
-* ``ClosedFormIntegration`` — no ODE solve: $(\Theta, \Psi)$ evolve linearly,
-  $\Theta(t) = \Theta_0 + \omega_1 t$, $\Psi(t) = \Psi_0 e^{\kappa t}$, and the point is
-  recovered by ``from_phase_amplitude`` (one monotone root solve per output time;
-  explicit
-  for Hopf). Design document §6.1. Exact up to the root solve; the reference the three
-  numerical integrations are tested against. ``config`` is ignored.
+Every integration takes a cartesian ``u0`` and returns a ``diffrax.Solution`` whose
+``.ys`` is the cartesian trajectory; the other fields are diffrax's. There are four:
+``CartesianIntegration`` solves ``rhs`` on $\mathbb R^2$ and is the only one that can
+start at the origin; ``PolarIntegration`` solves ``rhs_polar``;
+``RadiusSquaredIntegration`` solves in $s = r^2$ with the even family's data;
+``ClosedFormIntegration`` solves no ODE at all and is the reference the other three
+are tested against. The design document §6 derives the closed form and compares the
+numerical charts.
 """
 
 import abc
@@ -47,10 +35,13 @@ if TYPE_CHECKING:
 
 
 def _with_ys(sol: dfx.Solution, ys: Array) -> dfx.Solution:
+    """`sol` with its ``.ys`` replaced by `ys`."""
     return eqx.tree_at(lambda s: s.ys, sol, ys)
 
 
 class AbstractFlowIntegration(eqx.Module):
+    """One way to integrate a normal form: a callable with no array leaves."""
+
     @abc.abstractmethod
     def __call__(
         self,
@@ -60,16 +51,37 @@ class AbstractFlowIntegration(eqx.Module):
         args: Any,
         config: SolverConfig,
     ) -> dfx.Solution:
-        """Solution through cartesian ``u0`` at ``ts`` with cartesian ``.ys``."""
+        """The trajectory through cartesian `u0` sampled at `ts`.
+
+        **Arguments:**
+
+        - `normal_form`: The system.
+        - `ts`: The save times, shape ``(time,)``.
+        - `u0`: The initial cartesian point, shape ``(2,)``.
+        - `args`: Passed through to the vector field.
+        - `config`: The solver settings.
+
+        **Returns:** A ``diffrax.Solution`` with cartesian ``.ys``, shape
+        ``(time, 2)``.
+        """
 
 
 class CartesianIntegration(AbstractFlowIntegration):
+    r"""A diffrax solve of ``rhs`` on $\mathbb R^2$. Smooth at the origin, so the
+    only integration that can start there."""
+
     def __call__(self, normal_form, ts, u0, args, config):
+        """Solve ``rhs`` from `u0`; see `AbstractFlowIntegration.__call__`."""
         return diffeqsolve(normal_form.rhs, ts, u0, args, config)
 
 
 class PolarIntegration(AbstractFlowIntegration):
+    r"""A diffrax solve of ``rhs_polar`` on $(r, \theta)$, with $\theta$ accumulating
+    without wrapping. Singular at $r = 0$, where $\theta$ is undefined."""
+
     def __call__(self, normal_form, ts, u0, args, config):
+        """Solve ``rhs_polar`` from the polar image of `u0` and map the trajectory
+        back; see `AbstractFlowIntegration.__call__`."""
         z0 = normal_form.to_polar(u0)
         sol = diffeqsolve(normal_form.rhs_polar, ts, z0, args, config)
         assert sol.ys is not None
@@ -77,10 +89,22 @@ class PolarIntegration(AbstractFlowIntegration):
 
 
 class RadiusSquaredIntegration(AbstractFlowIntegration):
-    """Integrates $(r^2, \\theta)$ with the even family's ``*_sq`` data (no square
-    root); refuses other normal forms."""
+    r"""A diffrax solve in $s = r^2$ with the even family's ``*_sq`` data.
+
+    The state is $(s, \theta)$ with $\dot s = 2s\tilde\rho(s)$, a polynomial for the
+    Hopf and Bautin forms, and the phase quadrature
+    $\dot\theta = \tilde\omega(s)$; $r = \sqrt s$ is recovered on output. This was
+    ``BautinNormalForm.solve`` before the integrations became objects. Singular at the
+    origin, through $\theta_0$ and the derivative of $\sqrt s$.
+    """
 
     def __call__(self, normal_form, ts, u0, args, config):
+        """Solve in $(r^2, \\theta)$ and map back; see
+        `AbstractFlowIntegration.__call__`.
+
+        **Raises:** `TypeError` for a normal form that is not an
+        ``AbstractEvenNormalForm``.
+        """
         from .base import AbstractEvenNormalForm
 
         if not isinstance(normal_form, AbstractEvenNormalForm):
@@ -107,7 +131,17 @@ class RadiusSquaredIntegration(AbstractFlowIntegration):
 
 
 class ClosedFormIntegration(AbstractFlowIntegration):
+    r"""No ODE solve: $(\Theta, \Psi)$ evolve linearly,
+    $\Theta(t) = \Theta_0 + \omega_1 t$ and $\Psi(t) = \Psi_0 e^{\kappa t}$, and
+    ``from_phase_amplitude`` recovers the point, with one monotone root solve per
+    output time (explicit for Hopf). Exact up to the root solve, so the reference for
+    the three numerical integrations
+    (design document §6.1). `config` is ignored.
+    """
+
     def __call__(self, normal_form, ts, u0, args, config):
+        """Evolve the phase–amplitude coordinates of `u0` and map back; see
+        `AbstractFlowIntegration.__call__`. `args` and `config` are ignored."""
         del args, config
         Theta0, Psi0 = normal_form.to_phase_amplitude(u0)
         dt = ts - ts[0]
@@ -130,6 +164,7 @@ class ClosedFormIntegration(AbstractFlowIntegration):
 
 
 INTEGRATIONS: dict[str, AbstractFlowIntegration] = {
+    # the default instances, by the names flow() accepts
     "cartesian": CartesianIntegration(),
     "polar": PolarIntegration(),
     "r_squared": RadiusSquaredIntegration(),
@@ -140,6 +175,11 @@ INTEGRATIONS: dict[str, AbstractFlowIntegration] = {
 def resolve_integration(
     integration: "AbstractFlowIntegration | str",
 ) -> AbstractFlowIntegration:
+    """The integration object for `integration`, an instance or a name in
+    ``INTEGRATIONS``.
+
+    **Raises:** `ValueError` for an unknown name.
+    """
     if isinstance(integration, AbstractFlowIntegration):
         return integration
     try:

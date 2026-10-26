@@ -36,9 +36,15 @@ from .base import AbstractODE
 
 
 class LevelSetCycle(AbstractODE):
-    r"""$f = s\thinspace(R\nabla g - g\nabla g)$: the zero level set of ``g`` is the
-    attracting cycle. ``g`` is a static field (a Python function), so distinct ``g``
-    compile separately."""
+    r"""$f = s\thinspace(R\nabla g - g\nabla g)$: the zero level set of `g` is the
+    attracting cycle.
+
+    **Attributes:**
+
+    - `g`: The level function, a Python function of the state. It is a static field,
+        so distinct `g` compile separately.
+    - `speed`: The factor $s > 0$.
+    """
 
     dim: int = eqx.field(static=True, default=2, init=False)
     g: Callable[[Array], Array] = eqx.field(static=True)
@@ -51,23 +57,33 @@ class LevelSetCycle(AbstractODE):
         self.speed = float(speed)
 
     def level(self, u: Float[ArrayLike, " 2"]) -> Float[Array, ""]:
-        """``g(u)``: zero on the cycle, its magnitude the distance-like error of a
-        point off it."""
+        """``g(u)``: zero on the cycle; its magnitude is the distance-like error of a
+        point off the cycle."""
         return self.g(jnp.asarray(u))
 
     def rhs(self, t, u: Float[Array, " 2"], args=None) -> Float[Array, " 2"]:
+        r"""The field $s\thinspace(R\nabla g - g\nabla g)$ at `u`, with $\nabla g$ by
+        autodiff of `level`."""
         del t, args
         grad = jax.grad(self.level)(u)
         rot = jnp.array([-grad[1], grad[0]])
         return self.speed * (rot - self.level(u) * grad)
 
     def params(self):
+        """``{"speed": s}``; `g` is a function and is not recorded."""
         return {"speed": self.speed}
 
 
 def guckenheimer_meloon(c: float = 0.07) -> LevelSetCycle:
-    """Guckenheimer & Meloon 2000, §5.1: the orbit on ``x² − y² + 2y³/3 + c = 0``,
-    ``c ∈ (0, 1/3)``, with their time scale (``s = 1/2``)."""
+    """The test orbit of Guckenheimer & Meloon 2000, §5.1: the level set
+    ``x² − y² + 2y³/3 + c = 0`` at their time scale, ``s = 1/2``.
+
+    **Arguments:**
+
+    - `c`: The level, in ``(0, 1/3)`` so that the level set is a closed orbit.
+
+    **Raises:** `ValueError` for `c` outside that interval.
+    """
     if not 0 < c < 1 / 3:
         raise ValueError(
             "c must be in (0, 1/3) for the level set to be a closed orbit."
@@ -76,9 +92,17 @@ def guckenheimer_meloon(c: float = 0.07) -> LevelSetCycle:
 
 
 def cassini(a: float = 1.0, b: float = 1.1) -> LevelSetCycle:
-    """A Cassini oval ``(x² + y²)² − 2a²(x² − y²) = b⁴ − a⁴``: for ``a < b < a√2`` a
-    single non-convex ("peanut") curve with waist at ``y = ±√(b² − a²)``; a horizontal
-    line above the waist cuts it four times."""
+    """A Cassini oval ``(x² + y²)² − 2a²(x² − y²) = b⁴ − a⁴`` as the cycle.
+
+    For ``a < b < a√2`` the oval is a single non-convex curve with its waist at
+    ``y = ±√(b² − a²)``, so a horizontal section above the waist cuts it four times.
+
+    **Arguments:**
+
+    - `a`, `b`: The oval's parameters.
+
+    **Raises:** `ValueError` unless ``a < b < a√2``.
+    """
     if not a < b < a * 2**0.5:
         raise ValueError("a < b < a√2 is needed for a single non-convex oval.")
     return LevelSetCycle(
