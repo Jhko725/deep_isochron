@@ -544,6 +544,38 @@ and monotone) and on a line (exact). The eight tests pass in 132 s at `-n 2`, th
 **The slow oracle with the coworker's box** (`ISOCHRON_SETTINGS["full"]`,
 `box_scale = 5`): passes, in 1026 s alone on the session.
 
+**Per-file timing at the `ci` profile** (decision 8; Joon asked for it on
+2026-10-28): `pytest -n 2 <file> -m "not slow and not auto" --hypothesis-profile=ci`,
+as CI's `checks` job runs the tier, one file at a time and alone on the two-core, 7 GB
+session:
+
+| File | Time | Result |
+|---|---|---|
+| `test_bijections.py` | 1450 s | 271 passed |
+| `test_splines.py` | 1190 s | 20 passed |
+| `test_analysis_ode.py` | 1095 s | 42 passed, 1 failed (worker killed) |
+| `test_normal_forms.py` | 1057 s | 26 passed, 2 failed (workers killed) |
+| `test_experiment.py` | 188 s | 23 passed |
+| `test_analytic.py` | 129 s | 8 passed, 1 xfailed |
+| `test_training.py` | 57 s | 21 passed |
+| `test_baseline.py` | 35 s | 9 passed |
+| `test_constraints.py` | 33 s | 54 passed |
+| `test_systems.py` | 26 s | 8 passed |
+| `test_analysis.py` | 24 s | 12 passed |
+| `test_data.py` | 21 s | 14 passed |
+| `test_isochron.py` | 20 s | 15 passed |
+| `test_linear.py` | 20 s | 13 passed |
+| `test_models.py`, `test_symbolic.py` | 16 s each | 4 and 36 passed |
+| `test_registry.py`, `test_windows.py` | 12 s, 11 s | 5 and 15 passed |
+| `test_auto_codegen.py`, `test_auto_env.py`, `test_experiment_isochrons.py` | 8 s, 7 s, 7 s | 27, 3 and 5 passed |
+
+The tier takes about 90 minutes at `-n 2`; four files hold 4800 s of it. The three
+failures are workers that the kernel killed for memory: `dmesg` records two "Memory
+cgroup out of memory" kills of a pytest worker at 3.8 GB and 3.1 GB resident, so two
+workers at the `ci` profile exceed the session's 7 GB. The failed tests are
+`test_limit_cycle_on_random_hopf_forms`, `test_cartesian_integration_is_finite_at_the_origin`
+and `test_integrations_agree`; each is being measured alone for its peak memory.
+
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
 changes little):
