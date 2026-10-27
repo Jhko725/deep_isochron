@@ -269,8 +269,10 @@ three times.
 - **`box_scale` defaults to 2.5, not 5 (Joon, 2026-10-28).** Five reproduced the
   coworker's $\vert x\vert = 10$ on FitzHugh–Nagumo; 2.5 shortens the outward halves,
   which carry little of the structure, while the inward halves toward the unstable
-  fixed point are unchanged. The two-way oracle compares over the arclength ours covers,
-  so it is unaffected; it is rerun with the new default.
+  fixed point are unchanged. The slow two-way oracle failed with the new default: ours
+  covered 1243 of the 7124 points of the coworker's file 100, below the half the test
+  requires, though every one of our points lay on his curve. The oracle therefore runs
+  with his box, `box_scale = 5` (`ISOCHRON_SETTINGS["full"]`); its rerun is pending.
 
 ## Bugs fixed
 
@@ -554,3 +556,4 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `tests/test_isochron.py`, `tests/helpers.py` — phase π in the stage test; one worker in the named settings | | |
 | `docs/decisions/0017-isochrons-by-auto-continuation.md` — the timing; one thread per AUTO run, workers on the CPU | | |
 | `isochron.py`, `docs/design/isochrons.md`, `tests/helpers.py` — `box_scale` defaults to 2.5 | | |
+| `tests/helpers.py` — `ISOCHRON_SETTINGS["full"]` keeps the coworker's box | | |
