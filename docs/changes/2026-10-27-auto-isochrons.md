@@ -135,13 +135,13 @@ running the coworker's script and variants of it in a scratch directory:
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `docs/design/isochrons.md` — the design document: three versions of the method, AUTO background, the stable direction and the $+A^{\mathsf T}$ defect, accuracy, oracles, D1–D5 | | |
-| `docs/references.md` — Hannam et al. 2022, Krauskopf & Rieß 2008, Osinga & Moehlis 2010 | | |
-| `docs/index.md` — the design document's row | | |
-| `docs/roadmap.md` — O7 row points to the design document | | |
-| `docs/changes/2026-10-27-auto-isochrons.md` — this change document | | |
-| `src/deep_isochron/analysis/ode/auto/fortran/isochron_multiseg.f90` — the bundle integrates the adjoint equation $-\tau A^{\mathsf T}w$ (D1) | | |
-| `src/deep_isochron/analysis/ode/auto/codegen.py` — `indices_block` one slot per line; `_wrap` cuts only at blanks (D8) | | |
-| `tests/test_auto_codegen.py` — gfortran driver and compile tests in place of f2py; tests for the wrap, `indices.inc` and the adjoint sign | | |
-| `.github/workflows/ci.yml` — the `slow` job installs gfortran | | |
-| `docs/roadmap.md` — Done ledger row for Step A; the O7 row names the gfortran tests | | |
+| `docs/design/isochrons.md` — the design document: three versions of the method, AUTO background, the stable direction and the $+A^{\mathsf T}$ defect, accuracy, oracles, D1–D5 | Reads well. Very good. | None |
+| `docs/references.md` — Hannam et al. 2022, Krauskopf & Rieß 2008, Osinga & Moehlis 2010 | Confirmed. | None |
+| `docs/index.md` — the design document's row | Simple change. | None |
+| `docs/roadmap.md` — O7 row points to the design document | Confirmed. | None |
+| `docs/changes/2026-10-27-auto-isochrons.md` — this change document | Read through. Looks good. | None |
+| `src/deep_isochron/analysis/ode/auto/fortran/isochron_multiseg.f90` — the bundle integrates the adjoint equation $-\tau A^{\mathsf T}w$ (D1) | Looks good. | None |
+| `src/deep_isochron/analysis/ode/auto/codegen.py` — `indices_block` one slot per line; `_wrap` cuts only at blanks (D8) | Confirmed. | None |
+| `tests/test_auto_codegen.py` — gfortran driver and compile tests in place of f2py; tests for the wrap, `indices.inc` and the adjoint sign  | Skimmed through. Will scrutinize later if needed. | None |
+| `.github/workflows/ci.yml` — the `slow` job installs gfortran | Confirmed. | None |
+| `docs/roadmap.md` — Done ledger row for Step A; the O7 row names the gfortran tests | Confirmed. | None |
