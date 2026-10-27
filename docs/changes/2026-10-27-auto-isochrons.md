@@ -79,6 +79,16 @@ follows.
 - `src/deep_isochron/analysis/ode/__init__.py`: exports `reanchor`; the docstring.
 - `tests/test_analysis_ode.py`: three `reanchor` tests and the fixture `hopf_cycle`.
 - `docs/architecture.md`, Step C: `reanchor` in the module map.
+- `src/deep_isochron/analysis/ode/auto/fortran/isochron_multiseg.f90`, Step C: `FB(6)`
+  anchors segment 1 on the section through phase 0, $(u - p)\cdot n = 0$ (decision 3);
+  `STPNT` is empty and `PVLS` no longer stores an anchor or AUTO's stability flag.
+- `src/deep_isochron/analysis/ode/auto/codegen.py`, Step C: `Idx` trades `anchor` and
+  `stability` for `section_point` and `section_normal`.
+- `tests/test_auto_codegen.py`, Step C: the slot layout with the section slots.
+- `src/deep_isochron/analysis/ode/auto/isochron.py` (**new**, work in progress):
+  `IsochronSettings`, `Isochron`, `IsochronFailure`, `IsochronFoliation`, the four
+  stages and `isochron_foliation`.
+- `src/deep_isochron/analysis/ode/__init__.py`, Step C: exports the pipeline.
 - `CLAUDE.md`: `-n 2` in the cloud sessions; the AUTO setup line.
 - `docs/references.md`: entries for Hannam et al. 2022, Krauskopf & Rieß 2008 and
   Osinga & Moehlis 2010.
@@ -237,6 +247,16 @@ FitzHugh–Nagumo, `reanchor` at the coworker's anchor $(-1.72170711, 0.5)$ retu
 point as ``x0s[0]`` and the period to $10^{-10}$, in 15 s for the first call (compiling)
 and 0.1 s after.
 
+**The pipeline is work in progress and has no tests yet.** Stages 1–3 ran on
+FitzHugh–Nagumo with phase 0 at the coworker's anchor: the orbit corrected with the
+section anchor (period 11.227886761), the bundle's branch point at multiplier 1, the
+normalization at 1. Stage 4 had not finished when this was committed: its first run
+shared the two cores with the test-timing run, and its "test-sized" `eta_stop = 1e-4`
+lengthens the inward half rather than shortening it (to be corrected in G3). Every AUTO
+run now passes `IPS`, `NDIM`, `NBC` and `NINT`, because each run reloads the
+constants file; the first version relied on constants carried over from the previous
+run and stage 2 failed at its first step (`MX`).
+
 ## Open issues
 
 - **The canceled `checks` job** is fixed on its own branch before this one is reviewed
@@ -285,3 +305,8 @@ and 0.1 s after.
 | `tests/test_analysis_ode.py` — the `reanchor` tests | | |
 | `docs/architecture.md` — `reanchor` in the module map | | |
 | `docs/roadmap.md` — Done ledger row for `reanchor` | | |
+| `src/deep_isochron/analysis/ode/auto/fortran/isochron_multiseg.f90` — phase 0 anchored on the section (decision 3) | | |
+| `src/deep_isochron/analysis/ode/auto/codegen.py` — section slots replace the anchor and stability slots | | |
+| `tests/test_auto_codegen.py` — the slot layout | | |
+| `src/deep_isochron/analysis/ode/auto/isochron.py` — the pipeline (work in progress, untested) | | |
+| `src/deep_isochron/analysis/ode/__init__.py` — exports the pipeline | | |

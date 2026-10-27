@@ -10,9 +10,18 @@ O2 is ``floquet``, the multipliers and exponents of a ``LimitCycle`` by the seed
 periodic Schur chain, with the monodromy and Liouville routes as checks. Results are
 fixed-shape ``eqx.Module`` pytrees; the functions of them, ``f(cycle, ...)``, are jit-
 and vmap-compatible and left unjitted, and the host-side drivers ``find_limit_cycle``,
-``reanchor`` and ``fixed_point`` jit the stages they call.
+``reanchor`` and ``fixed_point`` jit the stages they call. O7 is
+``isochron_foliation``, the isochrons of a planar cycle by AUTO-07p continuation
+(``auto``, ``docs/design/isochrons.md``), whose results are host-side dataclasses.
 """
 
+from .auto.isochron import (
+    Isochron as Isochron,
+    isochron_foliation as isochron_foliation,
+    IsochronFailure as IsochronFailure,
+    IsochronFoliation as IsochronFoliation,
+    IsochronSettings as IsochronSettings,
+)
 from .floquet import (
     divergence_integral as divergence_integral,
     Floquet as Floquet,

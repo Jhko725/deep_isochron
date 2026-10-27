@@ -10,7 +10,9 @@
 ! Staged extended system, selected by NDIM:
 !   2   the vector field itself (equilibria, periodic orbits)
 !   4   two orbit segments U(1:2), U(3:4) with times IP_SEG1, IP_SEG2
-!       joined into one periodic orbit (period IP_PERIOD = IP_SEG1 + IP_SEG2)
+!       joined into one periodic orbit (period IP_PERIOD = IP_SEG1 + IP_SEG2),
+!       segment 1 starting on the section through IP_SECTION_POINT_X/Y with
+!       normal IP_SECTION_NORMAL_X/Y: the cycle's phase 0
 !   8   plus the adjoint equation w' = -A^T w on both segments (U(5:6),
 !       U(7:8)); at the branch point IP_MULT = 1, w is the direction of the
 !       phase sensitivity Z and its perpendicular the stable direction
@@ -51,14 +53,11 @@
       END SUBROUTINE FUNC
 
       SUBROUTINE STPNT(NDIM,U,PAR,T)
+        ! every run starts from a solution passed in from Python
         IMPLICIT NONE
         INTEGER, INTENT(IN) :: NDIM
         DOUBLE PRECISION, INTENT(INOUT) :: U(NDIM),PAR(*)
         DOUBLE PRECISION, INTENT(IN) :: T
-        INCLUDE 'indices.inc'
-        IF (NDIM==4) THEN
-           U(3:4)  = PAR(IP_ANCHOR_X:IP_ANCHOR_Y)
-        ENDIF
       END SUBROUTINE STPNT
 
       SUBROUTINE BCND(NDIM,PAR,ICP,NBC,U0,U1,FB,IJAC,DBC)
@@ -73,7 +72,9 @@
         FB(1:2)  = U0(1:2)-U1(3:4)
         FB(3:4)  = U1(1:2)-U0(3:4)
         FB(5)    = PAR(IP_PERIOD)-PAR(IP_SEG1)-PAR(IP_SEG2)
-        FB(6)    = U0(2)-PAR(IP_ANCHOR_Y)
+        ! phase 0: the start of segment 1 lies on the section (p, n)
+        FB(6)    = DOT_PRODUCT(U0(1:2)-PAR(IP_SECTION_POINT_X:IP_SECTION_POINT_Y), &
+                   PAR(IP_SECTION_NORMAL_X:IP_SECTION_NORMAL_Y))
         IF (NDIM==4) RETURN
         ! w' = -A^T w: periodic up to the multiplier, normalized at the junction
         FB(7:8)  = U1(7:8)- U0(5:6)
@@ -92,10 +93,6 @@
         DOUBLE PRECISION, INTENT(INOUT) :: PAR(*)
         DOUBLE PRECISION, EXTERNAL :: GETP
         INCLUDE 'indices.inc'
-        PAR(IP_STABILITY)= GETP('STA',0,U)
-        IF (NDIM==2) THEN
-           PAR(IP_ANCHOR_X:IP_ANCHOR_Y) = (/GETP("BV0",1,U), GETP("BV0",2,U)/)
-        ENDIF
         IF (NDIM==10) THEN
            PAR(IP_BASE_X:IP_BASE_Y) = (/GETP("BV0",3,U), GETP("BV0",4,U)/)
            PAR(IP_POINT_X:IP_POINT_Y) = (/GETP("BV0",9,U), GETP("BV0",10,U)/)

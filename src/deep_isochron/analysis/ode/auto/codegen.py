@@ -47,7 +47,7 @@ MIN_NPAR = 36
 
 
 class Idx(NamedTuple):
-    """The pipeline's parameter slots by name. The Fortran file sees them as
+    r"""The pipeline's parameter slots by name. The Fortran file sees them as
     ``IP_<NAME>`` through ``indices.inc``; the Python side uses the attributes.
 
     **Attributes:**
@@ -63,10 +63,12 @@ class Idx(NamedTuple):
     - `norm`: The squared norm of ``w`` at the junction, ``IP_NORM``.
     - `eta`: The distance along the stable direction, the continuation parameter of
         an isochron, ``IP_ETA``.
-    - `anchor`: The ``(x, y)`` slots anchoring the junction, ``IP_ANCHOR_X/Y``.
+    - `section_point`, `section_normal`: The point $p$ and unit normal $n$ of the
+        section through the cycle's phase 0, ``IP_SECTION_POINT_X/Y`` and
+        ``IP_SECTION_NORMAL_X/Y``; segment 1 starts where $(u - p)\cdot n = 0$, which
+        fixes the orbit's time shift (``docs/design/isochrons.md`` §6).
     - `base`: The ``(x, y)`` of the junction point on the cycle, ``IP_BASE_X/Y``.
     - `point`: The ``(x, y)`` of the isochron point traced out, ``IP_POINT_X/Y``.
-    - `stability`: AUTO's stability flag, ``GETP('STA')``, ``IP_STABILITY``.
     - `last`: The highest slot used.
     """
 
@@ -77,10 +79,10 @@ class Idx(NamedTuple):
     mult: int
     norm: int
     eta: int
-    anchor: tuple[int, int]
+    section_point: tuple[int, int]
+    section_normal: tuple[int, int]
     base: tuple[int, int]
     point: tuple[int, int]
-    stability: int
     last: int
 
     def fortran_constants(self) -> dict[str, int]:
@@ -120,11 +122,11 @@ def internal_indices(n_params: int) -> Idx:
         mult=b + 5,
         norm=b + 6,
         eta=b + 7,
-        anchor=(b + 8, b + 9),
-        base=(b + 10, b + 11),
-        point=(b + 12, b + 13),
-        stability=b + 14,
-        last=b + 14,
+        section_point=(b + 8, b + 9),
+        section_normal=(b + 10, b + 11),
+        base=(b + 12, b + 13),
+        point=(b + 14, b + 15),
+        last=b + 15,
     )
 
 

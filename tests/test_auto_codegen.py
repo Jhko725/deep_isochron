@@ -171,12 +171,13 @@ def test_internal_indices_follow_the_system_block(n):
     assert idx.period == 11
     values = [
         idx.period, idx.seg1, idx.seg2, idx.copies, idx.mult, idx.norm, idx.eta,
-        *idx.anchor, *idx.base, *idx.point, idx.stability,
+        *idx.section_point, *idx.section_normal, *idx.base, *idx.point,
     ]  # fmt: skip
     assert values == list(range(11, 11 + len(values)))
     assert idx.last == values[-1]
     constants = idx.fortran_constants()
     assert constants["IP_PERIOD"] == 11 and constants["IP_POINT_Y"] == idx.point[1]
+    assert constants["IP_SECTION_NORMAL_X"] == idx.section_normal[0]
     assert len(constants) == len(values)
 
 
