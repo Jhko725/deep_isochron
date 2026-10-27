@@ -2,25 +2,37 @@
 
 Section 1 tests the settings and the checks on the requested phases, and section 1b
 saving, loading and plotting a foliation built by hand; neither needs AUTO.
-Section 2 (marker ``auto``) runs the pipeline. Stage 2 must find the adjoint bundle's
-branch point at multiplier 1 for every planar system, which the coworker's
-``+Aᵀ`` bundle did not (``docs/design/isochrons.md`` §3). The FitzHugh–Nagumo isochrons
-must lie on the coworker's stored curves (``tests/golden/fncMultiSeg_Iso_*.csv``, file
-``k`` at phase fraction ``1 - k/100`` after their anchor), measured from points to the
-stored polyline (decision D3): one way with the quick settings, whose curves are
-shorter, and both ways with the full settings (also ``slow``).
+Section 2 (marker ``auto``) runs the pipeline against the oracles of
+``docs/design/isochrons.md`` §8:
+
+- stages 1–3 against O1 and O2, for every planar system: the bundle's branch point at
+  multiplier 1, which the coworker's ``+Aᵀ`` bundle did not have (§3); the orbit and
+  period against O1's flow; ``Jw`` along O2's Floquet vector; ``w·F`` constant; each
+  rotated base point at its phase on O1's cycle; and, for the normal forms, ``w`` along
+  the closed-form gradient of the phase;
+- the coworker's Hopf route (his runs 0–1) against O1's cycle (decision 12);
+- the Bautin and Winfree isochrons against their closed-form phase (decision 14);
+- the FitzHugh–Nagumo isochrons against the coworker's stored curves
+  (``tests/golden/fncMultiSeg_Iso_*.csv``, file ``k`` at phase fraction ``1 - k/100``
+  after their anchor), measured from points to the stored polyline (decision D3): one
+  way with the quick settings, whose curves are shorter, together with forward
+  integration of the traced points; both ways with the full settings (also ``slow``).
 """
 
 import math
 import os
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
+import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from deep_isochron.analysis.ode import (
     find_limit_cycle,
+    floquet,
     Isochron,
     isochron_foliation,
     IsochronFailure,
@@ -30,6 +42,7 @@ from deep_isochron.analysis.ode import (
     reanchor,
 )
 from deep_isochron.analysis.ode.auto import _env, isochron
+from deep_isochron.analysis.ode.auto.codegen import AutoProblem
 from deep_isochron.plotting import plot_isochrons
 from deep_isochron.systems import FitzhughNagumo
 from deep_isochron.systems.normal_forms import (
@@ -109,6 +122,25 @@ def test_phases_are_wrapped_and_refused_when_not_finite_or_repeated():
         isochron._check_phases([0.0, float("nan")])
     with pytest.raises(ValueError, match="repeat"):
         isochron._check_phases([0.5, 0.5 + 2 * math.pi])
+
+
+def test_a_user_point_on_the_box_is_a_box_stop():
+    """A half that ends on an edge of the box stopped there; one that ends inside it
+    stopped at ``eta_stop``, even when AUTO located that point with
+    ``|eta|`` a little below ``eta_stop``."""
+    idx = SimpleNamespace(eta=1, point=(2, 3))
+    box = (np.array([-2.0, -2.0]), np.array([2.0, 2.0]))
+    settings = IsochronSettings(eta_stop=1e-6)
+
+    def end(eta, x, y):
+        return {"TY": "UZ", "PAR(1)": eta, "PAR(2)": x, "PAR(3)": y}
+
+    assert (
+        isochron._stop_reason(end(-9.9999999532e-07, 0.8, 0.5), idx, settings, box)
+        == "eta"
+    )
+    assert isochron._stop_reason(end(1.3e-10, 2.0, 0.1), idx, settings, box) == "box"
+    assert isochron._stop_reason(end(-5e-8, 0.2, -2.0), idx, settings, box) == "box"
 
 
 # ------------------------------------------------ 1b. saving, loading, plotting ----
@@ -194,33 +226,161 @@ def auto():
 @pytest.fixture(scope="module")
 def fhn_cycle() -> LimitCycle:
     """FitzHugh–Nagumo's cycle with phase 0 at the coworker's anchor."""
-    cycle = find_limit_cycle(FitzhughNagumo(), jnp.array([1.0, 0.5]), t_settle=50.0)
-    return reanchor(cycle, ANCHOR)
+    return _cycle("fitzhugh_nagumo")
+
+
+J = np.array([[0.0, -1.0], [1.0, 0.0]])
+"""The quarter turn, which takes the bundle ``w`` to the stable direction."""
+
+
+def _sine(a: Float[np.ndarray, "2"], b: Float[np.ndarray, "2"]) -> float:
+    """The sine of the angle between the lines along `a` and `b`, accurate near 0."""
+    return float(abs(a[0] * b[1] - a[1] * b[0]) / np.linalg.norm(a) / np.linalg.norm(b))
+
+
+def _components(solution: Any, ndim: int) -> Float[np.ndarray, "n d"]:
+    """The first `ndim` components of an AUTO solution, one row per stored point."""
+    return np.column_stack([solution[f"U({i})"] for i in range(1, ndim + 1)])
+
+
+SYSTEMS = {
+    "fitzhugh_nagumo": (FitzhughNagumo(), [1.0, 0.5], ANCHOR),
+    "hopf": (HopfNormalForm(1.3, 1.5, 0.4), [1.2, 0.1], jnp.array([1.0, 0.0])),
+    "bautin": (BautinNormalForm(1.0, 0.3, 1.5, 0.5), [1.1, 0.1], jnp.array([1.0, 0.0])),
+    "winfree": (WinfreeNormalForm(-0.25, -0.5), [1.1, 0.1], jnp.array([1.0, 0.0])),
+}
+"""The planar systems of section 2: the system, a point in the basin, phase 0."""
+
+
+def _cycle(name: str) -> LimitCycle:
+    """The cycle of ``SYSTEMS[name]`` with phase 0 at its anchor."""
+    ode, x0, anchor = SYSTEMS[name]
+    return reanchor(find_limit_cycle(ode, jnp.asarray(x0), t_settle=50.0), anchor)
 
 
 @pytest.mark.auto
-@pytest.mark.parametrize(
-    "ode, x0",
-    [
-        (FitzhughNagumo(), [1.0, 0.5]),
-        (HopfNormalForm(1.3, 1.5, 0.4), [1.2, 0.1]),
-        (BautinNormalForm(1.0, 0.3, 1.5, 0.5), [1.1, 0.1]),
-        (WinfreeNormalForm(-0.25, -0.5), [1.1, 0.1]),
-    ],
-    ids=["fitzhugh_nagumo", "hopf", "bautin", "winfree"],
-)
-def test_adjoint_bundle_branches_at_multiplier_one(auto, ode, x0):
-    """Stages 1 and 2 find the bundle's branch point at multiplier 1 and normalize
-    the bundle, for every planar system (decision D1); the coworker's ``+Aᵀ`` bundle
-    has no such branch point on the normal forms."""
-    cycle = find_limit_cycle(ode, jnp.asarray(x0), t_settle=50.0)
+@pytest.mark.parametrize("name", list(SYSTEMS))
+def test_stages_one_to_three_agree_with_o1_and_o2(auto, name):
+    """Stage 2 branches at multiplier 1 and normalizes the bundle (decision D1); its
+    orbit is O1's flow and its period O1's; ``Jw`` lies along O2's Floquet vector and
+    ``w·F`` is constant along the cycle; stage 3 puts the base point of phase
+    ``2πk/m`` at O1's mesh point ``x0s[k]``, with ``Jw`` along the Floquet vector
+    there, phase π included, where the rotation starts. On the normal forms ``w``
+    lies along the gradient of the closed-form phase, and that phase at each base point
+    is the requested one, signed by the sense of rotation (decision 14)."""
+    cycle = _cycle(name)
+    ode, m = cycle.ode, cycle.x0s.shape[0]
+    vectors = np.asarray(floquet(cycle).vectors)
+    assert m % 2 == 0  # so that k = m/2 is phase π, the start of stage 3
+    ks = sorted({m // 8, m // 3, m // 2, (5 * m) // 8})
+    phases = [math.remainder(2 * math.pi * k / m, 2 * math.pi) for k in ks]
     with isochron._workdir(ode, "isochron") as problem:
         run = isochron._Runner(auto, problem)
+        idx = problem.idx
         bundle = isochron._adjoint_bundle(run, isochron._periodic_orbit(run, cycle))
-    idx = problem.idx
+        rotated = isochron._rotate_phase(run, bundle, phases, max(idx.last, 36))
     assert bundle[f"PAR({idx.mult})"] == pytest.approx(1.0, abs=TOL["branch_point"])
     assert bundle[f"PAR({idx.norm})"] == pytest.approx(1.0, abs=TOL["branch_point"])
-    assert bundle[f"PAR({idx.period})"] == pytest.approx(float(cycle.period), rel=1e-8)
+    period, seg1 = bundle[f"PAR({idx.period})"], bundle[f"PAR({idx.seg1})"]
+    assert period == pytest.approx(float(cycle.period), rel=TOL["auto_orbit"])
+    # the orbit: segment 1 from phase 0, segment 2 from where segment 1 ends
+    t, u = np.asarray(bundle["t"]), _components(bundle, 8)
+    first = np.asarray(
+        ode.flow(jnp.asarray(t * seg1), cycle.x0s[0], config=cycle.config).ys
+    )
+    second = ode.flow(
+        jnp.asarray(t * (period - seg1)), jnp.asarray(first[-1]), config=cycle.config
+    )
+    np.testing.assert_allclose(u[:, :2], first, atol=TOL["auto_orbit"])
+    np.testing.assert_allclose(u[:, 2:4], np.asarray(second.ys), atol=TOL["auto_orbit"])
+    # the bundle's direction and scale
+    assert _sine(J @ u[0, 4:6], vectors[0, :, 0]) < TOL["bundle_direction"]
+    field = jax.vmap(ode.rhs, (None, 0))
+    w_dot_f = np.concatenate(
+        [
+            (
+                u[:, 4 + j : 6 + j]
+                * np.asarray(field(0.0, jnp.asarray(u[:, j : j + 2])))
+            ).sum(1)
+            for j in (0, 2)
+        ]
+    )
+    assert np.ptp(w_dot_f) < TOL["bundle_scale"] * abs(w_dot_f.mean())
+    # stage 3
+    assert set(rotated) == set(phases)
+    for k, theta in zip(ks, phases):
+        base, w = rotated[theta].u[0, 2:4], rotated[theta].u[0, 6:8]
+        np.testing.assert_allclose(
+            base, np.asarray(cycle.x0s[k]), atol=TOL["auto_orbit"]
+        )
+        assert _sine(J @ w, vectors[k, :, 0]) < TOL["bundle_direction"]
+        if name != "fitzhugh_nagumo":
+            gradient = np.asarray(jax.grad(ode.phase)(jnp.asarray(base)))
+            assert _sine(w, gradient) < TOL["bundle_direction"]
+            sense = math.copysign(1.0, float(ode.omega()))
+            gap = math.remainder(
+                float(ode.phase(jnp.asarray(base))) - sense * theta, 2 * math.pi
+            )
+            assert abs(gap) < TOL["isochron_phase"]
+
+
+def _hopf_route(
+    run: isochron._Runner, problem: AutoProblem, c: float
+) -> tuple[float, Float[np.ndarray, " n"], Float[np.ndarray, "n 2"]]:
+    """The coworker's runs 0–1 for FitzHugh–Nagumo: the equilibrium continued in ``c``
+    from 3 down to the Hopf point, then the branch of periodic orbits born there
+    (``IPS = 2``, period in ``PAR(11)``) continued back up to ``c``.
+
+    **Returns:**
+
+    The period, AUTO's stored mesh of $[0, 1]$, and the orbit's points on it.
+    """
+    slot, plain = problem.slot("c"), {"NDIM": 2, "NBC": 0, "NINT": 0}
+    equilibria = run(
+        [0.9066, -0.2582], PAR=problem.pars, ICP=[slot], IPS=1, DS=-0.01, NMX=200,
+        SP=["HB1"], **plain,
+    )  # fmt: skip
+    orbits = run(
+        equilibria("HB1"), IPS=2, ISW=-1, ICP=[slot, 11], DS=0.1, NMX=200,
+        UZSTOP={slot: c}, **plain,
+    )  # fmt: skip
+    end = orbits("UZ1")
+    return float(end["PAR(11)"]), np.asarray(end["t"]), _components(end, 2)
+
+
+@pytest.mark.auto
+def test_hopf_route_reaches_o1s_cycle(auto):
+    """The coworker's route to the FitzHugh–Nagumo cycle, continuation from the Hopf
+    point, ends at O1's period, and its orbit is O1's flow (decision 12)."""
+    cycle = _cycle("fitzhugh_nagumo")
+    ode = cycle.ode
+    with isochron._workdir(ode, "isochron") as problem:
+        period, t, points = _hopf_route(isochron._Runner(auto, problem), problem, ode.c)
+    assert period == pytest.approx(float(cycle.period), rel=TOL["auto_orbit"])
+    flowed = ode.flow(
+        jnp.asarray(t * period), jnp.asarray(points[0]), config=cycle.config
+    )
+    np.testing.assert_allclose(points, np.asarray(flowed.ys), atol=TOL["auto_orbit"])
+
+
+@pytest.mark.auto
+@pytest.mark.parametrize("name", ["bautin", "winfree"])
+def test_normal_form_isochrons_carry_the_closed_form_phase(auto, name):
+    """With phase 0 at ``(1, 0)``, the closed-form phase at every traced point equals
+    the requested phase, signed by the sense of rotation (decision 14), on halves
+    that reach from inside half the cycle's radius to outside one and a half."""
+    cycle = _cycle(name)
+    ode = cycle.ode
+    phases = [0.5, 2.0]
+    foliation = isochron_foliation(cycle, phases, ISOCHRON_SETTINGS["reach"])
+    assert not foliation.failures, foliation.failures
+    sense = math.copysign(1.0, float(ode.omega()))
+    for iso, theta in zip(foliation.isochrons, phases, strict=True):
+        got = np.asarray(jax.vmap(ode.phase)(jnp.asarray(iso.points)))
+        gap = np.remainder(got - sense * theta + np.pi, 2 * np.pi) - np.pi
+        assert np.abs(gap).max() < TOL["isochron_phase"]
+        radius = np.linalg.norm(iso.points, axis=1)
+        assert radius.min() < 0.5 and radius.max() > 1.5
 
 
 def _arclength_from_base(
@@ -262,22 +422,29 @@ def _check_against_golden(foliation, files, *, both_ways: bool):
 
 
 @pytest.mark.auto
-def test_fitzhugh_nagumo_isochrons_lie_on_the_coworkers(fhn_cycle):
+def test_fitzhugh_nagumo_isochrons_lie_on_the_coworkers(auto, fhn_cycle):
     """With the quick settings, the isochrons at the phases of the coworker's files
-    100 and 26 start at their base points and lie on their curves; the foliation
-    records its provenance."""
+    100 and 26 start at their base points and lie on their curves; every traced point,
+    flowed five periods by O1's solver, ends at its base point; the foliation records
+    its provenance."""
     files = (100, 26)
     foliation = isochron_foliation(
         fhn_cycle, [_golden_phase(k) for k in files], ISOCHRON_SETTINGS["quick"]
     )
     _check_against_golden(foliation, files, both_ways=False)
+    ode, horizon = fhn_cycle.ode, jnp.array([0.0, 5 * float(fhn_cycle.period)])
+    end = jax.vmap(lambda p: ode.flow(horizon, p, config=fhn_cycle.config).ys[-1])
+    for iso in foliation.isochrons:
+        ends = np.asarray(end(jnp.asarray(iso.points)))
+        distance = np.linalg.norm(ends - iso.base_point, axis=1)
+        assert distance.max() < TOL["isochron_forward"]
     assert foliation.provenance["auto_commit"] == _env.pinned_commit()
     assert foliation.provenance["compiler"].startswith("GNU Fortran")
 
 
 @pytest.mark.auto
 @pytest.mark.slow
-def test_fitzhugh_nagumo_isochrons_reproduce_the_coworkers(fhn_cycle):
+def test_fitzhugh_nagumo_isochrons_reproduce_the_coworkers(auto, fhn_cycle):
     """With the coworker's settings, the isochrons of files 100, 26 and 51 coincide
     with theirs within ``TOL["isochron_curve"]`` in both directions."""
     files = (100, 26, 51)

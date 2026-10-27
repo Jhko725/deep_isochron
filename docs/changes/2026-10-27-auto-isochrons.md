@@ -1,7 +1,7 @@
 ---
 type: change
-status: in progress; Steps A–D done, Steps A–B reviewed; Step E (ADR-0017) remains
-updated: 2026-10-27
+status: Steps A–E done, Steps A–B reviewed; ready for review
+updated: 2026-10-28
 branch: auto-isochrons
 ---
 
@@ -37,6 +37,15 @@ the section anchor, the four stages and `isochron_foliation`, the results with n
 persistence and a plot (Step D), and tests against the coworker's stored isochrons.
 With the quick settings, two FitzHugh–Nagumo isochrons lie within $7\times 10^{-6}$ of
 the coworker's curves, traced in 72 s.
+
+Step E adds the remaining oracles of the design document's §8 and
+[ADR-0017](../decisions/0017-isochrons-by-auto-continuation.md). Stages 1–3 agree with
+O1's flow and with O2's Floquet vectors on all four planar systems; the coworker's Hopf
+route reaches O1's cycle; the Bautin and Winfree isochrons carry their closed-form
+phase; and FitzHugh–Nagumo's traced points, flowed five periods, end at their base
+points. Writing them found two defects of the pipeline (*Bugs fixed*). Ruff's `W605`
+now rejects the backslash in a docstring that is not raw, which had slipped through
+three times.
 
 ## Files
 
@@ -122,6 +131,25 @@ the coworker's curves, traced in 72 s.
 - `docs/roadmap.md`: the O7 row points to the design document and names the gfortran
   tests; the Done ledger records Steps A and B.
 - `docs/changes/2026-10-27-auto-isochrons.md` (**new**): this document.
+- `docs/decisions/0017-isochrons-by-auto-continuation.md` (**new**), Step E: ADR-0017.
+- `docs/index.md`, Step E: the ADR-0017 row replaces the reservation.
+- `src/deep_isochron/analysis/ode/auto/isochron.py`, Step E: `_stop_reason` decides a
+  box stop by the box edge; the docstrings of stage 1 say that AUTO stores its start
+  uncorrected.
+- `docs/design/isochrons.md`, Step E: stage 1 does not correct the orbit; the oracle of
+  O1's cycle is the orbit after stage 2.
+- `tests/test_isochron.py`, Step E: the oracles of §8 (see *Tests*).
+- `tests/helpers.py`, Step E: the tolerances `auto_orbit`, `bundle_direction`,
+  `bundle_scale`, `isochron_phase`, `isochron_forward`, and the settings
+  `ISOCHRON_SETTINGS["reach"]`.
+- `pyproject.toml`, `docs/coding-standards.md`, Step E: ruff's `W605` selected, and its
+  row in the table of checks.
+- `docs/roadmap.md`, Step E: the O7 row; the Done ledger records Step E.
+- `src/deep_isochron/analysis/ode/auto/isochron.py`, after Joon's cluster runs: every
+  AUTO run on one OpenMP thread (`_one_thread` in `_Runner`); phase π taken from the
+  bundle in stage 3; pool workers with JAX on the CPU.
+- `tests/test_isochron.py`, `tests/helpers.py`: the stage test includes phase π; the
+  named settings run one worker.
 
 ## Design
 
@@ -256,6 +284,34 @@ the coworker's curves, traced in 72 s.
   `_statements` joined continuations without a blank and hid it; Hopf's file happened to
   be cut between tokens.
 
+- **A half that stopped at `eta_stop` was reported as a box stop.** Symptom: Bautin's
+  inner half at phase 0.5 ended at $\eta = -9.9999999532\times 10^{-7}$, a point that
+  AUTO located to its own tolerance, and `_stop_reason` compared $\vert\eta\vert$ with
+  `eta_stop` to a relative $10^{-9}$, so the half was labeled `"box"` at radius 0.96.
+  The box is now decided by the box: a user point is a box stop when the traced point
+  lies on an edge, which AUTO reaches to round-off.
+- **Stage 1 does not correct the orbit, although its docstring and the design document
+  said so.** Symptom: on Bautin's unit circle the stored orbit of stage 1 is off by
+  $3.4\times 10^{-6}$ in radius, oscillating within each mesh interval: the sag of
+  chords between 601 points. AUTO stores the first point of a run with `NMX = 1` as the
+  start interpolated onto its mesh, before Newton. Nothing downstream was wrong, since
+  stage 2's first step corrects the orbit (to $7\times 10^{-12}$); the docstrings and
+  the design document now say what happens, and the oracle against O1 reads the orbit
+  after stage 2. The set-up run of stage 4 behaves the same way, as the coworker's did.
+
+- **Phase π always failed** ("no user point at this phase in stage 3", Joon's notebook,
+  `linspace(-π, π, 1, endpoint=False)`). Its target $\tau_2 = T/2$ is where stage 1
+  leaves segment 2, and AUTO reports a user point only where its function changes sign
+  between two steps, never at the start. Stage 3 now takes the bundle itself for it.
+- **Stages 1–3 ran AUTO on every core.** Symptom: 24 `isochron.exe` threads on a
+  24-core node for about 8.5 minutes, one thread once stage 4 began. AUTO compiles with
+  `-fopenmp` and only the pool workers set `OMP_NUM_THREADS=1`; `_Runner` now sets it
+  for every run.
+- **Five phases ran a GPU out of memory five times.** Each pool worker unpickled the
+  cycle's arrays and integrated on the default backend, the GPU, each preallocating
+  most of its memory. `_init_worker` puts the workers' JAX on the CPU. Not tested here,
+  which has no GPU.
+
 ## Tests
 
 Only `tests/test_auto_codegen.py` covers the modules this step touches. The full tier
@@ -357,16 +413,51 @@ tests/test_auto_codegen.py tests/test_auto_env.py --hypothesis-profile=dev` give
 passed in 160 s with AUTO installed. The slow two-way oracle passed before the deletion
 (682 s). The full tier has not been run on this branch since Step B (plan decision 8).
 
+**Step E: the oracles of the design document's §8**, in `tests/test_isochron.py`, with
+the tolerances named in `tests/helpers.py`:
+
+| Test | What it pins | Measured |
+|---|---|---|
+| `test_stages_one_to_three_agree_with_o1_and_o2` (four systems) | the branch point and the normalization at 1; the period against O1's; the orbit after stage 2 against O1's flow; $Jw$ along O2's Floquet vector at phase 0 and at three rotated base points; $w\cdot F$ constant; each rotated base point at O1's mesh point of its phase; on the normal forms, $w$ along the closed-form $\nabla\Theta$ and the closed-form phase of each base point | orbit $3\times 10^{-9}$ (FitzHugh–Nagumo), $6\times 10^{-11}$ (Hopf); the sines $10^{-11}$; $w\cdot F$ spread $7\times 10^{-10}$ relative; base points $3\times 10^{-10}$ |
+| `test_hopf_route_reaches_o1s_cycle` | the coworker's runs 0–1, equilibrium to Hopf point to the cycle at $c = 3$, against O1's period and flow (decision 12) | period $9\times 10^{-11}$ relative, orbit $2.5\times 10^{-9}$ |
+| `test_normal_form_isochrons_carry_the_closed_form_phase` (Bautin, Winfree) | the closed-form phase at every traced point, with phase 0 at $(1, 0)$, signed by the sense of rotation (decision 14); halves reaching inside $r = 0.5$ and outside $r = 1.5$ | $4\times 10^{-10}$; radii 0.038–2.0 (Bautin), 0.36–2.08 (Winfree) |
+| `test_fitzhugh_nagumo_isochrons_lie_on_the_coworkers` | now also each traced point flowed five periods by O1's solver, against its base point | $4\times 10^{-6}$ at one point, $10^{-9}$ for most |
+| `test_a_user_point_on_the_box_is_a_box_stop` (no AUTO) | the stop reason of a half by the box edge, with the $\eta$ that was misread | — |
+
+Winfree rotates clockwise, so its closed-form phase is the negative of the time phase;
+the tests compare against the requested phase times the sign of $\omega$. With one
+period, Winfree's halves stay within 0.002 of the cycle, since its multiplier is about
+$4\times 10^{-4}$; the closed-form test therefore runs with two periods
+(`ISOCHRON_SETTINGS["reach"]`).
+
+**Step E baseline.** `uv run pytest -q -n 2 tests/test_isochron.py -m "not slow"`:
+21 passed in 504 s. The new tests make the quick `auto` tier slow on two cores: the
+stage test of FitzHugh–Nagumo takes 228 s, the FitzHugh–Nagumo foliation 164 s, the
+normal-form foliations 107 s and 118 s, because each foliation's own pool of two
+processes shares the two cores with the second pytest worker. Run alone, stages 1–3 of
+FitzHugh–Nagumo take 82 s and the quick foliation 70 s.
+
+**After the cluster fixes**: the isochron tests have not yet been rerun; the next
+commit records them with the timing.
+
+**Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
+coworker's files 100, 76, 51 and 26, run alone on the two-core session): running at the time of this commit; the next
+commit records it.
+
 ## Open issues
 
 - **The canceled `checks` job** is fixed on its own branch before this one is reviewed
   (plan decision 8).
-- **Two Done rows dated 2026-10-28** (Steps B′ and C begins) were written a day ahead;
-  the ledger is append-only, so they stand, and the rows after them carry the true
-  date.
-- **Step E** of the plan: ADR-0017, and the oracles still to write: the bundle against
-  O2's Floquet vectors and its scale, the Bautin and Winfree isochrons against their
-  closed-form phase, forward integration, and the timing of a full foliation.
+- **`AbstractNormalForm.floquet_multiplier` is above 1 for a clockwise cycle.** It is
+  $e^{\kappa T}$ with the signed period, so Winfree's attracting cycle reports 2576
+  instead of $3.9\times 10^{-4}$; `test_normal_form_closed_forms_are_consistent` and
+  `test_hopf_floquet_multiplier_is_the_polar_monodromy` (which integrates to the signed
+  period) pin the same formula. Found by Step E; nothing in O7 uses it. The fix is
+  $e^{\kappa\vert T\vert}$ and the two tests, on the normal-forms code's own branch.
+- **The quick `auto` tier takes about 8 minutes on two cores** (*Tests*). Options: run
+  the stage test on FitzHugh–Nagumo and Bautin only, give the foliation tests
+  `max_workers=1` so that pytest's workers do not oversubscribe the cores, or mark the
+  normal-form foliations `slow`.
 
 ## Review notes
 
@@ -428,3 +519,14 @@ passed in 160 s with AUTO installed. The slow two-way oracle passed before the d
 | `docs/decisions/0016-symbolic-systems.md` — links at commit `3af99f2`; History line | | |
 | `docs/design/isochrons.md` — the coworker's files linked at commit `3af99f2` | | |
 | `docs/roadmap.md` — the O7 row; Done ledger row for Steps C–D | | |
+| `docs/decisions/0017-isochrons-by-auto-continuation.md` — ADR-0017: the method, the adjoint bundle, the section anchor, AUTO as a dependency, the pool, the netCDF file | | |
+| `docs/index.md` — the ADR-0017 row | | |
+| `src/deep_isochron/analysis/ode/auto/isochron.py` — a box stop decided by the box edge; stage 1's docstrings | | |
+| `docs/design/isochrons.md` — stage 1 stores the orbit uncorrected; the O1 oracle after stage 2 | | |
+| `tests/test_isochron.py` — the §8 oracles: stages 1–3 vs O1 and O2, the Hopf route, the closed-form phase, forward integration, the stop reason | | |
+| `tests/helpers.py` — five tolerances and `ISOCHRON_SETTINGS["reach"]` | | |
+| `pyproject.toml`, `docs/coding-standards.md` — ruff `W605` and its row | | |
+| `docs/roadmap.md` — O7 step 2 done; Done ledger row for Step E | | |
+| `docs/decisions/0016-symbolic-systems.md` — the History line dated 2026-10-28 | | |
+| `src/deep_isochron/analysis/ode/auto/isochron.py` — one OpenMP thread per AUTO run; phase π; workers' JAX on the CPU | | |
+| `tests/test_isochron.py`, `tests/helpers.py` — phase π in the stage test; one worker in the named settings | | |

@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0016
 status: accepted (review pending)
-updated: 2026-10-27
+updated: 2026-10-28
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-22, plan `claude/isochron-auto-plan-2026-10-22`)
 ---
 
@@ -222,5 +222,5 @@ Hodgkin–Huxley is symbolic for `rhs` only.
   write `_symbolic_template_polar` and subclass `AbstractSymbolicODE`; the even family is
   checked, not declared by a second hook); Decision 3 rewritten (the `ABCMeta` guard and
   the `_compile` extension point); `SupportsSymbolic` removed from Decision 1.
-- 2026-10-27 (`auto-isochrons`): the links to `src/Isochron2PBVP` point at commit
+- 2026-10-28 (`auto-isochrons`): the links to `src/Isochron2PBVP` point at commit
   `3af99f2`, since the pipeline replaced the directory and it was deleted.

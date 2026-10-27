@@ -69,6 +69,24 @@ TOL = {
     # O7: the adjoint bundle's branch point, where AUTO locates the multiplier 1 to
     # about 1e-11 (0.99999999998 on Hopf and Bautin)
     "branch_point": 1e-8,
+    # O7: AUTO's orbit after stage 2 against O1's flow, and the Hopf route's orbit and
+    # period against O1's; AUTO corrects to EPSU = 1e-10 and O1's solver runs at
+    # rtol 1e-10, and the measured gaps are 3e-9 (FitzHugh–Nagumo) and 6e-11 (Hopf)
+    "auto_orbit": 1e-8,
+    # O7: the sine of the angle between the bundle's rotation Jw and O2's Floquet
+    # vector, or between w and a closed-form gradient of the phase; measured 1e-11
+    "bundle_direction": 1e-8,
+    # O7: the spread of w·F along the cycle relative to its mean, constant in exact
+    # arithmetic since d(w·F)/dt = 0 for the adjoint; measured 7e-10
+    "bundle_scale": 1e-8,
+    # O7: a normal form's closed-form phase along a traced isochron, against the
+    # requested phase; the end direction is the stable direction, so the error is
+    # O(eta²) plus the collocation error, measured 4e-10
+    "isochron_phase": 1e-8,
+    # O7: a traced point flowed five periods, against the base point; a point off its
+    # isochron by delta ends |grad Θ| |F| delta away, measured 4e-6 at most on
+    # FitzHugh–Nagumo and 1e-9 for most points
+    "isochron_forward": 2e-5,
 }
 
 
@@ -100,11 +118,21 @@ SOLVERS = {
 # half is set by how far its segment reaches, which grows with the number of periods,
 # so the quick settings trace one period; a half that runs out of steps is flagged, not
 # raised (D7). One FitzHugh–Nagumo phase then takes about half a minute on two cores.
+# Every entry has one worker: pytest already runs one test per core, and a pool of
+# its own per test oversubscribed the two cores of a session (8.4 min for the tier).
 ISOCHRON_SETTINGS = {
     # every push: one period, a small box, a step cap
-    "quick": IsochronSettings(n_periods=1, box_scale=2.0, max_steps=1500),
+    "quick": IsochronSettings(
+        n_periods=1, box_scale=2.0, max_steps=1500, max_workers=1
+    ),
     # the full oracle suite (auto and slow): the coworker's settings
-    "full": IsochronSettings(),
+    "full": IsochronSettings(max_workers=1),
+    # the normal forms against their closed forms: two periods, so that the halves
+    # reach from near the phaseless set to the box (one period stays within 0.002 of
+    # Winfree's cycle, whose multiplier is about 4e-4)
+    "reach": IsochronSettings(
+        n_periods=2, box_scale=2.0, max_steps=1500, max_workers=1
+    ),
 }
 
 

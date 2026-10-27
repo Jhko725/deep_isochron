@@ -45,9 +45,11 @@ fix = true
 [tool.ruff.lint]
 fixable = ["I001", "F401"]
 ignore = ["E402", "E721", "E731", "E741", "F722"]
-# TID251 enforces banned-api below. D100-D103 require a docstring on every public
-# module, class, method and function; the content rules are in docs/coding-standards.md.
-select = ["E", "F", "I001", "TID251", "D100", "D101", "D102", "D103"]
+# TID251 enforces banned-api below. W605 rejects an invalid escape, such as LaTeX's
+# "\Phi" in a docstring that is not raw, which Python only reports as a SyntaxWarning.
+# D100-D103 require a docstring on every public module, class, method and function;
+# the content rules are in docs/coding-standards.md.
+select = ["E", "F", "W605", "I001", "TID251", "D100", "D101", "D102", "D103"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"  # the section parser; only the selected D rules run
