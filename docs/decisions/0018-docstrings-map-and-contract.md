@@ -1,9 +1,9 @@
 ---
 type: decision
 id: ADR-0018
-status: accepted (review pending)
+status: accepted
 updated: 2026-10-27
-verified_by: pending (Joon; the decisions were taken in discussion 2026-10-26, before round 0 of the prose pass)
+verified_by: joon
 ---
 
 # ADR-0018 — Docstrings are the map and the contract; the reasoning lives in the ADRs; one bibliography

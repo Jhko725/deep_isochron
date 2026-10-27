@@ -422,7 +422,7 @@ at runtime by the jaxtyping/beartype import hook (`conftest.py`).
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 | [0010](decisions/0010-rotations-by-cayley-transform.md) | `BiLipschitzLinear` rotations by Cayley transform, not `expm` |
 | [0011](decisions/0011-experiment-layer.md) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit generation, forced final checkpoint |
-| [0012](decisions/0012-analysis-layout.md) | `analysis`: data-driven and ODE halves sharing `Cycle`; E1 self-contained; host-side NumPy; one commit per function |
+| [0012](decisions/0012-analysis-layout.md) | `analysis`: a data-driven half and an ODE half; E1 self-contained; the data half host-side NumPy, the ODE half's results `eqx.Module`s; one commit per function |
 | [0013](decisions/0013-normal-form-basins.md) | normal forms: data in `r` on a declared basin; evenness is the `AbstractEvenNormalForm` subfamily; `nan` outside the basin; `generate(outside_basin=)` |
 | [0014](decisions/0014-limit-cycle-by-shooting.md) | the limit cycle from the vector field: first-return map on a flow-normal section, multiple shooting with AD Jacobians and LM; `PoincareMap` as the abstraction; reverse time for repelling cycles |
 | [0015](decisions/0015-floquet-by-seeded-periodic-schur.md) | Floquet multipliers by the periodic Schur chain on the shooting mesh, seeded with the flow direction and run in the attracting direction; monodromy and Liouville as checks; `LimitCycle` an `eqx.Module` carrying its ODE and configuration; `f(cycle)` signatures |

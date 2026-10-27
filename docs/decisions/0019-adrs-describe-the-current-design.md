@@ -1,9 +1,9 @@
 ---
 type: decision
 id: ADR-0019
-status: accepted (review pending)
+status: accepted
 updated: 2026-10-27
-verified_by: pending (Joon; the format was settled in discussion 2026-10-27, during the review of round 6 of the prose pass)
+verified_by: joon
 ---
 
 # ADR-0019 — An ADR describes the current design; its history follows it

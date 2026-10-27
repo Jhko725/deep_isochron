@@ -32,9 +32,6 @@ dependencies = [
 [project.optional-dependencies]
 cuda = ["jax[cuda12]>=0.10.2"]
 
-[project.scripts]
-deep-isochron = "deep_isochron:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
