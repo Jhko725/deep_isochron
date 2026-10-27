@@ -72,9 +72,47 @@ compute nodes as well as on the login node where AUTO is installed.
 - **Load the compiler in every job script**, with the same `module load` line used for
   the installation, before Python starts.
 - **Set `DEEP_ISOCHRON_AUTO_DIR` in the job script** if the tree is not at the default.
-- **The pool will use the cores the job was given.** `IsochronSettings.max_workers`,
-  which arrives with the pipeline, defaults to `os.process_cpu_count()`; it counts only
-  the cores a SLURM allocation grants the process.
+- **The pool will use the cores the job was given.** `IsochronSettings.max_workers`
+  defaults to `os.process_cpu_count()`, which counts only the cores a SLURM allocation
+  grants the process. Every AUTO run is single-threaded (`OMP_NUM_THREADS=1`), so a
+  job of 24 cores traces 24 phases at once.
+
+## Computing and saving a foliation
+
+`scripts/compute_isochrons.py` traces the isochrons that a config in
+`configs/isochrons/` describes and saves them as one netCDF file:
+
+```bash
+uv run python scripts/compute_isochrons.py --config-name isochrons/fhn
+uv run python scripts/compute_isochrons.py --config-name isochrons/fhn-easy phases.count=20
+```
+
+Each config takes its system from the data config of the same name, so the isochrons
+are those of the system a model is trained on. It adds the cycle (`x0`, `t_settle`,
+`m`, and the `anchor` that sets phase 0 and the Poincaré section), the phases (`count`,
+evenly spaced, or a list of `values`) and the `IsochronSettings`. The file is
+`data/isochrons/<data name>-<hash>.nc`, the hash taken over everything that decides the
+result; when it exists, the script says so and exits, so delete it to recompute. A run
+with failed phases still saves the others, prints the failures and exits with status 1.
+`experiment.load_isochrons(cfg)` reads a file back with the cycle rebuilt from the same
+config, and `Isochron.resample(spacing)` gives evenly spaced points when a reader wants
+them; the file holds the points as AUTO traced them.
+
+**As a SLURM job**, through Hydra's submitit launcher (the `slurm` dependency group,
+part of `dev`) and `configs/hydra/launcher/slurm.yaml`, with the partition on the
+command line and `-m`, since the launcher submits multiruns only:
+
+```bash
+uv run python scripts/compute_isochrons.py --config-name isochrons/fhn -m \
+    hydra/launcher=slurm hydra.launcher.partition=<name> \
+    'hydra.launcher.setup=[module load gcc]'
+```
+
+`setup` runs in the job before Python starts; the `module load` line makes `gfortran`
+available to AUTO's run-time compiles. The launcher config asks for 24 cores, 32 GB and
+four hours; override `hydra.launcher.cpus_per_task` and the others as the cluster
+needs. The job's log, with one line per finished phase, is under
+`data/isochrons/logs/multirun/`.
 
 ## Tests
 

@@ -116,12 +116,12 @@ def test_settings_defaults_scale_the_mesh_and_use_the_allowed_cores():
 def test_phases_are_wrapped_and_refused_when_not_finite_or_repeated():
     """The requested phases are wrapped to $(-π, π]$; a non-finite phase and a phase
     that repeats another after wrapping raise `ValueError` naming them (G9)."""
-    wrapped = isochron._check_phases([0.0, 2 * math.pi + 0.5, -math.pi])
+    wrapped = isochron.wrap_phases([0.0, 2 * math.pi + 0.5, -math.pi])
     assert wrapped == pytest.approx((0.0, 0.5, math.pi))
     with pytest.raises(ValueError, match="finite"):
-        isochron._check_phases([0.0, float("nan")])
+        isochron.wrap_phases([0.0, float("nan")])
     with pytest.raises(ValueError, match="repeat"):
-        isochron._check_phases([0.5, 0.5 + 2 * math.pi])
+        isochron.wrap_phases([0.5, 0.5 + 2 * math.pi])
 
 
 def test_a_user_point_on_the_box_is_a_box_stop():
@@ -211,6 +211,66 @@ def test_plot_draws_every_isochron_and_the_cycle(hopf_foliation):
     fig = plot_isochrons(hopf_foliation)
     assert len(fig.axes[0].lines) == len(hopf_foliation.isochrons) + 1
     plt.close(fig)
+
+
+def _arc_isochron(radius: float, angles: Float[np.ndarray, " n"]) -> Isochron:
+    """An isochron built by hand on the circle of `radius` about the origin, at the
+    increasing `angles`, with its base point at angle 0 (which `angles` must contain)
+    and ``eta`` growing geometrically away from it, negative on the first half."""
+    points = radius * np.column_stack([np.cos(angles), np.sin(angles)])
+    steps = np.linalg.norm(np.diff(points, axis=0), axis=1)
+    arclength = np.concatenate([[0.0], np.cumsum(steps)])
+    base = int(np.argmin(np.abs(angles)))
+    arclength -= arclength[base]
+    eta = np.sign(arclength) * 1e-12 * np.exp(10 * np.abs(arclength))
+    return Isochron(0.0, points[base], points, eta, arclength, ("eta", "box"))
+
+
+def test_resample_spaces_points_evenly_on_the_traced_curve():
+    """On a circular arc traced at uneven steps, `resample` returns points at exactly
+    the requested arclength spacing, anchored at the base point, which it keeps; each
+    lies on the traced polyline, so within ``h²/8R`` of the circle for the traced
+    steps ``h``; ``eta`` keeps its sign, is 0 at the base point and grows away from it
+    on both halves."""
+    radius = 2.0
+    angles = np.concatenate(
+        [-np.geomspace(0.6, 1e-4, 300), [0.0], np.linspace(1e-3, 0.4, 40) ** 1.5]
+    )
+    iso = _arc_isochron(radius, angles)
+    out = iso.resample(0.01)
+    np.testing.assert_allclose(np.diff(out.arclength), 0.01, rtol=1e-12)
+    assert out.arclength.min() >= iso.arclength.min()
+    assert out.arclength.max() <= iso.arclength.max()
+    zero = int(np.flatnonzero(out.arclength == 0.0)[0])
+    np.testing.assert_array_equal(out.points[zero], iso.base_point)
+    h = np.diff(iso.arclength).max()
+    sag = np.abs(np.linalg.norm(out.points, axis=1) - radius)
+    assert sag.max() <= h**2 / (8 * radius) * (1 + 1e-6)
+    assert out.eta[zero] == 0.0
+    assert np.all(np.sign(out.eta) == np.sign(out.arclength))
+    assert np.all(np.diff(np.abs(out.eta[: zero + 1])) <= 0)
+    assert np.all(np.diff(np.abs(out.eta[zero:])) >= 0)
+    assert (out.phase, out.stop) == (iso.phase, iso.stop)
+
+
+def test_resample_is_exact_on_a_line_and_refuses_a_bad_spacing():
+    """On a straight segment the resampled points are the exact points at their
+    arclength; a spacing that is not positive and finite raises `ValueError`."""
+    s = np.concatenate(
+        [-np.geomspace(1.0, 1e-3, 50), [0.0], np.geomspace(1e-3, 0.5, 30)]
+    )
+    direction = np.array([0.6, 0.8])
+    base = np.array([1.0, -1.0])
+    iso = Isochron(
+        1.0, base, base + s[:, None] * direction, s * 1e-9, s, ("eta", "eta")
+    )
+    out = iso.resample(0.05)
+    np.testing.assert_allclose(
+        out.points, base + out.arclength[:, None] * direction, atol=1e-15
+    )
+    for bad in (0.0, -0.1, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="spacing"):
+            iso.resample(bad)
 
 
 # ------------------------------------------------------------ 2. AUTO (auto) ----

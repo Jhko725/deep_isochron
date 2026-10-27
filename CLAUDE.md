@@ -31,6 +31,9 @@ one row per file touched â€” *Change* is the file name plus a one-line summary â
 the other two columns blank. Joon fills them in while vetting; Claude reads them at the
 start of the next session on that branch and never edits them except when asked.
 
+A test's outcome is stated in a change document only after that test has run on the
+code the document describes; until then the document says the run is pending.
+
 Claude updates the change document in the same commit as any later change on the branch.
 A new review row is appended after the table's last line, never inserted by matching
 the text of an existing row: Joon's edits change that text, and an edit anchored on it

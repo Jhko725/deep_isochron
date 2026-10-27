@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import contextlib
+import copy
 import dataclasses
 import io
 import json
@@ -35,6 +36,7 @@ import math
 import multiprocessing
 import os
 import tempfile
+import time
 from collections.abc import Generator, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -139,6 +141,54 @@ class Isochron:
     eta: Float[np.ndarray, " n"]
     arclength: Float[np.ndarray, " n"]
     stop: tuple[str, str]
+
+    def resample(self, spacing: float) -> Isochron:
+        r"""The isochron at points evenly spaced in arclength.
+
+        The grid is $s_k = k\,$`spacing`, anchored at the base point ($s = 0$, kept
+        exactly) and covering the traced arclength; the traced ends are dropped where
+        they fall between grid points. Points are interpolated linearly in arclength,
+        $\eta$ linearly in $\log\vert\eta\vert$ with its sign, since it varies
+        geometrically along a curve. Between two traced points the chord is off the
+        curve by about $\kappa h^2/8$ for a step $h$ and curvature $\kappa$, under
+        $10^{-5}$ for AUTO's steps on FitzHugh–Nagumo. A `spacing` coarser than the
+        curve's turns, which near the phaseless set have radii of $10^{-3}$, cuts
+        across them.
+
+        **Arguments:**
+
+        - `spacing`: The arclength between consecutive points.
+
+        **Returns:**
+
+        An `Isochron` with the same phase, base point and stop reasons.
+
+        **Raises:**
+
+        `ValueError` unless `spacing` is positive and finite.
+        """
+        if not (math.isfinite(spacing) and spacing > 0):
+            raise ValueError(f"spacing must be positive and finite; got {spacing}.")
+        s = self.arclength
+        grid = spacing * np.arange(
+            math.ceil(s.min() / spacing - 1e-12),
+            math.floor(s.max() / spacing + 1e-12) + 1,
+        )
+        points = np.column_stack(
+            [np.interp(grid, s, self.points[:, j]) for j in (0, 1)]
+        )
+        base = np.argmin(np.abs(grid))
+        points[base] = self.base_point
+        eta = np.zeros_like(grid)
+        for side in (-1.0, 1.0):  # each half on its own; eta is 0 at the base point
+            traced = np.sign(s) == side
+            wanted = np.sign(grid) == side
+            if traced.any() and wanted.any():
+                magnitude = np.log(np.abs(self.eta[traced]))
+                eta[wanted] = side * np.exp(
+                    np.interp(grid[wanted], s[traced], magnitude)
+                )
+        return copy.replace(self, points=points, eta=eta, arclength=grid)
 
 
 @dataclass(frozen=True)
@@ -421,7 +471,7 @@ def _wrap_phase(theta: float) -> float:
     return math.pi if wrapped == -math.pi else wrapped
 
 
-def _check_phases(
+def wrap_phases(
     phases: Sequence[float] | Float[ArrayLike, " k"],
 ) -> tuple[float, ...]:
     r"""The requested phases wrapped to $(-\pi, \pi]$.
@@ -744,8 +794,9 @@ def isochron_foliation(
     """
     if cycle.reverse_time:
         raise ValueError("isochrons are traced for attracting cycles only.")
-    wrapped = _check_phases(phases)
+    wrapped = wrap_phases(phases)
     auto = load_auto()
+    start = time.perf_counter()
     with _workdir(cycle.ode, "isochron") as problem:
         run = _Runner(auto, problem)
         npar = max(problem.idx.last, 36)
@@ -753,6 +804,10 @@ def isochron_foliation(
         bundle = _adjoint_bundle(run, orbit)
         rotated = _rotate_phase(run, bundle, wrapped, npar)
         provenance = _provenance(auto, problem)
+    logger.info(
+        "stages 1-3: %d of %d phases rotated in %.0f s",
+        len(rotated), len(wrapped), time.perf_counter() - start,
+    )  # fmt: skip
     failures = [
         IsochronFailure(theta, "no user point at this phase in stage 3", "", {})
         for theta in wrapped
@@ -773,8 +828,18 @@ def isochron_foliation(
             ): theta
             for theta in todo
         }
-        for future in concurrent.futures.as_completed(futures):
-            results[futures[future]] = future.result()
+        for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
+            theta = futures[future]
+            results[theta] = result = future.result()
+            outcome = (
+                f"stopped by {result.stop}"
+                if isinstance(result, Isochron)
+                else f"failed: {result.message}"
+            )
+            logger.info(
+                "phase %+.6f %s (%d/%d, %.0f s)",
+                theta, outcome, done, len(todo), time.perf_counter() - start,
+            )  # fmt: skip
     isochrons = tuple(r for t in todo if isinstance(r := results[t], Isochron))
     failures += [r for t in todo if isinstance(r := results[t], IsochronFailure)]
     return IsochronFoliation(cycle, isochrons, tuple(failures), settings, provenance)
@@ -788,4 +853,5 @@ __all__ = [
     "IsochronFoliation",
     "IsochronSettings",
     "isochron_foliation",
+    "wrap_phases",
 ]

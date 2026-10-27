@@ -47,6 +47,11 @@ points. Writing them found two defects of the pipeline (*Bugs fixed*). Ruff's `W
 now rejects the backslash in a docstring that is not raw, which had slipped through
 three times.
 
+After Joon's cluster runs and a design round on 2026-10-28, the branch adds a Hydra
+script that computes and saves a foliation from a config, `scripts/compute_isochrons.py`
+with `configs/isochrons/`, runnable as a SLURM job through Hydra's submitit launcher,
+and `Isochron.resample` for evenly spaced points.
+
 ## Files
 
 - `docs/design/isochrons.md` (**new**): the design document, §1–11, with D1–D9 decided.
@@ -152,6 +157,26 @@ three times.
   named settings run one worker.
 - `src/deep_isochron/analysis/ode/auto/isochron.py`, `docs/design/isochrons.md`,
   `tests/helpers.py`: `box_scale` defaults to 2.5 (Joon, 2026-10-28).
+- `src/deep_isochron/experiment/isochrons.py` (**new**): `isochron_phases`,
+  `isochron_settings`, `isochron_cycle`, `isochron_hash`, `isochron_file`,
+  `compute_isochrons`, `load_isochrons`; exported from `experiment`.
+- `scripts/compute_isochrons.py` (**new**): the Hydra entry point; `scripts/README.md`
+  lists it.
+- `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` (**new**): the
+  isochron configs, each composing its data config.
+- `configs/hydra/launcher/slurm.yaml` (**new**): the SLURM launcher's settings.
+- `pyproject.toml`, `uv.lock`: the dependency group `slurm`
+  (`hydra-submitit-launcher`), included by `dev`.
+- `src/deep_isochron/analysis/ode/auto/isochron.py`: `Isochron.resample`; `wrap_phases`
+  public (it was `_check_phases`), exported from `analysis.ode`; INFO lines for stages
+  1–3 and for every finished phase.
+- `tests/test_experiment_isochrons.py` (**new**), `tests/test_isochron.py`: see
+  *Tests*.
+- `docs/auto.md`: "Computing and saving a foliation", the SLURM launcher.
+- `docs/decisions/0011-experiment-layer.md`: Decision 3 covers the isochron configs; a
+  History line.
+- `docs/architecture.md`: `experiment/isochrons.py`, the script and the configs.
+- `CLAUDE.md`: a test outcome is stated only after the test has run.
 
 ## Design
 
@@ -273,6 +298,35 @@ three times.
   covered 1243 of the 7124 points of the coworker's file 100, below the half the test
   requires, though every one of our points lay on his curve. The oracle therefore runs
   with his box, `box_scale = 5` (`ISOCHRON_SETTINGS["full"]`); its rerun is pending.
+
+- **The isochron script (decisions of 2026-10-28, Q1–Q19).** The configs live in
+  `experiment/`, since library code never reads configs (ADR-0011): `compute_isochrons`
+  and `load_isochrons` are the counterparts of `generate_dataset` and `build_source`.
+  Each config composes its data config through Hydra's defaults
+  (`/data@data: fhn`), so the reference isochrons are of the trained system; a config
+  restating the system was rejected, since the two could drift apart. The file is
+  `data/isochrons/<data name>-<hash>.nc`, the hash over the system, the cycle block,
+  the wrapped phases and the settings other than `max_workers`; Hydra's dated run
+  directory was rejected because a config could not find it again. An existing file
+  is reported and left alone, so a resubmitted job costs nothing; an `overwrite` flag
+  was rejected as a second way to delete a file. Failed phases are saved with the
+  others and give exit status 1. The anchor is required, since without it phase 0 is
+  wherever settling ended. `compute_isochrons` returns the foliation rather than the
+  path, so that the script can report failures without reading the file back. The
+  `fhn-easy` anchor, $(-0.0977, 0.5)$, is the left crossing of its cycle with
+  $y = 0.5$, the rule that gives the coworker's anchor on `fhn` (to $2\times 10^{-7}$).
+  The script runs JAX on the CPU and logs one line per finished phase.
+- **SLURM through Hydra's submitit launcher**, in a dependency group `slurm` that `dev`
+  includes, with `configs/hydra/launcher/slurm.yaml`; the partition is given on the
+  command line. Plain `sbatch` was the alternative; Joon may return to it. The launcher
+  submits multiruns only, so even one job takes `-m`.
+- **`Isochron.resample(spacing)`** returns points at an exact arclength spacing on a
+  grid anchored at the base point, interpolated linearly in arclength; $\eta$ is
+  interpolated in $\log\vert\eta\vert$ on each half. Linear interpolation errs by
+  under $10^{-5}$ on the coworker's curves, estimated from their curvature and steps;
+  a spline would add a dependency for less than the oracle's tolerance. A fixed number
+  of points per half, which would stack into one array, waits for the metric that needs
+  it. The script stores the traced points; resampling is the reader's choice.
 
 ## Bugs fixed
 
@@ -455,6 +509,15 @@ but the tier is still 5.8 minutes, above the 3.5–4 estimated: the foliation te
 trace their phases one after the other, and JAX's own threads in each pytest worker
 still share the two cores.
 
+**The isochron script and `resample`**: `tests/test_experiment_isochrons.py` composes
+both configs against their data configs, checks the phases from `count` or `values`,
+that the hash follows the system, anchor, phases and settings and not `max_workers`,
+that `load_isochrons` refuses a missing file and `compute_isochrons` an existing one,
+and (marker `auto`) that a one-phase foliation computed from a config loads back
+through it. `tests/test_isochron.py` checks `resample` on a circular arc (exact
+spacing, the base point kept, within the traced steps' sag of the circle, $\eta$ signed
+and monotone) and on a line (exact). Their runs are pending at the time of writing.
+
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
 changes little):
@@ -557,3 +620,11 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `docs/decisions/0017-isochrons-by-auto-continuation.md` — the timing; one thread per AUTO run, workers on the CPU | | |
 | `isochron.py`, `docs/design/isochrons.md`, `tests/helpers.py` — `box_scale` defaults to 2.5 | | |
 | `tests/helpers.py` — `ISOCHRON_SETTINGS["full"]` keeps the coworker's box | | |
+| `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py` — the isochron configs: phases, settings, cycle, hash, file, compute, load | | |
+| `scripts/compute_isochrons.py`, `scripts/README.md` — the Hydra entry point | | |
+| `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — the isochron configs | | |
+| `configs/hydra/launcher/slurm.yaml`, `pyproject.toml`, `uv.lock` — the SLURM launcher and the `slurm` group | | |
+| `src/deep_isochron/analysis/ode/auto/isochron.py`, `analysis/ode/__init__.py` — `Isochron.resample`; `wrap_phases` public; INFO per phase | | |
+| `tests/test_experiment_isochrons.py`, `tests/test_isochron.py` — the configs and the script; `resample` | | |
+| `docs/auto.md`, `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md` — the script, the launcher, the module map | | |
+| `CLAUDE.md` — a test outcome only after the test has run | | |

@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0011
 status: accepted; amended 2026-10-07/13 (§6 - Run, Experiment.from_config, explicit resume, one construction style)
-updated: 2026-10-27
+updated: 2026-10-28
 verified_by: pending (Joon; decisions taken in discussion 2026-10-05)
 ---
 
@@ -92,6 +92,13 @@ parameters as the arrays hold them.
 - `generate_dataset(cfg.data)` is the one place generation happens; the script calls it.
   `load_or_generate_source(cfg.data)` is the notebook's explicit opt-in to generation;
   `Experiment.from_config` and `train` still never generate.
+- The reference isochrons of [ADR-0017](0017-isochrons-by-auto-continuation.md) follow
+  the same pattern. A config in `configs/isochrons/` composes a data config, whose
+  system it traces, and `compute_isochrons` saves `<out_dir>/<name>-<hash>.nc`, the
+  hash over what decides the result; `load_isochrons` never computes and raises
+  `FileNotFoundError` naming `scripts/compute_isochrons.py`. Unlike
+  `generate_dataset`, `compute_isochrons` refuses an existing file, since a foliation
+  costs hours and a rerun would compute the same one.
 
 ### 4. `num_steps` is the unit of a run; the loader covers it in whole epochs
 
@@ -201,3 +208,7 @@ Alternatives rejected for a single decision are listed under that decision.
   `Experiment.setup` became `Run.from_config` and `Experiment.from_config`.
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md).
+- 2026-10-28 (`auto-isochrons`): Decision 3 covers the isochron configs
+  (`configs/isochrons/`, `compute_isochrons`, `load_isochrons`); Hydra's submitit
+  launcher joins as the dependency group `slurm`, with
+  `configs/hydra/launcher/slurm.yaml` for training and isochron jobs alike.

@@ -75,6 +75,7 @@ order-by-type = false
 auto = ["auto-07p"]
 dev = [
     { include-group = "auto" },
+    { include-group = "slurm" },
     "beartype>=0.22.9",
     "hypothesis>=6.168.3",
     "ipykernel>=7.3.0",
@@ -85,6 +86,11 @@ dev = [
     "pytest-xdist>=3.8.0",
     "rust-just>=1.59.0",  # the task runner: `uv run just --list` (justfile)
     "ty>=0.0.88",
+]
+# Hydra's SLURM launcher: `-m hydra/launcher=slurm hydra.launcher.partition=<name>`
+# submits a training or isochron run as a job (configs/hydra/launcher/slurm.yaml).
+slurm = [
+    "hydra-submitit-launcher>=1.2.0",
 ]
 
 [tool.uv.sources]
