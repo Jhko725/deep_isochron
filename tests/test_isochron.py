@@ -265,13 +265,14 @@ def test_stages_one_to_three_agree_with_o1_and_o2(auto, name):
     orbit is O1's flow and its period O1's; ``Jw`` lies along O2's Floquet vector and
     ``w·F`` is constant along the cycle; stage 3 puts the base point of phase
     ``2πk/m`` at O1's mesh point ``x0s[k]``, with ``Jw`` along the Floquet vector
-    there. On the normal forms ``w`` lies along the gradient of the closed-form phase,
-    and that phase at each base point is the requested one, signed by the sense of
-    rotation (decision 14)."""
+    there, phase π included, where the rotation starts. On the normal forms ``w``
+    lies along the gradient of the closed-form phase, and that phase at each base point
+    is the requested one, signed by the sense of rotation (decision 14)."""
     cycle = _cycle(name)
     ode, m = cycle.ode, cycle.x0s.shape[0]
     vectors = np.asarray(floquet(cycle).vectors)
-    ks = sorted({m // 8, m // 3, (5 * m) // 8})
+    assert m % 2 == 0  # so that k = m/2 is phase π, the start of stage 3
+    ks = sorted({m // 8, m // 3, m // 2, (5 * m) // 8})
     phases = [math.remainder(2 * math.pi * k / m, 2 * math.pi) for k in ks]
     with isochron._workdir(ode, "isochron") as problem:
         run = isochron._Runner(auto, problem)

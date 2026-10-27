@@ -353,8 +353,30 @@ def _workdir(ode, name: str) -> Generator[AutoProblem]:
             os.chdir(previous)
 
 
+@contextlib.contextmanager
+def _one_thread() -> Generator[None]:
+    """``OMP_NUM_THREADS=1`` for the duration of the block, restored afterward.
+
+    AUTO compiles each equation file with ``-fopenmp`` and starts the executable with
+    the process's environment, so without the variable it runs one thread per core.
+    On a 24-core node, stages 1–3 of one FitzHugh–Nagumo phase ran on 24 threads for
+    about 8.5 minutes; on two cores they take 82 s. A planar problem leaves each thread
+    little work to share.
+    """
+    previous = os.environ.get("OMP_NUM_THREADS")
+    os.environ["OMP_NUM_THREADS"] = "1"
+    try:
+        yield
+    finally:
+        if previous is None:
+            del os.environ["OMP_NUM_THREADS"]
+        else:
+            os.environ["OMP_NUM_THREADS"] = previous
+
+
 class _Runner:
-    """Runs AUTO with its output captured: logged at DEBUG and kept for failures."""
+    """Runs AUTO on one thread (`_one_thread`) with its output captured: logged at
+    DEBUG and kept for failures."""
 
     def __init__(self, auto: AutoHandle, problem: AutoProblem):
         self.auto = auto
@@ -367,7 +389,7 @@ class _Runner:
         self.constants = constants
         buffer = io.StringIO()
         try:
-            with contextlib.redirect_stdout(buffer):
+            with contextlib.redirect_stdout(buffer), _one_thread():
                 return self.auto.commands.run(
                     start,
                     e=self.problem.name,
@@ -502,7 +524,15 @@ def _rotate_phase(
     targets = {theta: (1 - (theta % (2 * math.pi)) / (2 * math.pi)) * period
                for theta in phases}  # fmt: skip
     targets = {theta: (period if tau == 0 else tau) for theta, tau in targets.items()}
-    found: dict[float, _Solution] = {}
+    # A user point is reported where its function changes sign between two steps, so
+    # one at the starting value is never reported: the bundle itself is that phase,
+    # θ = π for the split at half the period of stage 1.
+    start = float(bundle[f"PAR({idx.seg2})"])
+    found: dict[float, _Solution] = {
+        theta: _Solution.from_auto(bundle, ndim=8, npar=npar)
+        for theta, target in targets.items()
+        if abs(target - start) < 1e-8 * period
+    }
     for ds in (-0.01, 0.01):
         branch = run(
             bundle, ICP=[idx.seg2, idx.mult, idx.seg1, idx.period], SP=[], DS=ds,
@@ -624,8 +654,18 @@ def _isochron(
 
 # ------------------------------------------------------------------ the driver ----
 def _init_worker() -> None:
-    """A pool worker traces one phase at a time on one core (decision 17)."""
+    """A pool worker traces one phase at a time on one core (decision 17), with JAX on
+    the CPU.
+
+    Each worker unpickles the cycle's arrays and integrates the start of stage 4, so on
+    a machine with a GPU each one would start a GPU backend and preallocate most of its
+    memory; five workers ran the GPU out of memory five times. The worker's
+    integrations are small and two-dimensional. JAX is already imported when the
+    initializer runs, so the platform is set through its configuration, not the
+    environment.
+    """
     os.environ["OMP_NUM_THREADS"] = "1"
+    jax.config.update("jax_platforms", "cpu")
 
 
 def _trace_phase(

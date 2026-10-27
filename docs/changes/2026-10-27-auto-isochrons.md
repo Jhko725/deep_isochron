@@ -145,6 +145,11 @@ three times.
 - `pyproject.toml`, `docs/coding-standards.md`, Step E: ruff's `W605` selected, and its
   row in the table of checks.
 - `docs/roadmap.md`, Step E: the O7 row; the Done ledger records Step E.
+- `src/deep_isochron/analysis/ode/auto/isochron.py`, after Joon's cluster runs: every
+  AUTO run on one OpenMP thread (`_one_thread` in `_Runner`); phase π taken from the
+  bundle in stage 3; pool workers with JAX on the CPU.
+- `tests/test_isochron.py`, `tests/helpers.py`: the stage test includes phase π; the
+  named settings run one worker.
 
 ## Design
 
@@ -294,6 +299,19 @@ three times.
   the design document now say what happens, and the oracle against O1 reads the orbit
   after stage 2. The set-up run of stage 4 behaves the same way, as the coworker's did.
 
+- **Phase π always failed** ("no user point at this phase in stage 3", Joon's notebook,
+  `linspace(-π, π, 1, endpoint=False)`). Its target $\tau_2 = T/2$ is where stage 1
+  leaves segment 2, and AUTO reports a user point only where its function changes sign
+  between two steps, never at the start. Stage 3 now takes the bundle itself for it.
+- **Stages 1–3 ran AUTO on every core.** Symptom: 24 `isochron.exe` threads on a
+  24-core node for about 8.5 minutes, one thread once stage 4 began. AUTO compiles with
+  `-fopenmp` and only the pool workers set `OMP_NUM_THREADS=1`; `_Runner` now sets it
+  for every run.
+- **Five phases ran a GPU out of memory five times.** Each pool worker unpickled the
+  cycle's arrays and integrated on the default backend, the GPU, each preallocating
+  most of its memory. `_init_worker` puts the workers' JAX on the CPU. Not tested here,
+  which has no GPU.
+
 ## Tests
 
 Only `tests/test_auto_codegen.py` covers the modules this step touches. The full tier
@@ -419,6 +437,9 @@ normal-form foliations 107 s and 118 s, because each foliation's own pool of two
 processes shares the two cores with the second pytest worker. Run alone, stages 1–3 of
 FitzHugh–Nagumo take 82 s and the quick foliation 70 s.
 
+**After the cluster fixes**: the isochron tests have not yet been rerun; the next
+commit records them with the timing.
+
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session): running at the time of this commit; the next
 commit records it.
@@ -507,3 +528,5 @@ commit records it.
 | `pyproject.toml`, `docs/coding-standards.md` — ruff `W605` and its row | | |
 | `docs/roadmap.md` — O7 step 2 done; Done ledger row for Step E | | |
 | `docs/decisions/0016-symbolic-systems.md` — the History line dated 2026-10-28 | | |
+| `src/deep_isochron/analysis/ode/auto/isochron.py` — one OpenMP thread per AUTO run; phase π; workers' JAX on the CPU | | |
+| `tests/test_isochron.py`, `tests/helpers.py` — phase π in the stage test; one worker in the named settings | | |

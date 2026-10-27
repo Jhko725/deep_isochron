@@ -118,15 +118,21 @@ SOLVERS = {
 # half is set by how far its segment reaches, which grows with the number of periods,
 # so the quick settings trace one period; a half that runs out of steps is flagged, not
 # raised (D7). One FitzHugh–Nagumo phase then takes about half a minute on two cores.
+# Every entry has one worker: pytest already runs one test per core, and a pool of
+# its own per test oversubscribed the two cores of a session (8.4 min for the tier).
 ISOCHRON_SETTINGS = {
     # every push: one period, a small box, a step cap
-    "quick": IsochronSettings(n_periods=1, box_scale=2.0, max_steps=1500),
+    "quick": IsochronSettings(
+        n_periods=1, box_scale=2.0, max_steps=1500, max_workers=1
+    ),
     # the full oracle suite (auto and slow): the coworker's settings
-    "full": IsochronSettings(),
+    "full": IsochronSettings(max_workers=1),
     # the normal forms against their closed forms: two periods, so that the halves
     # reach from near the phaseless set to the box (one period stays within 0.002 of
     # Winfree's cycle, whose multiplier is about 4e-4)
-    "reach": IsochronSettings(n_periods=2, box_scale=2.0, max_steps=1500),
+    "reach": IsochronSettings(
+        n_periods=2, box_scale=2.0, max_steps=1500, max_workers=1
+    ),
 }
 
 
