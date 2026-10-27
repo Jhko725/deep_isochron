@@ -574,7 +574,26 @@ failures are workers that the kernel killed for memory: `dmesg` records two "Mem
 cgroup out of memory" kills of a pytest worker at 3.8 GB and 3.1 GB resident, so two
 workers at the `ci` profile exceed the session's 7 GB. The failed tests are
 `test_limit_cycle_on_random_hopf_forms`, `test_cartesian_integration_is_finite_at_the_origin`
-and `test_integrations_agree`; each is being measured alone for its peak memory.
+and `test_integrations_agree`. Run alone at the `ci` profile:
+
+- `test_integrations_agree` passes, in 714 s at a 4.2 GB peak: alone it fits, beside a
+  second worker it does not.
+- `test_cartesian_integration_is_finite_at_the_origin` passes, in 10 s at 0.6 GB: its
+  worker was killed for what earlier tests had left in it.
+- `test_limit_cycle_on_random_hopf_forms` aborts (SIGABRT, exit 134) after 673 s at a
+  4.0 GB peak, inside XLA's `backend_compile_and_load` under `find_limit_cycle`
+  (`limit_cycle.py:364`). It aborts in Hypothesis's generation phase as well as while
+  shrinking, so whether any example fails is not known.
+
+**Every call of `find_limit_cycle` with a new `t_settle` or new parameters compiles
+again.** Counted with `jax_log_compiles`: the first call compiles 45 programs, a repeat
+0, a new `t_settle` 3 (`settle`, the return map's `filter_custom_jvp`, `polish`), and new
+parameters with the same `t_settle` 1 (`polish`). Python floats such as `t_settle` and
+the return-map period reach `eqx.filter_jit` as static arguments, so each value is a new
+program. Over the 300 examples of the `ci` profile the compiled programs accumulate,
+which fits the memory growth and the abort, and likely much of the time of the four
+slowest files **[deduced]**. Passing them as arrays should remove it; that is O1's code
+and decision 8's question, left for Joon.
 
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
@@ -590,6 +609,11 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 1.8.
 
 ## Open issues
+
+- **`find_limit_cycle` recompiles for every new `t_settle` and parameter set** (*Tests*,
+  per-file timing): the likely cause of the `ci` tier's memory kills and of much of its
+  90 minutes. The fix, floats passed to the jitted stages as arrays, is O1's and
+  decision 8's.
 
 - **The canceled `checks` job** is fixed on its own branch before this one is reviewed
   (plan decision 8).
