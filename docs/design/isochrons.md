@@ -448,8 +448,10 @@ when the traced point leaves the cycle's bounding box enlarged `box_scale` times
 its center in either coordinate, or at the step limit `NMX`. Each `Isochron` records
 which of `"eta"`, `"box"` and `"max_steps"` ended each half (D7); a half that ran out of
 steps is correct as far as it goes, so it is flagged rather than raised. For
-FitzHugh–Nagumo, whose cycle has $\vert x\vert$ up to about 2, `box_scale = 5`
-reproduces the coworker's bound of 10 and adds the lost bound on $y$.
+FitzHugh–Nagumo, whose cycle has $\vert x\vert$ up to about 2, `box_scale = 5` would
+reproduce the coworker's bound of 10; the default is 2.5 (Joon, 2026-10-28), which
+shortens the outward halves, the part of each curve far from both the cycle and the
+fixed point, and adds the bound on $y$ that the coworker's runs lacked.
 
 **The mesh grows with the number of periods.** `IsochronSettings.ntst` defaults to
 `60 * n_periods`, 300 for the default 5, so that the isochron segment keeps 60 intervals

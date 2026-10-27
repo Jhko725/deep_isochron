@@ -150,6 +150,8 @@ three times.
   bundle in stage 3; pool workers with JAX on the CPU.
 - `tests/test_isochron.py`, `tests/helpers.py`: the stage test includes phase π; the
   named settings run one worker.
+- `src/deep_isochron/analysis/ode/auto/isochron.py`, `docs/design/isochrons.md`,
+  `tests/helpers.py`: `box_scale` defaults to 2.5 (Joon, 2026-10-28).
 
 ## Design
 
@@ -263,6 +265,12 @@ three times.
   `isochron_multiseg.f90` keeps these conditions but two: the bundle is
   $-\tau A^{\mathsf T}w$ (D1, *Bugs fixed*), and `FB(6)` anchors segment 1 on the
   section through phase 0.
+
+- **`box_scale` defaults to 2.5, not 5 (Joon, 2026-10-28).** Five reproduced the
+  coworker's $\vert x\vert = 10$ on FitzHugh–Nagumo; 2.5 shortens the outward halves,
+  which carry little of the structure, while the inward halves toward the unstable
+  fixed point are unchanged. The two-way oracle compares over the arclength ours covers,
+  so it is unaffected; it is rerun with the new default.
 
 ## Bugs fixed
 
@@ -545,3 +553,4 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `src/deep_isochron/analysis/ode/auto/isochron.py` — one OpenMP thread per AUTO run; phase π; workers' JAX on the CPU | | |
 | `tests/test_isochron.py`, `tests/helpers.py` — phase π in the stage test; one worker in the named settings | | |
 | `docs/decisions/0017-isochrons-by-auto-continuation.md` — the timing; one thread per AUTO run, workers on the CPU | | |
+| `isochron.py`, `docs/design/isochrons.md`, `tests/helpers.py` — `box_scale` defaults to 2.5 | | |
