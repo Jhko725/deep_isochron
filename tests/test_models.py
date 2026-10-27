@@ -1,6 +1,6 @@
-"""``AbstractPhaseAmplitudeModel``: both approaches — the invertible conjugacy
-(``ConjugateLatentDynamics``) and the phase autoencoder (``PhaseAmplitudeAutoencoder``)
-— satisfy one contract (``model/base.py``), so training and evaluation see them alike.
+"""``AbstractPhaseAmplitudeModel``: both approaches, the invertible conjugacy
+``ConjugateLatentDynamics`` and the phase autoencoder ``PhaseAmplitudeAutoencoder``,
+satisfy one contract (``model/base.py``), so training and evaluation see them alike.
 
 Checked on each model: shapes, ``phase`` in ``(-π, π]``, ``phase_sensitivity`` is the
 gradient of ``phase`` at the cycle point, ``__call__`` returns ``(xt, yt)``. The
@@ -40,6 +40,10 @@ def _autoencoder(key):
 
 @pytest.mark.parametrize("build", [_conjugacy, _autoencoder], ids=["conjugacy", "ae"])
 def test_phase_amplitude_contract(build):
+    """Each model is an `AbstractPhaseAmplitudeModel` whose `phase` is a scalar in
+    ``[-π, π]``, whose `phase_sensitivity` and `phase_gradient` are the autodiff
+    gradient of `phase`, and whose call returns finite ``(xt, yt)`` of the right
+    shapes."""
     model = build(jax.random.key(0))
     assert isinstance(model, AbstractPhaseAmplitudeModel)
     x = jnp.array([0.4, -1.1])

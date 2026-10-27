@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-20
+updated: 2026-10-27
 ---
 
 # `deep_isochron` documentation — index
@@ -21,6 +21,8 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`architecture.md`](architecture.md) | architecture | module map, data flow of one training step, where each decision is recorded |
 | [`roadmap.md`](roadmap.md) | roadmap | the single current plan, phase by phase, with the Done ledger |
 | [`../CLAUDE.md`](../CLAUDE.md) | conventions | how Claude works in this repository (change documents, review notes, tooling) |
+| [`coding-standards.md`](coding-standards.md) | reference | where each convention is enforced here: tiers, named tolerances, the contracts the ADRs fix, the Markdown rules, the docstring and citation forms, the checks that replace prose |
+| [`references.md`](references.md) | reference | the one bibliography: every work the documents, docstrings and tests cite, by key, with DOI and the locators used |
 
 ## Design documents (`design/`) — the mathematics behind the code
 
@@ -44,15 +46,19 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | [0004](decisions/0004-abstractvar-fields.md) | accepted | `AbstractVar` as `eqx.field(static=True, init=False)` |
 | [0005](decisions/0005-constraint-primitives.md) | accepted; amended | constraint primitives created inside `constrain`; shift computed lazily (no JAX at import) |
 | [0006](decisions/0006-cubic-bspline-boundary-and-inverse.md) | accepted | `CubicBSpline` boundary and inverse |
-| [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | accepted; amended (ADR-0013: basins, even subfamily) | `AbstractODE`/`AbstractNormalForm`, `SolverConfig`, integrations as objects |
+| [0007](decisions/0007-systems-hierarchy-and-flow-strategies.md) | accepted; amended (ADR-0013: basins, even subfamily; ADR-0016: symbolic defining data) | `AbstractODE`/`AbstractNormalForm`, `SolverConfig`, integrations as objects |
 | [0008](decisions/0008-dataset-format-and-sampling.md) | accepted; amended (Decision 3 review pending) | netCDF4 datasets via xarray; weighted windows alongside `mix`; batched `WindowBatchSource` for training runs |
 | [0009](decisions/0009-trainer-losses-schedules-checkpoints.md) | accepted; amended (review round 2 pending) | trainer: injected logging/checkpointing, losses as weighted terms, schedules in the state, whole-state checkpoints |
 | [0010](decisions/0010-rotations-by-cayley-transform.md) | accepted | `BiLipschitzLinear` rotations by Cayley transform, not `expm` (GPU conditionals) |
 | [0011](decisions/0011-experiment-layer.md) | accepted; amended 2026-10-07 (§6 `Run`/`setup`, explicit resume) | experiment layer: YAML `_target_` configs, builders, Hydra-owned runs, explicit data generation, forced final checkpoint |
-| [0012](decisions/0012-analysis-layout.md) | accepted; amended 2026-10-15 (ODE half first; `Cycle` not the organizing object; survey delivered before implementation) | `analysis`: data-driven and ODE halves sharing `Cycle`; `estimate_cycle` self-contained, `settling_time` takes a cycle; host-side NumPy; one commit per function after a literature survey |
+| [0012](decisions/0012-analysis-layout.md) | accepted; amended 2026-10-15 (ODE half first; `Cycle` not the organizing object; survey delivered before implementation) | `analysis`: a data-driven half and an ODE half, shared objects chosen from what the functions share; `estimate_cycle` self-contained, `settling_time` takes a cycle; the data half host-side NumPy, the ODE half's results `eqx.Module`s; one commit per function after a literature survey |
 | [0013](decisions/0013-normal-form-basins.md) | accepted (review pending) | normal forms take their data in `r` on a declared basin; evenness is the `AbstractEvenNormalForm` subfamily (Hopf, Bautin); Winfree's model with a hole; `nan` outside the basin; `generate(outside_basin=error\|resample)` |
-| [0014](decisions/0014-limit-cycle-by-shooting.md) | accepted (review pending) | `analysis.ode.limit_cycle`: shooting on the time-T flow (not collocation), Poincaré section normal to the flow, `PoincareMap` as the one abstraction with `direction`/`reverse_time`, frozen-dataclass results, Liouville/multiplier interpretation deferred to O2 |
+| [0014](decisions/0014-limit-cycle-by-shooting.md) | accepted (review pending) | `analysis.ode.limit_cycle`: shooting on the time-T flow (not collocation), Poincaré section normal to the flow, `PoincareMap` as the one abstraction with `direction`/`reverse_time`, `eqx.Module` results, `analysis` through the `flow` contract alone; Floquet multipliers in ADR-0015 |
 | [0015](decisions/0015-floquet-by-seeded-periodic-schur.md) | accepted (review pending) | `analysis.ode.floquet`: the seeded periodic Schur chain on the shooting-segment Jacobians (forward, in the attracting direction) as the method, explicit monodromy and Liouville as checks, `Literal` method dispatch; `LimitCycle`/`FixedPoint` as `eqx.Module`s carrying the ODE and configuration (amends ADR-0012 §3, ADR-0014 §3) |
+| [0016](decisions/0016-symbolic-systems.md) | accepted (review pending) | systems declared once in SymPy (`AbstractSymbolicODE._symbolic_template`; normal forms' `_symbolic_rates[_sq]`), JAX `rhs`/hooks derived and compiled per class in `__init_subclass__`; AUTO-07p Fortran by `INCLUDE` of generated `rhs.inc`/`indices.inc` (amends ADR-0007) |
+| 0017 | reserved | the AUTO-07p isochron pipeline (branch `auto-isochrons`, roadmap O7 step 2) |
+| [0018](decisions/0018-docstrings-map-and-contract.md) | accepted | docstrings: the module docstring is the map, a function docstring the contract, reasoning in the ADRs; `**Attributes:**` lists; one bibliography `references.md` with `(Key, locator)` citations and `check_references.py`; ruff `D100`–`D103` switched on round by round |
+| [0019](decisions/0019-adrs-describe-the-current-design.md) | accepted | ADRs: Context with Motivation and Forces; Decision and Consequences always the current design; superseded designs in Alternatives rejected; a dated History; relative links checked by `check_references.py` |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 
@@ -67,3 +73,5 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `analysis` | [`2026-10-06-analysis.md`](changes/2026-10-06-analysis.md) |
 | `run-layout` | [`2026-10-07-run-layout.md`](changes/2026-10-07-run-layout.md) |
 | `normal-forms-basin` | [`2026-10-08-normal-forms-basin.md`](changes/2026-10-08-normal-forms-basin.md) |
+| `conventions-docs` | [`2026-10-25-conventions-docs.md`](changes/2026-10-25-conventions-docs.md) |
+| `prose` | [`2026-10-26-prose.md`](changes/2026-10-26-prose.md) |

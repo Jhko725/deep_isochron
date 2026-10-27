@@ -38,6 +38,9 @@ def layers(draw) -> BiLipschitzLinear:
 
 @given(f=layers())
 def test_parameter_space_guarantees(f):
+    """For arbitrary raw leaves, ``U`` and ``V`` are in ``SO(dim)``, ``s`` in
+    ``(1/L, L)``, the singular values of ``weight`` within ``(1/L, L)`` to
+    ``TOL["closed_form"]``, and ``det W > 0``."""
     L = f.max_lipschitz
     p = f.params
     eye = jnp.eye(f.dim)
@@ -53,6 +56,8 @@ def test_parameter_space_guarantees(f):
 
 @given(f=layers())
 def test_weight_is_built_from_params(f):
+    """``weight == (U * s) @ V.T`` to ``TOL["identity"]``, and its sorted singular
+    values are the sorted ``s`` to ``TOL["closed_form"]``."""
     p = f.params
     tol = TOL["identity"]
     assert_close(f.weight, (p.U * p.s) @ p.V.T, rtol=tol, atol=tol)
@@ -63,6 +68,7 @@ def test_weight_is_built_from_params(f):
 
 @pytest.mark.parametrize("dim", [2, 3])
 def test_identity_init(dim):
+    """The default init gives ``weight == I`` and ``s == 1`` to ``TOL["identity"]``."""
     f = BiLipschitzLinear(dim=dim, max_lipschitz=2.0, key=jax.random.key(3))
     assert_close(f.weight, jnp.eye(dim), atol=TOL["identity"])
     assert_close(f.params.s, jnp.ones(dim), atol=TOL["identity"])
@@ -70,6 +76,8 @@ def test_identity_init(dim):
 
 @pytest.mark.parametrize("seed", range(5))
 def test_rotation_init_is_orthogonal_with_unit_singular_values(seed):
+    """``init="rotation"`` gives an orthogonal ``weight`` with positive determinant and
+    unit ``s`` that differs from the identity, over five seeds."""
     f = BiLipschitzLinear(
         dim=3, max_lipschitz=2.0, init="rotation", key=jax.random.key(seed)
     )
@@ -82,6 +90,8 @@ def test_rotation_init_is_orthogonal_with_unit_singular_values(seed):
 
 
 def test_validation():
+    """``max_lipschitz <= 1`` raises ``ValueError``; an unknown ``init`` raises
+    ``ValueError`` or, under the beartype hook, ``TypeError``."""
     with pytest.raises(ValueError):
         BiLipschitzLinear(dim=2, max_lipschitz=1.0, key=jax.random.key(0))
     # Under the beartype import hook the Literal annotation rejects this first.
@@ -91,10 +101,11 @@ def test_validation():
 
 @pytest.mark.parametrize("dim", [2, 3])
 def test_rotations_have_no_conditionals(dim):
-    """ADR-0010: the compiled parameter map has no ``conditional`` — and for ``dim = 2``
-    no ``while`` either. ``jax.scipy.linalg.expm`` put 16 ``lax.cond``s per rotation in
-    the step, each a device-to-host round trip on GPU (0.65 ms per 2×2 call on a V100).
-    For ``dim > 2`` the LU solve keeps a ``dim``-trip pivot loop with no conditional."""
+    """The compiled parameter map has no ``conditional`` in its HLO, and for ``dim = 2``
+    no ``while`` either (ADR-0010). ``jax.scipy.linalg.expm`` put 16 ``lax.cond``s per
+    rotation in the step, each a device-to-host round trip on GPU, 0.65 ms per 2×2 call
+    on a V100. For ``dim > 2`` the LU solve keeps a ``dim``-trip pivot loop with no
+    conditional."""
     f = BiLipschitzLinear(
         dim=dim, max_lipschitz=2.0, init="rotation", key=jax.random.key(0)
     )
@@ -105,6 +116,9 @@ def test_rotations_have_no_conditionals(dim):
 
 
 def test_cayley_dim2_closed_form_matches_the_solve():
+    """The closed-form 2×2 ``cayley`` equals ``solve(I + S, I - S)`` to
+    ``TOL["closed_form"]``, is orthogonal, and has positive determinant, for four
+    skew entries including 50."""
     from deep_isochron.model.invertible.linear import cayley
 
     for a in (0.0, 0.3, -2.0, 50.0):

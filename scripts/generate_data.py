@@ -21,6 +21,7 @@ jax.config.update("jax_enable_x64", True)
 
 @hydra.main(version_base=None, config_path="../configs/data", config_name="fhn")
 def main(cfg: DictConfig) -> None:
+    """Generate the dataset that `cfg` describes and print where it was written."""
     path = generate_dataset(cfg)
     print(f"wrote {path}")
 

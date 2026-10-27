@@ -1,6 +1,6 @@
-"""Where this code came from: the git state of the checkout the package is
-imported from, and the installed package version. Recorded in dataset metadata
-(``data.generate``) and in run metadata (``experiment.run``)."""
+"""Where this code came from: the git state of the checkout the package is imported
+from, and the installed package version, recorded in dataset metadata by
+``data.generate`` and in run metadata by ``experiment.run``."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ from pathlib import Path
 
 
 def git_state() -> tuple[str, bool]:
-    """``(sha, dirty)`` of the checkout this package is imported from (not the cwd);
-    ``("", False)`` outside a checkout or without git."""
+    """``(sha, dirty)`` of the checkout this package is imported from, not of the
+    working directory; ``("", False)`` outside a checkout or without git."""
     here = Path(__file__).resolve().parent
     try:
         sha = subprocess.run(
@@ -32,6 +32,7 @@ def git_state() -> tuple[str, bool]:
 
 
 def package_version() -> str:
+    """The installed version of ``deep-isochron``, or ``""`` when not installed."""
     try:
         return importlib.metadata.version("deep-isochron")
     except importlib.metadata.PackageNotFoundError:

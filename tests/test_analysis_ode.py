@@ -1,31 +1,19 @@
-"""``analysis.ode`` — O1, the limit cycle from the vector field, against exact oracles.
+"""``analysis.ode``, the limit cycle and its Floquet exponent from the vector field,
+against exact oracles.
 
-1. CrossSection      signed distance, unit normal, the flow-normal section
-2. PoincareMap       the first-return map on the normal forms (exact return time and
-                     point), under jit and vmap; P₋ on (p, n) = P₊ on (p, −n); the
-                     two-sided map on a four-crossing (Cassini) cycle visits the four
-                     intersections; fixed_point with period 2 there, contraction →
-                     e^{κT}; the derivative by custom JVP: eigenvalues {0, e^{κT}}
-                     (Parker & Chua Eq. 5.21) and dτ against finite differences; the
-                     missing-crossing behavior (runtime error / tau = inf); reverse
-                     time on Winfree's repelling inner cycle
-3. multiple_shooting from a perturbed guess, m = 1 and m = 4 agree, under jit;
-                     tolerance monotonicity; input checks
-4. find_limit_cycle  Hopf/Bautin/Winfree (exact T, radius), the Guckenheimer–Meloon
-                     algebraic orbit (max|g|), FitzHugh–Nagumo against Langfield et al.
-                     (slow), near-Hopf Bautin, reverse time, output invariants, the
-                     guards; Hypothesis over Hopf parameters
-5. floquet           O2: the three routes against κ = ρ'(1) on the normal forms;
-                     Winfree's repelling cycle in reverse time; the Cassini oval's κ
-                     and T by solver-free line integrals; FitzHugh–Nagumo: periodic
-                     Schur vs Liouville agree, the monodromy and return-map floors
-                     (slow); the Cassini oval's μ ≈ 1e-16 beyond the monodromy's
-                     reach; invariance under base point and m; QR exactness; dim ≠ 2
+The five sections follow the module: `CrossSection`; `PoincareMap`, the first-return
+map on the normal forms with its custom JVP (Parker & Chua 1989, Eq. 5.21), its
+two-sided and reverse-time variants and its missing-crossing behavior;
+`multiple_shooting` from a perturbed guess; `find_limit_cycle` on Hopf, Bautin and
+Winfree (exact period and radius), the Guckenheimer–Meloon algebraic orbit, the
+FitzHugh–Nagumo cycle of Langfield et al. 2014 (slow), and its guards; `floquet`, the
+three routes against ``κ = ρ'(1)`` on the normal forms, solver-free line integrals on
+the Cassini oval, and the conditioning floors on FitzHugh–Nagumo (slow).
 
 The normal forms are constructed with ``integration="cartesian"`` so that the analysis
-integrates their vector field numerically and their closed forms are the oracle (with
-the default closed-form ``flow`` the comparison would be circular); one test checks that
-the two agree.
+integrates their vector field numerically and their closed forms are the oracle; with
+the default closed-form ``flow`` the comparison would be circular, and one test checks
+that the two agree.
 """
 
 import importlib
@@ -87,6 +75,8 @@ def _multiplier(nf) -> float:
 
 # --------------------------------------------------------------- 1. CrossSection --
 def test_cross_section_signed_distance_and_unit_normal():
+    """A `CrossSection` normalizes its normal, its signed distance is zero at the
+    center and flips with `flip`, and a zero normal raises `ValueError`."""
     plane = CrossSection(jnp.array([1.0, 2.0]), jnp.array([0.0, 3.0]))
     assert_close(jnp.linalg.norm(plane.normal), 1.0, atol=TOL["identity"])
     assert_close(
@@ -103,6 +93,8 @@ def test_cross_section_signed_distance_and_unit_normal():
 
 
 def test_flow_normal_section_points_along_the_flow():
+    """`CrossSection.normal_to_flow` has a positive component along the vector field
+    at its center and raises at an equilibrium."""
     p = _on_cycle(HOPF)
     plane = CrossSection.normal_to_flow(HOPF, p)
     assert float(jnp.dot(plane.normal, HOPF.rhs(0.0, p))) > 0
@@ -122,6 +114,8 @@ def test_flow_normal_section_points_along_the_flow():
     ids=["hopf", "bautin_cw", "winfree"],
 )
 def test_return_map_on_the_cycle_returns_in_one_period(nf):
+    """From a point of the cycle the first-return map returns the same point after
+    the normal form's unsigned period, to `TOL["return_map"]`."""
     p = _on_cycle(nf, 0.4)
     P = PoincareMap(nf, CrossSection.normal_to_flow(nf, p), CFG, t_max=20.0)
     y, tau = P(p)
@@ -130,6 +124,9 @@ def test_return_map_on_the_cycle_returns_in_one_period(nf):
 
 
 def test_return_map_is_jittable_and_vmappable():
+    """`PoincareMap` gives the same return under `filter_jit`, and `vmap` over three
+    radii lands every point on the section after one period (Hopf's ``ω`` is
+    constant)."""
     p = _on_cycle(HOPF, 0.4)
     P = PoincareMap(HOPF, CrossSection.normal_to_flow(HOPF, p), CFG, t_max=20.0)
     y_eager, tau_eager = P(p)
@@ -145,6 +142,8 @@ def test_return_map_is_jittable_and_vmappable():
 
 
 def test_negative_map_is_the_positive_map_of_the_flipped_section():
+    """The negative-direction map on a section equals the positive map on the flipped
+    section, and on Hopf it reaches the antipodal point after half a period."""
     p = _on_cycle(HOPF, 1.0)
     plane = CrossSection.normal_to_flow(HOPF, p)
     neg = PoincareMap(HOPF, plane, CFG, t_max=20.0, direction="negative")
@@ -169,6 +168,9 @@ def _cassini_point_at_height(ode, y0=0.5, x_guess=1.3):
 
 
 def test_two_sided_map_visits_the_four_intersections_of_a_non_convex_cycle():
+    """On the Cassini oval a horizontal section above the waist has four crossings:
+    the two-sided map visits all four in one period, the one-sided map's fixed point
+    has ``k = 2``, and `fixed_point` on a two-sided map raises `ValueError`."""
     ode = cassini()
     p = _cassini_point_at_height(ode)
     plane = CrossSection(p, jnp.array([0.0, 1.0]))  # horizontal, above the waist
@@ -188,6 +190,9 @@ def test_two_sided_map_visits_the_four_intersections_of_a_non_convex_cycle():
 
 
 def test_fixed_point_contracts_at_the_floquet_multiplier():
+    """`fixed_point` from off the Hopf cycle converges to radius 1 with the reported
+    contraction ``e^{κT}`` within 2 %, and a one-iteration budget raises
+    `NotConvergedError` with stage ``"settle"``."""
     P = PoincareMap(
         HOPF, CrossSection.normal_to_flow(HOPF, _on_cycle(HOPF)), CFG, t_max=20.0
     )
@@ -232,6 +237,9 @@ def test_return_time_derivative_matches_finite_differences():
 
 
 def test_return_map_without_a_crossing_raises_or_returns_inf():
+    """A section the Hopf cycle never reaches raises `EquinoxRuntimeError`, returns
+    an infinite ``tau`` with ``throw=False``, and makes `fixed_point` raise
+    `NotConvergedError` with stage ``"return"``."""
     # a section the Hopf cycle never reaches: through (3, 0) with normal (1, 0)
     plane = CrossSection(jnp.array([3.0, 0.0]), jnp.array([1.0, 0.0]))
     with pytest.raises(eqx.EquinoxRuntimeError):
@@ -277,6 +285,8 @@ def test_reverse_time_map_contracts_onto_winfrees_repelling_inner_cycle():
 # ----------------------------------------------------------- 3. multiple_shooting --
 @pytest.mark.parametrize("m", [1, 4])
 def test_shooting_polishes_a_perturbed_guess(m):
+    """`multiple_shooting` with ``m`` segments recovers Hopf's period and unit radius
+    from a guess perturbed by ``1e-2``, eagerly and under `filter_jit`."""
     nf = HOPF
     T = abs(float(nf.period()))
     p = _on_cycle(nf)
@@ -298,6 +308,8 @@ def test_shooting_polishes_a_perturbed_guess(m):
 
 
 def test_shooting_is_more_accurate_with_tighter_solver_tolerances():
+    """The period error of `multiple_shooting` is smaller with ``rtol = 1e-10`` than
+    with ``1e-6`` on the inner solver."""
     nf = HOPF
     T = abs(float(nf.period()))
     p = _on_cycle(nf)
@@ -315,6 +327,7 @@ def test_shooting_is_more_accurate_with_tighter_solver_tolerances():
 
 
 def test_shooting_rejects_bad_input():
+    """`multiple_shooting` raises `ValueError` for an empty mesh."""
     plane = CrossSection.normal_to_flow(HOPF, _on_cycle(HOPF))
     with pytest.raises(ValueError):
         multiple_shooting(HOPF, jnp.zeros((0, 2)), 1.0, plane)
@@ -322,6 +335,9 @@ def test_shooting_rejects_bad_input():
 
 # ------------------------------------------------------------- 4. find_limit_cycle --
 def _check_invariants(lc: LimitCycle, orientation: int, n: int = 64):
+    """The output invariants of `find_limit_cycle`: positive period, the first sample
+    on the section, times ``i T / n``, the orientation, the residual, and the shooting
+    mesh on the orbit."""
     assert lc.period > 0
     times, points = lc.sample(n)
     assert_close(points[0], lc.x0s[0], atol=TOL["identity"])
@@ -344,6 +360,8 @@ def _check_invariants(lc: LimitCycle, orientation: int, n: int = 64):
     ids=["hopf", "bautin_cw", "winfree"],
 )
 def test_limit_cycle_matches_the_normal_form(nf, orientation):
+    """`find_limit_cycle` recovers the unit circle and the period of the normal form
+    with the expected orientation, and `sample` is uniform in phase."""
     lc = find_limit_cycle(nf, X0, t_settle=5.0, m=2, config=CFG)
     assert_close(lc.period, abs(float(nf.period())), atol=TOL["limit_cycle"])
     _, points = lc.sample(64)
@@ -381,6 +399,8 @@ def test_limit_cycle_points_are_a_phase_uniform_cycle():
 
 
 def test_limit_cycle_on_the_guckenheimer_meloon_algebraic_orbit():
+    """On the Guckenheimer & Meloon 2000 orbit the sampled points lie on the level set
+    ``g = 0`` to `TOL["level_set"]` and the period is near 7.7, as they report."""
     ode = guckenheimer_meloon(0.07)
     start = jnp.array([0.0, 0.2952161257895192])  # on the orbit (their p. 970)
     lc = find_limit_cycle(ode, start, t_settle=2.0, m=4, config=CFG)
@@ -394,7 +414,7 @@ def test_limit_cycle_on_the_guckenheimer_meloon_algebraic_orbit():
 
 @pytest.mark.slow
 def test_limit_cycle_fitzhugh_nagumo_against_langfield():
-    """Langfield, Krauskopf & Osinga (2014), Sec. III: T_Γ ≈ 11.2279, clockwise."""
+    """Langfield et al. 2014, Sec. III: T_Γ ≈ 11.2279, clockwise."""
     lc = find_limit_cycle(FitzhughNagumo(), jnp.array([3.0, 3.0]), t_settle=10.0, m=8)
     assert_close(lc.period, 11.2279, atol=2e-3)
     assert_close(lc.period, lc.settle.tau, atol=1e-6)  # brute force agrees with polish
@@ -414,6 +434,8 @@ def test_limit_cycle_near_hopf_needs_the_polish():
 
 
 def test_limit_cycle_reverse_time_finds_the_repelling_cycle():
+    """With ``reverse_time=True`` `find_limit_cycle` finds Winfree's repelling inner
+    cycle ``r = a`` with its period ``2π/|ω(a)|``."""
     w = WinfreeNormalForm(a=0.25, w=-0.5, **INTEGRATION)
     lc = find_limit_cycle(
         w, jnp.array([0.3, 0.0]), t_settle=20.0, m=2, reverse_time=True
@@ -427,6 +449,8 @@ def test_limit_cycle_reverse_time_finds_the_repelling_cycle():
 
 
 def test_limit_cycle_refuses_bad_starts():
+    """`find_limit_cycle` raises `ValueError` from inside Winfree's hole and from
+    Hopf's equilibrium."""
     with pytest.raises(ValueError):  # inside Winfree's hole: outside the basin
         find_limit_cycle(
             WinfreeNormalForm(a=0.25, w=-0.5, **INTEGRATION),
@@ -460,6 +484,8 @@ def test_limit_cycle_guards_against_a_collapsed_period(monkeypatch):
     angle=st.floats(0.0, 6.2),
 )
 def test_limit_cycle_on_random_hopf_forms(a, w, sign, r0, angle):
+    """Over Hypothesis-drawn Hopf parameters and starts, `find_limit_cycle` gives
+    period ``2π/w``, unit radius and the orientation of ``sign``."""
     nf = HopfNormalForm(a=a, w=sign * w, **INTEGRATION)
     x0 = r0 * jnp.array([jnp.cos(angle), jnp.sin(angle)])
     lc = find_limit_cycle(nf, x0, t_settle=8.0 / a, m=2, config=CFG)
@@ -473,6 +499,7 @@ METHODS = ("periodic_schur", "monodromy", "liouville")
 
 
 def _exponent(fl) -> float:
+    """The non-trivial Floquet exponent of a `Floquet` result."""
     return float(fl.exponents[1])
 
 
@@ -569,6 +596,8 @@ def test_floquet_and_period_of_the_cassini_oval_against_line_integrals():
 
 
 def test_floquet_on_the_guckenheimer_meloon_orbit():
+    """The periodic Schur and Liouville routes agree on the Guckenheimer–Meloon orbit
+    and the trivial multiplier is accurate."""
     ode = guckenheimer_meloon(0.07)
     lc = find_limit_cycle(
         ode, jnp.array([0.0, 0.2952161257895192]), t_settle=2.0, m=8, config=CFG
@@ -582,7 +611,7 @@ def test_floquet_on_the_guckenheimer_meloon_orbit():
 def test_floquet_fitzhugh_nagumo_shows_the_conditioning_floors():
     """FHN's cycle is strongly attracting (μ ≈ 1.7e-12): the periodic Schur chain and
     Liouville agree to 1e-8 relative; the explicit monodromy's eigenvalue is at its
-    ε‖M‖/μ floor (≈ 1e-4 relative, Lust 2001 Eq. 10); the return-map Jacobian's
+    ε‖M‖/μ floor (≈ 1e-4 relative, Lust 2001, Eq. 10); the return-map Jacobian's
     eigenvalue is at the solver's absolute floor and wrong by orders of magnitude;
     the trivial multiplier reports the orbit's accuracy regardless."""
     lc = find_limit_cycle(FitzhughNagumo(), jnp.array([3.0, 3.0]), t_settle=10.0, m=8)
@@ -600,6 +629,8 @@ def test_floquet_fitzhugh_nagumo_shows_the_conditioning_floors():
 
 
 def test_floquet_return_map_route_on_a_moderate_cycle():
+    """`return_map_multiplier` matches ``e^{κT}`` to ``1e-8`` on a Bautin cycle with a
+    moderate multiplier."""
     nf = BautinNormalForm(a=1.0, b=0.1, w=-1.5, **INTEGRATION)
     p = _on_cycle(nf, 0.4)
     pm = PoincareMap(nf, CrossSection.normal_to_flow(nf, p), CFG, t_max=20.0)
@@ -607,6 +638,8 @@ def test_floquet_return_map_route_on_a_moderate_cycle():
 
 
 def test_floquet_is_invariant_under_the_base_point_and_the_mesh():
+    """The exponent from `floquet` is the same for a rolled mesh (base point moved)
+    and for ``m`` in 1, 2, 16."""
     nf = BautinNormalForm(a=1.0, b=0.1, w=-1.5, **INTEGRATION)
     kappa = float(nf.floquet_exponent())
     lc = find_limit_cycle(nf, X0, t_settle=5.0, m=8, config=CFG)
@@ -661,6 +694,8 @@ def test_floquet_functions_jit_and_vmap_over_cycles():
 
 
 class _Linear3D(AbstractODE):
+    """A three-dimensional linear ODE, for the non-planar refusals."""
+
     dim: int = eqx.field(static=True, default=3, init=False)
 
     def rhs(self, t, u, args=None):
@@ -668,6 +703,8 @@ class _Linear3D(AbstractODE):
 
 
 def test_floquet_refuses_non_planar_systems():
+    """`periodic_schur` raises `NotImplementedError` and `floquet` and
+    `LimitCycle.orientation` raise `ValueError` on a three-dimensional cycle."""
     with pytest.raises(NotImplementedError):
         periodic_schur(jnp.tile(jnp.eye(3), (2, 1, 1)), jnp.array([1.0, 0.0, 0.0]))
     fp = FixedPoint(

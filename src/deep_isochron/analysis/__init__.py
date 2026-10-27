@@ -1,13 +1,13 @@
 """Analysis of planar limit-cycle systems (roadmap Phase E, ADR-0012).
 
-Two halves share one object: ``Cycle`` (``cycle.py``), a closed curve parameterized by
-the phase that advances uniformly in time. ``analysis.data`` estimates it — and the
-settling time, the winding direction, the Floquet multiplier — from sampled, possibly
-noisy trajectories; ``analysis.ode`` computes the same quantities, and the asymptotic
-phase and isochrons, from a known vector field, as ground truth. Replanned 2026-10-15
-(ADR-0012 amendment): the ODE half comes first, and ``Cycle`` is one object among
-several rather than the organizing one — ``analysis.ode`` starts from ``CrossSection``,
-``PoincareMap`` and ``LimitCycle``.
+``analysis.ode`` computes the reference objects of an oscillator from its vector
+field: the limit cycle, its Floquet multipliers, and later the asymptotic phase and
+isochrons. ``analysis.data`` estimates what it can from sampled, possibly noisy
+trajectories: the cycle, the settling time, the winding direction. ``Cycle``
+(``cycle.py``) is the closed curve both halves can produce; since the replanning of
+2026-10-15 (ADR-0012 amendment) the ODE half comes first and starts from
+``CrossSection``, ``PoincareMap`` and ``LimitCycle``, with ``Cycle`` one object among
+several rather than the organizing one.
 """
 
 from .cycle import Cycle as Cycle

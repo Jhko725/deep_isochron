@@ -98,6 +98,7 @@ from deep_isochron.training import (  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
+    """The command-line options of the benchmark."""
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument(
         "--device",
@@ -138,6 +139,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def make_source(args: argparse.Namespace) -> TimeSeriesDataSource:
+    """The dataset at ``args.data``, or 512 Bautin trajectories of three periods
+    generated on the fly."""
     if args.data is not None:
         return TimeSeriesDataSource.load(args.data)
     nf = BautinNormalForm(1.0, 0.5, 2.0, 1.0)
@@ -152,6 +155,8 @@ def make_source(args: argparse.Namespace) -> TimeSeriesDataSource:
 
 
 def make_model_and_loss(args: argparse.Namespace, dim: int):
+    """The model and loss that ``args.model`` names: the phase autoencoder, or a
+    conjugacy of ``args.blocks`` linear and spline-coupling pairs on the Bautin form."""
     key = jax.random.key(0)
     if args.model == "ae":
         model = PhaseAmplitudeAutoencoder(
@@ -180,6 +185,7 @@ def make_model_and_loss(args: argparse.Namespace, dim: int):
 
 # ------------------------------------------------------------------- measurements --
 def time_fetch(loader: Iterable, n: int) -> float:
+    """The mean ms per batch of `n` fetches from `loader`, after one untimed fetch."""
     it = iter(loader)
     next(it)
     t0 = time.perf_counter()
@@ -207,6 +213,7 @@ def time_steps(
 
 
 def cycle(items: list) -> Iterator:
+    """`items` repeated without end."""
     while True:
         yield from items
 
@@ -304,6 +311,9 @@ def hlo_launch_estimate(
 
 
 def report_hlo_stats(trainer: Trainer, state, batch, device: jax.Device) -> None:
+    """Print the compiled training step's HLO size, loop count and estimated kernel
+    launches, then time one 2×2 ``expm`` against the closed-form rotation on
+    `device`."""
     text = trainer.train_step.lower(state, batch).compile().compiled.as_text()
     instructions, loops, launches, conditionals = hlo_launch_estimate(text)
     print(
@@ -319,7 +329,7 @@ def report_hlo_stats(trainer: Trainer, state, batch, device: jax.Device) -> None
     # the suspect: jax.scipy.linalg.expm (BiLipschitzLinear's rotations) is a 16-step
     # scan of lax.cond; time one 2×2 expm against the closed-form rotation
     a = jax.device_put(jnp.array([[0.0, -0.3], [0.3, 0.0]]), device)
-    expm = jax.jit(jax.scipy.linalg.expm)
+    expm = jax.jit(jax.scipy.linalg.expm)  # noqa: TID251 — the measurement behind ADR-0010
 
     def rotation(m):
         c, s = jnp.cos(m[1, 0]), jnp.sin(m[1, 0])
@@ -342,6 +352,7 @@ def report_hlo_stats(trainer: Trainer, state, batch, device: jax.Device) -> None
 
 
 def main() -> None:
+    """Time the data pipeline variants against the training step and print a table."""
     args = parse_args()
     flags.FLAGS(sys.argv[:1])  # grain's multiprocessing reads absl flags
     jax.config.update("jax_enable_x64", True)

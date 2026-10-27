@@ -1,3 +1,7 @@
+"""Shared test helpers: the named tolerances ``TOL`` and solver configurations
+``SOLVERS``, jitted checkers for the bijection laws, and an optimizer step along a
+random direction."""
+
 import diffrax as dfx
 import equinox as eqx
 import jax
@@ -92,12 +96,13 @@ def roundtrip(f, x):
 
 @eqx.filter_jit
 def jacobian_dets(f, x):
+    """``det Df(x)`` for a batch ``x``."""
     return jax.vmap(lambda p: jnp.linalg.det(f.jacobian(p)))(x)
 
 
 @eqx.filter_jit
 def inverse_jacobian_product(f, x):
-    """``Df⁻¹(f(x)) · Df(x)`` — should be the identity."""
+    """``Df⁻¹(f(x)) · Df(x)`` for a batch ``x``, the identity for a bijection."""
     J = jax.vmap(f.jacobian)(x)
     Jinv = jax.vmap(lambda p: jax.jacfwd(f.inverse)(p))(jax.vmap(f)(x))
     return Jinv @ J
@@ -113,13 +118,23 @@ def assert_close(actual, desired, *, rtol=None, atol=None, msg=""):
 
 
 def adam_step[M: eqx.Module](module: M, key: jax.Array, lr: float = 1.0) -> M:
-    """One Adam step along a *random* direction for every trainable leaf.
+    """One Adam step on `module` along a random direction for every trainable leaf.
 
-    A random direction is the stronger test for parameter validity: the constrained set
-    must be preserved for any update an optimizer might take, not just the gradient of
-    one particular loss. ``test_true_gradient_step_decreases_loss`` covers the plumbing
-    (that
-    gradients flow through ``constrain``)."""
+    A random direction is the stronger test for parameter validity: the constrained
+    set must be preserved for any update an optimizer might take, not only for the
+    gradient of one loss. ``test_true_gradient_step_decreases_loss`` covers the
+    plumbing, that gradients flow through ``constrain``.
+
+    **Arguments:**
+
+    - `module`: The module to step.
+    - `key`: The PRNG key for the direction.
+    - `lr`: The Adam learning rate.
+
+    **Returns:**
+
+    The stepped module.
+    """
     params, static = eqx.partition(module, eqx.is_inexact_array)
     leaves, treedef = jax.tree.flatten(params)
     grads = jax.tree.unflatten(

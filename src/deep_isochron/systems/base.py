@@ -1,26 +1,29 @@
-r"""ODE systems.
+r"""The ODE systems of the study, and the one class they all share.
 
-``AbstractODE``
-    Any ODE used anywhere in the study — the observed oscillators (FitzHugh–Nagumo,
-    Hodgkin–Huxley) and the normal forms alike. It carries the vector field ``rhs``, the
-    constrained parameter values ``params()`` (for provenance), and the numerical flow
-    ``flow`` (diffrax, every solver setting in a ``SolverConfig``). Anything *numerical*
-    about an ODE beyond integrating it — locating its limit cycle, monodromy, asymptotic
-    phase by long integration — is a function over ``AbstractODE`` in
-    ``deep_isochron.analysis`` (Phase E), not a method.
+``AbstractODE`` is any ODE used anywhere in the study: the observed oscillators
+(FitzHugh–Nagumo, Hodgkin–Huxley), the normal forms, and the level-set test orbits.
+It carries the vector field ``rhs``, the constrained parameter values ``params()``,
+which dataset metadata records, and the numerical flow ``flow``, a diffrax solve whose
+every setting sits in a ``SolverConfig``. Anything numerical about an ODE beyond
+integrating it, such as locating its limit cycle or its Floquet multipliers, is a
+function over ``AbstractODE`` in ``deep_isochron.analysis``, not a method.
 
-``AbstractNormalForm`` (``systems/normal_forms/``)
-    The subset that can serve as the normal-form template of a conjugacy: planar
-    oscillators with a stable limit cycle whose phase–amplitude structure is available
-    in *closed form*. See that subpackage.
+``AbstractNormalForm`` (``systems/normal_forms/``) is the subset that can be the
+normal-form template of a conjugacy: planar oscillators with a stable limit cycle whose
+phase–amplitude structure is in closed form. ``AbstractSymbolicODE`` (``symbolic.py``)
+is the subset declared as SymPy expressions, from which ``rhs`` and the AUTO-07p
+Fortran are derived.
 
-Vmapping: ``flow`` is written for one initial condition; batch with
-``eqx.filter_vmap(ode.flow, in_axes=(None, 0))(ts, u0s)``. ``SolverConfig`` has no array
-leaves, so it is static under the filter transforms.
+``flow`` is written for one initial condition. Batch it with
+``eqx.filter_vmap(ode.flow, in_axes=(None, 0))(ts, u0s)``; ``SolverConfig`` has no
+array leaves, so it is static under the filter transforms.
+
+ADR-0007 has the hierarchy and the flow strategies; ADR-0016 the symbolic layer.
 """
 
 import abc
 import copy
+import dataclasses
 from typing import Any, cast
 
 import diffrax as dfx
@@ -31,11 +34,22 @@ from jaxtyping import Array, ArrayLike, Bool, Float
 
 
 class SolverConfig(eqx.Module):
-    """Every numerical setting of a flow, in one hashable object (no array leaves).
+    """Every numerical setting of a flow, in one hashable object with no array leaves.
 
-    **Arguments:** as for ``diffrax.diffeqsolve``. ``throw=False`` makes a failed batch
-    element report through ``Solution.result`` instead of raising for the whole batch
-    (under ``vmap``, ``throw=True`` raises if *any* element fails).
+    **Attributes:**
+
+    as for ``diffrax.diffeqsolve``.
+
+    - `solver`: The diffrax solver; ``Tsit5`` by default, diffrax's own recommendation
+        for a non-stiff problem.
+    - `rtol`, `atol`: The tolerances of the ``PIDController``.
+    - `max_steps`: The step budget of one solve.
+    - `adjoint`: The adjoint; the default ``RecursiveCheckpointAdjoint`` supports
+        reverse mode only, so a solve differentiated with ``jax.jacfwd`` takes
+        ``ForwardMode`` through `with_adjoint`.
+    - `throw`: With ``False``, a failed batch element reports through
+        ``Solution.result`` instead of raising for the whole batch; under ``vmap``,
+        ``True`` raises if any element fails.
     """
 
     solver: dfx.AbstractSolver = eqx.field(static=True, default=dfx.Tsit5())
@@ -48,16 +62,26 @@ class SolverConfig(eqx.Module):
     throw: bool = eqx.field(static=True, default=True)
 
     def controller(self) -> dfx.PIDController:
+        """The step-size controller: a ``PIDController`` at `rtol` and `atol`."""
         return dfx.PIDController(rtol=self.rtol, atol=self.atol)
 
     def with_adjoint(self, adjoint: dfx.AbstractAdjoint) -> "SolverConfig":
-        """The same configuration with another adjoint — ``diffrax.ForwardMode()``
-        for a solve that will be differentiated with ``jax.jacfwd`` (the default
-        ``RecursiveCheckpointAdjoint`` supports reverse mode only)."""
+        """The same configuration with another adjoint.
+
+        **Arguments:**
+
+        - `adjoint`: The replacement, for instance ``diffrax.ForwardMode()`` for a
+            solve that ``jax.jacfwd`` will differentiate.
+
+        **Returns:**
+
+        A new ``SolverConfig``; `self` is unchanged.
+        """
         return copy.replace(self, adjoint=adjoint)
 
     def params(self) -> dict[str, Any]:
-        """JSON-able description (for dataset metadata)."""
+        """The solver name, tolerances and step budget as JSON-able values, for
+        dataset metadata."""
         return {
             "solver": type(self.solver).__name__,
             "rtol": self.rtol,
@@ -72,7 +96,21 @@ DEFAULT_SOLVER_CONFIG = SolverConfig()
 def diffeqsolve(
     rhs, ts: Float[Array, " time"], u0, args, config: SolverConfig
 ) -> dfx.Solution:
-    """``diffrax.diffeqsolve`` of ``rhs`` saved at ``ts``, configured by ``config``."""
+    """Solve ``du/dt = rhs(t, u, args)`` from ``ts[0]`` to ``ts[-1]``, saving at ``ts``.
+
+    **Arguments:**
+
+    - `rhs`: The vector field, in the diffrax signature.
+    - `ts`: The save times, increasing or decreasing; the solve runs from the first to
+        the last.
+    - `u0`: The initial state.
+    - `args`: Passed through to `rhs`.
+    - `config`: The solver, tolerances, step budget, adjoint and `throw` flag.
+
+    **Returns:**
+
+    The ``diffrax.Solution``.
+    """
     return dfx.diffeqsolve(
         dfx.ODETerm(rhs),
         config.solver,
@@ -95,34 +133,64 @@ def _jsonable(v):
 
 
 class AbstractODE(eqx.Module):
-    """An autonomous ODE ``du/dt = rhs(t, u)`` on ``R^dim``."""
+    """An autonomous ODE ``du/dt = rhs(t, u)`` on ``R^dim``.
+
+    **Attributes:**
+
+    - `dim`: The state dimension, implemented by every subclass as
+        ``eqx.field(static=True, default=..., init=False)`` (ADR-0004).
+    """
 
     dim: eqx.AbstractVar[int]
-    """Implemented as ``eqx.field(static=True, default=..., init=False)`` (ADR-0004)."""
 
     @abc.abstractmethod
     def rhs(
         self, t: Float[ArrayLike, ""], u: Float[Array, " {self.dim}"], args: Any = None
     ) -> Float[Array, " {self.dim}"]:
-        """The vector field, in the diffrax signature (``t`` may be a Python float)."""
+        """The vector field at state `u`, in the diffrax signature.
+
+        **Arguments:**
+
+        - `t`: The time; unused by an autonomous system, and may be a Python float.
+        - `u`: The state, shape ``(dim,)``.
+        - `args`: Unused; present for diffrax.
+
+        **Returns:**
+
+        ``du/dt``, shape ``(dim,)``.
+        """
 
     def in_basin(self, u: Float[Array, " {self.dim}"]) -> Bool[Array, ""]:
-        """Whether ``u`` lies in the basin of attraction of the system's limit cycle —
-        the domain on which an asymptotic phase exists. ``True`` everywhere by default
-        (a basin whose complement has measure zero, like FitzHugh–Nagumo's single
-        phaseless point); a normal form with a phaseless *set* overrides it, and
-        ``data.generate`` uses it to reject or resample initial conditions."""
+        """Whether `u` lies in the basin of attraction of the limit cycle, the domain
+        on which an asymptotic phase exists.
+
+        The default is ``True`` everywhere, for a basin whose complement has measure
+        zero, such as FitzHugh–Nagumo's single phaseless point. A normal form with a
+        phaseless set overrides it, and ``data.generate`` uses it to reject or resample
+        initial conditions (ADR-0013).
+
+        **Arguments:**
+
+        - `u`: The state, shape ``(dim,)``.
+
+        **Returns:**
+
+        A scalar boolean array.
+        """
         del u
         return jnp.asarray(True)
 
     def params(self) -> dict[str, Any]:
-        """The system's parameters as JSON-able *constrained* values, keyed by their
-        mathematical names — what a dataset's metadata records. The default is every
-        non-static field; a system that stores unconstrained leaves overrides this to
-        report the constrained values (``AbstractNormalForm`` does)."""
+        """The parameters as JSON-able constrained values keyed by their mathematical
+        names, which is what a dataset's metadata records.
+
+        The default reports every non-static field. A system that stores unconstrained
+        leaves overrides it to report the constrained values, as the learnable normal
+        forms do.
+        """
         return {
             f.name: _jsonable(getattr(self, f.name))
-            for f in self.__dataclass_fields__.values()
+            for f in dataclasses.fields(self)  # excludes ClassVar pseudo-fields
             if not f.metadata.get("static", False)
         }
 
@@ -134,12 +202,26 @@ class AbstractODE(eqx.Module):
         *,
         config: SolverConfig = DEFAULT_SOLVER_CONFIG,
     ) -> dfx.Solution:
-        """The diffrax ``Solution`` through ``u0`` sampled at ``ts``: ``.ys`` is the
-        trajectory ``(time, dim)``, ``.result`` the outcome (compare with
-        ``diffrax.RESULTS.successful``; elementwise under ``vmap`` with
-        ``config.throw=False``), ``.stats`` the step counts. The normal forms override
-        it with a choice of integration, closed form by default (their ``integration``
-        constructor argument selects a numerical one)."""
+        """The trajectory through `u0` sampled at `ts`, by a diffrax solve.
+
+        The normal forms override this with a choice of integration, closed form by
+        default (``normal_forms.integration``).
+
+        **Arguments:**
+
+        - `ts`: The save times, shape ``(time,)``; the solve runs from ``ts[0]`` to
+            ``ts[-1]``, so a decreasing `ts` integrates backward.
+        - `u0`: The initial state, shape ``(dim,)``.
+        - `args`: Passed through to `rhs`.
+        - `config`: The solver settings; ``DEFAULT_SOLVER_CONFIG`` when omitted.
+
+        **Returns:**
+
+        The ``diffrax.Solution``: ``.ys`` is the trajectory, shape ``(time, dim)``;
+        ``.result`` the outcome, to compare with ``diffrax.RESULTS.successful``
+        (elementwise under ``vmap`` when ``config.throw`` is ``False``); ``.stats`` the
+        step counts.
+        """
         return diffeqsolve(self.rhs, ts, u0, args, config)
 
     def flow_to(
@@ -150,9 +232,20 @@ class AbstractODE(eqx.Module):
         *,
         config: SolverConfig = DEFAULT_SOLVER_CONFIG,
     ) -> Float[Array, " {self.dim}"]:
-        """The state at time ``t`` (negative for the reversed flow) from ``u0``:
-        ``flow(ts=[0, t]).ys[-1]``. ``t`` may be traced; differentiable in ``u0`` and
-        ``t`` under the mode ``config.adjoint`` supports."""
+        """The state at time `t` from `u0`: ``flow(ts=[0, t]).ys[-1]``.
+
+        **Arguments:**
+
+        - `t`: The time; negative integrates the reversed flow. May be traced.
+        - `u0`: The initial state, shape ``(dim,)``.
+        - `args`: Passed through to `rhs`.
+        - `config`: The solver settings.
+
+        **Returns:**
+
+        The state, shape ``(dim,)``, differentiable in `u0` and `t` under the mode that
+        ``config.adjoint`` supports.
+        """
         ts = jnp.stack([jnp.zeros_like(t), jnp.asarray(t)])
         ys = cast(Array, self.flow(ts, u0, args, config=config).ys)
         return ys[-1]

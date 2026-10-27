@@ -63,6 +63,7 @@ def _split_blocks(text: str) -> list[tuple[str, str]]:
 
 
 def check(path: Path) -> list[str]:
+    """The math problems of the Markdown file at `path`, frontmatter excluded."""
     text = path.read_text()
     if text.startswith("---"):
         text = text[text.index("\n---", 3) + 4 :]
@@ -97,6 +98,7 @@ def check(path: Path) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
+    """Check `argv`, or every Markdown file under ``docs``; return the exit code."""
     paths = [Path(a) for a in argv] or sorted(Path("docs").rglob("*.md"))
     total = 0
     for path in paths:

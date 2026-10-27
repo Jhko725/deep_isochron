@@ -23,6 +23,8 @@ dependencies = [
     "numpy>=2.5.1",
     "optax>=0.2.8",
     "orbax-checkpoint>=0.12.4",
+    "sympy>=1.14.0",
+    "sympy2jax>=0.0.8",
     "wandb>=0.28.0",
     "xarray>=2025.1",
 ]
@@ -30,15 +32,18 @@ dependencies = [
 [project.optional-dependencies]
 cuda = ["jax[cuda12]>=0.10.2"]
 
-[project.scripts]
-deep-isochron = "deep_isochron:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.ty.src]
+exclude = ["src/Isochron2PBVP"]  # as for ruff, below
+
 [tool.ruff]
 line-length = 88  # ruff's default; pinned so editors with other profiles agree
+# The coworker's AUTO scripts are not this project's code; without this line every
+# whole-tree `ruff check` fails on them (and `fix = true` reorders their imports).
+exclude = ["src/Isochron2PBVP"]
 extend-include = ["*.ipynb"]
 src = []
 fix = true
@@ -46,7 +51,23 @@ fix = true
 [tool.ruff.lint]
 fixable = ["I001", "F401"]
 ignore = ["E402", "E721", "E731", "E741", "F722"]
-select = ["E", "F", "I001"]
+# TID251 enforces banned-api below. D100-D103 require a docstring on every public
+# module, class, method and function; the content rules are in docs/coding-standards.md.
+select = ["E", "F", "I001", "TID251", "D100", "D101", "D102", "D103"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"  # the section parser; only the selected D rules run
+
+[tool.ruff.lint.per-file-ignores]
+# Docstrings are required everywhere the prose pass (branch `prose`, 2026-10-26) went:
+# the package, its tests and its scripts. Notebooks and the coworker's src/Isochron2PBVP
+# stay exempt.
+"*.ipynb" = ["D"]
+"src/Isochron2PBVP/**" = ["D"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"dataclasses.replace".msg = "use copy.replace (Python 3.13, this project's floor)"
+"jax.scipy.linalg.expm".msg = "use linear.cayley: expm's 16-step cond scan is a host round trip per step on GPU (ADR-0010)"
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -78,3 +99,12 @@ filterwarnings = [
 xfail_strict = true
 
 [tool.hypothesis]
+
+[tool.codespell]
+# The irregular British spellings and typos; scripts/check_spelling.py covers the
+# productive -ise/-isation/-yse families. "./docs/changes" skips the directory when
+# codespell walks from the root (CI); "docs/changes/*" skips the paths a git hook
+# passes. docs/coding-standards.md says why that directory is out of scope.
+builtin = "clear,en-GB_to_en-US"
+skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,./src/Isochron2PBVP,src/Isochron2PBVP/*,./docs/changes,docs/changes/*"
+ignore-words-list = "oint,numer,Numer,Commun,Stoer,INOUT,nd"

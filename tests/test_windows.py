@@ -1,18 +1,17 @@
-"""Laws of the windowing package (``deep_isochron.data.windows``), both ways (ADR-0008
-Decisions 2 and 3).
+"""The laws of the windowing package, ``deep_isochron.data.windows``, in both of its
+forms (ADR-0008, Decisions 2 and 3).
 
-1. elementwise   RandomWindow cuts contiguous slices with starts uniform in range;
-                 WeightedWindow draws starts with the requested frequencies; both
-                 re-draw across epochs and are deterministic in the seed;
-                 mixed_windows interleaves two start ranges in ratio;
-                 validation_windows is finite, deterministic and complete; the
-                 categorical draw and transient_weight
-2. batched       WindowBatchSource: batch shapes and contiguity; determinism in the
-                 seed;
-                 an epoch is every window exactly once and the next epoch a reshuffle;
-                 remainder dropped; start_range / weight / mixed marginals equal the
-                 elementwise laws; epochs xor num_steps; slicing resumes; pickles;
-                 feeds to_device
+The elementwise form: `RandomWindow` cuts contiguous slices with starts uniform in
+their range, `WeightedWindow` draws starts with the requested frequencies, both
+re-draw across epochs and are deterministic in the seed, `mixed_windows` interleaves
+two start ranges in ratio, `validation_windows` is finite, deterministic and
+complete, and the `categorical` draw and `transient_weight` obey their definitions.
+The batched form, `WindowBatchSource`: batch shapes and contiguity, determinism in
+the seed, an epoch that is every window exactly once and the next epoch a reshuffle,
+the remainder dropped, `start_range`, `weight` and mixed marginals equal to the
+elementwise laws, `epochs` exclusive with `num_steps`, slicing that resumes,
+pickling, and feeding `to_device`. The sources are 3 or 4 arithmetic trajectories
+whose values encode the trajectory and the start index.
 """
 
 import collections
@@ -54,6 +53,8 @@ def _start_of(window, src):
 
 @given(T=st.integers(2, 12), data=st.data())
 def test_random_window_cuts_contiguous_slices(T, data):
+    """Ten draws of a `RandomWindow` of length ``L <= T`` each have shape ``(L,)`` and
+    ``(L, 2)`` and equal the slice of the trajectory at their start."""
     L = data.draw(st.integers(1, T), label="length")
     src = _source(n=2, T=T)
     rng = np.random.default_rng(0)
@@ -66,6 +67,9 @@ def test_random_window_cuts_contiguous_slices(T, data):
 
 
 def test_random_window_start_range_and_validation():
+    """A `start_range` of ``(2, 5)`` produces the starts ``{2, 3, 4}`` over 200 draws;
+    an empty, negative, overlong or reversed range and a window longer than the
+    trajectory are rejected."""
     src = _source(n=1, T=10)
     rng = np.random.default_rng(0)
     tf = RandomWindow(3, (2, 5))
@@ -129,6 +133,9 @@ def test_categorical_matches_the_weights_and_covers_the_support():
 
 
 def test_transient_weight_and_weighted_window_validation():
+    """`transient_weight` starts at ``1 + boost``, decreases and stays at least 1, and
+    rejects a negative boost; a `WeightedWindow` rejects an all-zero weight and a
+    weight of the wrong length, and `windows` rejects a weight with a start range."""
     w = transient_weight(boost=4.0, tau=0.5)(np.linspace(0.0, 1.0, 10))
     assert w[0] == pytest.approx(5.0) and np.all(np.diff(w) < 0) and np.all(w >= 1.0)
     with pytest.raises(ValueError):
@@ -144,6 +151,8 @@ def test_transient_weight_and_weighted_window_validation():
 
 
 def test_windows_pipeline_batches():
+    """A batch of 8 from `windows(...).batch(8)` has shapes ``(8, 4)`` and ``(8, 4, 2)``
+    and every window is a slice of one trajectory, read off the encoded values."""
     src = _source(n=3, T=10)
     batch = next(iter(windows(src, 4, seed=0).batch(8)))
     assert batch["t"].shape == (8, 4) and batch["u"].shape == (8, 4, 2)
@@ -153,6 +162,9 @@ def test_windows_pipeline_batches():
 
 
 def test_mixed_windows_ratio_and_validation():
+    """`mixed_windows` with weights ``(1, 2)`` draws every start from one of the two
+    ranges, one third from the early range over 300 draws; a `split_idx` too close
+    to either end is rejected."""
     src = _source(n=2, T=12)
     ds = mixed_windows(src, 3, 6, weights=(1.0, 2.0), seed=0)
     starts = [_start_of(ds[i], src) for i in range(300)]
@@ -166,10 +178,14 @@ def test_mixed_windows_ratio_and_validation():
 
 # ------------------------------------------------------------------- 2. batched -----
 def _starts_of(batch, src):
+    """The start indices of a batch's windows on ``src``'s grid."""
     return np.rint(batch["t"][:, 0] * (src.trajectory_length - 1)).astype(int)
 
 
 def test_window_batches_shapes_length_and_determinism():
+    """`window_batches` over 32 windows has ``32 // 8`` batches per epoch with the
+    source's dtype, every window a contiguous slice of its trajectory on the shared
+    grid, the same batches for the same seed and different ones for another."""
     src = _source(n=4, T=10, dim=2)  # 4 · (10 − 3 + 1) = 32 windows of length 3
     ds = window_batches(src, 3, 8, seed=0, epochs=2)
     assert len(ds) == 2 * 4  # 32 // 8 batches per epoch
@@ -190,6 +206,8 @@ def test_window_batches_shapes_length_and_determinism():
 
 
 def test_window_batches_epoch_is_every_window_once_then_reshuffled():
+    """The `_draw` calls of one epoch cover each of the 32 windows exactly once, and
+    the next epoch covers the same set in a different order."""
     src = _source(n=4, T=10)
     wsrc = WindowBatchSource(src, 3, 8, seed=0, epochs=2)
     assert wsrc.num_windows == 32 and wsrc.batches_per_epoch == 4
@@ -208,6 +226,9 @@ def test_window_batches_epoch_is_every_window_once_then_reshuffled():
 
 
 def test_window_batches_drop_remainder_and_too_large_batch():
+    """24 windows in batches of 10 give 2 batches of 20 distinct windows, the 4 others
+    dropped; a batch larger than the window count is rejected, and an index past the
+    last batch raises `IndexError`."""
     src = _source(n=3, T=10)  # 24 windows of length 3
     wsrc = WindowBatchSource(src, 3, 10, seed=0, epochs=1)
     assert wsrc.batches_per_epoch == 2 and len(wsrc) == 2  # 4 windows dropped
@@ -223,6 +244,10 @@ def test_window_batches_drop_remainder_and_too_large_batch():
 
 
 def test_window_batches_start_range_weight_and_mix():
+    """`start_range`, `weight` and the mixed form give the same marginals as the
+    elementwise laws: starts in the range only, the weighted frequencies over 4000
+    draws with draws that differ between batches, and the early fraction of the mix;
+    a weight with a start range and a bad `split_idx` are rejected."""
     src = _source(n=1, T=5)  # 4 valid starts for L = 2
     ranged = WindowBatchSource(src, 2, 2, seed=0, epochs=3, start_range=(1, 3))
     assert ranged.num_windows == 2 and len(ranged) == 3
@@ -252,6 +277,8 @@ def test_window_batches_start_range_weight_and_mix():
 
 
 def test_window_batches_num_steps_slicing_and_pickling():
+    """``num_steps=10`` over 4 batches per epoch gives 12 batches (3 whole epochs),
+    ``ds[5:]`` resumes at batch 5, and a pickled source yields the same batches."""
     src = _source(n=4, T=10)  # 4 batches of 8 per epoch
     ds = window_batches(src, 3, 8, seed=0, num_steps=10)
     assert len(ds) == 12  # ceil(10 / 4) = 3 epochs

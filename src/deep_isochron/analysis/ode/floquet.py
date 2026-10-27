@@ -1,66 +1,31 @@
 r"""Floquet multipliers and exponents of a ``LimitCycle`` (roadmap O2).
 
-The monodromy $M = \partial_x\Phi_T(x^\ast)$ of a periodic orbit has the eigenvalue $1$
-(eigenvector $f(x^\ast)$, the trivial multiplier) and the nontrivial multipliers
-$\mu_j$; $\kappa_j = \log\mu_j/T$ are the Floquet exponents — for a planar attracting
-cycle one $\mu \in (0, 1)$, the rate $\dot\psi = \kappa\psi$ of the amplitude coordinate
-(Wilson & Moehlis 2016, Eq. 7; Kvalheim & Revzen 2021, Prop. 5). This module computes
-them from the shooting mesh ``x0s`` of a ``LimitCycle`` by three routes, one the method
-and two cross-checks, each a jit- and vmap-compatible function of the cycle (left
-unjitted — the caller chooses the level):
+The monodromy of a periodic orbit has the trivial multiplier $1$, with eigenvector
+$f(x^\ast)$, and the nontrivial multipliers $\mu_j$; the exponents are
+$\kappa_j = \log\mu_j / T$. For a planar attracting cycle the one nontrivial exponent
+is the decay rate of the amplitude coordinate (Wilson & Moehlis 2016, Eq. 7;
+Kvalheim & Revzen 2021, Prop. 5).
 
-**Periodic Schur chain** (the method, ``method="periodic_schur"``). The monodromy is the
-ordered product of the segment Jacobians $M_i = \partial_x\Phi_{T/m}(x_i)$. Forming the
-product and taking eigenvalues loses the small multiplier: by Bauer–Fike the eigenvalues
-of the product carry an absolute error $\varepsilon\Vert M\Vert$, so a multiplier $\mu$
-loses $\log_{10}(\max\vert\lambda\vert/\vert\mu\vert)$ digits (Lust 2001, Eq. 10). The
-periodic Schur decomposition (Bojanczyk, Golub & Van Dooren 1992) finds orthogonal $Q_i$
-with every $R_i = Q_{i+1}^{\top}M_iQ_i$ upper triangular, cyclically, so that
-$\mu_j = \prod_i (R_i)_{jj}$ — a product of per-segment factors of moderate size,
-accumulated here as a sum of logarithms (Lust 2001, §3; his Table 5). Their general
-algorithm iterates to find $Q_1$; here one Schur vector is known — the flow direction,
-eigenvector of the trivial multiplier, dominant for an attracting cycle — so the chain
-is seeded with $q_1 = f(x_1)/\Vert f(x_1)\Vert$ (Guckenheimer & Meloon 2000 transform to
-cross-section coordinates in the same spirit) and built by the forward QR chain
-$M_iQ_i = Q_{i+1}R_i$ with positive diagonals: the discrete QR method for Lyapunov
-exponents over one period (Dieci, Russell & Van Vleck 1997, §3 and Claim 2: it "computes
-the real parts of the Floquet exponents of the computed approximation to the monodromy
-matrix exactly"). The forward direction propagates the dominant direction, which is
-self-correcting; the chain run backward through the transposes propagates the
-subdominant one and does not close (checked numerically; no literature statement found).
-The closure $Q_{m+1} = Q_1 D$, $D = \mathrm{diag}(\pm1)$, carries the multipliers' signs
-and its defect is the trivial-multiplier diagnostic (Guckenheimer & Meloon §5.4). In the
-plane the transverse block is $1 \times 1$, so no periodic QR iteration remains; for
-``dim > 2`` the transverse block would need one (SLICOT's ``MB03WD``, wrapped by
-``slycot``) — not implemented.
+``floquet(cycle, method=...)`` computes them from the shooting mesh of the cycle by one
+of three routes, each also callable as ``floquet_<method>``: ``"periodic_schur"``, the
+method, a periodic Schur decomposition of the segment Jacobians seeded with the flow
+direction (``PeriodicSchur``), which also returns the Floquet vectors;
+``"monodromy"``, the eigenvalues of the explicit product, a diagnostic limited by
+rounding; and ``"liouville"``, planar only, the exponent from the divergence
+integral. ``return_map_multiplier`` is a fourth diagnostic that takes a
+``PoincareMap``. The kernels (``segment_jacobians``, ``periodic_schur``,
+``monodromy``, ``divergence_integral``) are jit- and vmap-compatible functions of the
+cycle and are left unjitted, so the caller chooses the level.
 
-**Monodromy** (``method="monodromy"``): the explicit product and ``jnp.linalg.eigvals``
-— the textbook route, with the floor above (relative error
-$\varepsilon\Vert M\Vert/\mu$; $\approx 10^{-4}$ for FitzHugh–Nagumo's
-$\mu \approx 1.7\cdot10^{-12}$), kept as the diagnostic it is.
+Two invariants span the routes. The chain runs in the time direction in which the
+cycle attracts, so for a cycle found with ``reverse_time`` the segment Jacobians are
+those of the reversed field and the result is inverted at the end: reported
+multipliers and exponents are always forward-time (ADR-0014 §4). And only
+``dim == 2`` is implemented for the periodic Schur route.
 
-**Liouville** (``method="liouville"``, planar only):
-$\det M = \exp\int_0^T\mathrm{tr}\thinspace Df(\gamma(t))\thinspace dt$
-(Abel–Liouville), and with $\lambda_1 = 1$ exactly,
-$\kappa = T^{-1}\int_0^T\mathrm{div}f\thinspace dt$ (Andronov et al.; Perko 3rd ed. pp.
-210–214; Mauroy & Mezić 2018, Remark 4) — a scalar quadrature in log space, exact in the
-plane, independent of all linear algebra: the $m \to \infty$ limit of the product of
-segment determinants. Computed by an augmented solve
-$(\dot x, \dot z) = (f, \mathrm{tr}\thinspace Df)$ at the cycle's tolerances.
-
-**Return map** (``return_map_multiplier``, a diagnostic that takes a ``PoincareMap``):
-the nontrivial eigenvalue of ``jax.jacfwd(P)`` — the single-section route, whose
-floor is the solver's absolute error on $DP$; *not* its trace, which is
-$\mathrm{tr}\thinspace M - n^{\top}Mv/ \langle n, v\rangle = (1 + \mu) - 1$
-algebraically but leaks the trivial multiplier's error ($\sim 10^{-9}$) additively onto
-$\mu$.
-
-**Reverse time.** The chain must run in the direction in which the cycle attracts
-(otherwise $f$ is the subdominant direction and the seed is the unstable one), so for a
-cycle found with ``reverse_time`` the segment Jacobians are those of the reversed field
-($M_i^{-1}$ of the forward segments) and the reversed flow's multipliers
-$\lbrace 1, 1/\mu\rbrace$ are inverted at the end: reported multipliers and exponents
-are always forward-time (ADR-0014 §4)."""
+ADR-0015 has the choice of method, the direction rule and the rejected routes;
+``docs/design/analysis.md`` §3 has the survey, the accuracy floors and the citations.
+"""
 
 from __future__ import annotations
 
@@ -78,51 +43,63 @@ from .poincare import PoincareMap
 
 
 FloquetMethod = Literal["periodic_schur", "monodromy", "liouville"]
+"""The names `floquet` dispatches on."""
 
 
 class PeriodicSchur(NamedTuple):
-    """The periodic Schur decomposition of a product ``M_m ⋯ M_1`` (arrays)."""
+    """The periodic Schur decomposition of a product ``M_m ⋯ M_1``, as arrays.
+
+    **Attributes:**
+
+    - `Q`: The orthogonal frames, shape ``(m+1, dim, dim)``; ``Q[i]`` is the frame at
+        mesh point ``i``, ``Q[0]`` the seed frame and ``Q[m]`` the frame the chain
+        closes on.
+    - `R`: The triangular factors ``R[i] = Q[i+1]ᵀ M_i Q[i]``, shape
+        ``(m, dim, dim)``, upper triangular with positive diagonal.
+    - `signs`: The diagonal of ``D`` in ``Q[m] ≈ Q[0] D``, shape ``(dim,)``: the
+        multipliers' signs.
+    """
 
     Q: Float[Array, "m+1 dim dim"]
-    """``Q[i]`` is the orthogonal frame at mesh point ``i`` (``Q[0]`` the seed frame,
-    ``Q[m]`` the frame the chain closes on)."""
     R: Float[Array, "m dim dim"]
-    """``R[i] = Q[i+1]ᵀ M_i Q[i]``, upper triangular with positive diagonal."""
     signs: Float[Array, " dim"]
-    """``D = diag(signs)`` with ``Q[m] ≈ Q[0] D``: the multipliers' signs."""
 
     @property
     def log_multipliers(self) -> Float[Array, " dim"]:
-        """``Σ_i log (R[i])_jj`` — the multipliers' log-moduli, in log space."""
+        r"""The multipliers' log-moduli, ``Σ_i log (R[i])_jj``, accumulated in log
+        space so that a multiplier as small as $10^{-16}$ keeps its digits."""
         return jnp.sum(jnp.log(jnp.diagonal(self.R, axis1=-2, axis2=-1)), axis=0)
 
     @property
     def multipliers(self) -> Float[Array, " dim"]:
+        """The multipliers, ``signs · exp(log_multipliers)``."""
         return self.signs * jnp.exp(self.log_multipliers)
 
     @property
     def closure(self) -> Float[Array, ""]:
-        """``‖Q[m] − Q[0] D‖``: zero if the seed frame was a Schur basis of the
-        product — the trivial-multiplier defect of the chain."""
+        """The closure defect ``‖Q[m] − Q[0] D‖``: zero if the seed frame was a Schur
+        basis of the product, so the chain's trivial-multiplier diagnostic."""
         return jnp.linalg.norm(self.Q[-1] - self.Q[0] * self.signs[None, :])
 
 
 class Floquet(eqx.Module):
-    """The Floquet data of a ``LimitCycle``, forward-time.
+    """The Floquet data of a ``LimitCycle``, in forward time.
 
     **Attributes:**
 
-    - `multipliers`: The multipliers `(dim,)`, sorted by modulus descending for the
-        monodromy route and in Schur order for the periodic Schur route (index 0 is the
-        trivial multiplier in both, for an attracting planar cycle).
-    - `exponents`: `log(multipliers) / T` `(dim,)`.
-    - `trivial_error`: `|multipliers[0] − 1|`, the accuracy of the orbit and solver
-        together (Guckenheimer & Meloon 2000, §5.4); `None` for the Liouville route,
-        which assumes the trivial multiplier exactly.
-    - `closure`: The periodic Schur chain's closure defect; `None` for other routes.
-    - `vectors`: The right Floquet vectors `(m, dim, dim−1)` of the nontrivial
-        multipliers at every mesh point, from the periodic Schur route (O5's hook);
-        `None` for other routes.
+    - `multipliers`: The multipliers, shape ``(dim,)``: in Schur order for the
+        periodic Schur route and sorted by modulus descending for the monodromy
+        route; index 0 is the trivial multiplier in both, for an attracting planar
+        cycle.
+    - `exponents`: ``log(multipliers) / T``, shape ``(dim,)``.
+    - `trivial_error`: ``|multipliers[0] − 1|``, the accuracy of orbit and solver
+        together (Guckenheimer & Meloon 2000, §5.4); ``None`` for the Liouville
+        route, which assumes the trivial multiplier exactly.
+    - `closure`: The periodic Schur chain's closure defect; ``None`` for the other
+        routes.
+    - `vectors`: The right Floquet vectors of the nontrivial multipliers at every
+        mesh point, shape ``(m, dim, dim−1)``, from the periodic Schur route (the
+        hook for O5); ``None`` for the other routes.
     - `method`: The route used (static).
     """
 
@@ -136,10 +113,13 @@ class Floquet(eqx.Module):
 
 # --------------------------------------------------------------- the kernels ----
 def segment_jacobians(cycle: LimitCycle) -> Float[Array, "m dim dim"]:
-    """The Jacobians ``M_i = ∂Φ_{T/m}(x0s[i])`` of the flow over each shooting
-    segment, in the time direction in which the orbit attracts (the reversed field
-    for a reverse-time cycle): ``M_m ⋯ M_1`` is the monodromy at ``x0s[0]``.
-    Jit- and vmap-compatible."""
+    """The Jacobians ``M_i = ∂Φ_{T/m}(x0s[i])`` of the flow over each shooting segment
+    of `cycle`, shape ``(m, dim, dim)``, by forward-mode AD through the solver.
+
+    They are taken in the time direction in which the orbit attracts, the reversed
+    field for a reverse-time cycle, so ``M_m ⋯ M_1`` is the monodromy at ``x0s[0]`` of
+    the attracting flow.
+    """
     sign = -1.0 if cycle.reverse_time else 1.0
     duration = sign * cycle.period / cycle.m
     fwd = cycle.config.with_adjoint(dfx.ForwardMode())
@@ -148,8 +128,8 @@ def segment_jacobians(cycle: LimitCycle) -> Float[Array, "m dim dim"]:
 
 
 def _frame_from(q1: Float[Array, " dim"]) -> Float[Array, "dim dim"]:
-    """An orthogonal matrix whose first column is the unit vector ``q1``: the
-    Householder reflector mapping ``e_1`` to ``q1`` (the identity if ``q1 = e_1``)."""
+    """An orthogonal matrix whose first column is the unit vector `q1`: the
+    Householder reflector mapping ``e_1`` to `q1`, or the identity if ``q1 = e_1``."""
     dim = q1.shape[0]
     e1 = jnp.zeros(dim).at[0].set(1.0)
     v = e1 - q1
@@ -160,9 +140,9 @@ def _frame_from(q1: Float[Array, " dim"]) -> Float[Array, "dim dim"]:
 
 
 def _qr_positive(A: Float[Array, "dim dim"]) -> tuple[Array, Array]:
-    """``A = Q R`` with the diagonal of ``R`` positive (the convention of Dieci,
-    Russell & Van Vleck 1997, Eq. 3.3): the sign of row ``i`` of ``R`` and column
-    ``i`` of ``Q`` are flipped together, which keeps the factorization exact."""
+    """``A = Q R`` with the diagonal of ``R`` positive, the convention of Dieci et al.
+    1997, Eq. 3.3: the sign of row ``i`` of ``R`` and column ``i`` of ``Q`` are flipped
+    together, which keeps the factorization exact."""
     Q, R = jnp.linalg.qr(A)
     s = jnp.where(jnp.diag(R) < 0, -1.0, 1.0)
     return Q * s[None, :], R * s[:, None]
@@ -172,25 +152,28 @@ def periodic_schur(
     jacobians: Float[Array, "m dim dim"], q1: Float[ArrayLike, " dim"]
 ) -> PeriodicSchur:
     """The periodic Schur decomposition of ``M_m ⋯ M_1`` by the forward QR chain
-    seeded with ``q1``; see the module docstring.
+    ``M_i Q_i = Q_{i+1} R_i`` with positive diagonals, seeded with `q1`.
+
+    The chain is the discrete QR method for Lyapunov exponents over one period
+    (Dieci et al. 1997, §3); the seed is one Schur vector known in advance, so in the
+    plane no periodic QR iteration remains (ADR-0015 §1).
 
     **Arguments:**
 
-    - `jacobians`: The factors `(m, dim, dim)`, `jacobians[i]` mapping mesh point `i`
-        to `i + 1`.
+    - `jacobians`: The factors, shape ``(m, dim, dim)``; ``jacobians[i]`` maps mesh
+        point ``i`` to ``i + 1``.
     - `q1`: A unit vector that is an eigenvector of the product for its dominant
-        eigenvalue — the flow direction at mesh point 0 for an attracting cycle.
+        eigenvalue: the flow direction at mesh point 0 for an attracting cycle.
 
     **Returns:**
 
-    A `PeriodicSchur`; its `multipliers` are the eigenvalues of the product. Jit- and
-    vmap-compatible.
+    A `PeriodicSchur` whose `multipliers` are the eigenvalues of the product.
 
     **Raises:**
 
-    - `NotImplementedError` for `dim > 2`: the seed fixes one Schur vector only, and
-        the remaining transverse block would need the periodic QR iteration
-        (SLICOT `MB03WD`, available in Python through `slycot.math.mb03wd`).
+    `NotImplementedError` for ``dim > 2``: the seed fixes one Schur vector only, and the
+    transverse block would need the periodic QR iteration (SLICOT ``MB03WD``, in Python
+    through ``slycot.math.mb03wd``).
     """
     dim = jacobians.shape[-1]
     if dim > 2:
@@ -212,18 +195,21 @@ def periodic_schur(
 
 
 def monodromy(jacobians: Float[Array, "m dim dim"]) -> Float[Array, "dim dim"]:
-    """The ordered product ``M_m ⋯ M_1`` of the segment Jacobians — the monodromy at
-    mesh point 0 (``jnp.linalg.multi_dot``; for square factors every association
-    costs the same and rounds the same, the chain's loss of accuracy being in the
-    product itself, not in its order)."""
+    """The ordered product ``M_m ⋯ M_1`` of the segment Jacobians `jacobians`: the
+    monodromy at mesh point 0. For square factors every association costs the same
+    and rounds the same; the loss of accuracy is in the product itself, not in its
+    order."""
     return jnp.linalg.multi_dot(list(jacobians[::-1]))
 
 
 def multipliers_from_monodromy(M: Float[Array, "dim dim"]) -> Float[Array, " dim"]:
-    """The eigenvalues of ``M``: the one closest to 1 (the trivial multiplier) first,
-    the others by modulus, descending; real parts (the planar multipliers are real; a
-    complex pair in higher dimension would be reported by its real part). Floor:
-    relative error ``ε‖M‖/|μ|`` on a multiplier ``μ`` (Lust 2001, Eq. 10)."""
+    """The eigenvalues of the monodromy `M`, shape ``(dim,)``: the one closest to 1,
+    the trivial multiplier, first, then the others by modulus descending.
+
+    Real parts are returned: the planar multipliers are real, and a complex pair in
+    higher dimension would be reported by its real part. Rounding limits a multiplier
+    ``μ`` to a relative error ``ε‖M‖/|μ|`` (Lust 2001, Eq. 10).
+    """
     ev = jnp.linalg.eigvals(M)
     trivial = jnp.argmin(jnp.abs(ev - 1.0))
     rest = jnp.delete(ev, trivial, assume_unique_indices=True)
@@ -234,28 +220,34 @@ def multipliers_from_monodromy(M: Float[Array, "dim dim"]) -> Float[Array, " dim
 def return_map_multiplier(
     pmap: PoincareMap, x: Float[ArrayLike, " dim"]
 ) -> Float[Array, ""]:
-    """The nontrivial multiplier from the return map's Jacobian at the fixed point
-    ``x``: the largest eigenvalue of ``jax.jacfwd(P)(x)`` (whose other eigenvalue is
-    0, along the flow). A single-section diagnostic: both eigenvalues of ``DP`` are
-    small, so its floor is the solver's *absolute* error on ``DP`` (``~1e-9`` at the
-    shooting tolerances) — fine for a moderately attracting cycle, meaningless for
-    ``μ`` below that. Its trace is *not* used (see the module docstring)."""
+    """The nontrivial multiplier from the Jacobian of the return map `pmap` at its
+    fixed point `x`: the largest eigenvalue of ``jax.jacfwd(P)(x)``, whose other
+    eigenvalue is 0, along the flow.
+
+    A single-section diagnostic. Both eigenvalues of ``DP`` are small, so its floor is
+    the solver's absolute error on ``DP``, about ``1e-9`` at the shooting tolerances:
+    fine for a moderately attracting cycle, meaningless for a ``μ`` below that. The
+    trace of ``DP`` is not used, because it leaks the trivial multiplier's error onto
+    ``μ`` (ADR-0015 §1).
+    """
     DP = jax.jacfwd(lambda u: pmap(u)[0])(jnp.asarray(x, dtype=float))
     ev = jnp.linalg.eigvals(DP)
     return jnp.real(ev[jnp.argmax(jnp.abs(ev))])
 
 
 def divergence_integral(cycle: LimitCycle) -> Float[Array, ""]:
-    r"""$\int_0^T \mathrm{div} f(\gamma(t))\thinspace dt = \log\mu$ for a planar orbit
-    (Liouville), by an augmented solve
-    $(\dot x, \dot z) = (f, \mathrm{tr}\thinspace Df)$ along the orbit at the cycle's
-    tolerances, in the direction in which the orbit attracts (the integrand is the
-    forward field's divergence either way). Jit-compatible.
+    r"""The divergence integral $\int_0^T \mathrm{div} f(\gamma(t))\thinspace dt$ along
+    `cycle`, which equals $\log\mu$ for a planar orbit by Liouville's formula.
+
+    It is computed by one augmented solve
+    $(\dot x, \dot z) = (f, \mathrm{tr}\thinspace Df)$ at the cycle's tolerances, in
+    the direction in which the orbit attracts; the integrand is the forward field's
+    divergence either way.
 
     **Raises:**
 
-    - `ValueError` unless `cycle.dim == 2`: in higher dimension the integral is the
-        sum of all exponents, not the one we want.
+    `ValueError` unless ``cycle.dim == 2``, since in higher dimension the integral is
+    the sum of all exponents.
     """
     if cycle.dim != 2:
         raise ValueError("the Liouville route is defined for planar orbits only.")
@@ -276,9 +268,10 @@ def divergence_integral(cycle: LimitCycle) -> Float[Array, ""]:
 
 # ----------------------------------------------------------------- the driver ----
 def _floquet_vectors(ps: PeriodicSchur) -> Float[Array, "m dim dim-1"]:
-    """Right eigenvectors of the nontrivial multipliers at every mesh point, from the
-    cyclic products of the triangular factors (planar: a 2 × 2 triangular
-    eigenproblem in the ``Q[i]`` frame, mapped back to the ambient frame)."""
+    """The right eigenvectors of the nontrivial multipliers at every mesh point, shape
+    ``(m, dim, dim-1)``, from the cyclic products of the triangular factors: in the
+    plane a 2 × 2 triangular eigenproblem in the ``Q[i]`` frame, mapped back to the
+    ambient frame."""
     R, Q = ps.R, ps.Q[:-1]
     m = R.shape[0]
 
@@ -297,9 +290,17 @@ def _floquet_vectors(ps: PeriodicSchur) -> Float[Array, "m dim dim-1"]:
 
 
 def floquet_periodic_schur(cycle: LimitCycle) -> Floquet:
-    """The Floquet data by the seeded periodic Schur chain on the shooting mesh (the
-    method; see the module docstring): the chain runs in the direction in which the
-    orbit attracts and the result is reported forward-time. Jit-compatible."""
+    r"""The Floquet data of `cycle` by the seeded periodic Schur chain on its shooting
+    mesh: the method.
+
+    The multipliers are accumulated as sums of logarithms, so a multiplier as small as
+    $10^{-16}$ keeps its digits; the chain runs in the direction in which the orbit
+    attracts and the result is reported in forward time.
+
+    **Returns:**
+
+    A `Floquet` with `closure` and, in the plane, `vectors` set.
+    """
     f = cycle.ode.rhs(0.0, cycle.x0s[0])
     ps = periodic_schur(segment_jacobians(cycle), f / jnp.linalg.norm(f))
     log_mu = ps.log_multipliers * (-1.0 if cycle.reverse_time else 1.0)
@@ -315,9 +316,18 @@ def floquet_periodic_schur(cycle: LimitCycle) -> Floquet:
 
 
 def floquet_monodromy(cycle: LimitCycle) -> Floquet:
-    """The Floquet data from the eigenvalues of the explicit monodromy — the
-    diagnostic route, with the floor ``ε‖M‖/μ`` (see the module docstring).
-    Jit-compatible."""
+    r"""The Floquet data of `cycle` from the eigenvalues of the explicit monodromy.
+
+    Rounding limits a small multiplier $\mu$ to a relative error
+    $\varepsilon\Vert M\Vert/\mu$ (Lust 2001, Eq. 10), about $10^{-4}$ for
+    FitzHugh–Nagumo where $\mu \approx 1.7\cdot10^{-12}$, so this route is a
+    cross-check on `floquet_periodic_schur`, not the method.
+
+    **Returns:**
+
+    A `Floquet` with `multipliers` sorted by modulus descending; `closure` and `vectors`
+    are ``None``.
+    """
     mult = multipliers_from_monodromy(monodromy(segment_jacobians(cycle)))
     if cycle.reverse_time:  # the reversed flow's {1, 1/μ}
         mult = 1.0 / mult
@@ -332,9 +342,18 @@ def floquet_monodromy(cycle: LimitCycle) -> Floquet:
 
 
 def floquet_liouville(cycle: LimitCycle) -> Floquet:
-    """The Floquet data from the planar divergence integral — the cross-check
-    independent of all linear algebra, which assumes the trivial multiplier exactly
-    (``trivial_error`` is ``None``). Jit-compatible; planar only."""
+    """The Floquet data of `cycle` from the planar divergence integral: the
+    cross-check independent of all linear algebra, exact in the plane.
+
+    **Returns:**
+
+    A `Floquet` whose trivial multiplier is assumed exactly, so `trivial_error`,
+    `closure` and `vectors` are ``None``.
+
+    **Raises:**
+
+    `ValueError` for a non-planar cycle.
+    """
     log_mu = divergence_integral(cycle)
     zero = jnp.zeros_like(log_mu)
     return Floquet(
@@ -348,23 +367,24 @@ def floquet_liouville(cycle: LimitCycle) -> Floquet:
 
 
 def floquet(cycle: LimitCycle, *, method: FloquetMethod = "periodic_schur") -> Floquet:
-    """The Floquet multipliers and exponents of `cycle`, forward-time, by the route
-    `method` — a dispatch over `floquet_periodic_schur` (the method),
-    `floquet_monodromy` and `floquet_liouville` (the checks).
+    """The Floquet multipliers and exponents of `cycle`, in forward time, by the
+    chosen route.
 
     **Arguments:**
 
-    - `cycle`: The `LimitCycle` (its `ode`, `config` and `reverse_time` are used).
-    - `method`: `"periodic_schur"`, `"monodromy"` or `"liouville"`.
+    - `cycle`: The `LimitCycle`, from `find_limit_cycle`; its `ode`, `config` and
+        `reverse_time` are used.
+    - `method`: ``"periodic_schur"`` (the method), ``"monodromy"`` or
+        ``"liouville"``; each is also callable directly as ``floquet_<method>``.
 
     **Returns:**
 
-    A `Floquet`.
+    A `Floquet`, in forward time whatever the direction the cycle was found in.
 
     **Raises:**
 
-    - `ValueError` for an unknown `method`, or `"liouville"` on a non-planar cycle.
-    - `NotImplementedError` for `"periodic_schur"` with `cycle.dim > 2`.
+    `ValueError` for an unknown `method` or for ``"liouville"`` on a non-planar cycle;
+    `NotImplementedError` for ``"periodic_schur"`` with ``cycle.dim > 2``.
     """
     routes = {
         "periodic_schur": floquet_periodic_schur,

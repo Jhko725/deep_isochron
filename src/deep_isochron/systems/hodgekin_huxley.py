@@ -1,14 +1,35 @@
+r"""The Hodgkin–Huxley model as Yawata et al. 2024 use it for their phase autoencoder.
+
+The equations printed in the paper have typos; the rates below are those of the
+authors' source code
+(https://github.com/kyoukuntaro/PhaseAutoencoder/blob/main/utils/limitcycle.py).
+The two removable singularities of $\alpha_m$ and $\alpha_n$ are written with
+``expm1``, so the compiled field keeps its precision near $V = -40$ and $V = -55$.
+The field is declared symbolically and ``rhs`` is derived (ADR-0016); the system is
+four-dimensional, so it is not a candidate for the planar AUTO pipeline.
+"""
+
 import equinox as eqx
-import jax.numpy as jnp
-from jaxtyping import Array, ArrayLike, Float
+import sympy as sp
+from sympy.codegen.cfunctions import expm1
 
-from .base import AbstractODE
+from .symbolic import AbstractSymbolicODE, SymbolicODE
 
 
-class HodgekinHuxley(AbstractODE):
+class HodgekinHuxley(AbstractSymbolicODE):
+    r"""Four-dimensional Hodgkin–Huxley: $(V, m, h, n)$ with constant current $I$.
+
+    **Attributes:**
+
+    - `I`: Applied current.
+    - `C`: Membrane capacitance.
+    - `G_Na`, `G_K`, `G_L`: Maximal conductances.
+    - `E_Na`, `E_K`, `E_L`: Reversal potentials.
+    """
+
     dim: int = eqx.field(static=True, default=4, init=False)
 
-    I: float = 30.0
+    I: float = 30.0  # noqa: E741 (the model's own symbol)
     C: float = 1.0
     G_Na: float = 120.0
     G_K: float = 36.0
@@ -17,38 +38,37 @@ class HodgekinHuxley(AbstractODE):
     E_K: float = -77.0
     E_L: float = -54.4
 
-    # The equations in the paper have major typos.
-    # Below are from the original source code at: https://github.com/kyoukuntaro/PhaseAutoencoder/blob/main/utils/limitcycle.py
-    def alpha_m(self, V):
-        return -0.1 * (V + 40) / jnp.expm1(-(V + 40) / 10)
-
-    def beta_m(self, V):
-        return 4.0 * jnp.exp(-(V + 65) / 18)
-
-    def alpha_h(self, V):
-        return 0.07 * jnp.exp(-(V + 65) / 20)
-
-    def beta_h(self, V):
-        return 1 / (1 + jnp.exp(-(V + 35) / 10))
-
-    def alpha_n(self, V):
-        return -0.01 * (V + 55) / jnp.expm1(-(V + 55) / 10)
-
-    def beta_n(self, V):
-        return 0.125 * jnp.exp(-(V + 65) / 80.0)
-
-    def rhs(
-        self, t: Float[ArrayLike, ""], u: Float[Array, " dim"], args=None
-    ) -> Float[Array, " dim"]:
-        del t, args
-        V, m, h, n = u
+    @classmethod
+    def _symbolic_template(cls) -> SymbolicODE:
+        V, m, h, n = sp.symbols("V m h n", real=True)
+        I, C, G_Na, G_K, G_L, E_Na, E_K, E_L = sp.symbols(  # noqa: E741
+            "I C G_Na G_K G_L E_Na E_K E_L", real=True
+        )
+        alpha_m = -sp.Rational(1, 10) * (V + 40) / expm1(-(V + 40) / 10)
+        beta_m = 4 * sp.exp(-(V + 65) / 18)
+        alpha_h = sp.Rational(7, 100) * sp.exp(-(V + 65) / 20)
+        beta_h = 1 / (1 + sp.exp(-(V + 35) / 10))
+        alpha_n = -sp.Rational(1, 100) * (V + 55) / expm1(-(V + 55) / 10)
+        beta_n = sp.Rational(1, 8) * sp.exp(-(V + 65) / 80)
         dV = (
-            self.G_Na * m**3 * h * (self.E_Na - V)
-            + self.G_K * n**4 * (self.E_K - V)
-            + self.G_L * (self.E_L - V)
-            + self.I
-        ) / self.C
-        dm = self.alpha_m(V) * (1 - m) - self.beta_m(V) * m
-        dh = self.alpha_h(V) * (1 - h) - self.beta_h(V) * h
-        dn = self.alpha_n(V) * (1 - n) - self.beta_n(V) * n
-        return jnp.stack([dV, dm, dh, dn], axis=0)
+            G_Na * m**3 * h * (E_Na - V) + G_K * n**4 * (E_K - V) + G_L * (E_L - V) + I
+        ) / C
+        return SymbolicODE(
+            states=(V, m, h, n),
+            params={
+                "I": I,
+                "C": C,
+                "G_Na": G_Na,
+                "G_K": G_K,
+                "G_L": G_L,
+                "E_Na": E_Na,
+                "E_K": E_K,
+                "E_L": E_L,
+            },
+            rhs=(
+                dV,
+                alpha_m * (1 - m) - beta_m * m,
+                alpha_h * (1 - h) - beta_h * h,
+                alpha_n * (1 - n) - beta_n * n,
+            ),
+        )

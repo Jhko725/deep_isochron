@@ -1,9 +1,9 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-05
+updated: 2026-10-27
 verified_by: joon (2026-10-05; §6.3 C9 update pending)
-sources: [JAX docs (async dispatch, data placement, profiling), XLA GPU runtime source, grain source and tutorial, CPython docs, NVIDIA CUDA Graphs blog, Serino et al. 2025]
+sources: ["JAX docs: async dispatch", "JAX docs: data placement", "JAX docs: jax.default_device", "JAX docs: profiling", "JAX docs: training cookbook", "JAX source: scipy linalg", "XLA source: conditional_thunk", "XLA source: while_thunk", "grain docs", "grain source: options.py", "Python docs: GIL", "Python docs: sys.setswitchinterval", "Python docs: multiprocessing", "NVIDIA blog: CUDA Graphs", Serino et al. 2025]
 ---
 
 # Where a JAX training step spends its time — and where ours did
@@ -22,22 +22,22 @@ adopted.
 
 ## 1. Asynchronous dispatch: the host runs ahead of the device
 
-When Python calls a JAX operation — a jitted function above all — JAX does not wait for the
+When Python calls a JAX operation (a jitted function above all), JAX does not wait for the
 result. It *enqueues* the work on the device and returns a `jax.Array` that is a future for
 the value; the Python program continues, and only an operation that needs the actual numbers
 (printing, `np.asarray`, `float()`, `.block_until_ready()`) blocks until the device has
 produced them **[cited: JAX, *Asynchronous dispatch*]**. The documentation's own framing is
 that this "allows Python code to 'run ahead' of an accelerator device, keeping Python code
 out of the critical path." The same page warns that timing a JAX call without blocking
-measures only the *dispatch* — the host-side cost of enqueueing — not the computation.
+measures only the *dispatch*, the host-side cost of enqueueing, and not the computation.
 
 Three consequences shape everything below.
 
 - **A training loop has two clocks.** The host clock is how long the Python loop takes to
   come back from `train_step(state, batch)` and go round again; the device clock is how long
   the device takes to finish the step. Throughput is set by the slower of the two. The
-  benchmark reports both — *dispatch* (host loop time without waiting) and *total* (with a
-  final `block_until_ready`) — because their relation is the first diagnostic (§5).
+  benchmark reports both, *dispatch* (host loop time without waiting) and *total* (with a
+  final `block_until_ready`), because their relation is the first diagnostic (§5).
 - **Reading a metric is a synchronization.** `float(loss)` makes the host wait for the step
   that produced it, and with it for everything queued before. This is why the loop never
   reads device values and the loggers do it (`to_floats`), and why the training cookbook's
@@ -59,8 +59,8 @@ Every `jax.Array` is on some device. It is either *committed* there or not
   committed … and it stays put. Computations follow their data." Combining arrays committed
   to *different* devices in one operation is an error — "Commitment is a promise JAX
   enforces."
-- An array created without naming a device — `jnp.asarray(np_array)`, the output of a
-  computation on uncommitted inputs — is placed "somewhere sensible" (the default device) and
+- An array created without naming a device (`jnp.asarray(np_array)`, the output of a
+  computation on uncommitted inputs) is placed "somewhere sensible" (the default device) and
   left **uncommitted**: "if it's used in a computation together with data that *is*
   committed somewhere, JAX moves it there implicitly." A computation whose inputs are all
   uncommitted runs on the default device; `jax.config.update("jax_default_device", d)` and
@@ -77,9 +77,9 @@ script as a guard. Two practical rules survive: the device is chosen once, by th
 (`to_device(dataset, device)` takes it explicitly), and the model and state are created
 under `jax_default_device` set to the same card so nothing is moved implicitly.
 
-*Which default, then?* `jax.devices()[0]` is JAX's own default device — the first device of
+*Which default, then?* `jax.devices()[0]` is JAX's own default device, the first device of
 the default backend, "generally `'gpu'` or `'tpu'` if available, otherwise `'cpu'`"
-**[cited: JAX, `jax.devices`]** — and it is the right choice exactly when the visible devices
+**[cited: JAX, `jax.devices`]**, and it is the right choice exactly when the visible devices
 are the right ones: a CPU machine, tests, or a job whose scheduler set
 `CUDA_VISIBLE_DEVICES` (Slurm's `--gpus`/`--gres` do), so that the one visible card is the
 assigned one. It is the wrong choice on a shared node where several cards are visible and
@@ -114,7 +114,7 @@ happens in every worker — our constraint primitives used to initialize a CUDA 
 import, so each worker claimed GPU memory and died of `CUDA_ERROR_OUT_OF_MEMORY` (change
 document, *Bugs fixed*; fixed by computing the shift lazily, ADR-0005 amended, and by the
 script setting `JAX_PLATFORMS=cpu` when it runs as `__mp_main__`). And the batches still
-have to cross back into the main process, where a Python thread receives them — so
+have to cross back into the main process, where a Python thread receives them, so
 `mp_prefetch` removes the slicing from the main process but not the GIL traffic of the
 hand-over.
 
@@ -124,7 +124,7 @@ The script times one `Trainer.train_step` under controlled conditions and prints
 Every number is milliseconds per batch or per step, reported as **min / median** over
 `--repeats` interleaved repetitions of `--steps` steps each, after a multi-step warm-up
 (compilation, allocator, lazy CUDA state). Interleaving matters on a shared machine: a
-configuration measured in one block can be flattered or punished by whatever else the node
+configuration measured in one block can be helped or hurt by whatever else the node
 was doing in that minute; the min is the best guess at the undisturbed cost, the median at
 the typical one.
 
@@ -145,7 +145,7 @@ spread over the steps: dispatch ≪ total means the host ran far ahead (device-b
 dispatch ≈ total means it could not (host-bound, launch-bound, or synchronized — §5).
 
 **The dispatch floor.** A deliberately trivial jitted function over the *same* `(state,
-batch)` pytrees — it adds one to the step counter and sums the batch — timed like a step.
+batch)` pytrees (it adds one to the step counter and sums the batch), timed like a step.
 Its cost is everything the host pays per call *before any kernel of the real step exists*:
 `eqx.filter_jit`'s partitioning of the state's leaves, hashing the static parts, pushing a
 few hundred array arguments through the dispatch path. It is reported for committed,
@@ -208,8 +208,8 @@ below is the dispatch floor of §4.
 
 ### 5.1 Host-bound by Python
 
-The loop's own Python — partitioning the pytree, hashing static arguments, the loader's
-`next()` — takes longer than the device needs. Signature: dispatch ≈ total **and** floor of
+The loop's own Python (partitioning the pytree, hashing static arguments, the loader's
+`next()`) takes longer than the device needs. Signature: dispatch ≈ total **and** floor of
 the order of the step. Remedy: less Python per step (bigger batches, fewer leaves,
 `eqx.filter_jit` over a plain `jax.jit` only where the filtering is needed). We never saw
 this regime: the floor was 0.7–0.9 ms against steps of 30–90 ms.
@@ -231,12 +231,13 @@ program of thousands of launches per step fills the device's command queue as so
 device falls behind, and the launching thread then blocks on every further launch until a
 slot frees — so once the device's own work exceeds the launch cost, dispatch still tracks
 total, with the device now the bottleneck **[deduced: the 512 → 2 048 pair below; CUDA's
-launch queue is finite, depth unspecified]**. The batch-size scan is therefore the honest
+launch queue is finite, depth unspecified]**. The batch-size scan is therefore the decisive
 test: fit `step = fixed + per_sample · batch`; the fixed part is launches, the slope is
 the device. For this project after ADR-0010: 31 ms at 512 and 63 ms at 2 048 give ≈ 20 ms
-fixed and ≈ 10.7 ms per 512 windows **[measured, V100]** — launch cost and device work of
-the same order, so a 4× batch buys 2× throughput and the next lever is the device work per
-window (the root solve's 112 serialized iterations per point), not the launch count alone.
+fixed and ≈ 10.7 ms per 512 windows **[measured, V100]**, launch cost and device work of
+the same order, so a 4× batch gives 2× throughput and the next thing to reduce is the
+device work per window (the root solve's 112 serialized iterations per point), not the
+launch count alone.
 
 Where do thousands of launches come from in a model with a dozen layers? From **loops**. A
 `lax.fori_loop`/`lax.scan` becomes an XLA `while`; on the GPU backend the runtime executes
@@ -248,9 +249,9 @@ per call, however many points it is vectorized over.
 
 Remedies, in order of preference: remove the loop (a closed form, ADR-0010); fewer
 iterations; `unroll=k` on the loop (k iterations per launch set); XLA command buffers (CUDA
-graphs — "a mechanism to launch multiple GPU operations through a single CPU operation"
-**[cited: NVIDIA, *CUDA Graphs*]** — `--xla_gpu_enable_command_buffer=+WHILE`, flag names
-present in jaxlib 0.11; untested here); and simply larger batches, which are nearly free in
+graphs, "a mechanism to launch multiple GPU operations through a single CPU operation"
+**[cited: NVIDIA, *CUDA Graphs*]**, through `--xla_gpu_enable_command_buffer=+WHILE`, flag
+names present in jaxlib 0.11; untested here); and simply larger batches, which are nearly free in
 this regime.
 
 ### 5.3 Synchronization inside the executable
@@ -263,7 +264,7 @@ copy is done* before launching the chosen branch **[cited: XLA `conditional_thun
 whose trip count XLA could not determine does the same once per iteration **[cited: XLA
 `while_thunk.cc`, the unknown-trip-count branch]**; a `fori_loop` with static bounds carries
 a `known_trip_count` annotation and does not. Each such wait is a full round trip to the
-device and back — tens of microseconds on a PCIe card — and, worse than the time, it
+device and back (tens of microseconds on a PCIe card) and, worse than the time, it
 forbids the host from running ahead: the host must sit at every conditional until the device
 reaches it, so dispatch ≈ total even when the device is the real limit.
 
@@ -288,8 +289,8 @@ project has needed yet.
 ### 5.5 And the data: fetch-bound
 
 Orthogonal to the four above: the loader cannot produce batches as fast as the step consumes
-them. grain's training tutorial names the plain pattern — `jax.device_put` in the loop,
-"option A" — as one where "the host blocks while the device receives data", and recommends
+them. grain's training tutorial names the plain pattern (`jax.device_put` in the loop,
+"option A") as one where "the host blocks while the device receives data", and recommends
 `grain.experimental.device_put` (option C: a CPU prefetch thread, the transfer, a
 device-side buffer; "ThreadPrefetch -> map(jax.device_put) -> ThreadPrefetch") "for real
 training" **[cited: grain, *JAX training tutorial*]**. Prefetching overlaps the fetch with the
@@ -308,7 +309,7 @@ dev container.
    device-resident batches to ≈ 90 ms, dispatch ≈ total: the launching thread waited for the
    GIL behind sixteen slicing threads. One reader thread (`data.single_threaded`) under
    `to_device` brought it back to ≈ 22 ms **[measured, CPU]**. On the 24-core V100 host the
-   same contrast is 361–400 ms against 93 ms — four times slower with cores to spare, which
+   same contrast is 361–400 ms against 93 ms, four times slower with cores to spare, which
    is what rules out CPU time-sharing and leaves the GIL **[deduced]**.
 
 2. **`expm`'s conditionals (§5.3), found with the loop census.** With the data already on
@@ -319,7 +320,7 @@ dev container.
    `_squaring`]**. `BiLipschitzLinear` built its two rotations with `expm(raw − rawᵀ)`: two
    per layer × 8 layers × (`__call__` and `inverse` both read `params`) × (primal and the
    Fréchet-derivative `expm` of the custom JVP) ≈ 112. A lone 2×2 `expm` measured **0.65–0.84
-   ms per call** on the V100 against **0.05–0.07 ms** for the closed-form rotation — sixteen
+   ms per call** on the V100 against **0.05–0.07 ms** for the closed-form rotation, sixteen
    round trips of ≈ 40 µs **[measured]**; ≈ 1 700 of them per step is the 80 ms. The Cayley
    transform `(I − A)(I + A)⁻¹` replaced `expm` (ADR-0010): 0 conditionals, 2 loops, step
    **88 → 33 ms** **[measured]**.
@@ -330,10 +331,10 @@ dev container.
    `np.random.Generator` per element → `batch`'s `np.stack`), and the prefetch thread can
    hide the step behind the fetch but not the fetch behind the step. The same batches from a
    cache run at 33 ms. Fixed by C9: `WindowBatchSource`, a source whose element is a whole
-   batch built by one fancy-indexed gather — 0.6 ms against 49 ms per batch on the dev CPU
+   batch built by one fancy-indexed gather, 0.6 ms against 49 ms per batch on the dev CPU
    **[measured]**, with an epoch defined as every window once (ADR-0008 Decision 3). On the
    V100: fetch 88.5 → 0.7 ms, `to_device` 32.6 ms against 31.0 device-resident
-   **[measured]** — the loader is out of the picture; the step (§5.2) is what remains.
+   **[measured]**, so the loader no longer matters and the step (§5.2) is what remains.
 
 Two hypotheses were raised and refuted on the way, and are kept as negative results: that
 *committed* batches dispatch slower than uncommitted ones (§2; floors and steps identical),
@@ -366,18 +367,4 @@ launches, ≈ 17 µs per launch) and nearly flat in batch size.
 
 ## References
 
-- JAX, *Asynchronous dispatch* — https://docs.jax.dev/en/latest/async_dispatch.html
-- JAX, *Data placement* (committed / uncommitted) — https://docs.jax.dev/en/latest/201/placement.html
-- JAX, `jax.default_device` — https://docs.jax.dev/en/latest/_autosummary/jax.default_device.html
-- JAX, *Profiling computation* — https://docs.jax.dev/en/latest/profiling.html
-- JAX, *The training cookbook*, the training loop (one-step-delayed logging) — https://docs.jax.dev/en/latest/the-training-cookbook.html#the-training-loop
-- JAX source, `jax/_src/scipy/linalg.py` (`expm`, `_squaring`) — https://github.com/jax-ml/jax/blob/main/jax/_src/scipy/linalg.py
-- XLA GPU runtime, `conditional_thunk.cc` — https://github.com/openxla/xla/blob/main/xla/backends/gpu/runtime/conditional_thunk.cc
-- XLA GPU runtime, `while_thunk.cc` — https://github.com/openxla/xla/blob/main/xla/backends/gpu/runtime/while_thunk.cc
-- grain, *JAX training tutorial*, moving batches to the accelerator — https://google-grain.readthedocs.io/en/latest/tutorials/jax_training_tutorial.html
-- grain source, `grain/_src/python/options.py` (`ReadOptions`) — https://github.com/google/grain/blob/main/grain/_src/python/options.py
-- Python, glossary: *global interpreter lock* — https://docs.python.org/3/glossary.html#term-global-interpreter-lock
-- Python, `sys.setswitchinterval` — https://docs.python.org/3/library/sys.html#sys.setswitchinterval
-- Python, *multiprocessing* — start methods and *Safe importing of main module* — https://docs.python.org/3/library/multiprocessing.html
-- NVIDIA, *Getting Started with CUDA Graphs* — https://developer.nvidia.com/blog/cuda-graphs/
-- D. A. Serino et al., *Fast-slow neural networks for learning singularly perturbed dynamical systems*, J. Comput. Phys. 537, 114090 (2025) — the bi-Lipschitz linear layer.
+Every work cited above has its entry in [`references.md`](../references.md).

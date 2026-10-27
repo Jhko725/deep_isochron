@@ -61,6 +61,8 @@ def _derivatives(f, order):
 @pytest.mark.parametrize("cls", list(JOIN_ORDER), ids=SPLINE_IDS)
 @given(data=st.data())
 def test_identity_tails(cls, data):
+    """``f`` and ``f⁻¹`` are exactly the identity at and beyond both range endpoints,
+    for a drawn template and raw parameters of each spline class."""
     f = data.draw(spline_templates(cls).flatmap(scalar_bijections), label="spline")
     lo, hi = f.xy_range
     d = jnp.abs(data.draw(point_batches(1), label="offsets")[:, 0])
@@ -246,6 +248,8 @@ def _identity_instance(name):
 @example(f=MonotonicRQSpline(5, xy_range=(-4.0, 4.0)))
 @example(f=CubicBSpline(6))
 def test_knots_round_trip(f):
+    """``f⁻¹(f(x_k)) == x_k`` at every knot, endpoints included, to
+    ``TOL["closed_form"]``, with two pinned examples."""
     xk = f.xs  # includes both range endpoints
     _, x_rt, _ = roundtrip(f, xk)
     assert_close(x_rt, xk, atol=TOL["closed_form"], msg="round trip at knots")
@@ -254,6 +258,8 @@ def test_knots_round_trip(f):
 @given(f=any_scalar_bijection(KNOTTED))
 @example(f=LinearSpline(3))
 def test_knots_interpolated_and_monotone(f):
+    """``f(x_k) == y_k`` to ``TOL["closed_form"]`` and ``f`` is strictly increasing on a
+    2001-point grid through and beyond the knots."""
     assert_close(jax.vmap(f)(f.xs), f.ys, atol=TOL["closed_form"], msg="f(x_k) != y_k")
     lo, hi = float(f.xs[0]), float(f.xs[-1])
     x = jnp.sort(jnp.concatenate([jnp.linspace(lo - 1, hi + 1, 2001), f.xs]))

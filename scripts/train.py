@@ -26,6 +26,8 @@ from omegaconf import DictConfig
 
 @hydra.main(version_base=None, config_path="../configs", config_name="train")
 def main(cfg: DictConfig) -> None:
+    """Train one run from `cfg` in Hydra's output directory, grouped by the sweep
+    directory under a multirun."""
     # Hydra sets the root logger to INFO, which lets Orbax's and JAX's absl chatter
     # through; the run's own output is the PrintLogger
     for name in ("absl", "jax", "orbax"):

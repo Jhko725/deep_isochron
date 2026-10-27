@@ -1,9 +1,5 @@
-"""Monotone non-uniform cubic B-spline of [1] (order k = 4), with identity tails that
-join C^2.
-
-[1] S. Hong and S. Y. Chun. Neural Diffeomorphic Non-uniform B-spline Flows.
-    AAAI (2023).
-"""
+"""The monotone non-uniform cubic B-spline of Hong & Chun 2023, order 4, with identity
+tails that join $C^2$ (ADR-0006; ``docs/design/cubic-bspline.md``)."""
 
 from collections.abc import Sequence
 from functools import partial
@@ -19,10 +15,12 @@ from .base import AbstractSpline
 
 
 def _cubic(c: Float[Array, " 4"], u: Float[Array, ""]) -> Float[Array, ""]:
+    """The cubic with power-basis coefficients `c` at `u`, by Horner's rule."""
     return c[0] + u * (c[1] + u * (c[2] + u * c[3]))
 
 
 def _dcubic(c: Float[Array, " 4"], u: Float[Array, ""]) -> Float[Array, ""]:
+    """The derivative of `_cubic`."""
     return c[1] + u * (2 * c[2] + u * 3 * c[3])
 
 
@@ -30,13 +28,14 @@ def _dcubic(c: Float[Array, " 4"], u: Float[Array, ""]) -> Float[Array, ""]:
 def monotone_cubic_root(
     iters: int, c: Float[Array, " 4"], y: Float[Array, ""]
 ) -> Float[Array, ""]:
-    """Solve ``c0 + c1 u + c2 u^2 + c3 u^3 = y`` for ``u`` in [0, 1], assuming the
-    cubic is strictly increasing there.
+    """The root ``u`` in ``[0, 1]`` of ``c0 + c1 u + c2 u² + c3 u³ = y``, for a cubic
+    strictly increasing there.
 
-    Newton iteration safeguarded by bisection: the bracket ``[lo, hi]`` always contains
-    the root, so the iterate cannot leave the bin. This replaces the closed-form root
-    formula of the reference implementation, whose numerical instability the authors
-    of [1] suspect behind their ~1-in-10 training outliers.
+    The solve is `iters` Newton steps safeguarded by bisection: the bracket always
+    contains the root, so the iterate cannot leave the bin. It replaces the
+    closed-form root formula of the reference implementation, whose numerical
+    instability Hong & Chun 2023 suspect behind their 1-in-10 training outliers
+    (ADR-0006).
     """
 
     def body(_, state):
@@ -57,8 +56,9 @@ def monotone_cubic_root(
 
 @monotone_cubic_root.defjvp
 def _monotone_cubic_root_jvp(iters, primals, tangents):
-    # Implicit function theorem on p(u; c) = y:  du = (dy - d_c p . dc) / p'(u).
-    # Calls the custom_jvp function itself, so the rule is differentiable to any order.
+    """The implicit function theorem on ``p(u; c) = y``: ``du = (dy - ∂_c p · dc) /
+    p'(u)``. It calls the custom-JVP function itself, so the rule is differentiable
+    to any order."""
     c, y = primals
     dc, dy = tangents
     u = monotone_cubic_root(iters, c, y)
@@ -67,44 +67,54 @@ def _monotone_cubic_root_jvp(iters, primals, tangents):
 
 
 class BSplineParams(NamedTuple):
+    """The constrained parameters of `CubicBSpline`.
+
+    **Attributes:**
+
+    - `knot_widths`: The ``num_bins + 4`` positive knot spacings ``t_{i+1} - t_i``;
+        the interior ``num_bins`` sum to the range width.
+    - `coeff_incrs`: The ``num_bins - 2`` positive increments between the non-pinned
+        coefficients.
+    """
+
     knot_widths: Float[Array, " M"]
-    """``num_bins + 4`` positive knot spacings ``t_{i+1} - t_i``; the interior
-    ``num_bins`` sum to the range width."""
     coeff_incrs: Float[Array, " M-6"]
-    """``num_bins - 2`` positive increments between the non-pinned coefficients."""
 
 
 class CubicBSpline(AbstractSpline[BSplineParams]):
-    r"""C^2 spline: on ``xy_range`` the map is a non-uniform cubic B-spline
+    r"""The $C^2$ spline: on `xy_range` the map is the non-uniform cubic B-spline
     $f(x) = \sum_j \alpha_j B_{j,4}(x)$ with strictly increasing coefficients.
 
-    Knots and coefficients follow Algorithm 1 of [1] (``r = 0``, ``s = num_bins``),
-    except at the boundary: instead of the rescaling in its lines 13-17 (which only
-    fixes ``f(a) = a``, ``f(b) = b``), the three outermost coefficients on each side are
-    pinned to their Greville abscissae ``(t_j + t_{j+1} + t_{j+2}) / 3``. On a
-    stretch where the coefficients equal the Greville abscissae a cubic B-spline
-    reproduces the identity (Marsden's identity), so ``f = id``, ``f' = 1``, ``f'' = 0``
-    at both ends of the range and the identity tails join C^2.
+    Knots and coefficients follow Algorithm 1 of Hong & Chun 2023 with ``r = 0`` and
+    ``s = num_bins``, except at the boundary: instead of the rescaling of its lines
+    13–17, which only fixes ``f(a) = a`` and ``f(b) = b``, the three outermost
+    coefficients on each side are pinned to their Greville abscissae
+    ``(t_j + t_{j+1} + t_{j+2}) / 3``. On a stretch where the coefficients equal the
+    Greville abscissae a cubic B-spline reproduces the identity (Marsden's identity),
+    so ``f = id``, ``f' = 1`` and ``f'' = 0`` at both ends of the range and the
+    identity tails join $C^2$ (ADR-0006; ``docs/design/cubic-bspline.md`` has the
+    mathematics and the index conventions).
 
-    Raw parameters: ``num_bins + 4`` knot widths then ``num_bins - 2`` coefficient
-    increments, each block through a floored softmax (``Widths``). The knot block is
-    normalized so that the ``num_bins`` *interior* widths span the range (the four
-    exterior widths scale along; this differs from Algorithm 1, which normalizes all);
-    the coefficient block sums to the Greville span between the pinned ends. ``raw = 0``
-    gives uniform knots and Greville coefficients: the identity.
+    The raw parameters are ``num_bins + 4`` knot widths then ``num_bins - 2``
+    coefficient increments, each block through the floored softmax `Widths`. The knot
+    block is normalized so that the `num_bins` interior widths span the range, the
+    four exterior widths scaling along, which differs from Algorithm 1, where all are
+    normalized; the coefficient block sums to the Greville span between the pinned
+    ends. ``raw = 0`` gives uniform knots and Greville coefficients, the identity. The
+    inverse is a bisection-safeguarded Newton solve with `newton_iters` fixed
+    iterations, finite for every parameter value and at round-off in practice.
 
-    Index conventions for ``K = num_bins``:
-        knots[i]  = t_{i-2},      i = 0..K+4   (t_0 = a, t_K = b)
-        coeffs[i] = alpha_{i-3},  i = 0..K+2
+    **Arguments:**
 
-    The inverse is a bisection-safeguarded Newton solve with ``newton_iters`` fixed
-    iterations: the root stays bracketed and the iterate stays in the bin, so the
-    inverse is finite for every parameter value; it reaches round-off in practice. (See
-    ``docs/design/cubic-bspline.md`` §5 for further discussion.)
+    - `num_bins`: The number of bins, at least 4.
+    - `xy_range`: The range.
+    - `raw`: The raw parameters; the identity when omitted.
+    - `min_rel_knot_width`, `min_rel_coeff_incr`: The floors of the two blocks.
+    - `newton_iters`: The iterations of the inverse solve.
 
-    Design rationale: ``docs/decisions/0006-cubic-bspline-boundary-and-inverse.md``;
-    mathematics and index conventions: ``docs/design/cubic-bspline.md``.
-    """
+    **Raises:**
+
+    `ValueError` for fewer than 4 bins or a bad range."""
 
     raw: Float[Array, " {self.num_params}"] | None
     num_params: int = eqx.field(static=True, init=False)
@@ -137,10 +147,11 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
 
     # -------------------------------------------------------------- interface -----
     def constrain(self, raw) -> BSplineParams:
+        """The knot block through `Widths` and renormalized to the interior
+        (Algorithm 1, lines 1–3, with the boundary treatment above), the coefficient
+        block through `Widths` over the Greville span."""
         K = self.num_bins
         t_raw, a_raw = jnp.split(raw, [K + 4])
-        # Algorithm 1, lines 1-3 of [1]: floored softmax, then normalized so that the
-        # K interior widths span the range (the 4 exterior ones scale along).
         w = Widths(1.0, self.min_rel_knot_width)(t_raw)
         knot_widths = w / jnp.sum(w[2 : K + 2]) * self.range_width
         greville = self._greville(self._knots(knot_widths))
@@ -152,6 +163,8 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
     def _knots(
         self, knot_widths: Float[Array, " {self.num_bins+4}"]
     ) -> Float[Array, " {self.num_bins+5}"]:
+        """The knot sequence from the widths, with ``t_0 = lo`` and ``t_K = hi``
+        exactly; ``knots[i] = t_{i-2}`` for ``i = 0..K+4``."""
         lo, hi = self.xy_range
         t = jnp.cumulative_sum(knot_widths, include_initial=True)
         t = t - t[2] + lo  # t_0 = lo
@@ -159,18 +172,19 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
 
     @staticmethod
     def _greville(knots: Float[Array, " M"]) -> Float[Array, " M-2"]:
+        """The Greville abscissae, the means of three consecutive knots."""
         return (knots[:-2] + knots[1:-1] + knots[2:]) / 3
 
     @property
     def knots(self) -> Float[Array, " {self.num_bins+5}"]:
-        """Full knot sequence ``t_{-2} < ... < t_{K+2}`` (two knots beyond each end of
-        the range, as the cubic pieces at the boundary need them)."""
+        """The full knot sequence ``t_{-2} < ... < t_{K+2}``, two knots beyond each end
+        of the range, as the cubic pieces at the boundary need them."""
         return self._knots(self.params.knot_widths)
 
     @property
     def coeffs(self) -> Float[Array, " {self.num_bins+3}"]:
-        """Strictly increasing B-spline coefficients ``alpha_{-3}, ..., alpha_{K-1}``
-        ."""
+        """The strictly increasing B-spline coefficients
+        ``alpha_{-3}, ..., alpha_{K-1}``, with ``coeffs[i] = alpha_{i-3}``."""
         K = self.num_bins
         greville = self._greville(self.knots)
         interior = greville[2] + jnp.cumsum(self.params.coeff_incrs)[:-1]
@@ -178,10 +192,11 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
 
     @property
     def pieces(self) -> Float[Array, "{self.num_bins} 4"]:
-        """Power-basis coefficients of each bin's cubic in the local coordinate
-        ``u = (x - t_j) / (t_{j+1} - t_j)``: the Taylor expansion at ``t_j``, obtained
-        from the B-spline derivative recursion (de Boor; see the proof of Thm. 2 in
-        [1]) applied to the three basis functions active on the bin."""
+        """The power-basis coefficients of each bin's cubic in the local coordinate
+        ``u = (x - t_j) / (t_{j+1} - t_j)``, shape ``(num_bins, 4)``: the Taylor
+        expansion at ``t_j``, from the B-spline derivative recursion (de Boor 2001,
+        Ch. X; the proof of Theorem 2 of Hong & Chun 2023) applied to the three basis
+        functions active on the bin."""
         K = self.num_bins
         t, a = self.knots, self.coeffs
         D = (a[1:] - a[:-1]) / (t[3:] - t[:-3])  # first divided differences
@@ -199,23 +214,28 @@ class CubicBSpline(AbstractSpline[BSplineParams]):
 
     @property
     def xs(self) -> Float[Array, " {self.num_bins+1}"]:
+        """The interior knots ``t_0, ..., t_K``."""
         return self.knots[2 : self.num_bins + 3]
 
     @property
     def ys(self) -> Float[Array, " {self.num_bins+1}"]:
+        """The values at the interior knots: each piece's constant term, then ``hi``."""
         return jnp.append(self.pieces[:, 0], self.xy_range[1])
 
     @property
     def knot_derivs(self) -> Float[Array, " {self.num_bins+1}"]:
-        """``f'(xs)``, boundaries included (equal to 1)."""
+        """``f'(xs)``, boundaries included and equal to 1."""
         return jnp.append(self.pieces[:, 1] / jnp.diff(self.xs), 1.0)
 
     # ------------------------------------------------------------ interpolant -----
     def _forward_in_range(self, x):
+        """The cubic of the bin of `x` at its local coordinate."""
         k, dx = self.get_bin_and_offset(x, self.xs)
         return _cubic(self.pieces[k], dx / jnp.diff(self.xs)[k])
 
     def _inverse_in_range(self, y):
+        """The root of the cubic of the bin of `y`, mapped back from the local
+        coordinate."""
         k = self.get_bin_and_offset(y, self.ys)[0]
         u = monotone_cubic_root(self.newton_iters, self.pieces[k], y)
         return self.xs[k] + u * jnp.diff(self.xs)[k]

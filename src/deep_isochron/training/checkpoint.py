@@ -1,15 +1,14 @@
 """Checkpointing of the whole ``TrainerState`` with Orbax (roadmap C4, ADR-0009).
 
-``OrbaxCheckpointer(directory, ...)`` saves the **array leaves** of a ``TrainerState``
-(model, optimizer state, step, key, schedule state) so a run can resume, and restores
-them into a template state with ``eqx.combine``. Which steps are saved is Orbax's
-``save_decision_policy`` (default: every ``save_every`` steps) and which are kept is its
-``preservation_policy`` (default: the best by ``metric`` plus the latest). The directory
-is given by the caller — the experiment script owns run directories (Phase D) — and the
-``custom_metadata`` (resolved config, dataset ``config_hash``, ``x64`` flag) is whatever
-the caller passes; nothing here invents paths or metadata.
-
-``NullCheckpointer`` is for tests and notebooks."""
+``OrbaxCheckpointer`` saves the array leaves of a ``TrainerState`` (model, optimizer
+state, step, key, schedule state) so a run can resume, and restores them into a
+template state with ``eqx.combine``. Which steps are saved is Orbax's
+``save_decision_policy``, every ``save_every`` steps by default, and which are kept is
+its ``preservation_policy``, the best by ``metric`` plus the latest. The directory and
+the ``custom_metadata`` are the caller's, since the experiment layer owns run
+directories (ADR-0011); nothing here invents paths or metadata. ``NullCheckpointer``
+is for tests and notebooks.
+"""
 
 from __future__ import annotations
 
@@ -27,18 +26,13 @@ S = TypeVar("S", bound=eqx.Module)
 
 
 class Checkpointer(abc.ABC):
-    """Base class: subclasses implement ``save(step, state, metrics, force=False) ->
-    saved``.
+    """The base class: a subclass implements `save`.
 
-    ``save`` is *offered* a state at every evaluation step; a checkpointer's save policy
-    (``OrbaxCheckpointer(save_every=...)``) decides whether to write it, and the return
-    value says whether it did. ``force=True`` writes **this** call's checkpoint whatever
-    the policy says — it is per call, not a mode: ``Trainer.train`` passes it exactly
-    once, for the run's final step, so that a run always ends with its last state on
-    disk (``restore()`` with no step is then the trained state) whatever ``save_every``
-    is.
-    Every checkpointer is a context manager whose exit calls ``close()`` (a no-op unless
-    overridden), also when the loop raised."""
+    `save` is offered a state at every evaluation step; the checkpointer's save policy
+    decides whether to write it, and the return value says whether it did. Every
+    checkpointer is a context manager whose exit calls `close`, a no-op unless
+    overridden, also when the loop raised.
+    """
 
     @abc.abstractmethod
     def save(
@@ -48,9 +42,20 @@ class Checkpointer(abc.ABC):
         metrics: Mapping[str, float],
         *,
         force: bool = False,
-    ) -> bool: ...
+    ) -> bool:
+        """Offer `state` at `step` with its validation `metrics`.
+
+        `force` writes this call's checkpoint whatever the policy says. It is per
+        call, not a mode: ``Trainer.train`` passes it exactly once, for the run's
+        final step, so that a run always ends with its last state on disk, whatever
+        ``save_every`` is.
+
+        **Returns:**
+
+        Whether a checkpoint was written."""
 
     def close(self) -> None:
+        """Release whatever the checkpointer holds; a no-op by default."""
         pass
 
     def __enter__(self):  # beartype rejects typing.Self outside @beartype classes
@@ -61,6 +66,8 @@ class Checkpointer(abc.ABC):
 
 
 class NullCheckpointer(Checkpointer):
+    """A checkpointer that never writes, for tests and notebooks."""
+
     def save(
         self,
         step: int,
@@ -69,12 +76,24 @@ class NullCheckpointer(Checkpointer):
         *,
         force: bool = False,
     ) -> bool:
+        """Write nothing."""
         return False
 
 
 class OrbaxCheckpointer(Checkpointer):
-    """See the module docstring. ``metric`` is the key of ``metrics`` the best
-    checkpoint is chosen by (smaller is better unless ``maximize``)."""
+    """A checkpointer writing the array leaves of a state to `directory` with Orbax.
+
+    **Arguments:**
+
+    - `directory`: Where the checkpoints go; made absolute, as Orbax requires.
+    - `save_every`: The save policy: a checkpoint every this many offered steps.
+    - `metric`: The key of `metrics` the best checkpoint is chosen by, smaller being
+        better unless `maximize`; ``None`` keeps only the latest.
+    - `maximize`: Whether larger is better for `metric`.
+    - `keep_best`: How many best checkpoints to keep, besides the latest.
+    - `custom_metadata`: Recorded with the directory, such as the run's resolved
+        config; read back by `custom_metadata`.
+    """
 
     def __init__(
         self,
@@ -122,11 +141,18 @@ class OrbaxCheckpointer(Checkpointer):
         *,
         force: bool = False,
     ) -> bool:
-        """Offer ``state`` at ``step``: written if ``step`` is a multiple of
-        ``save_every`` (Orbax's ``FixedIntervalPolicy``), or unconditionally with
-        ``force`` — this one call only; the trainer uses it for the final step. Returns
-        whether a checkpoint was written. Which checkpoints are *kept* afterwards is the
-        preservation policy (the latest, plus the best ``keep_best`` by ``metric``)."""
+        """Offer `state` at `step`: written when `step` is a multiple of `save_every`,
+        Orbax's ``FixedIntervalPolicy``, or unconditionally with `force`. Which
+        checkpoints are kept afterwards is the preservation policy: the latest, plus
+        the best `keep_best` by `metric`.
+
+        **Returns:**
+
+        Whether a checkpoint was written.
+
+        **Raises:**
+
+        `KeyError` when `metrics` lacks `metric`."""
         if self.metric is not None and self.metric not in metrics:
             raise KeyError(
                 f"checkpoint metric {self.metric!r} missing from metrics "
@@ -140,8 +166,8 @@ class OrbaxCheckpointer(Checkpointer):
         return response is not None
 
     def restore(self, template: S, step: int | None = None) -> S:
-        """The state at ``step`` (latest if ``None``) with ``template``'s static
-        parts."""
+        """The state at `step`, the latest when ``None``, with the static parts of
+        `template`."""
         arrays, static = eqx.partition(template, eqx.is_array)
         abstract = jax.tree.map(
             lambda a: jax.ShapeDtypeStruct(
@@ -154,23 +180,25 @@ class OrbaxCheckpointer(Checkpointer):
 
     @property
     def steps(self) -> list[int]:
+        """The saved steps, ascending, after pending writes complete."""
         self._ckptr.wait()
         return sorted(c.step for c in self._ckptr.checkpoints)
 
     @property
     def latest_step(self) -> int | None:
-        """The most recent saved step, ``None`` when the directory holds none."""
+        """The most recent saved step, or ``None`` when the directory holds none."""
         self._ckptr.wait()
         latest = self._ckptr.latest
         return None if latest is None else int(latest.step)
 
     @property
     def custom_metadata(self) -> dict[str, Any]:
-        """The ``custom_metadata`` the directory was created with (``{}`` if none) — the
-        resolved config of the run, for ``experiment.load_run``."""
+        """The ``custom_metadata`` the directory was created with, ``{}`` if none: the
+        run's resolved config, for ``experiment.load_run``."""
         raw = self._ckptr.root_metadata().custom_metadata
         meta = cast(Mapping[str, Any] | None, raw)
         return dict(meta) if meta else {}
 
     def close(self) -> None:
+        """Finish pending writes and close the Orbax checkpointer."""
         self._ckptr.close()

@@ -68,6 +68,8 @@ extreme_raw = magnitudes(1e-6, EXTREME_RAW_BOUND)
 @pytest.mark.parametrize("name", ELEMENTWISE)
 @given(r=raw_vectors(8))
 def test_inverse(name, r):
+    """``c.inverse(c(r)) == r`` to ``TOL["closed_form"]`` for an elementwise
+    primitive."""
     c, tol = PRIMITIVES[name], TOL["closed_form"]
     assert_close(c.inverse(c(r)), r, rtol=tol, atol=tol, msg=f"{name}: inverse∘forward")
 
@@ -75,6 +77,8 @@ def test_inverse(name, r):
 @pytest.mark.parametrize("name", WIDTHS)
 @given(r=raw_vectors(6))
 def test_widths_inverse_in_mean_zero_gauge(name, r):
+    """``Widths`` inverts a mean-zero raw vector to ``TOL["closed_form"]``, and its
+    forward map is invariant to the constant that the inverse drops."""
     c = PRIMITIVES[name]
     r_centered = r - jnp.mean(r)
     tol = TOL["closed_form"]
@@ -86,6 +90,8 @@ def test_widths_inverse_in_mean_zero_gauge(name, r):
 
 @pytest.mark.parametrize("name", ELEMENTWISE)
 def test_at_zero(name):
+    """``c(0)`` is the primitive's ``at_zero`` value to ``TOL["identity"]`` and lies in
+    the constrained set."""
     c = PRIMITIVES[name]
     assert_close(c(jnp.zeros(4)), jnp.full(4, AT_ZERO[name]), atol=TOL["identity"])
     assert c.is_constrained(c(jnp.zeros(4)))
@@ -94,6 +100,7 @@ def test_at_zero(name):
 @pytest.mark.parametrize("name", WIDTHS)
 @given(n=st.integers(1, 12))
 def test_widths_at_zero_is_equal(name, n):
+    """``Widths`` at zero raw parameters gives ``n`` equal widths ``total / n``."""
     c = PRIMITIVES[name]
     w, tol = c(jnp.zeros(n)), TOL["identity"]
     assert_close(w, jnp.full(n, c.total / n), rtol=tol, atol=tol)
@@ -103,6 +110,8 @@ def test_widths_at_zero_is_equal(name, n):
 @pytest.mark.parametrize("name", PRIMITIVES)
 @given(r=raw_vectors(6, extreme_raw))
 def test_image_and_finiteness(name, r):
+    """In the extreme regime ``|raw| <= EXTREME_RAW_BOUND``, the image is finite, lies
+    in the constrained set, and has a finite Jacobian."""
     c = PRIMITIVES[name]
     v = c(r)
     assert jnp.all(jnp.isfinite(v)), f"{name}: non-finite image"
@@ -113,20 +122,23 @@ def test_image_and_finiteness(name, r):
 
 @pytest.mark.parametrize("name", PRIMITIVES)
 def test_is_constrained_rejects_outsiders(name):
-    """``is_constrained`` is not vacuous: something outside the set is rejected (Free
-    and
-    Arcsinh have no outside apart from non-finite values)."""
+    """``is_constrained`` is not vacuous: a vector outside the set is rejected, and
+    for ``free`` and ``arcsinh``, whose only outside is the non-finite values, ``nan``
+    is."""
     c = PRIMITIVES[name]
     bad = jnp.full(4, jnp.nan) if name in ("free", "arcsinh") else jnp.full(4, -1e3)
     assert not c.is_constrained(bad)
 
 
 def test_widths_rejects_impossible_floor():
+    """``Widths`` raises ``ValueError`` when ``n * min_rel >= 1`` leaves no room."""
     with pytest.raises(ValueError):
         Widths(1.0, 0.3)(jnp.zeros(4))  # 4 * 0.3 >= 1
 
 
 def test_shifted_primitives_validate_at_zero():
+    """``GreaterThan``, ``Interval`` and ``BoundedPositive`` raise ``ValueError`` for an
+    ``at_zero`` outside their image."""
     with pytest.raises(ValueError):
         GreaterThan(1.0, at_zero=0.5)
     with pytest.raises(ValueError):
@@ -147,6 +159,8 @@ def test_primitive_construction_is_traceable():
 @pytest.mark.parametrize("a", [1.0, 2.0, 3.0])
 @given(x=raw_vectors(8))
 def test_squashed_exp_inverse(a, x):
+    """``squashed_exp(x, a)`` lies in ``(exp(-a), exp(a))`` and ``inv_squashed_exp``
+    returns ``x`` to ``TOL["closed_form"]`` for each ``a``."""
     y = squashed_exp(x, a)
     assert jnp.all((y > jnp.exp(-a)) & (y < jnp.exp(a)))
     tol = TOL["closed_form"]

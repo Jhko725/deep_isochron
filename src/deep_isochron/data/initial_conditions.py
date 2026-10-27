@@ -1,3 +1,11 @@
+"""Samplers of initial conditions for ``generate``.
+
+An ``AbstractICSampler`` is a small equinox module, so that its configuration is
+recorded in the dataset metadata through ``params()``. ``UniformBox`` and
+``UniformAnnulus`` cover a region; ``OnCycleGaussian`` is the sampler of Yawata et al.
+2024, points of the limit cycle plus Gaussian noise.
+"""
+
 from __future__ import annotations
 
 import abc
@@ -13,13 +21,16 @@ from ..systems.normal_forms import (
 )
 
 
-# ------------------------------------------------------------------ IC samplers ---
 class AbstractICSampler(eqx.Module):
+    """A sampler of initial conditions: ``sampler(key, n)`` draws `n` of them."""
+
     @abc.abstractmethod
-    def __call__(self, key: PRNGKeyArray, n: int) -> Float[Array, "n dim"]: ...
+    def __call__(self, key: PRNGKeyArray, n: int) -> Float[Array, "n dim"]:
+        """`n` initial conditions drawn with `key`, shape ``(n, dim)``."""
 
     def params(self) -> dict[str, Any]:
-        """JSON-able configuration for the metadata."""
+        """The configuration as JSON-able values, for the metadata: every field by
+        default."""
         return {
             k: (v.tolist() if hasattr(v, "tolist") else v)
             for k, v in vars(self).items()
@@ -27,7 +38,11 @@ class AbstractICSampler(eqx.Module):
 
 
 class UniformBox(AbstractICSampler):
-    """Uniform on the box ``[lo, hi]`` (per-coordinate bounds)."""
+    """Uniform on the box ``[lo, hi]`` with per-coordinate bounds.
+
+    **Raises:**
+
+    `ValueError` unless `lo` and `hi` have one shape with ``lo < hi``."""
 
     lo: Float[Array, " dim"]
     hi: Float[Array, " dim"]
@@ -38,14 +53,19 @@ class UniformBox(AbstractICSampler):
             raise ValueError("lo and hi must have the same shape with lo < hi.")
 
     def __call__(self, key, n):
+        """`n` uniform draws from the box."""
         return jax.random.uniform(
             key, (n, self.lo.shape[0]), minval=self.lo, maxval=self.hi
         )
 
 
 class UniformAnnulus(AbstractICSampler):
-    """Uniform in angle and in radius on ``[r_min, r_max]`` about ``center`` (planar);
-    avoids the origin of a normal form."""
+    """Uniform in angle and in radius on ``[r_min, r_max]`` about `center`, planar;
+    it avoids the origin of a normal form.
+
+    **Raises:**
+
+    `ValueError` unless ``0 <= r_min < r_max``."""
 
     r_min: float
     r_max: float
@@ -58,6 +78,7 @@ class UniformAnnulus(AbstractICSampler):
         self.center = jnp.asarray(center, dtype=float)
 
     def __call__(self, key, n):
+        """`n` draws, uniform in radius and angle."""
         kr, kt = jax.random.split(key)
         r = jax.random.uniform(kr, (n,), minval=self.r_min, maxval=self.r_max)
         theta = jax.random.uniform(kt, (n,), minval=-jnp.pi, maxval=jnp.pi)
@@ -65,16 +86,24 @@ class UniformAnnulus(AbstractICSampler):
 
 
 class OnCycleGaussian(AbstractICSampler):
-    r"""Yawata et al. (Chaos 34, 063111, 2024), Eqs. (27)–(28): a point of the limit
-    cycle, drawn uniformly from ``cycle_points``, plus Gaussian noise
-    $\gamma_2\,\sigma \odot \xi$ with $\sigma$ the per-coordinate standard deviation of
-    the cycle points and $\xi \sim \mathcal N(0, I)$ (their $\gamma_2 = 0.5$). The
-    paper evolves each initial state for $\gamma_1 T = 3T$; that is the ``ts`` passed
-    to ``generate``.
+    r"""The sampler of Yawata et al. 2024, Eqs. 27–28: a point of the limit cycle,
+    drawn uniformly from `cycle_points`, plus Gaussian noise
+    $\gamma_2\thinspace\sigma \odot \xi$ with $\sigma$ the per-coordinate standard
+    deviation of the cycle points and $\xi \sim \mathcal N(0, I)$.
 
-    ``cycle_points`` come from ``AbstractNormalForm.limit_cycle`` (``from_normal_form``)
-    or, for an observed system, from a long integration of one orbit.
-    """
+    The paper evolves each initial state for $\gamma_1 T = 3T$; that is the ``ts``
+    passed to ``generate``.
+
+    **Arguments:**
+
+    - `cycle_points`: Points of the cycle, shape ``(points, dim)``, at least two; from
+        ``AbstractNormalForm.limit_cycle`` through `from_normal_form`, or from a long
+        integration of one orbit of an observed system.
+    - `gamma2`: The noise scale $\gamma_2$, non-negative; the paper's is 0.5.
+
+    **Raises:**
+
+    `ValueError` otherwise."""
 
     cycle_points: Float[Array, "points dim"]
     gamma2: float
@@ -94,14 +123,18 @@ class OnCycleGaussian(AbstractICSampler):
         num_points: int = 1000,
         gamma2: float = 0.5,
     ) -> "OnCycleGaussian":
+        """The sampler on `num_points` uniform phases of the normal form's cycle."""
         theta = jnp.linspace(-jnp.pi, jnp.pi, num_points, endpoint=False)
         return cls(jax.vmap(normal_form.limit_cycle)(theta), gamma2)
 
     @property
     def sigma(self) -> Float[Array, " dim"]:
+        """The per-coordinate standard deviation of the cycle points."""
         return jnp.std(self.cycle_points, axis=0)
 
     def params(self) -> dict[str, Any]:
+        """`gamma2`, the number of cycle points and `sigma`; the points themselves are
+        not recorded."""
         return {
             "gamma2": self.gamma2,
             "num_cycle_points": int(self.cycle_points.shape[0]),
@@ -109,6 +142,7 @@ class OnCycleGaussian(AbstractICSampler):
         }
 
     def __call__(self, key, n):
+        """`n` draws: a cycle point each plus the scaled noise."""
         k_idx, k_xi = jax.random.split(key)
         idx = jax.random.randint(k_idx, (n,), 0, self.cycle_points.shape[0])
         xi = jax.random.normal(k_xi, (n, self.cycle_points.shape[1]))

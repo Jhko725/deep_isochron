@@ -1,19 +1,15 @@
-"""Windows: how training and validation windows are cut from the whole trajectories of a
-``TimeSeriesDataSource``. Two ways, deliberately both (ADR-0008, Decisions 2 and 3):
+"""Windows: how training and validation windows are cut from the whole trajectories
+of a ``TimeSeriesDataSource``, in two ways on purpose (ADR-0008, Decisions 2 and 3).
 
-``elementwise``
-    one window per grain element — ``RandomWindow`` / ``WeightedWindow`` transforms
-    behind ``windows()`` and ``mixed_windows()``, and ``validation_windows()``. Short,
-    idiomatic grain, the **reference semantics** the tests compare against; ≈ 0.1–0.2 ms
-    per window, i.e. 50–90 ms per batch of 512 — too slow to feed a 30 ms step.
-``batched``
-    ``WindowBatchSource`` behind ``window_batches()`` / ``mixed_window_batches()`` — a
-    source whose element is a whole batch, one vectorized gather, epochs of every window
-    once, concrete length. ≈ 1 ms per batch. **The training-run path.**
-
-``common`` holds what both share (types, range checks, weight functions, the categorical
-draw). How either is consumed next to JAX — ``single_threaded``, ``to_device``,
-``resolve_device`` — is ``data.device``, which is not specific to windows.
+``elementwise`` cuts one window per grain element, through the ``RandomWindow`` and
+``WeightedWindow`` transforms behind ``windows()`` and ``mixed_windows()``, and
+``validation_windows()``. It is short, idiomatic grain and the reference semantics the
+tests compare against, but at 0.1–0.2 ms per window, 50–90 ms per batch of 512, too
+slow to feed a 30 ms step. ``batched`` is the training-run path: ``WindowBatchSource``
+behind ``window_batches()`` and ``mixed_window_batches()``, a source whose element is a
+whole batch by one vectorized gather, with epochs of every window once and a concrete
+length, at about 1 ms per batch. ``common`` holds what both share. How either is
+consumed next to JAX is ``data.device``.
 """
 
 from .batched import (
