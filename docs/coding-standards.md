@@ -21,7 +21,7 @@ document when a task touches tiers, tolerances, contracts or checks.
 | Slow tier | add `-m slow`: FitzHugh–Nagumo's limit cycle, the autoencoder training test |
 | Types | `uv run ty check src/deep_isochron/model/invertible`, clean, with no `# ty: ignore` |
 | Markdown | `uv run python scripts/check_md_math.py`, 0 problems |
-| Citations | `uv run python scripts/check_references.py`, every key resolves |
+| Citations | `uv run python scripts/check_references.py`, every key and relative link resolves |
 | Docstrings | `uv run ruff check`, with `D100`–`D103` selected for the modules the prose pass has reached; `uv run python scripts/check_docstring_headers.py`, 0 problems |
 
 Read the baseline before editing rather than running the full suite to discover what is
@@ -93,7 +93,7 @@ This section says what each check is for; the file has the current values.
 | American English, the productive families | `scripts/check_spelling.py` | `prek`, CI |
 | `copy.replace` (this project's floor is Python 3.13); Cayley rotations | ruff `TID251` banned-api | `prek`, CI |
 | both Markdown previews | `scripts/check_md_math.py` | `prek`, CI |
-| every citation resolves to `docs/references.md` | `scripts/check_references.py` | `prek`, CI |
+| every citation resolves to `docs/references.md`; every relative Markdown link resolves | `scripts/check_references.py` | `prek`, CI |
 | a docstring on every public module, class, method and function | ruff `D100`–`D103`, `per-file-ignores` naming the modules not yet reached | `prek`, CI |
 | `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after | `scripts/check_docstring_headers.py` | `prek`, CI |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
@@ -196,6 +196,27 @@ semicolons inside one pair of parentheses. Every key resolves to an entry in
 the full reference, a DOI or arXiv identifier, and the locators the repository uses.
 Design documents and ADRs carry no reference list of their own; their frontmatter
 `sources:` lists keys.
+
+## Decision records
+
+An ADR describes the current design, and its history follows it
+([ADR-0019](decisions/0019-adrs-describe-the-current-design.md)). Its sections, in
+order:
+
+```markdown
+## Context
+### Motivation    one bullet per point, each with its evidence, or *[not recorded]*
+### Forces        prose: what any solution had to respect
+## Decision       the current design
+## Consequences
+## Alternatives rejected   superseded designs too, marked *Superseded* with date and reason
+## History        one dated line per change, with its branch
+```
+
+A change to a decision rewrites Decision and Consequences in the same commit; a change
+that reverses the decision is a new ADR. The first mention of an ADR, design document or
+code file in each section is a relative link, and `scripts/check_references.py` fails on
+a link whose target does not exist.
 
 ## Deliberate exceptions
 

@@ -58,6 +58,7 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | [0016](decisions/0016-symbolic-systems.md) | accepted (review pending) | systems declared once in SymPy (`AbstractSymbolicODE._symbolic_template`; normal forms' `_symbolic_rates[_sq]`), JAX `rhs`/hooks derived and compiled per class in `__init_subclass__`; AUTO-07p Fortran by `INCLUDE` of generated `rhs.inc`/`indices.inc` (amends ADR-0007) |
 | 0017 | reserved | the AUTO-07p isochron pipeline (branch `auto-isochrons`, roadmap O7 step 2) |
 | [0018](decisions/0018-docstrings-map-and-contract.md) | accepted (review pending) | docstrings: the module docstring is the map, a function docstring the contract, reasoning in the ADRs; `**Attributes:**` lists; one bibliography `references.md` with `(Key, locator)` citations and `check_references.py`; ruff `D100`–`D103` switched on round by round |
+| [0019](decisions/0019-adrs-describe-the-current-design.md) | accepted (review pending) | ADRs: Context with Motivation and Forces; Decision and Consequences always the current design; superseded designs in Alternatives rejected; a dated History; relative links checked by `check_references.py` |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 

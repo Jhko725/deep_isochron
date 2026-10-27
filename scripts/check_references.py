@@ -1,4 +1,7 @@
-"""Check that every citation in the tree resolves to an entry in ``docs/references.md``.
+"""Check that every citation and every relative link in the tree resolves.
+
+A citation resolves to an entry in ``docs/references.md``; a relative Markdown link
+resolves to a file in the repository.
 
 A citation is an author-year key, ``Lust 2001``, ``Wilson & Moehlis 2016``,
 ``Langfield et al. 2014``, optionally followed by a locator after a comma:
@@ -12,11 +15,18 @@ Both drifts this catches happened before the bibliography existed: the same pape
 cited under three forms (the full author list, the surnames joined by en dashes, and
 the ``et al.`` form), and five documents each carrying their own reference list.
 
+A relative link is a Markdown link ``[text](target)`` whose target is not a URL or a
+bare ``#anchor``; the target, without its ``#anchor``, must name an existing file or
+directory relative to the linking file. ADR-0019 makes the first mention of an ADR,
+design document or code file in a section a link, so a renamed file or a mistyped
+name fails here rather than leaving a dead pointer.
+
 A line carrying ``references:ignore`` is skipped. ``docs/changes/`` is skipped as a
 whole: landed change documents are records of what was said.
 
 Usage: ``uv run python scripts/check_references.py [path ...]`` (default: ``docs``,
-``src/deep_isochron``, ``tests``, ``scripts``). Exits 1 on an unresolved key.
+``src/deep_isochron``, ``tests``, ``scripts``). Exits 1 on an unresolved key or a
+broken link.
 """
 
 from __future__ import annotations
@@ -45,6 +55,10 @@ KEY = re.compile(
     rf"\b(?P<key>{_SURNAME}(?:\s+&\s+{_SURNAME}|\s+et al\.)?\s+(?:19|20)\d{{2}}[a-z]?)"
     r"\b(?!-\d)"
 )
+# A Markdown link; the target stops at the first space or closing parenthesis.
+LINK = re.compile(r"\]\((?P<target>[^)\s]+)\)")
+# A target with a scheme (``https:``, ``mailto:``) or a bare anchor is not checked.
+EXTERNAL = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|#)")
 # An entry line of the bibliography: ``- **Key** — ...``.
 ENTRY = re.compile(r"^- \*\*(?P<key>[^*]+)\*\* ")
 
@@ -88,6 +102,22 @@ def citations(file: Path) -> Iterator[tuple[int, str]]:
         yield number, " ".join(match.group("key").split())
 
 
+def broken_links(file: Path) -> Iterator[tuple[int, str]]:
+    """``(line number, target)`` for every relative link in the Markdown `file` whose
+    target does not exist. A line carrying the ignore marker contributes nothing."""
+    if file.suffix != ".md":
+        return
+    for number, line in enumerate(file.read_text(encoding="utf-8").splitlines(), 1):
+        if IGNORE_MARKER in line:
+            continue
+        for match in LINK.finditer(line):
+            target = match.group("target")
+            if EXTERNAL.match(target):
+                continue
+            if not (file.parent / target.split("#", 1)[0]).exists():
+                yield number, target
+
+
 def main(argv: list[str] | None = None) -> int:
     """Check the citations under `argv`; return 1 if any key does not resolve."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -98,14 +128,17 @@ def main(argv: list[str] | None = None) -> int:
     known = bibliography_keys()
     unresolved: list[str] = []
     cited: set[str] = set()
+    broken: list[str] = []
     for file in iter_files(paths):
+        relative = file.resolve().relative_to(ROOT).as_posix()
         for number, key in citations(file):
             cited.add(key)
             if key not in known:
-                relative = file.resolve().relative_to(ROOT).as_posix()
                 unresolved.append(f"{relative}:{number}: {key}")
+        for number, target in broken_links(file):
+            broken.append(f"{relative}:{number}: broken link {target}")
 
-    for line in unresolved:
+    for line in unresolved + broken:
         print(line)
     uncited = sorted(known - cited)
     if uncited:
@@ -114,8 +147,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {key}")
     if unresolved:
         print(f"{len(unresolved)} citation(s) not in the bibliography")
+    if broken:
+        print(f"{len(broken)} broken relative link(s)")
+    if unresolved or broken:
         return 1
-    print(f"all {len(cited)} cited keys resolve")
+    print(f"all {len(cited)} cited keys resolve; no broken relative links")
     return 0
 
 
