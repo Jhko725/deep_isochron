@@ -4,12 +4,13 @@ its vector field (roadmap Phase E, O1–O6).
 O1 is the orbit: ``CrossSection``, ``PoincareMap`` (the first-return map on a section,
 differentiable in the point, with ``iterate`` and ``fixed_point``),
 ``multiple_shooting``, and ``find_limit_cycle``, whose stages (settle, return map,
-shooting) are exported for reuse and whose result ``LimitCycle`` samples itself. O2 is
-``floquet``, the multipliers and exponents of a ``LimitCycle`` by the seeded periodic
-Schur chain, with the monodromy and Liouville routes as checks. Results are
+shooting) are exported for reuse and whose result ``LimitCycle`` samples itself;
+``reanchor`` moves a cycle's phase origin to the orbit point nearest a given point.
+O2 is ``floquet``, the multipliers and exponents of a ``LimitCycle`` by the seeded
+periodic Schur chain, with the monodromy and Liouville routes as checks. Results are
 fixed-shape ``eqx.Module`` pytrees; the functions of them, ``f(cycle, ...)``, are jit-
-and vmap-compatible and left unjitted, and the host-side drivers ``find_limit_cycle``
-and ``fixed_point`` jit the stages they call.
+and vmap-compatible and left unjitted, and the host-side drivers ``find_limit_cycle``,
+``reanchor`` and ``fixed_point`` jit the stages they call.
 """
 
 from .floquet import (
@@ -35,6 +36,7 @@ from .limit_cycle import (
     orientation as orientation,
     period_consistent as period_consistent,
     polish as polish,
+    reanchor as reanchor,
     settle as settle,
 )
 from .poincare import (

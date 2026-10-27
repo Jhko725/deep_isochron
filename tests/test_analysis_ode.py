@@ -35,6 +35,7 @@ from deep_isochron.analysis.ode import (
     multiple_shooting,
     periodic_schur,
     PoincareMap,
+    reanchor,
     return_map_multiplier,
     segment_jacobians,
     SHOOTING_SOLVER_CONFIG,
@@ -51,7 +52,7 @@ from deep_isochron.systems.normal_forms import (
     HopfNormalForm,
     WinfreeNormalForm,
 )
-from hypothesis import given, strategies as st
+from hypothesis import given, settings, strategies as st
 
 from .helpers import assert_close, TOL
 
@@ -410,6 +411,46 @@ def test_limit_cycle_on_the_guckenheimer_meloon_algebraic_orbit():
     assert 7.6 < lc.period < 7.8  # "period approximately 7.7"
     assert_close(lc.settle.tau, lc.period, atol=TOL["return_map"])
     _check_invariants(lc, 1)
+
+
+@pytest.fixture(scope="module")
+def hopf_cycle() -> LimitCycle:
+    """The unit-circle cycle of `HOPF` by `find_limit_cycle`, counterclockwise."""
+    return find_limit_cycle(HOPF, X0, t_settle=5.0, m=4, config=CFG)
+
+
+@settings(max_examples=10)
+@given(angle=st.floats(-np.pi, np.pi), radius=st.floats(0.6, 1.6))
+def test_reanchor_moves_phase_zero_to_the_nearest_cycle_point(
+    hopf_cycle, angle, radius
+):
+    """`reanchor` at the point at `angle` and distance `radius` from the center of
+    Hopf's unit-circle cycle puts ``x0s[0]`` at ``(cos angle, sin angle)``, the nearest
+    cycle point, and leaves the orbit and the period as they were; the result has every
+    invariant of `find_limit_cycle`."""
+    on_cycle = np.array([np.cos(angle), np.sin(angle)])
+    lc = reanchor(hopf_cycle, jnp.asarray(radius * on_cycle))
+    assert_close(lc.x0s[0], on_cycle, atol=TOL["limit_cycle"])
+    assert_close(lc.period, hopf_cycle.period, atol=TOL["limit_cycle"])
+    assert_close(np.linalg.norm(lc.x0s, axis=1), 1.0, atol=TOL["limit_cycle"])
+    _check_invariants(lc, 1)
+    # the section is normal to the flow at the new origin
+    f = np.asarray(HOPF.rhs(0.0, lc.x0s[0]))
+    assert_close(np.asarray(lc.section.normal), f / np.linalg.norm(f), atol=1e-12)
+
+
+def test_reanchor_at_the_origin_returns_the_same_mesh(hopf_cycle):
+    """Reanchoring at ``x0s[0]`` returns the cycle's own mesh: a cycle point is its own
+    nearest point."""
+    lc = reanchor(hopf_cycle, hopf_cycle.x0s[0])
+    assert_close(lc.x0s, hopf_cycle.x0s, atol=TOL["limit_cycle"])
+
+
+def test_reanchor_refuses_a_point_of_the_wrong_shape(hopf_cycle):
+    """`reanchor` raises `ValueError` for a point that is not a vector of the
+    cycle's dimension."""
+    with pytest.raises(ValueError, match="shape"):
+        reanchor(hopf_cycle, jnp.zeros(3))
 
 
 @pytest.mark.slow

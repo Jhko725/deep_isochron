@@ -27,9 +27,11 @@ survey of shooting methods.
 
 from __future__ import annotations
 
+import copy
 from typing import cast
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
@@ -257,7 +259,28 @@ def period_consistent(period: float, period_hat: float, factor: float = 10.0) ->
 
 # ----------------------------------------------------------------- the driver ----
 _settle = eqx.filter_jit(settle)
-_polish = eqx.filter_jit(polish)  # the stages as the host-side driver runs them
+_polish = eqx.filter_jit(polish)  # the stages as the host-side drivers run them
+
+
+def _check_shooting(ode: AbstractODE, shot: ShootingResult, period_hat: float) -> None:
+    """Raise `NotConvergedError` unless `shot` converged to a periodic orbit whose
+    period is consistent with `period_hat` (Parker & Chua 1989, §5.5)."""
+    period = float(shot.period)
+    if not bool(jnp.isfinite(shot.residual)):
+        raise NotConvergedError(
+            "shooting", "Levenberg–Marquardt did not converge.", shot
+        )
+    if is_equilibrium(ode, shot.points[0]):
+        raise NotConvergedError(
+            "shooting", "converged to an equilibrium (the vector field vanishes).", shot
+        )
+    if not period_consistent(period, period_hat):
+        raise NotConvergedError(
+            "shooting",
+            f"the period collapsed or exploded: T = {period:.6g} vs the return-map "
+            f"estimate {period_hat:.6g}.",
+            shot,
+        )
 
 
 def find_limit_cycle(
@@ -348,22 +371,7 @@ def find_limit_cycle(
         tol=tol,
         reverse_time=reverse_time,
     )
-    x_star, period = shot.points[0], float(shot.period)
-    if not bool(jnp.isfinite(shot.residual)):
-        raise NotConvergedError(
-            "shooting", "Levenberg–Marquardt did not converge.", shot
-        )
-    if is_equilibrium(ode, x_star):
-        raise NotConvergedError(
-            "shooting", "converged to an equilibrium (the vector field vanishes).", shot
-        )
-    if not period_consistent(period, period_hat):
-        raise NotConvergedError(
-            "shooting",
-            f"the period collapsed or exploded: T = {period:.6g} vs the return-map "
-            f"estimate {period_hat:.6g}.",
-            shot,
-        )
+    _check_shooting(ode, shot, period_hat)
     return LimitCycle(
         ode=ode,
         x0s=shot.points,
@@ -376,6 +384,88 @@ def find_limit_cycle(
     )
 
 
+def reanchor(
+    cycle: LimitCycle,
+    point: Float[ArrayLike, " dim"],
+    *,
+    n_points: int = 1024,
+    newton_steps: int = 8,
+    tol: float = 1e-8,
+) -> LimitCycle:
+    r"""The same orbit with its phase origin ``x0s[0]`` moved to the orbit point nearest
+    `point`.
+
+    The nearest of `n_points` samples starts a Newton iteration in time on the
+    stationarity condition $g(t) = (\gamma(t) - p)\cdot f(\gamma(t)) = 0$, with
+    $\gamma(t)$ the orbit point reached by flowing for $t$ from the sample and
+    $g'(t) = \Vert f\Vert^2 + (\gamma - p)\cdot Df\thinspace f$. The orbit is then
+    polished by `polish` on the section through that point, normal to the flow there,
+    which is the section `find_limit_cycle` builds through its own origin. Phase 0 is
+    where the isochron pipeline anchors its junction (`docs/design/isochrons.md` §6).
+
+    **Arguments:**
+
+    - `cycle`: The orbit, from `find_limit_cycle`.
+    - `point`: Where phase 0 should be, shape ``(dim,)``; on or near the orbit.
+    - `n_points`: The number of samples for the starting guess.
+    - `newton_steps`: The bound on the Newton steps in time.
+    - `tol`: The Levenberg–Marquardt tolerance of the polish, as in
+        `find_limit_cycle`.
+
+    **Returns:**
+
+    A `LimitCycle` with the same `ode`, `config`, `reverse_time` and `settle`, and new
+    `x0s`, `period`, `residual` and `section`.
+
+    **Raises:**
+
+    `ValueError` for a `point` of the wrong shape; `NotConvergedError` when the Newton
+    iteration does not settle within `newton_steps`, the polish fails, or a guard of
+    `find_limit_cycle` rejects it.
+    """
+    ode, config = cycle.ode, cycle.config
+    p = jnp.asarray(point, dtype=float)
+    if p.shape != (cycle.dim,):
+        raise ValueError(f"point must have shape ({cycle.dim},), not {p.shape}.")
+    _, points = cycle.sample(n_points)
+    x = points[jnp.argmin(jnp.linalg.norm(points - p, axis=1))]
+    jacobian = jax.jacfwd(ode.rhs, argnums=1)
+    dt_tol = 1e-12 * float(cycle.period)
+    for _ in range(newton_steps):
+        f = ode.rhs(0.0, x)
+        g = jnp.dot(x - p, f)
+        dg = jnp.dot(f, f) + jnp.dot(x - p, jacobian(0.0, x) @ f)
+        dt = -float(g / dg)
+        x = ode.flow_to(dt, x, config=config)
+        if abs(dt) < dt_tol:
+            break
+    else:
+        raise NotConvergedError(
+            "reanchor",
+            f"the nearest orbit point did not settle in {newton_steps} Newton steps.",
+            x,
+        )
+    period_hat = float(cycle.period)
+    shot = _polish(
+        ode,
+        x,
+        period_hat,
+        CrossSection.normal_to_flow(ode, x),
+        m=cycle.m,
+        config=config,
+        tol=tol,
+        reverse_time=cycle.reverse_time,
+    )
+    _check_shooting(ode, shot, period_hat)
+    return copy.replace(
+        cycle,
+        x0s=shot.points,
+        period=shot.period,
+        residual=shot.residual,
+        section=CrossSection.normal_to_flow(ode, shot.points[0]),
+    )
+
+
 __all__ = [
     "LimitCycle",
     "find_limit_cycle",
@@ -383,5 +473,6 @@ __all__ = [
     "is_equilibrium",
     "period_consistent",
     "polish",
+    "reanchor",
     "settle",
 ]

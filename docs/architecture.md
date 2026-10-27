@@ -124,7 +124,8 @@ deep_isochron
 │       │                    SHOOTING_SOLVER_CONFIG
 │       ├── limit_cycle.py   find_limit_cycle = settle → initial_guess → polish → guards
 │       │                    (is_equilibrium, period_consistent) → LimitCycle (ode, the
-│       │                    shooting mesh x0s, period, config; sample(n), orientation())
+│       │                    shooting mesh x0s, period, config; sample(n), orientation());
+│       │                    reanchor(cycle, point) moves phase 0 to the nearest orbit point
 │       └── floquet.py       floquet(cycle, method=) → Floquet, dispatching over
 │                            floquet_periodic_schur (seeded chain on the segment
 │                            Jacobians: the method, with Floquet vectors at every mesh

@@ -1,6 +1,6 @@
 ---
 type: change
-status: in progress; Steps A, B and B′ done, Steps A–B reviewed
+status: in progress; Steps A, B and B′ done, Steps A–B reviewed; Step C under way
 updated: 2026-10-28
 branch: auto-isochrons
 ---
@@ -31,7 +31,9 @@ asked three questions in the review table, which became decisions R1–R3. The c
 after the review, Step B′, applies them: `just` as the task runner, the AUTO tree located
 only through the environment, and the setup documented for a cluster. It also corrects
 a false claim in `docs/auto.md`, adds the README, and acknowledges Andrus Giraldo, whose
-reproduction the pipeline is built from. The pipeline itself (Steps C–E) follows.
+reproduction the pipeline is built from. Step C starts with `reanchor`, the O1
+function that moves a cycle's phase origin (plan decision 2); the pipeline itself
+follows.
 
 ## Files
 
@@ -72,6 +74,11 @@ reproduction the pipeline is built from. The pipeline itself (Steps C–E) follo
   acknowledgment.
 - `docs/design/isochrons.md`, Step B′: the acknowledgment.
 - `CLAUDE.md`, Step B′: the recipes in "Repository facts"; `prek` and its exclusions.
+- `src/deep_isochron/analysis/ode/limit_cycle.py`, Step C: `reanchor`; the shooting
+  guards of `find_limit_cycle` moved into `_check_shooting`, which both use.
+- `src/deep_isochron/analysis/ode/__init__.py`: exports `reanchor`; the docstring.
+- `tests/test_analysis_ode.py`: three `reanchor` tests and the fixture `hopf_cycle`.
+- `docs/architecture.md`, Step C: `reanchor` in the module map.
 - `CLAUDE.md`: `-n 2` in the cloud sessions; the AUTO setup line.
 - `docs/references.md`: entries for Hannam et al. 2022, Krauskopf & Rieß 2008 and
   Osinga & Moehlis 2010.
@@ -132,6 +139,14 @@ reproduction the pipeline is built from. The pipeline itself (Steps C–E) follo
 - **The cluster** (G1, H1–H4): `just setup` names `apt-get`, `module load gcc` and conda
   when gfortran is missing; `docs/auto.md` says to load the compiler in every job script,
   since AUTO compiles at run time, and that nothing needs the network at run time.
+- **`reanchor` finds the nearest orbit point by Newton in time, then polishes on the
+  flow-normal section there** (plan decision 2). The first version polished on the
+  section through `point` itself, with the normal of the nearest of 1024 samples; on
+  Hopf's unit circle that missed the nearest point by $2.8\times 10^{-4}$ for a point at
+  radius 0.6, because the sampled normal is off by up to half a sample spacing. Newton
+  on $g(t) = (\gamma(t) - p)\cdot f(\gamma(t))$ converges in a few steps, and the
+  section is then exactly the one `find_limit_cycle` would build through that point.
+  The guards of `find_limit_cycle` became `_check_shooting` rather than a copy.
 - **The remaining decisions are design-document decisions for later steps:** D2 (the
   stage-4 start on AUTO's grid), D3 (the oracle's tolerance), D4 (one segment per
   isochron), D5 (the rotating base point, for ADR-0017), D6 (`ntst` scaling with
@@ -214,6 +229,14 @@ Step B′ ran `uv run just check` (all hooks on every file, then `ty`: clean) an
 showed that the end-of-file and whitespace hooks rewrite the coworker's files; those
 edits were reverted, and `prek.toml` now excludes them and the golden data.
 
+Step C's `reanchor` adds three tests to `tests/test_analysis_ode.py`, 3 passed at the
+`dev` profile: the origin moves to the nearest cycle point for points drawn at radius
+0.6–1.6 on Hopf's cycle, with every invariant of `find_limit_cycle`; reanchoring at
+``x0s[0]`` returns the same mesh; a point of the wrong shape raises. On
+FitzHugh–Nagumo, `reanchor` at the coworker's anchor $(-1.72170711, 0.5)$ returns that
+point as ``x0s[0]`` and the period to $10^{-10}$, in 15 s for the first call (compiling)
+and 0.1 s after.
+
 ## Open issues
 
 - **The canceled `checks` job** is fixed on its own branch before this one is reviewed
@@ -257,3 +280,8 @@ edits were reverted, and `prek.toml` now excludes them and the golden data.
 | `docs/design/isochrons.md` — acknowledgment of Andrus Giraldo | | |
 | `CLAUDE.md` — the recipes; `prek` and its exclusions | | |
 | `docs/roadmap.md` — Done ledger row for Step B′; the O7 row names the consumer of the saved foliation | | |
+| `src/deep_isochron/analysis/ode/limit_cycle.py` — `reanchor`; `_check_shooting` shared with `find_limit_cycle` | | |
+| `src/deep_isochron/analysis/ode/__init__.py` — exports `reanchor` | | |
+| `tests/test_analysis_ode.py` — the `reanchor` tests | | |
+| `docs/architecture.md` — `reanchor` in the module map | | |
+| `docs/roadmap.md` — Done ledger row for `reanchor` | | |
