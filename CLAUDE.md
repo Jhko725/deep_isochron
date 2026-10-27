@@ -68,8 +68,8 @@ fails silently.
   `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a
   string forward reference.
 - Pre-commit runs through `prek`, a dev dependency; the hooks are listed in `prek.toml`,
-  which excludes `src/Isochron2PBVP/` and `tests/golden/`, and what each check is for is
-  in `docs/coding-standards.md`. `just check` runs them on every file, then `ty`.
+  which excludes `tests/golden/`, and what each check is for is in
+  `docs/coding-standards.md`. `just check` runs them on every file, then `ty`.
 - Design decisions are numbered ADRs in `docs/decisions/`, and a change document's
   *Design* section links to them. The contracts those ADRs fix, together with this
   repository's tiers, tolerances and checks, are in `docs/coding-standards.md`.

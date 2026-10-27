@@ -21,7 +21,7 @@ from pathlib import Path
 
 
 HEADER = re.compile(r"^\s*\*\*(Arguments|Returns|Raises|Attributes):\*\*(.*)$")
-EXCLUDED = ("src/Isochron2PBVP",)
+EXCLUDED: tuple[str, ...] = ()
 DEFAULT_PATHS = ("src", "tests", "scripts")
 
 

@@ -68,4 +68,5 @@ jobs:
           path: ~/.local/opt/auto-07p
           key: auto-07p-${{ runner.os }}-${{ steps.pin.outputs.commit }}
       - run: uv run just install-auto
-      - run: uv run just test-auto
+      # CI runs on pull requests and on master only, so it runs the full oracle suite
+      - run: uv run just test-auto full

@@ -1,7 +1,7 @@
 ---
 type: design
 status: draft for review; the decisions of §11 settled 2026-10-27
-updated: 2026-10-28
+updated: 2026-10-27
 verified_by: pending (Joon); the measurements in §3, §5 and §7 were made on 2026-10-27 with AUTO-07p at commit 44cc1c4 and are recorded in the branch's change document
 sources: [Langfield et al. 2014, Osinga & Moehlis 2010, Hannam et al. 2022, Krauskopf & Rieß 2008, Guckenheimer 1975, Nakao 2016, AUTO-07p (manual doc/auto.tex and source at 44cc1c4), the coworker's src/Isochron2PBVP, ADR-0014, ADR-0015, ADR-0016]
 ---
@@ -12,7 +12,8 @@ This document is the derivation behind roadmap item O7, which computes the isoch
 a planar limit cycle with AUTO-07p. It describes three versions of one method:
 
 - the method as Langfield et al. publish it (2014, §II.B), §4;
-- the coworker's reproduction in `src/Isochron2PBVP`, which follows the rotating
+- the coworker's reproduction in [`src/Isochron2PBVP`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP), removed from the tree
+  once the pipeline reproduced it, which follows the rotating
   multi-segment set-up of Hannam et al. (2022), §5;
 - the version that `analysis/ode/auto/` will implement, §6.
 
@@ -292,7 +293,7 @@ follows this rotating set-up.
 ## 5. The coworker's algorithm, run by run
 
 **The coworker's script is a sequence of ten AUTO runs and one loop.** It lives in
-`src/Isochron2PBVP/fncMultiSeg/` (`mainIsochronMultiSegFNC.py`, `fncMultiSegIso.f90`,
+[`src/Isochron2PBVP/fncMultiSeg/`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP/fncMultiSeg) at commit `3af99f2` (`mainIsochronMultiSegFNC.py`, `fncMultiSegIso.f90`,
 `c.fncMultiSeg`, and `isoFunctions.py` one level up). It numbers its parameters as
 follows [code]:
 
@@ -582,7 +583,8 @@ recommendation, and each was accepted.
 
 ## Acknowledgments
 
-The AUTO-07p reproduction that this pipeline is built from, `src/Isochron2PBVP`, is the
+The AUTO-07p reproduction that this pipeline is built from, `src/Isochron2PBVP` (in the
+tree until commit `3af99f2`), is the
 work of Andrus Giraldo (Department of Computational Sciences, Korea Institute for
 Advanced Study). §5 describes it run by run, and the pipeline of §6 keeps its rotating
 multi-segment structure and its run constants.

@@ -14,12 +14,12 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-22, p
 
 - The isochrons of FitzHugh–Nagumo are to be computed by continuation of a two-point
   boundary value problem in AUTO-07p (Langfield et al. 2014; a coworker's reproduction
-  in [`src/Isochron2PBVP`](../../src/Isochron2PBVP), multi-segment form). AUTO needs
+  in [`src/Isochron2PBVP`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP), since removed, multi-segment form). AUTO needs
   the vector field and its Jacobian as a Fortran `RHS` subroutine.
 - Written by hand, that subroutine is a second copy of the physics next to the JAX
   `rhs`, and a third once the Jacobian is typed. The coworker's files are the instance:
-  [`fncMultiSegIso.f90`](../../src/Isochron2PBVP/fncMultiSeg/fncMultiSegIso.f90) and
-  [`fncIso.f90`](../../src/Isochron2PBVP/deprecated/fncIso.f90) each type the
+  [`fncMultiSegIso.f90`](https://github.com/Jhko725/deep_isochron/blob/3af99f2/src/Isochron2PBVP/fncMultiSeg/fncMultiSegIso.f90) and
+  [`fncIso.f90`](https://github.com/Jhko725/deep_isochron/blob/3af99f2/src/Isochron2PBVP/deprecated/fncIso.f90) each type the
   FitzHugh–Nagumo `F` and `A` by hand (lines 9–33).
 - The Jacobian is not optional, because the adjoint stages of the extended system
   integrate `Aᵀw`.
@@ -222,3 +222,5 @@ Hodgkin–Huxley is symbolic for `rhs` only.
   write `_symbolic_template_polar` and subclass `AbstractSymbolicODE`; the even family is
   checked, not declared by a second hook); Decision 3 rewritten (the `ABCMeta` guard and
   the `_compile` extension point); `SupportsSymbolic` removed from Decision 1.
+- 2026-10-27 (`auto-isochrons`): the links to `src/Isochron2PBVP` point at commit
+  `3af99f2`, since the pipeline replaced the directory and it was deleted.

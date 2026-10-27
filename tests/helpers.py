@@ -1,6 +1,6 @@
-"""Shared test helpers: the named tolerances ``TOL`` and solver configurations
-``SOLVERS``, jitted checkers for the bijection laws, and an optimizer step along a
-random direction."""
+"""Shared test helpers: the named tolerances ``TOL``, solver configurations
+``SOLVERS`` and isochron settings ``ISOCHRON_SETTINGS``, jitted checkers for the
+bijection laws, and an optimizer step along a random direction."""
 
 import diffrax as dfx
 import equinox as eqx
@@ -8,6 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+from deep_isochron.analysis.ode import IsochronSettings
 from deep_isochron.systems import SolverConfig
 
 
@@ -60,6 +61,14 @@ TOL = {
     "trivial_multiplier": 1e-8,
     "level_set": 1e-8,
     "floquet": 1e-8,  # O2: the exponent inherits O1's orbit error
+    # O7: an AUTO isochron against the coworker's stored curve, as the distance from
+    # points to the other curve's polyline; AUTO's own rerun reproduces the stored
+    # curves to 3.6e-6, and the corrected bundle moves them by 8.1e-6
+    # (docs/design/isochrons.md §7, decision D3)
+    "isochron_curve": 2e-5,
+    # O7: the adjoint bundle's branch point, where AUTO locates the multiplier 1 to
+    # about 1e-11 (0.99999999998 on Hopf and Bautin)
+    "branch_point": 1e-8,
 }
 
 
@@ -84,6 +93,18 @@ SOLVERS = {
     ),
     # data-generation tests: tight enough that only the metadata is in question
     "data": SolverConfig(solver=dfx.Tsit5(), rtol=1e-9, atol=1e-11),
+}
+
+
+# AUTO isochron settings used by the tests, by name (decision G3). The step count of a
+# half is set by how far its segment reaches, which grows with the number of periods,
+# so the quick settings trace one period; a half that runs out of steps is flagged, not
+# raised (D7). One FitzHugh–Nagumo phase then takes about half a minute on two cores.
+ISOCHRON_SETTINGS = {
+    # every push: one period, a small box, a step cap
+    "quick": IsochronSettings(n_periods=1, box_scale=2.0, max_steps=1500),
+    # the full oracle suite (auto and slow): the coworker's settings
+    "full": IsochronSettings(),
 }
 
 

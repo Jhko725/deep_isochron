@@ -225,5 +225,5 @@ a link whose target does not exist.
   `uv lock` after pulling.
 - `prototype.ipynb` and `prototype_analysis.ipynb` are Joon's own records. Claude updates
   them to follow an API change and does not restructure them.
-- `src/Isochron2PBVP` is a coworker's reproduction, read as reference rather than edited;
-  its Fortran is excluded from the spelling check.
+- `tests/golden/` holds reference data byte for byte; `prek.toml` excludes it from every
+  hook.

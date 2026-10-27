@@ -48,9 +48,10 @@ test profile="dev" *paths="tests":
 test-slow profile="dev":
     uv run pytest -n auto -m slow --hypothesis-profile={{profile}}
 
-# The tests that run AUTO (needs `just install-auto`)
-test-auto:
-    uv run pytest -m auto -q
+# The tests that run AUTO (needs `just install-auto`): `quick`, or `full` for the
+# five-period oracle suite as well (decision G3)
+test-auto scope="quick":
+    uv run pytest -q -n auto -m "{{ if scope == "full" { "auto" } else { "auto and not slow" } }}"
 
 # End to end: generate a tiny Bautin dataset, train 20 steps, reopen the run
 smoke:

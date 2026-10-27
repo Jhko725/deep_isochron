@@ -3,7 +3,7 @@ r"""Isochrons of a planar limit cycle by AUTO-07p continuation (roadmap O7).
 ``isochron_foliation(cycle, phases, settings)`` is the one entry point. It runs the
 pipeline of ``docs/design/isochrons.md`` §6, a rotating multi-segment boundary value
 problem after Hannam, Krauskopf and Osinga, as reproduced by Andrus Giraldo in
-``src/Isochron2PBVP``:
+``src/Isochron2PBVP`` (removed after commit ``3af99f2``):
 
 1. `_periodic_orbit` cuts O1's cycle at half its period into two segments, the first
    starting on the section through phase 0, and corrects them on AUTO's mesh.
@@ -26,7 +26,9 @@ from __future__ import annotations
 
 import concurrent.futures
 import contextlib
+import dataclasses
 import io
+import json
 import logging
 import math
 import multiprocessing
@@ -40,8 +42,10 @@ from typing import Any, NamedTuple
 import jax
 import jax.numpy as jnp
 import numpy as np
+import xarray as xr
 from jaxtyping import ArrayLike, Float
 
+from ....data.dataset import ENGINE
 from ...errors import NotConvergedError
 from ..limit_cycle import LimitCycle
 from ._env import AutoHandle, load_auto
@@ -174,6 +178,136 @@ class IsochronFoliation:
     settings: IsochronSettings
     provenance: dict[str, str] = field(default_factory=dict)
 
+    def dataset(self) -> xr.Dataset:
+        """The foliation as one `xarray.Dataset`: the isochrons concatenated along the
+        dimension ``point`` and delimited by ``offsets``, the cycle's mesh, period and
+        section as data, and the system, settings, failures and provenance as JSON
+        attributes."""
+        lengths = [len(iso.points) for iso in self.isochrons]
+        cat = lambda f, shape: (  # noqa: E731
+            np.concatenate([f(iso) for iso in self.isochrons])
+            if self.isochrons
+            else np.zeros(shape)
+        )
+        cycle = self.cycle
+        return xr.Dataset(
+            {
+                "points": (("point", "xy"), cat(lambda i: i.points, (0, 2))),
+                "eta": ("point", cat(lambda i: i.eta, (0,))),
+                "arclength": ("point", cat(lambda i: i.arclength, (0,))),
+                "offsets": ("boundary", np.concatenate([[0], np.cumsum(lengths)])),
+                "phase": ("isochron", [iso.phase for iso in self.isochrons]),
+                "base_point": (
+                    ("isochron", "xy"),
+                    np.reshape([iso.base_point for iso in self.isochrons], (-1, 2)),
+                ),
+                "stop": (
+                    ("isochron", "half"),
+                    np.reshape([iso.stop for iso in self.isochrons], (-1, 2)),
+                ),
+                "cycle_x0s": (("mesh", "xy"), np.asarray(cycle.x0s)),
+                "cycle_period": float(cycle.period),
+                "cycle_residual": float(cycle.residual),
+                "cycle_section_point": ("xy", np.asarray(cycle.section.point)),
+                "cycle_section_normal": ("xy", np.asarray(cycle.section.normal)),
+            },
+            attrs={
+                "system": json.dumps(
+                    {"name": type(cycle.ode).__name__, "params": cycle.ode.params()}
+                ),
+                "settings": json.dumps(dataclasses.asdict(self.settings)),
+                "failures": json.dumps(
+                    [dataclasses.asdict(f) for f in self.failures], default=str
+                ),
+                "provenance": json.dumps(self.provenance),
+            },
+        )
+
+    def save(self, path: str | Path) -> Path:
+        """Write the foliation to the netCDF file `path` (decision 16) and return it.
+
+        **Raises:**
+
+        `FileExistsError` if `path` exists.
+        """
+        path = Path(path)
+        if path.exists():
+            raise FileExistsError(f"{path} exists; choose another path.")
+        self.dataset().to_netcdf(path, engine=ENGINE)
+        return path
+
+    @classmethod
+    def load(cls, path: str | Path, cycle: LimitCycle) -> IsochronFoliation:
+        """Read a foliation that `save` wrote, attached to `cycle`.
+
+        The file stores the cycle as data, not as a `LimitCycle`, which would need the
+        system object and its solver. The caller passes the cycle, from
+        `find_limit_cycle` and `reanchor` at the stored ``cycle_x0s[0]``, and it is
+        checked against the file.
+
+        **Arguments:**
+
+        - `path`: The file.
+        - `cycle`: The cycle the foliation was traced for.
+
+        **Returns:**
+
+        The `IsochronFoliation`.
+
+        **Raises:**
+
+        `ValueError` when `cycle` is of another system, other parameters, another
+        period or another phase origin than the file records.
+        """
+        with xr.open_dataset(path, engine=ENGINE) as ds:
+            ds = ds.load()
+        system = json.loads(ds.attrs["system"])
+        mismatches = []
+        if system["name"] != type(cycle.ode).__name__:
+            mismatches.append(f"system {system['name']} != {type(cycle.ode).__name__}")
+        if not _same_params(system["params"], cycle.ode.params()):
+            mismatches.append(f"parameters {system['params']} != {cycle.ode.params()}")
+        if not math.isclose(
+            float(ds["cycle_period"]), float(cycle.period), rel_tol=1e-8
+        ):
+            mismatches.append(
+                f"period {float(ds['cycle_period'])} != {float(cycle.period)}"
+            )
+        origin = ds["cycle_x0s"].values[0]
+        if not np.allclose(origin, np.asarray(cycle.x0s[0]), atol=1e-8):
+            mismatches.append(f"phase origin {origin} != {np.asarray(cycle.x0s[0])}")
+        if mismatches:
+            raise ValueError(f"{path} was traced for another cycle: {mismatches}.")
+        offsets = ds["offsets"].values
+        isochrons = tuple(
+            Isochron(
+                phase=float(ds["phase"].values[i]),
+                base_point=ds["base_point"].values[i],
+                points=ds["points"].values[a:b],
+                eta=ds["eta"].values[a:b],
+                arclength=ds["arclength"].values[a:b],
+                stop=(str(ds["stop"].values[i, 0]), str(ds["stop"].values[i, 1])),
+            )
+            for i, (a, b) in enumerate(zip(offsets[:-1], offsets[1:]))
+        )
+        failures = tuple(IsochronFailure(**f) for f in json.loads(ds.attrs["failures"]))
+        return cls(
+            cycle=cycle,
+            isochrons=isochrons,
+            failures=failures,
+            settings=IsochronSettings(**json.loads(ds.attrs["settings"])),
+            provenance=json.loads(ds.attrs["provenance"]),
+        )
+
+
+def _same_params(stored: dict[str, Any], current: dict[str, Any]) -> bool:
+    """Whether two parameter dicts agree, numbers to a relative ``1e-12``."""
+    if stored.keys() != current.keys():
+        return False
+    return all(
+        math.isclose(float(stored[k]), float(current[k]), rel_tol=1e-12) for k in stored
+    )
+
 
 # ----------------------------------------------------------- AUTO plumbing ----
 class _Solution(NamedTuple):
@@ -264,7 +398,9 @@ def _wrap_phase(theta: float) -> float:
     return math.pi if wrapped == -math.pi else wrapped
 
 
-def _check_phases(phases: Float[ArrayLike, " k"]) -> tuple[float, ...]:
+def _check_phases(
+    phases: Sequence[float] | Float[ArrayLike, " k"],
+) -> tuple[float, ...]:
     r"""The requested phases wrapped to $(-\pi, \pi]$.
 
     **Raises:**
@@ -521,7 +657,7 @@ def _provenance(auto: AutoHandle, problem: AutoProblem) -> dict[str, str]:
 
 def isochron_foliation(
     cycle: LimitCycle,
-    phases: Float[ArrayLike, " k"],
+    phases: Sequence[float] | Float[ArrayLike, " k"],
     settings: IsochronSettings = IsochronSettings(),
 ) -> IsochronFoliation:
     r"""The isochrons of `cycle` at `phases`, by AUTO-07p continuation.

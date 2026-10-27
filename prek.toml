@@ -2,9 +2,8 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
-# The coworker's original AUTO scripts are kept as they were until Step D deletes them,
-# and golden data must stay byte for byte; no hook may rewrite either.
-exclude = "^(src/Isochron2PBVP/|tests/golden/)"
+# Golden data must stay byte for byte, so no hook may rewrite it.
+exclude = "^tests/golden/"
 
 [[repos]]
 repo = "builtin"

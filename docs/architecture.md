@@ -108,9 +108,14 @@ deep_isochron
 │       │   ├── codegen.py   write_problem(ode, workdir) -> AutoProblem: rhs.inc (F and the
 │       │   │                exact Jacobian from symbolic()), indices.inc (IP_* slots), c.<name>;
 │       │   │                internal_indices -> Idx; auto_pars; never imports AUTO
-│       │   ├── _env.py      load_auto() -> AutoHandle: finds the built AUTO tree (argument,
-│       │   │                DEEP_ISOCHRON_AUTO_DIR, AUTO_DIR, ~/.local/opt/auto-07p), sets
+│       │   ├── _env.py      load_auto() -> AutoHandle: finds the built AUTO tree
+│       │   │                (DEEP_ISOCHRON_AUTO_DIR, AUTO_DIR, ~/.local/opt/auto-07p), sets
 │       │   │                AUTO_DIR, imports `auto`; the only importer of AUTO (docs/auto.md)
+│       │   ├── isochron.py  isochron_foliation(cycle, phases, settings) -> IsochronFoliation:
+│       │   │                stages 1–3 (orbit, adjoint bundle, rotation) in temporary
+│       │   │                directories, stage 4 per phase in a spawn pool; Isochron,
+│       │   │                IsochronFailure, IsochronSettings; IsochronFoliation.save/load
+│       │   │                (netCDF) — docs/design/isochrons.md
 │       │   └── fortran/     isochron_multiseg.f90 — the generic multi-segment BVP (plain
 │       │                    Fortran; INCLUDEs the two generated files; adjoint bundle)
 │       ├── sections.py      CrossSection: a hyperplane (point, unit normal); signed_distance;
@@ -160,7 +165,8 @@ deep_isochron
 │                            create refuses an existing run, resume is explicit);
 │                            Experiment.from_config(cfg, run_dir); train = Experiment.from_config().train();
 │                            load_run / load_model (template= for hand-built models)
-├── plotting/                matplotlib style (configure_rcparams); plot_source_trajectories
+├── plotting/                matplotlib style (configure_rcparams); plot_source_trajectories;
+│                            plot_isochrons(foliation)
 └── utils/                   shared helpers
     ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian (constraints, normal forms)
     └── provenance.py        git_state(), package_version() — for dataset and run metadata

@@ -1,7 +1,7 @@
 ---
 type: change
-status: in progress; Steps A, B and B′ done, Steps A–B reviewed; Step C under way
-updated: 2026-10-28
+status: in progress; Steps A–D done, Steps A–B reviewed; Step E (ADR-0017) remains
+updated: 2026-10-27
 branch: auto-isochrons
 ---
 
@@ -32,8 +32,11 @@ after the review, Step B′, applies them: `just` as the task runner, the AUTO t
 only through the environment, and the setup documented for a cluster. It also corrects
 a false claim in `docs/auto.md`, adds the README, and acknowledges Andrus Giraldo, whose
 reproduction the pipeline is built from. Step C starts with `reanchor`, the O1
-function that moves a cycle's phase origin (plan decision 2); the pipeline itself
-follows.
+function that moves a cycle's phase origin (plan decision 2). The pipeline follows:
+the section anchor, the four stages and `isochron_foliation`, the results with netCDF
+persistence and a plot (Step D), and tests against the coworker's stored isochrons.
+With the quick settings, two FitzHugh–Nagumo isochrons lie within $7\times 10^{-6}$ of
+the coworker's curves, traced in 72 s.
 
 ## Files
 
@@ -63,7 +66,7 @@ follows.
   `test-slow`, `test-auto`, `smoke` (R3).
 - `pyproject.toml` / `uv.lock`, Step B′: `rust-just` and `prek` in the `dev` group.
 - `prek.toml`: excludes `src/Isochron2PBVP/` and `tests/golden/`, so that no hook
-  rewrites the coworker's files or golden data.
+  rewrites the coworker's files or golden data; Step D drops the first.
 - `.github/workflows/ci.yml`, Step B′: every job runs `just` recipes.
 - `src/deep_isochron/analysis/ode/auto/_env.py`, Step B′: `auto_dir` and `load_auto`
   take no path (R2).
@@ -85,9 +88,32 @@ follows.
 - `src/deep_isochron/analysis/ode/auto/codegen.py`, Step C: `Idx` trades `anchor` and
   `stability` for `section_point` and `section_normal`.
 - `tests/test_auto_codegen.py`, Step C: the slot layout with the section slots.
-- `src/deep_isochron/analysis/ode/auto/isochron.py` (**new**, work in progress):
-  `IsochronSettings`, `Isochron`, `IsochronFailure`, `IsochronFoliation`, the four
-  stages and `isochron_foliation`.
+- `src/deep_isochron/analysis/ode/auto/isochron.py` (**new**): `IsochronSettings`,
+  `Isochron`, `IsochronFailure`, `IsochronFoliation` (with `dataset`, `save`, `load`),
+  the four stages and `isochron_foliation`.
+- `src/deep_isochron/plotting/isochrons.py` (**new**): `plot_isochrons`; the plotting
+  package exports it.
+- `tests/test_isochron.py` (**new**): see *Tests*.
+- `tests/helpers.py`: `TOL["isochron_curve"]`, `TOL["branch_point"]`, and the named
+  settings `ISOCHRON_SETTINGS` (`quick`, `full`).
+- `tests/golden/fncMultiSeg_Iso_{100,26,51}.csv` (**new**): three of the coworker's
+  isochrons, byte for byte (decision G8).
+- `justfile`, `.github/workflows/ci.yml`, Step D: `test-auto` takes `quick` or `full`;
+  CI runs `full`, since it runs only on pull requests and on `master`.
+- `docs/architecture.md`, Step D: `isochron.py` and `plot_isochrons` in the module map.
+- `src/Isochron2PBVP/` (**deleted**), Step D: the coworker's scripts, Fortran and 100
+  CSVs. The full oracle reproduces his isochrons, so the pipeline replaces them; the
+  directory stays readable at commit `3af99f2`, and *Design* quotes the parts the
+  pipeline is built from.
+- `pyproject.toml`, `prek.toml`, `scripts/check_docstring_headers.py`, Step D: the
+  exclusions of `src/Isochron2PBVP` removed (ty, ruff, `per-file-ignores`, codespell,
+  the hooks, the docstring-header check).
+- `CLAUDE.md`, `docs/coding-standards.md`, Step D: the exclusion lines name only
+  `tests/golden/`.
+- `docs/decisions/0016-symbolic-systems.md`, Step D: the links to the coworker's files
+  point at commit `3af99f2`; a History line.
+- `docs/design/isochrons.md`, Step D: the coworker's files linked at commit `3af99f2`.
+- `docs/roadmap.md`, Step D: the O7 row; the Done ledger records Steps C and D.
 - `src/deep_isochron/analysis/ode/__init__.py`, Step C: exports the pipeline.
 - `CLAUDE.md`: `-n 2` in the cloud sessions; the AUTO setup line.
 - `docs/references.md`: entries for Hannam et al. 2022, Krauskopf & Rieß 2008 and
@@ -157,10 +183,58 @@ follows.
   on $g(t) = (\gamma(t) - p)\cdot f(\gamma(t))$ converges in a few steps, and the
   section is then exactly the one `find_limit_cycle` would build through that point.
   The guards of `find_limit_cycle` became `_check_shooting` rather than a copy.
+- **`load` takes the cycle and checks it against the file** (Step D). The file stores
+  the cycle as data (mesh, period, section, system name and parameters), not as a
+  `LimitCycle`, which would need the system object and its solver. Rebuilding the system
+  from its name through a registry was rejected as machinery nothing else needs; the
+  caller rebuilds the cycle with `find_limit_cycle` and `reanchor` at the stored origin,
+  and `load` raises when the system, parameters, period or origin disagree.
+- **CI runs the full `auto` suite.** Decision G3 split a quick tier for every push from
+  the full suite for pull requests; CI runs only on pull requests and on `master`, so
+  its `auto` job runs `just test-auto full`, and `just test-auto` is the quick tier for
+  a session.
 - **The remaining decisions are design-document decisions for later steps:** D2 (the
   stage-4 start on AUTO's grid), D3 (the oracle's tolerance), D4 (one segment per
   isochron), D5 (the rotating base point, for ADR-0017), D6 (`ntst` scaling with
   `n_periods`) and D7 (the stop reason of each half).
+
+- **The coworker's code, quoted before its deletion (Step D).** `src/Isochron2PBVP` is
+  Andrus Giraldo's work, and the pipeline keeps its structure, so the parts it is built
+  from are quoted here as they stood at commit `3af99f2`. His run sequence,
+  `fncMultiSeg/mainIsochronMultiSegFNC.py`, lines 39–42, 45 and 54:
+
+  ```text
+  rPre[2] = run(rPre[1]('UZ1'), IPS= 4, ISW= 1, NDIM=4, NBC=6, NINT=0, ICP =  [13,12,11], PAR={12:rPre[1]('UZ1')['PAR(11)']}, UZSTOP={13:1.0})
+  rPre[3] = run(rPre[2]('UZ1'), ICP =  [71,12,11], UZSTOP={71:0.5})
+  rPre[4] = run(rPre[3]('UZ1'), NDIM=8, NBC=11, ICP =  [34,35,12,11], SP=['BP2'], PAR={34:1.2,35:0}, DS=-0.1,DSMAX=1e-01)
+  rPre[5] = run(rPre[4]('BP1'), ISW=-1, UZSTOP={35:1.0},SP=['LP0','BP0'])
+  rPre[6]  = run(rPre[5]('UZ1'), ICP =  [13,34,12,11], SP=[], DS=-0.01, DSMAX=0.05, NMX=2000,NPR=0,UZR={13:rPre[5]('UZ1')['PAR(11)']*phaseVec},RL0=0, RL1=rPre[5]('UZ1')['PAR(11)']*1.01)
+  rIso[3]   = run(rIso[1], DS=1e-05,DSMAX=10,NMX=8000,NPR=200,UZSTOP={36:[1e-06,-1e-6],74:[10,-10],74:[10,-10]},SP=['LP0','BP0'])
+  ```
+
+  The pipeline's stages 1–4 are these runs: the orbit split into two segments (runs 2–3,
+  with the section anchor of decision 3 in place of his $u_2 = 0.5$), the adjoint bundle
+  and its branch point (4–5), the rotation to each phase (6–7), and the two halves of
+  each isochron (`rIso[3]`, `rIso[4]`). The right-hand side and boundary conditions of
+  `fncMultiSeg/fncMultiSegIso.f90`, lines 49–53 and 82–91:
+
+  ```fortran
+  F(5:6)  =  PAR(12)*(MATMUL(TRANSPOSE(A),U(5:6)))
+  F(7:8)  =  PAR(13)*(MATMUL(TRANSPOSE(B),U(7:8)))
+  F(9:10)  = PAR(14)*F(9:10)
+  FB(1:2)  = U0(1:2)-U1(3:4)
+  FB(3:4)  = U1(1:2)-U0(3:4)
+  FB(5)    = PAR(11)-PAR(12)-PAR(13)
+  FB(6)    = U0(2)-PAR(71)
+  FB(7:8)  = U1(7:8)- U0(5:6)
+  FB(9:10) = U1(5:6)- PAR(34)*U0(7:8)
+  FB(11)   = DOT_PRODUCT(U0(7:8),U0(7:8)) - PAR(35)
+  FB(12:13)= U1(9:10)- (U0(3:4) + PAR(36)*(/ -U0(8), U0(7) /))
+  ```
+
+  `isochron_multiseg.f90` keeps these conditions but two: the bundle is
+  $-\tau A^{\mathsf T}w$ (D1, *Bugs fixed*), and `FB(6)` anchors segment 1 on the
+  section through phase 0.
 
 ## Bugs fixed
 
@@ -247,26 +321,52 @@ FitzHugh–Nagumo, `reanchor` at the coworker's anchor $(-1.72170711, 0.5)$ retu
 point as ``x0s[0]`` and the period to $10^{-10}$, in 15 s for the first call (compiling)
 and 0.1 s after.
 
-**The pipeline is work in progress and has no tests yet.** Stages 1–3 ran on
-FitzHugh–Nagumo with phase 0 at the coworker's anchor: the orbit corrected with the
-section anchor (period 11.227886761), the bundle's branch point at multiplier 1, the
-normalization at 1. Stage 4 had not finished when this was committed: its first run
-shared the two cores with the test-timing run, and its "test-sized" `eta_stop = 1e-4`
-lengthens the inward half rather than shortening it. Decision G3 is corrected
-accordingly: the test-sized settings are `eta_stop = 1e-9` and `box_scale = 2`. The
-inward half is the costly one, and $\vert\eta\vert$ grows along it as it spirals toward
-the source, so a smaller `eta_stop` ends it near the cycle; the outward half ends at
-the box after a few hundred steps whatever `eta_stop` is. Every AUTO
-run now passes `IPS`, `NDIM`, `NBC` and `NINT`, because each run reloads the
-constants file; the first version relied on constants carried over from the previous
-run and stage 2 failed at its first step (`MX`).
+**The pipeline (Steps C and D).** `tests/test_isochron.py` holds 18 tests. Without AUTO
+(12, about 25 s): the settings' ranges and defaults; the phases wrapped and checked;
+a hand-built Hopf foliation round-tripping through netCDF, `load` refusing a cycle of
+other parameters or another phase origin, and the plot drawing every isochron. With
+AUTO (marker `auto`): the bundle's branch point at multiplier 1 and its normalization
+for FitzHugh–Nagumo, Hopf, Bautin and Winfree (10–22 s each), and FitzHugh–Nagumo's
+isochrons at the phases of the coworker's files 100 and 26, with the quick settings,
+within $2\times 10^{-5}$ of the stored curves (about 90 s; measured 1.7e-6 and 6.7e-6).
+The full five-period suite against files 100, 26 and 51 (`auto` and `slow`) takes
+11 minutes on two cores.
+
+Three things went wrong on the way and are fixed. Every AUTO run passes `IPS`, `NDIM`,
+`NBC` and `NINT`, because each run reloads the constants file; the first version relied
+on constants carried over from the previous run, and stage 2 failed at its first step
+(`MX`). The first two-way comparison failed with a distance of 0.82 because the
+pipeline's box, relative to the cycle, ends file 100's outward half at
+$x = -9.18$ where the coworker's ends at $x = -10$; the comparison of the stored curve
+against ours is now restricted to the arclength ours covers. And decision G3's
+test-sized settings were wrong twice, as the next paragraph records.
+
+**The cost of an isochron is the length of its segment, not `eta_stop`.** A first
+"test-sized" `eta_stop = 1e-4` was meant to stop each half sooner; a second guess,
+`1e-9`, was meant to stop the inward half near the cycle. Neither works: with five
+periods, both halves of isochron 26 ran 4800–6300 continuation steps while
+$\vert\eta\vert$ stayed between $10^{-14}$ and $6\times 10^{-11}$. The step count
+follows the length of the traced curve, which grows with `n_periods`. The quick settings
+are therefore `n_periods = 1`, `box_scale = 2` and `max_steps = 1500`
+(`ISOCHRON_SETTINGS["quick"]` in `tests/helpers.py`): two FitzHugh–Nagumo phases in
+72 s end to end, stages 1–3 included.
+
+**Step D baseline.** After the deletion of `src/Isochron2PBVP`: `uv run just check`
+clean; `uv run pytest -n 2 -m "not slow" tests/test_isochron.py
+tests/test_auto_codegen.py tests/test_auto_env.py --hypothesis-profile=dev` gives 48
+passed in 160 s with AUTO installed. The slow two-way oracle passed before the deletion
+(682 s). The full tier has not been run on this branch since Step B (plan decision 8).
 
 ## Open issues
 
 - **The canceled `checks` job** is fixed on its own branch before this one is reviewed
   (plan decision 8).
-- **Steps B–E** of the plan: the AUTO dependency, `reanchor` and the pipeline, the
-  results and persistence, the oracles and ADR-0017.
+- **Two Done rows dated 2026-10-28** (Steps B′ and C begins) were written a day ahead;
+  the ledger is append-only, so they stand, and the rows after them carry the true
+  date.
+- **Step E** of the plan: ADR-0017, and the oracles still to write: the bundle against
+  O2's Floquet vectors and its scale, the Bautin and Winfree isochrons against their
+  closed-form phase, forward integration, and the timing of a full foliation.
 
 ## Review notes
 
@@ -314,3 +414,17 @@ run and stage 2 failed at its first step (`MX`).
 | `tests/test_auto_codegen.py` — the slot layout | | |
 | `src/deep_isochron/analysis/ode/auto/isochron.py` — the pipeline (work in progress, untested) | | |
 | `src/deep_isochron/analysis/ode/__init__.py` — exports the pipeline | | |
+| `src/deep_isochron/analysis/ode/auto/isochron.py`, Step D — `IsochronFoliation.dataset`, `save`, `load`; the stages finished | | |
+| `src/deep_isochron/plotting/isochrons.py` — `plot_isochrons` | | |
+| `src/deep_isochron/plotting/__init__.py` — exports `plot_isochrons` | | |
+| `tests/test_isochron.py` — settings, phases, persistence, plot; bundle at multiplier 1; FitzHugh–Nagumo against the coworker | | |
+| `tests/helpers.py` — `TOL["isochron_curve"]`, `TOL["branch_point"]`, `ISOCHRON_SETTINGS` | | |
+| `tests/golden/fncMultiSeg_Iso_{100,26,51}.csv` — three golden isochrons | | |
+| `justfile`, `.github/workflows/ci.yml` — `test-auto` takes `quick` or `full` | | |
+| `docs/architecture.md` — the pipeline and the plot in the module map | | |
+| `src/Isochron2PBVP/` — deleted; the coworker's run sequence and Fortran quoted in *Design* | | |
+| `pyproject.toml`, `prek.toml`, `scripts/check_docstring_headers.py` — the exclusions of `src/Isochron2PBVP` removed | | |
+| `CLAUDE.md`, `docs/coding-standards.md` — the exclusion lines name only `tests/golden/` | | |
+| `docs/decisions/0016-symbolic-systems.md` — links at commit `3af99f2`; History line | | |
+| `docs/design/isochrons.md` — the coworker's files linked at commit `3af99f2` | | |
+| `docs/roadmap.md` — the O7 row; Done ledger row for Steps C–D | | |
