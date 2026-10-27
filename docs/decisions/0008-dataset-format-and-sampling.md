@@ -112,16 +112,22 @@ and training runs use Decision 3.
 ### 3. Training runs read batches from a `WindowBatchSource` (roadmap C9)
 
 **In one paragraph: there are two ways to get batched windows out of a
-`TimeSeriesDataSource`, and both are kept on purpose.** The *per-element* way (Decision
+`TimeSeriesDataSource`, and both are kept on purpose.**
+
+- The *per-element* way (Decision
 2; [`elementwise.py`](../../src/deep_isochron/data/windows/elementwise.py): `windows()`,
 `mixed_windows()`, `validation_windows()`) is grain's idiom: one trajectory per element,
 a `RandomMap` cuts one window, `.batch(B)` stacks. It is short, easy to see to be
 correct, and the reference that the tests compare against; it is also slow, ≈ 0.1–0.2 ms
-of grain overhead per window, 50–90 ms per batch of 512. The *batched* way (this
+of grain overhead per window, 50–90 ms per batch of 512.
+
+- The *batched* way (this
 decision; [`batched.py`](../../src/deep_isochron/data/windows/batched.py):
 `window_batches()`, `mixed_window_batches()`) serves whole batches from a
 `WindowBatchSource` by one vectorized gather, ≈ 1 ms per batch, with the same start
-distributions and a concrete epoch structure. **Training runs use the batched way;
+distributions and a concrete epoch structure.
+
+**Training runs use the batched way;
 validation and tests use the per-element way.**
 [`common.py`](../../src/deep_isochron/data/windows/common.py) holds what both share.
 
