@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # `deep_isochron` documentation — index
@@ -58,7 +58,7 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | [0014](decisions/0014-limit-cycle-by-shooting.md) | accepted (review pending) | `analysis.ode.limit_cycle`: shooting on the time-T flow (not collocation), Poincaré section normal to the flow, `PoincareMap` as the one abstraction with `direction`/`reverse_time`, `eqx.Module` results, `analysis` through the `flow` contract alone; Floquet multipliers in ADR-0015 |
 | [0015](decisions/0015-floquet-by-seeded-periodic-schur.md) | accepted (review pending) | `analysis.ode.floquet`: the seeded periodic Schur chain on the shooting-segment Jacobians (forward, in the attracting direction) as the method, explicit monodromy and Liouville as checks, `Literal` method dispatch; `LimitCycle`/`FixedPoint` as `eqx.Module`s carrying the ODE and configuration (amends ADR-0012 §3, ADR-0014 §3) |
 | [0016](decisions/0016-symbolic-systems.md) | accepted (review pending) | systems declared once in SymPy (`AbstractSymbolicODE._symbolic_template`; normal forms' polar `_symbolic_template_polar`, with even-family membership checked), JAX `rhs`/hooks derived and compiled by `_compile` once a class has no abstract methods; AUTO-07p Fortran by `INCLUDE` of generated `rhs.inc`/`indices.inc` (amends ADR-0007) |
-| 0017 | reserved | the AUTO-07p isochron pipeline (branch `auto-isochrons`, roadmap O7 step 2) |
+| [0017](decisions/0017-isochrons-by-auto-continuation.md) | accepted (review pending) | isochrons by AUTO-07p: the rotating multi-segment boundary value problem (Hannam et al. 2022), the adjoint bundle $-\tau A^{\mathsf T}w$, phase 0 on the cycle's section, AUTO as a locked git dependency with a build script, a `spawn` pool per phase, one netCDF file per foliation loaded against its cycle |
 | [0018](decisions/0018-docstrings-map-and-contract.md) | accepted | docstrings: the module docstring is the map, a function docstring the contract, reasoning in the ADRs; `**Attributes:**` lists; one bibliography `references.md` with `(Key, locator)` citations and `check_references.py`; ruff `D100`–`D103` switched on round by round |
 | [0019](decisions/0019-adrs-describe-the-current-design.md) | accepted | ADRs: Context with Motivation and Forces; Decision and Consequences always the current design; superseded designs in Alternatives rejected; a dated History; relative links checked by `check_references.py` |
 

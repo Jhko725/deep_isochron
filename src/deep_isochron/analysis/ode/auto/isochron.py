@@ -6,7 +6,8 @@ problem after Hannam, Krauskopf and Osinga, as reproduced by Andrus Giraldo in
 ``src/Isochron2PBVP`` (removed after commit ``3af99f2``):
 
 1. `_periodic_orbit` cuts O1's cycle at half its period into two segments, the first
-   starting on the section through phase 0, and corrects them on AUTO's mesh.
+   starting on the section through phase 0, and hands them to AUTO, which stores them
+   on its mesh; the first step of stage 2 corrects them.
 2. `_adjoint_bundle` adds the adjoint equation $\dot w = -\tau A^{\mathsf T}w$ on both
    segments, finds the branch point at multiplier 1 and switches onto the normalized
    bundle, whose rotation $Jw$ is the stable direction at the junction.
@@ -427,9 +428,14 @@ def _check_phases(
 
 # ------------------------------------------------------------------ the stages ----
 def _periodic_orbit(run: _Runner, cycle: LimitCycle, n_points: int = 601) -> Any:
-    """Stage 1: O1's cycle as two segments of half a period each, segment 1 starting
-    at phase 0 on the cycle's section, corrected by one AUTO run
-    (``NDIM = 4``, ``NBC = 6``; free: ``seg2``, ``seg1``, ``period``)."""
+    r"""Stage 1: O1's cycle as two segments of half a period each, segment 1 starting
+    at phase 0 on the cycle's section, as an AUTO solution (``NDIM = 4``,
+    ``NBC = 6``; free: ``seg2``, ``seg1``, ``period``).
+
+    The run has ``NMX = 1``, and AUTO stores its first point as the start interpolated
+    onto its mesh, not Newton-corrected: the stored orbit is off by the interpolation
+    error, $3.4\times 10^{-6}$ on Bautin's unit circle with `n_points` 601. Stage 2's
+    first continuation step corrects it, to $7\times 10^{-12}$ there."""
     idx, period = run.problem.idx, float(cycle.period)
     with jax.enable_x64(True):
         times = jnp.linspace(0.0, period, 2 * n_points - 1)
@@ -542,8 +548,16 @@ def _isochron_start(
     return _Solution(rotated.t, u, par)
 
 
-def _stop_reason(end: Any, idx: Any, settings: IsochronSettings) -> str:
-    """Why a half stopped, from the last solution of its run.
+def _stop_reason(
+    end: Any, idx: Any, settings: IsochronSettings, box: tuple[np.ndarray, np.ndarray]
+) -> str:
+    r"""Why a half stopped, from the last solution of its run.
+
+    A user point is a box stop when the traced point lies on an edge of `box`, and an
+    $\eta$ stop otherwise. AUTO locates a user point only to its own tolerance, so the
+    test is on the box, whose edges AUTO reaches to round-off; an $\eta$ stop was once
+    classified by $\vert\eta\vert \ge$ ``eta_stop`` and a point at
+    $\eta = -9.99999995\times 10^{-7}$ was reported as a box stop.
 
     **Raises:**
 
@@ -552,8 +566,12 @@ def _stop_reason(end: Any, idx: Any, settings: IsochronSettings) -> str:
     """
     kind = end["TY"]
     if kind == "UZ":
-        reached = abs(float(end[f"PAR({idx.eta})"])) >= settings.eta_stop * (1 - 1e-9)
-        return "eta" if reached else "box"
+        point = np.asarray([end[f"PAR({i})"] for i in idx.point], dtype=float)
+        scale = float(np.max(box[1] - box[0]))
+        on_edge = np.isclose(point, box[0], rtol=0, atol=1e-9 * scale) | np.isclose(
+            point, box[1], rtol=0, atol=1e-9 * scale
+        )
+        return "box" if on_edge.any() else "eta"
     if kind == "EP" and abs(int(end["PT"])) >= settings.max_steps:
         return "max_steps"
     raise NotConvergedError("isochron", f"AUTO stopped with label {kind}.", None)
@@ -591,7 +609,7 @@ def _isochron(
             [branch[f"PAR({idx.point[0]})"], branch[f"PAR({idx.point[1]})"]]
         )
         eta = np.asarray(branch[f"PAR({idx.eta})"], dtype=float)
-        halves.append((points, eta, _stop_reason(branch()[-1], idx, settings)))
+        halves.append((points, eta, _stop_reason(branch()[-1], idx, settings, box)))
     (p1, e1, s1), (p2, e2, s2) = halves
     points = np.concatenate([p1[::-1], p2[1:]])
     eta = np.concatenate([e1[::-1], e2[1:]])

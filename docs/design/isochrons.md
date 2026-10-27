@@ -1,7 +1,7 @@
 ---
 type: design
 status: draft for review; the decisions of §11 settled 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 verified_by: pending (Joon); the measurements in §3, §5 and §7 were made on 2026-10-27 with AUTO-07p at commit 44cc1c4 and are recorded in the branch's change document
 sources: [Langfield et al. 2014, Osinga & Moehlis 2010, Hannam et al. 2022, Krauskopf & Rieß 2008, Guckenheimer 1975, Nakao 2016, AUTO-07p (manual doc/auto.tex and source at 44cc1c4), the coworker's src/Isochron2PBVP, ADR-0014, ADR-0015, ADR-0016]
 ---
@@ -387,7 +387,7 @@ The mapping is:
 | Coworker | Ours | What changes |
 |---|---|---|
 | runs 0–1, Hopf continuation | O1's `find_limit_cycle` | the cycle comes from shooting; runs 0–1 survive only as a test (decision 12) |
-| run 2, growing segment 2 | stage 1, `_periodic_orbit` | the two segments are cut from O1's cycle at half the period and corrected once |
+| run 2, growing segment 2 | stage 1, `_periodic_orbit` | the two segments are cut from O1's cycle at half the period; stage 2's first step corrects them |
 | run 3, sliding the anchor | `reanchor` before stage 1 | phase 0 is set on the `LimitCycle`, not in AUTO |
 | `FB(6)`, $y = $ const | $(u_1(0) - p)\cdot n = 0$ | the anchor is O1's section through phase 0 (decision 3) |
 | runs 4–5 | stage 2, `_adjoint_bundle` | the adjoint equation, option (a) of §3 (D1) |
@@ -396,10 +396,15 @@ The mapping is:
 | the two isochron runs | stage 4, `_isochron` | stop when the traced point leaves a box relative to the cycle (decision 15) |
 | the loop over phases | `isochron_foliation` | a process pool (decision 17) |
 
-**Stage 1 corrects O1's cycle onto AUTO's mesh.** The cycle is integrated from
+**Stage 1 hands O1's cycle to AUTO.** The cycle is integrated from
 `x0s[0]` with `cycle.config` over one period and split at $T/2$, so
 $\tau_1 = \tau_2 = T/2$. The pieces become segments 1 and 2 on a uniform grid of $[0, 1]$, and one run with
-`NDIM = 4`, `NBC = 6` and the free parameters $\tau_2$, $\tau_1$, $T$ corrects them. The
+`NDIM = 4`, `NBC = 6` and the free parameters $\tau_2$, $\tau_1$, $T$ stores them on AUTO's
+mesh. That run has `NMX = 1`, and AUTO stores a run's first point as the start
+interpolated onto its mesh, without the Newton correction **[code]**: on Bautin's unit
+circle the stored orbit is off by $3.4\times 10^{-6}$, the sag of chords between 601
+points, and the bundle after stage 2's first step is off by $7\times 10^{-12}$. The
+same holds for the set-up run of stage 4, whose first step in $\eta$ corrects it. The
 split point does not matter, because stage 3 rotates the junction to every requested
 phase. The coworker's runs 2–3 left $\tau_2 = 1.0$, which was as arbitrary.
 
@@ -501,7 +506,7 @@ AUTO's error from its own (§8) [deduced].
 | Oracle | What it checks | Tolerance and its reason |
 |---|---|---|
 | The coworker's isochrons, files 100, 26 and 51 | the whole pipeline on FitzHugh–Nagumo, with phase 0 at the coworker's anchor and each stored curve's phase from its base point | a two-way distance from points to the other curve's polyline of $2\times 10^{-5}$, above the $3.6\times 10^{-6}$ of AUTO's own rerun and the $8.1\times 10^{-6}$ between the coworker's bundle and option (a) (D3) |
-| O1's cycle | the period of stage 1 (11.2279; Langfield et al. 2014, §III) and its points | AUTO's correction tolerance against O1's shooting tolerance |
+| O1's cycle | the period of stage 1 (11.2279; Langfield et al. 2014, §III), and the orbit of stage 2 against O1's flow | AUTO's correction tolerance against O1's shooting tolerance |
 | The Hopf route (runs 0–1) | O1's cycle by an independent method (decision 12) | the same |
 | O2's Floquet vectors | $Jw$ parallel to `floquet(cycle).vectors` at the points `x0s` | the angle at the accuracy of O2's vectors |
 | The closed forms of Bautin and Winfree | `nf.phase(point)` $= \theta$ along every traced isochron, with phase 0 at $(1, 0)$ (decision 14) | $O(\eta^2)$ plus collocation error, since the end direction is $v_s$ |
@@ -538,7 +543,8 @@ field is constant along every AUTO isochron, and $w$ is parallel to $Z(\theta)$.
   (Step B smoke test).
 - `reanchor`: the period is unchanged, the new `x0s[0]` lies on the cycle, and
   reanchoring at a cycle point returns that point.
-- Stage 1: the corrected period equals O1's; the anchor lies on the section.
+- Stages 1–2: the period equals O1's; the orbit after stage 2's correction equals O1's
+  flow.
 - Stage 2: the branch point is at $\lambda = 1$ for FitzHugh–Nagumo, Hopf, Bautin and
   Winfree; the end direction is parallel to O2's $v_s$ at the mesh points.
 - Stage 3: the base point of each `UZ` solution has the requested phase on O1's cycle.
