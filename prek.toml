@@ -2,6 +2,10 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
+# The coworker's original AUTO scripts are kept as they were until Step D deletes them,
+# and golden data must stay byte for byte; no hook may rewrite either.
+exclude = "^(src/Isochron2PBVP/|tests/golden/)"
+
 [[repos]]
 repo = "builtin"
 hooks = [
@@ -34,4 +38,3 @@ hooks = [
   { id = "check-references", name = "check-references (citations and relative links resolve)", entry = "uv run python scripts/check_references.py", language = "system", pass_filenames = false, types_or = ["python", "markdown"] },
   { id = "check-docstring-headers", name = "check-docstring-headers (**Returns:** on its own line)", entry = "uv run python scripts/check_docstring_headers.py", language = "system", types = ["python"] },
 ]
-

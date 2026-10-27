@@ -51,17 +51,17 @@ class AutoHandle(NamedTuple):
     runner: Any
 
 
-def auto_dir(path: str | Path | None = None) -> Path:
-    """The built AUTO-07p tree: `path` if given, otherwise the first of the variables in
-    `ENV_VARS` that is set, otherwise `DEFAULT_DIR`.
+def auto_dir() -> Path:
+    """The built AUTO-07p tree: the first of the variables in `ENV_VARS` that is set,
+    otherwise `DEFAULT_DIR`. The tree is a property of the machine, so it is chosen by
+    the environment and never by an argument (``docs/auto.md``).
 
     **Raises:**
 
     `AutoNotInstalled` when that directory has no ``cmds/cmds.make`` or no compiled
     objects in ``lib/``; the message names the install script.
     """
-    if path is None:
-        path = next((os.environ[v] for v in ENV_VARS if os.environ.get(v)), DEFAULT_DIR)
+    path = next((os.environ[v] for v in ENV_VARS if os.environ.get(v)), DEFAULT_DIR)
     directory = Path(path).expanduser()
     built = (directory / "cmds" / "cmds.make").is_file() and any(
         (directory / "lib").glob("*.o")
@@ -86,17 +86,13 @@ def pinned_commit() -> str | None:
     return json.loads(text).get("vcs_info", {}).get("commit_id")
 
 
-def load_auto(path: str | Path | None = None) -> AutoHandle:
+def load_auto() -> AutoHandle:
     """Resolve the tree with `auto_dir`, export it as ``AUTO_DIR``, and import AUTO's
     Python layer.
 
     The import prints a banner about the plotting modules, which is suppressed. A
     warning is issued when the tree's stamp names another commit than the Python layer,
     since the two halves then disagree on the file formats between them.
-
-    **Arguments:**
-
-    - `path`: The tree, overriding the environment variables.
 
     **Returns:**
 
@@ -106,7 +102,7 @@ def load_auto(path: str | Path | None = None) -> AutoHandle:
 
     `AutoNotInstalled`, from `auto_dir`.
     """
-    directory = auto_dir(path)
+    directory = auto_dir()
     os.environ["AUTO_DIR"] = str(directory)
     stamp = directory / STAMP
     built = stamp.read_text().strip() if stamp.is_file() else None

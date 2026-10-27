@@ -1,10 +1,10 @@
 """Finding and loading AUTO-07p (``deep_isochron.analysis.ode.auto._env``).
 
-Section 1 tests how `auto_dir` resolves the tree and refuses a missing one; it needs no
-AUTO. Section 2 (marker ``auto``, skipped without a built tree) loads AUTO and runs the
-generated FitzHugh–Nagumo problem: the equilibrium continuation in ``c`` must find the
-Hopf point where the Jacobian's trace vanishes, which is computed here independently
-from the cubic for the equilibrium.
+Section 1 tests how `auto_dir` resolves the tree from the environment and refuses a
+missing one; it needs no AUTO. Section 2 (marker ``auto``, skipped without a built
+tree) loads AUTO and runs the generated FitzHugh–Nagumo problem: the equilibrium
+continuation in ``c`` must find the Hopf point where the Jacobian's trace vanishes,
+which is computed here independently from the cubic for the equilibrium.
 """
 
 from pathlib import Path
@@ -26,22 +26,20 @@ def _fake_tree(root: Path) -> Path:
     return root
 
 
-def test_missing_tree_raises_and_names_the_install_script(tmp_path):
+def test_missing_tree_raises_and_names_the_install_script(tmp_path, monkeypatch):
     """`auto_dir` raises `AutoNotInstalled` for a directory without a build, and the
     message names ``scripts/install_auto.sh``."""
+    monkeypatch.setenv("DEEP_ISOCHRON_AUTO_DIR", str(tmp_path))
     with pytest.raises(_env.AutoNotInstalled, match="scripts/install_auto.sh"):
-        _env.auto_dir(tmp_path)
+        _env.auto_dir()
 
 
-def test_explicit_path_then_variables_then_default(tmp_path, monkeypatch):
-    """An explicit path wins; otherwise ``DEEP_ISOCHRON_AUTO_DIR`` is consulted before
-    ``AUTO_DIR``; otherwise `DEFAULT_DIR`."""
-    ours, theirs, explicit = (
-        _fake_tree(tmp_path / name) for name in ("ours", "theirs", "explicit")
-    )
+def test_variables_then_default(tmp_path, monkeypatch):
+    """``DEEP_ISOCHRON_AUTO_DIR`` is consulted before ``AUTO_DIR``, and `DEFAULT_DIR`
+    when neither is set."""
+    ours, theirs = (_fake_tree(tmp_path / name) for name in ("ours", "theirs"))
     monkeypatch.setenv("DEEP_ISOCHRON_AUTO_DIR", str(ours))
     monkeypatch.setenv("AUTO_DIR", str(theirs))
-    assert _env.auto_dir(explicit) == explicit
     assert _env.auto_dir() == ours
     monkeypatch.delenv("DEEP_ISOCHRON_AUTO_DIR")
     assert _env.auto_dir() == theirs

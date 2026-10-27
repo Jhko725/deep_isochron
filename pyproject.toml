@@ -86,8 +86,10 @@ dev = [
     "ipykernel>=7.3.0",
     "markdown-it-py>=3.0.0",
     "nbformat>=5.11.1",
+    "prek>=0.2",  # the pre-commit runner of prek.toml; `just setup` installs its hook
     "pytest>=9.1.1",
     "pytest-xdist>=3.8.0",
+    "rust-just>=1.59.0",  # the task runner: `uv run just --list` (justfile)
     "ty>=0.0.88",
 ]
 

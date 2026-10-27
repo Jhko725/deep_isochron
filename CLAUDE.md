@@ -50,12 +50,16 @@ fails silently.
 
 ## Repository facts
 
-- Python 3.13; `uv sync --group dev`; `uv run pytest`, with `-n` (pytest-xdist) at the
-  machine's core count: `-n 2` in the cloud sessions, which have two cores and 7 GB and
-  lost two workers at `-n 4` on 2026-10-27; `-n 4` in CI. Hypothesis profiles:
-  `--hypothesis-profile=dev` (10 examples), default (50), `ci` (300, derandomized).
+- Python 3.13; `uv sync` (the `dev` group is uv's default). The commands are recipes
+  in the `justfile`; `uv run just --list` prints them: `setup`, `check`, `test`,
+  `test-slow`, `test-auto`, `install-auto`, `smoke`. CI runs the same recipes.
+- `just test [profile] [paths]` runs pytest at `-n auto`, the machine's core count: 2 in
+  the cloud sessions, which have two cores and 7 GB, and 4 in CI. During a change run
+  `uv run just test dev <test files of the touched modules>`; the full tier once at the
+  end. Hypothesis profiles: `dev` (10 examples), `default` (50), `ci` (300,
+  derandomized).
 - AUTO-07p for the isochron pipeline (`docs/auto.md`): in a cloud session, run
-  `apt-get update && apt-get install -y gfortran make`, then `scripts/install_auto.sh`
+  `apt-get update && apt-get install -y gfortran make`, then `uv run just install-auto`
   (about 40 s). Tests that need AUTO carry the marker `auto` and skip without a tree;
   the gfortran tests of `tests/test_auto_codegen.py` are `slow` and skip without
   gfortran.
@@ -63,8 +67,9 @@ fails silently.
   at runtime: the first occurrence of an axis name is a plain name (`" K"`, not
   `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a
   string forward reference.
-- Pre-commit runs through `prek`; the hooks are listed in `prek.toml`, and what each
-  check is for is in `docs/coding-standards.md`.
+- Pre-commit runs through `prek`, a dev dependency; the hooks are listed in `prek.toml`,
+  which excludes `src/Isochron2PBVP/` and `tests/golden/`, and what each check is for is
+  in `docs/coding-standards.md`. `just check` runs them on every file, then `ty`.
 - Design decisions are numbered ADRs in `docs/decisions/`, and a change document's
   *Design* section links to them. The contracts those ADRs fix, together with this
   repository's tiers, tolerances and checks, are in `docs/coding-standards.md`.

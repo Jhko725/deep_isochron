@@ -1,7 +1,7 @@
 ---
 type: design
 status: draft for review; the decisions of §11 settled 2026-10-27
-updated: 2026-10-27
+updated: 2026-10-28
 verified_by: pending (Joon); the measurements in §3, §5 and §7 were made on 2026-10-27 with AUTO-07p at commit 44cc1c4 and are recorded in the branch's change document
 sources: [Langfield et al. 2014, Osinga & Moehlis 2010, Hannam et al. 2022, Krauskopf & Rieß 2008, Guckenheimer 1975, Nakao 2016, AUTO-07p (manual doc/auto.tex and source at 44cc1c4), the coworker's src/Isochron2PBVP, ADR-0014, ADR-0015, ADR-0016]
 ---
@@ -579,3 +579,10 @@ recommendation, and each was accepted.
   Bautin's `rhs.inc`, which then did not compile.
 - **D9 — The coworker.** Claude drafts a note on the sign slip; Joon decides whether to
   send it.
+
+## Acknowledgments
+
+The AUTO-07p reproduction that this pipeline is built from, `src/Isochron2PBVP`, is the
+work of Andrus Giraldo (Department of Computational Sciences, Korea Institute for
+Advanced Study). §5 describes it run by run, and the pipeline of §6 keeps its rotating
+multi-segment structure and its run constants.

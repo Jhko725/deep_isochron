@@ -1,7 +1,7 @@
 ---
 type: change
-status: in progress; Steps A and B done, the design document out for review
-updated: 2026-10-27
+status: in progress; Steps A, B and B′ done, Steps A–B reviewed
+updated: 2026-10-28
 branch: auto-isochrons
 ---
 
@@ -26,7 +26,12 @@ The second commit is Step A of the plan: the corrected bundle (D1), the generato
 compile bugs, and tests that compile the generated Fortran with gfortran, replacing the
 f2py test that had never run. The third commit is Step B: AUTO as a dependency, with
 its Python layer locked by commit in `uv.lock` and its Fortran tree built at the same
-commit by `scripts/install_auto.sh`. The pipeline itself (Steps C–E) follows.
+commit by `scripts/install_auto.sh`. Joon reviewed Steps A and B on 2026-10-28 and
+asked three questions in the review table, which became decisions R1–R3. The commit
+after the review, Step B′, applies them: `just` as the task runner, the AUTO tree located
+only through the environment, and the setup documented for a cluster. It also corrects
+a false claim in `docs/auto.md`, adds the README, and acknowledges Andrus Giraldo, whose
+reproduction the pipeline is built from. The pipeline itself (Steps C–E) follows.
 
 ## Files
 
@@ -52,6 +57,21 @@ commit by `scripts/install_auto.sh`. The pipeline itself (Steps C–E) follows.
 - `docs/auto.md` (**new**): installing AUTO, the variables, the pin, the tests,
   troubleshooting.
 - `docs/architecture.md`: `_env.py` in the module map.
+- `justfile` (**new**): the recipes `setup`, `install-auto`, `check`, `test`,
+  `test-slow`, `test-auto`, `smoke` (R3).
+- `pyproject.toml` / `uv.lock`, Step B′: `rust-just` and `prek` in the `dev` group.
+- `prek.toml`: excludes `src/Isochron2PBVP/` and `tests/golden/`, so that no hook
+  rewrites the coworker's files or golden data.
+- `.github/workflows/ci.yml`, Step B′: every job runs `just` recipes.
+- `src/deep_isochron/analysis/ode/auto/_env.py`, Step B′: `auto_dir` and `load_auto`
+  take no path (R2).
+- `tests/test_auto_env.py`, Step B′: the resolution tests set the variables.
+- `docs/auto.md`, Step B′: `just setup`; the `uv sync` correction; the platforms; "On a
+  cluster"; the network note.
+- `README.md`: what the package does, `just setup`, the documentation, the
+  acknowledgment.
+- `docs/design/isochrons.md`, Step B′: the acknowledgment.
+- `CLAUDE.md`, Step B′: the recipes in "Repository facts"; `prek` and its exclusions.
 - `CLAUDE.md`: `-n 2` in the cloud sessions; the AUTO setup line.
 - `docs/references.md`: entries for Hannam et al. 2022, Krauskopf & Rieß 2008 and
   Osinga & Moehlis 2010.
@@ -93,12 +113,36 @@ commit by `scripts/install_auto.sh`. The pipeline itself (Steps C–E) follows.
 - **The bundle's branch-point test moves to Step C.** The plan put it in Step B's smoke
   tests, but it needs the two-segment start that stage 1 builds; written now, it would
   be a second, test-only construction of that start.
+- **`just` runs the project's commands, and CI calls the same recipes** (R3). Make was
+  the first proposal, since AUTO's build already needs it; just was chosen for recipes
+  that read as shell scripts, `just --list` as the help, and arguments that read like a
+  command's. It installs from PyPI as `rust-just`, so `uv sync` brings it. Poe the Poet,
+  which keeps tasks in `pyproject.toml`, was the runner-up; Task, invoke, nox, hatch,
+  pixi and mise each bring more than a command list needs.
+- **The install script stays** (R1): AUTO's own procedure is `configure && make`, and
+  AUTO compiles equation files at run time, so the machine needs gfortran whichever
+  tool installs AUTO. pixi with conda-forge is the established route for many native
+  dependencies and is revisited if a second one arrives.
+- **The AUTO tree is chosen by the environment only** (R2). A path argument to
+  `load_auto` and a directory field on `IsochronSettings` were rejected: the tree is a
+  property of the machine, a setting would be saved with every foliation, and two ways
+  to choose it could disagree with the install script.
+- **`prek` is a dev dependency.** `just setup` installs its git hook, which then calls
+  the copy in the environment rather than a global one.
+- **The cluster** (G1, H1–H4): `just setup` names `apt-get`, `module load gcc` and conda
+  when gfortran is missing; `docs/auto.md` says to load the compiler in every job script,
+  since AUTO compiles at run time, and that nothing needs the network at run time.
 - **The remaining decisions are design-document decisions for later steps:** D2 (the
   stage-4 start on AUTO's grid), D3 (the oracle's tolerance), D4 (one segment per
   isochron), D5 (the rotating base point, for ADR-0017), D6 (`ntst` scaling with
   `n_periods`) and D7 (the stop reason of each half).
 
 ## Bugs fixed
+
+- **`docs/auto.md` said that a plain `uv sync` uninstalls AUTO's Python layer.** It does
+  not: uv syncs the `dev` group by default, and `dev` includes `auto`
+  (`uv sync --dry-run` reports no change). The claim had been measured in a scratch
+  project whose `auto` group was not in `dev`.
 
 - **The bundle integrated $+A^{\mathsf T}w$.** Symptom: on `HopfNormalForm(1.3, 1.5, 0.4)`
   and `BautinNormalForm(1.0, 0.3, 1.5, 0.5)`, the coworker's runs 4–5 walk from
@@ -165,6 +209,11 @@ Step B adds `tests/test_auto_env.py`, 4 passed with a built tree:
 `scripts/install_auto.sh` built the tree in 37 s, and a second run reported it already
 built.
 
+Step B′ ran `uv run just check` (all hooks on every file, then `ty`: clean) and
+`uv run just test dev tests/test_auto_env.py` (4 passed). The first `just check` run
+showed that the end-of-file and whitespace hooks rewrite the coworker's files; those
+edits were reverted, and `prek.toml` now excludes them and the golden data.
+
 ## Open issues
 
 - **The canceled `checks` job** is fixed on its own branch before this one is reviewed
@@ -197,3 +246,14 @@ built.
 | `docs/index.md` — the `auto.md` row | Confirmed. | None |
 | `CLAUDE.md` — `-n 2` in the cloud sessions; the AUTO setup line | Confirmed. | None |
 | `docs/roadmap.md` — Done ledger row for Step B | Confirmed. | None |
+| `justfile` — the recipes `setup`, `install-auto`, `check`, `test`, `test-slow`, `test-auto`, `smoke` (R3) | | |
+| `pyproject.toml`, `uv.lock` — `rust-just` and `prek` in the `dev` group | | |
+| `prek.toml` — excludes `src/Isochron2PBVP/` and `tests/golden/` | | |
+| `.github/workflows/ci.yml` — every job runs `just` recipes | | |
+| `src/deep_isochron/analysis/ode/auto/_env.py` — the tree only from the environment (R2) | | |
+| `tests/test_auto_env.py` — resolution tests through the variables | | |
+| `docs/auto.md` — `just setup`, the `uv sync` correction, platforms, "On a cluster" | | |
+| `README.md` — the package, setup, documentation, acknowledgment | | |
+| `docs/design/isochrons.md` — acknowledgment of Andrus Giraldo | | |
+| `CLAUDE.md` — the recipes; `prek` and its exclusions | | |
+| `docs/roadmap.md` — Done ledger row for Step B′; the O7 row names the consumer of the saved foliation | | |

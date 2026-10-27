@@ -1,11 +1,12 @@
-# Phase D6. Two jobs: the quick suite on every push (lint, types, Markdown math, the
-# hypothesis `ci` profile with the slow tests deselected) and a `slow` job with the full
-# training tests and a 20-step end-to-end run of scripts/train.py on a tiny generated
-# Bautin dataset (CPU). ruff runs through uvx so the lock file stays as it is; ty runs as
-# ``uvx ty@latest`` on purpose: the checker is young and its rules grow, and we want the
-# code clean against the newest one (``uvx ty`` alone may serve a cached older build).
-# The local ``uv run ty`` is the pinned dev-group copy — when CI goes red on a rule the
-# local run does not show, ``uv lock --upgrade-package ty`` and fix forward.
+# Phase D6. Three jobs, each a sequence of `just` recipes from the justfile, so that a
+# command list is written once and CI runs what a developer runs: `checks` (the hooks of
+# prek.toml, ty, and the quick suite at the hypothesis `ci` profile), `slow` (the slow
+# tier and a 20-step end-to-end run on a tiny Bautin dataset, CPU), and `auto` (AUTO-07p
+# built at the pinned commit, then the tests that run it). ty runs as `uvx ty@latest`
+# on purpose: the checker is young and its rules grow, and we want the code clean
+# against the newest one. The local `just check` uses the pinned dev-group copy; when
+# CI goes red on a rule the local run does not show, `uv lock --upgrade-package ty` and
+# fix forward.
 name: CI
 
 on:
@@ -27,22 +28,9 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.13
-      - run: uv sync --group dev
-      - run: uvx ruff check src tests scripts
-      - run: uvx ruff format --check src tests scripts
-      - run: uvx ty@latest check src
-      # ty honors ignore comments, so a clean run does not prove there are none (ADR-0004).
-      - run: "! grep -rn 'ty: ignore' src"
-      - run: uv run python scripts/check_md_math.py
-      # American English: codespell for irregulars and typos (pinned: its word list is
-      # what docs/coding-standards.md measured), check_spelling.py for the -ise families.
-      - run: uvx codespell@2.4.3
-      - run: uv run python scripts/check_spelling.py
-      # Every citation resolves to an entry in docs/references.md.
-      - run: uv run python scripts/check_references.py
-      # The docstring headers `**Arguments:**` and the like on their own line.
-      - run: uv run python scripts/check_docstring_headers.py
-      - run: uv run pytest --hypothesis-profile=ci -n 4 -m "not slow"
+      - run: uv sync
+      - run: uv run just check "uvx ty@latest"
+      - run: uv run just test ci
 
   slow:
     runs-on: ubuntu-latest
@@ -53,26 +41,12 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.13
-      - run: uv sync --group dev
+      - run: uv sync
       # gfortran compiles the generated AUTO Fortran in tests/test_auto_codegen.py;
       # installed explicitly rather than relying on the runner image.
       - run: sudo apt-get update && sudo apt-get install -y gfortran
-      - run: uv run pytest --hypothesis-profile=ci -n 2 -m slow
-      - name: end-to-end smoke run (generate + 20 training steps + reopen)
-        run: |
-          uv run python scripts/generate_data.py --config-name bautin \
-            n_trajectories=16 time.n=81 time.t1=16.0 out_dir=ci-data
-          uv run python scripts/train.py \
-            data.n_trajectories=16 data.time.n=81 data.time.t1=16.0 data.out_dir=ci-data \
-            model.inn.blocks=2 windows.length=20 windows.batch=32 validation.fraction=0.25 \
-            validation.batch=16 num_steps=20 eval_every=10 log_every=5 checkpoint.every=10 \
-            hydra.run.dir=ci-run
-          uv run python -c "
-          from deep_isochron.experiment import load_run
-          cfg, state = load_run('ci-run')
-          assert int(state.step) == 20, int(state.step)
-          print('reopened run at step', int(state.step))
-          "
+      - run: uv run just test-slow ci
+      - run: uv run just smoke
 
   # AUTO-07p: the Fortran tree is built at the commit uv.lock pins and cached under it,
   # so a second run skips the build; then the tests that carry the `auto` marker.
@@ -85,7 +59,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv python install 3.13
-      - run: uv sync --group dev
+      - run: uv sync
       - run: sudo apt-get update && sudo apt-get install -y gfortran make
       - id: pin
         run: echo "commit=$(scripts/install_auto.sh --commit)" >> "$GITHUB_OUTPUT"
@@ -93,5 +67,5 @@ jobs:
         with:
           path: ~/.local/opt/auto-07p
           key: auto-07p-${{ runner.os }}-${{ steps.pin.outputs.commit }}
-      - run: scripts/install_auto.sh
-      - run: uv run pytest -m auto -q
+      - run: uv run just install-auto
+      - run: uv run just test-auto
