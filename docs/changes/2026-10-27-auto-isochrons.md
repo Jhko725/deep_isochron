@@ -297,7 +297,7 @@ and `Isochron.resample` for evenly spaced points.
   fixed point are unchanged. The slow two-way oracle failed with the new default: ours
   covered 1243 of the 7124 points of the coworker's file 100, below the half the test
   requires, though every one of our points lay on his curve. The oracle therefore runs
-  with his box, `box_scale = 5` (`ISOCHRON_SETTINGS["full"]`); its rerun is pending.
+  with his box, `box_scale = 5` (`ISOCHRON_SETTINGS["full"]`), and passes (*Tests*).
 
 - **The isochron script (decisions of 2026-10-28, Q1–Q19).** The configs live in
   `experiment/`, since library code never reads configs (ADR-0011): `compute_isochrons`
@@ -538,7 +538,11 @@ that `load_isochrons` refuses a missing file and `compute_isochrons` an existing
 and (marker `auto`) that a one-phase foliation computed from a config loads back
 through it. `tests/test_isochron.py` checks `resample` on a circular arc (exact
 spacing, the base point kept, within the traced steps' sag of the circle, $\eta$ signed
-and monotone) and on a line (exact). Their runs are pending at the time of writing.
+and monotone) and on a line (exact). The eight tests pass in 132 s at `-n 2`, the
+`auto` one included.
+
+**The slow oracle with the coworker's box** (`ISOCHRON_SETTINGS["full"]`,
+`box_scale = 5`): passes, in 1026 s alone on the session.
 
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
