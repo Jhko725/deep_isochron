@@ -384,6 +384,55 @@ def find_limit_cycle(
     )
 
 
+def nearest_cycle_time(
+    cycle: LimitCycle,
+    y: Float[ArrayLike, " dim"],
+    *,
+    n_samples: int = 1024,
+    newton_steps: int = 4,
+) -> tuple[Float[Array, ""], Float[Array, " dim"], Float[Array, ""]]:
+    r"""The time $t^\ast$ from ``cycle.x0s[0]`` of the cycle point nearest `y`, that
+    point, and the last Newton step.
+
+    The nearest of `n_samples` samples starts `newton_steps` Newton steps in time on
+    the stationarity condition $g(t) = (\gamma(t) - y)\cdot f(\gamma(t)) = 0$, with
+    $g'(t) = \Vert f\Vert^2 + (\gamma - y)\cdot Df\thinspace f$ and $\gamma(t)$ reached
+    by flowing from the current point. A step is clipped to half a period, so a point
+    far from the cycle cannot send the flow around it many times. Jit- and
+    vmap-compatible; a caller that needs convergence checks the last step (`reanchor`
+    does).
+
+    **Arguments:**
+
+    - `cycle`: The orbit.
+    - `y`: The point, shape ``(dim,)``, on or near the orbit.
+    - `n_samples`: The number of samples for the starting guess.
+    - `newton_steps`: The number of Newton steps.
+
+    **Returns:**
+
+    ``(t, point, step)``: $t^\ast$ in $[0, T)$, $\gamma(t^\ast)$, and the last Newton
+    step in time.
+    """
+    ode, config, period = cycle.ode, cycle.config, cycle.period
+    y = jnp.asarray(y, dtype=float)
+    times, points = cycle.sample(n_samples)
+    j = jnp.argmin(jnp.linalg.norm(points - y, axis=1))
+    jacobian = jax.jacfwd(ode.rhs, argnums=1)
+
+    def newton_step(carry, _):
+        t, x, _ = carry
+        f = ode.rhs(0.0, x)
+        g = jnp.dot(x - y, f)
+        dg = jnp.dot(f, f) + jnp.dot(x - y, jacobian(0.0, x) @ f)
+        dt = jnp.clip(-g / dg, -period / 2, period / 2)
+        return (t + dt, ode.flow_to(dt, x, config=config), dt), None
+
+    start = (times[j], points[j], jnp.zeros_like(period))
+    (t, x, dt), _ = jax.lax.scan(newton_step, start, None, length=newton_steps)
+    return jnp.mod(t, period), x, dt
+
+
 def reanchor(
     cycle: LimitCycle,
     point: Float[ArrayLike, " dim"],
@@ -395,20 +444,18 @@ def reanchor(
     r"""The same orbit with its phase origin ``x0s[0]`` moved to the orbit point nearest
     `point`.
 
-    The nearest of `n_points` samples starts a Newton iteration in time on the
-    stationarity condition $g(t) = (\gamma(t) - p)\cdot f(\gamma(t)) = 0$, with
-    $\gamma(t)$ the orbit point reached by flowing for $t$ from the sample and
-    $g'(t) = \Vert f\Vert^2 + (\gamma - p)\cdot Df\thinspace f$. The orbit is then
-    polished by `polish` on the section through that point, normal to the flow there,
-    which is the section `find_limit_cycle` builds through its own origin. Phase 0 is
-    where the isochron pipeline anchors its junction (`docs/design/isochrons.md` §6).
+    The nearest orbit point comes from `nearest_cycle_time`, whose last Newton step in
+    time must be below $10^{-12}T$. The orbit is then polished by `polish` on the
+    section through that point, normal to the flow there, which is the section
+    `find_limit_cycle` builds through its own origin. Phase 0 is where the isochron
+    pipeline anchors its junction (`docs/design/isochrons.md` §6).
 
     **Arguments:**
 
     - `cycle`: The orbit, from `find_limit_cycle`.
     - `point`: Where phase 0 should be, shape ``(dim,)``; on or near the orbit.
     - `n_points`: The number of samples for the starting guess.
-    - `newton_steps`: The bound on the Newton steps in time.
+    - `newton_steps`: The number of Newton steps in time.
     - `tol`: The Levenberg–Marquardt tolerance of the polish, as in
         `find_limit_cycle`.
 
@@ -427,22 +474,14 @@ def reanchor(
     p = jnp.asarray(point, dtype=float)
     if p.shape != (cycle.dim,):
         raise ValueError(f"point must have shape ({cycle.dim},), not {p.shape}.")
-    _, points = cycle.sample(n_points)
-    x = points[jnp.argmin(jnp.linalg.norm(points - p, axis=1))]
-    jacobian = jax.jacfwd(ode.rhs, argnums=1)
-    dt_tol = 1e-12 * float(cycle.period)
-    for _ in range(newton_steps):
-        f = ode.rhs(0.0, x)
-        g = jnp.dot(x - p, f)
-        dg = jnp.dot(f, f) + jnp.dot(x - p, jacobian(0.0, x) @ f)
-        dt = -float(g / dg)
-        x = ode.flow_to(dt, x, config=config)
-        if abs(dt) < dt_tol:
-            break
-    else:
+    _, x, dt = nearest_cycle_time(
+        cycle, p, n_samples=n_points, newton_steps=newton_steps
+    )
+    if not abs(float(dt)) < 1e-12 * float(cycle.period):
         raise NotConvergedError(
             "reanchor",
-            f"the nearest orbit point did not settle in {newton_steps} Newton steps.",
+            f"the nearest orbit point did not settle in {newton_steps} Newton steps; "
+            f"the last step was {float(dt):.3e}.",
             x,
         )
     period_hat = float(cycle.period)
@@ -471,6 +510,7 @@ __all__ = [
     "find_limit_cycle",
     "initial_guess",
     "is_equilibrium",
+    "nearest_cycle_time",
     "period_consistent",
     "polish",
     "reanchor",

@@ -1,6 +1,10 @@
 """Shared test helpers: the named tolerances ``TOL``, solver configurations
-``SOLVERS`` and isochron settings ``ISOCHRON_SETTINGS``, jitted checkers for the
-bijection laws, and an optimizer step along a random direction."""
+``SOLVERS`` and isochron settings ``ISOCHRON_SETTINGS``, the coworker's stored
+FitzHugh–Nagumo isochrons, jitted checkers for the bijection laws, and an optimizer
+step along a random direction."""
+
+import math
+from pathlib import Path
 
 import diffrax as dfx
 import equinox as eqx
@@ -10,6 +14,7 @@ import numpy as np
 import optax
 from deep_isochron.analysis.ode import IsochronSettings
 from deep_isochron.systems import SolverConfig
+from jaxtyping import Float
 
 
 # Tolerances (float64 throughout). Every tolerance in the suite is an entry here, used
@@ -87,6 +92,13 @@ TOL = {
     # isochron by delta ends |grad Θ| |F| delta away, measured 4e-6 at most on
     # FitzHugh–Nagumo and 1e-9 for most points
     "isochron_forward": 2e-5,
+    # O3: the asymptotic phase by forward integration and read-off, against a closed
+    # form, the phase along the cycle or the flow law; the solve at rtol 1e-10 over
+    # t_end sets the floor, measured 1.5e-9 at most (also the discrepancy and distance)
+    "phase": 1e-8,
+    # O3: the phase at the coworker's FitzHugh–Nagumo isochron points within
+    # GOLDEN_NEAR_CYCLE of the cycle, against the file's phase; measured 4.5e-9
+    "golden_phase": 5e-8,
 }
 
 
@@ -137,6 +149,41 @@ ISOCHRON_SETTINGS = {
         n_periods=2, box_scale=2.0, max_steps=1500, max_workers=1
     ),
 }
+
+
+# The integration time of the asymptotic phase (O3) before its first reading, by
+# system: the escape from the slowest point tested plus enough periods for the
+# deviation from the cycle to shrink below rounding.
+PHASE_T_END = {
+    # the slowest contraction tested is Winfree's, kappa = -1.25: e^{-1.25 * 30} ~ 5e-17
+    "normal_forms": 30.0,
+    # as configs/isochrons/fhn.yaml: mu ~ 1.7e-12 per period of 11.2
+    "fitzhugh_nagumo": 80.0,
+}
+
+
+# The coworker's FitzHugh–Nagumo isochrons (tests/golden/fncMultiSeg_Iso_*.csv), the
+# oracle of O7 and O3: file k is the isochron at phase fraction 1 - k/100 after his
+# phase 0, the base point of file 100.
+GOLDEN = Path(__file__).parent / "golden"
+FHN_ANCHOR = jnp.array([-1.72170711, 0.5])
+"""The coworker's phase 0: the base point of their file 100."""
+GOLDEN_NEAR_CYCLE = 0.01
+"""The distance from the cycle within which a stored isochron point is an oracle of
+the phase: farther out, near the source, the stored points' position error of about
+1e-5 times the phase gradient reaches a radian (measured gaps: 4.5e-9 within 0.01,
+4.5e-3 within 0.05, 1.8 rad within 0.1)."""
+
+
+def golden_isochron(k: int) -> tuple[Float[np.ndarray, "2"], Float[np.ndarray, "n 2"]]:
+    """The base point and the points of the coworker's file `k`."""
+    data = np.loadtxt(GOLDEN / f"fncMultiSeg_Iso_{k}.csv")
+    return data[0, :2], data[:, 2:]
+
+
+def golden_phase(k: int) -> float:
+    """The phase of the coworker's file `k`, wrapped to $(-π, π]$."""
+    return math.remainder(2 * math.pi * (1 - k / 100), 2 * math.pi)
 
 
 @eqx.filter_jit

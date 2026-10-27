@@ -18,6 +18,11 @@ cycle:                    # find_limit_cycle, then reanchor at `anchor`
   anchor: [-1.72170711, 0.5]   # phase 0 and the Poincaré section: the left crossing of
                                # y = 0.5, the coworker's phase origin
 
+phase_field:              # analysis.ode.phase_grid in prototype_analysis.ipynb; not part
+                          # of the file's hash
+  t_end: 80.0             # escape from 1e-3 of the source (Re λ = 0.134) takes ~52;
+                          # the multiplier, 1.7e-12 per period of 11.2, does the rest
+
 phases:                   # exactly one of the two
   count: 100              # θ_k = 2πk/count, wrapped to (−π, π]
   values: null            # or an explicit list of phases, in radians

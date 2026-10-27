@@ -46,8 +46,9 @@ IGNORE_MARKER = "references:ignore"
 TEXT_SUFFIXES = frozenset({".py", ".md"})
 
 # A surname: a capitalized word (accented letters included), with an optional lowercase
-# particle (de Boor, van der Pol). Hyphenated and apostrophized surnames are allowed.
-_SURNAME = r"(?:(?:de|van|von|der|di|da) )?[A-Z][\w'’\-]+"
+# particle (de Boor, van der Pol, de la Llave). Hyphenated and apostrophized surnames
+# are allowed.
+_SURNAME = r"(?:(?:de|van|von|der|di|da)(?: la)? )?[A-Z][\w'’\-]+"
 # A key: one surname, two joined by ``&``, or one followed by ``et al.``; then a year,
 # with an optional letter suffix, and not the start of an ISO date (``2026-10-03``).
 # The spaces inside a key may be line breaks, since prose is wrapped at 88 columns.

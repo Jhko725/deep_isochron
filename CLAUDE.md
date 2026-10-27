@@ -66,6 +66,8 @@ fails silently.
   (about 40 s). Tests that need AUTO carry the marker `auto` and skip without a tree;
   the gfortran tests of `tests/test_auto_codegen.py` are `slow` and skip without
   gfortran.
+- float64 throughout: library drivers raise when `jax_enable_x64` is off; notebooks and
+  scripts enable it at the top.
 - The jaxtyping/beartype import hook runs in the tests, so shape annotations are checked
   at runtime: the first occurrence of an axis name is a plain name (`" K"`, not
   `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a

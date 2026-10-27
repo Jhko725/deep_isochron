@@ -61,9 +61,11 @@ def test_phases_from_count_or_values():
 
 def test_hash_follows_what_decides_the_result():
     """The hash changes with the system's parameters, the anchor, the phases and a
-    setting, and not with ``max_workers``, which decides only the speed."""
+    setting, and not with ``max_workers``, which decides only the speed, or with the
+    ``phase_field`` block, which the foliation does not use."""
     base = isochron_hash(_config("fhn"))
     assert isochron_hash(_config("fhn", "settings.max_workers=3")) == base
+    assert isochron_hash(_config("fhn", "phase_field.t_end=10.0")) == base
     for override in (
         "+data.system.c=2.5",
         "cycle.anchor=[-1.7,0.4]",

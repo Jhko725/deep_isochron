@@ -130,7 +130,11 @@ deep_isochron
 │       ├── limit_cycle.py   find_limit_cycle = settle → initial_guess → polish → guards
 │       │                    (is_equilibrium, period_consistent) → LimitCycle (ode, the
 │       │                    shooting mesh x0s, period, config; sample(n), orientation());
-│       │                    reanchor(cycle, point) moves phase 0 to the nearest orbit point
+│       │                    nearest_cycle_time(cycle, y) (Newton in time); reanchor(cycle,
+│       │                    point) moves phase 0 to the nearest orbit point
+│       ├── phase.py         asymptotic_phase(cycle, x, t_end=) → AsymptoticPhase (phase,
+│       │                    distance, discrepancy): flow, read off the cycle twice;
+│       │                    phase_grid (host-side, lax.map chunks) → field, mask, result
 │       └── floquet.py       floquet(cycle, method=) → Floquet, dispatching over
 │                            floquet_periodic_schur (seeded chain on the segment
 │                            Jacobians: the method, with Floquet vectors at every mesh
@@ -171,7 +175,8 @@ deep_isochron
 ├── plotting/                matplotlib style (configure_rcparams); plot_source_trajectories;
 │                            plot_isochrons(foliation)
 └── utils/                   shared helpers
-    ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian (constraints, normal forms)
+    ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian, wrap_phase
+    │                        (constraints, normal forms, analysis)
     └── provenance.py        git_state(), package_version() — for dataset and run metadata
 
 configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment

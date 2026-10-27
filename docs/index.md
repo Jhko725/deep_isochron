@@ -32,7 +32,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`normal-forms.md`](design/normal-forms.md) | agreed; §5.3–5.4 and the 2026-10-08 amendment (§3.3 Winfree, basins) tentative | Θ/Ψ conventions, Hopf and Bautin closed forms, the (Θ, Ψ) chart, the implementation contract (§9) and the tests it implies (§10); relation to Yawata et al. and Kvalheim & Revzen |
 | [`cubic-bspline.md`](design/cubic-bspline.md) | agreed | the `CubicBSpline` boundary treatment and inverse error bound |
 | [`validation-split.md`](design/validation-split.md) | tentative | why `val/mse` is a near-cycle metric and the early/late split by window start (`t_split`); how to choose the threshold; what it does not do |
-| [`analysis.md`](design/analysis.md) | tentative (§1 E1, §2 O1) | the `Cycle` representation; per analysis function (E1, O1 so far): literature survey with cited/deduced claims, method, oracles, limits |
+| [`analysis.md`](design/analysis.md) | tentative (§1 E1, §2 O1, §3 O2, §4–5 O3/O4 survey; §4.2 route (a) landed) | the `Cycle` representation; per analysis function (E1, O1–O4): literature survey with cited/deduced claims, method, oracles, limits |
 | [`isochrons.md`](design/isochrons.md) | draft for review (decisions D1–D9 settled 2026-10-27) | isochrons by AUTO-07p continuation: the method of Langfield et al. 2014, the coworker's run-by-run algorithm, ours; AUTO from the ground up; the stable direction (variational, adjoint, and the coworker's $+A^{\mathsf T}$ defect); accuracy, oracles, limits, tests (roadmap O7) |
 | [`training-step-performance.md`](design/training-step-performance.md) | tentative | where a JAX training step spends its time: asynchronous dispatch, committed/uncommitted placement, the GIL and grain's threads, what `bench_dataloader.py` measures, the bottleneck taxonomy, and the Phase C case history |
 
@@ -75,5 +75,9 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `analysis` | [`2026-10-06-analysis.md`](changes/2026-10-06-analysis.md) |
 | `run-layout` | [`2026-10-07-run-layout.md`](changes/2026-10-07-run-layout.md) |
 | `normal-forms-basin` | [`2026-10-08-normal-forms-basin.md`](changes/2026-10-08-normal-forms-basin.md) |
+| `ci-ty` | [`2026-10-15-ci-ty.md`](changes/2026-10-15-ci-ty.md) |
 | `conventions-docs` | [`2026-10-25-conventions-docs.md`](changes/2026-10-25-conventions-docs.md) |
 | `prose` | [`2026-10-26-prose.md`](changes/2026-10-26-prose.md) |
+| `auto-isochrons` | [`2026-10-27-auto-isochrons.md`](changes/2026-10-27-auto-isochrons.md) |
+| `symbolic-systems` | [`2026-10-22-symbolic-systems.md`](changes/2026-10-22-symbolic-systems.md) |
+| `phase-field` | [`2026-10-28-phase-field.md`](changes/2026-10-28-phase-field.md) |

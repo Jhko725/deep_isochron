@@ -1,6 +1,8 @@
-"""Numerical helpers shared by the invertible constraints and the normal forms: the
-bounded positive scale transforms and the polar-to-cartesian change of coordinates."""
+"""Numerical helpers shared by the invertible constraints, the normal forms and the
+analysis: the bounded positive scale transforms, the polar-to-cartesian change of
+coordinates and the wrapping of a phase."""
 
+import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
@@ -37,3 +39,18 @@ def polar_to_cartesian(rtheta: Float[Array, " 2 *rest"]) -> Float[Array, " 2 *re
     """``(x, y)`` of ``(r, θ)``."""
     r, theta = rtheta
     return jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)))
+
+
+def wrap_phase(angle: Float[ArrayLike, "*shape"]) -> Float[Array, "*shape"]:
+    r"""`angle` wrapped to $(-\pi, \pi]$, with $-\pi$ sent to $\pi$.
+
+    The truncated remainder by $2\pi$ is exact, and so is the one correction by
+    $\pm 2\pi$ that follows (Sterbenz's lemma), so the result equals
+    ``math.remainder(angle, 2π)`` bit for bit away from the ties at $\pm\pi$. The
+    derivative is 1.
+    """
+    angle = jnp.asarray(angle, dtype=float)
+    two_pi = jnp.asarray(2 * jnp.pi, dtype=angle.dtype)
+    rem = jax.lax.rem(angle, two_pi)
+    rem = jnp.where(rem > jnp.pi, rem - two_pi, rem)
+    return jnp.where(rem <= -jnp.pi, rem + two_pi, rem)

@@ -49,6 +49,7 @@ import xarray as xr
 from jaxtyping import ArrayLike, Float
 
 from ....data.dataset import ENGINE
+from ....utils.numerics import wrap_phase
 from ...errors import NotConvergedError
 from ..limit_cycle import LimitCycle
 from ._env import AutoHandle, load_auto
@@ -465,12 +466,6 @@ def _bvp(ndim: int, nbc: int) -> dict[str, int]:
     return {"IPS": 4, "NDIM": ndim, "NBC": nbc, "NINT": 0}
 
 
-def _wrap_phase(theta: float) -> float:
-    r"""`theta` wrapped to $(-\pi, \pi]$."""
-    wrapped = math.remainder(theta, 2 * math.pi)
-    return math.pi if wrapped == -math.pi else wrapped
-
-
 def wrap_phases(
     phases: Sequence[float] | Float[ArrayLike, " k"],
 ) -> tuple[float, ...]:
@@ -485,7 +480,8 @@ def wrap_phases(
     bad = [p for p in values if not math.isfinite(p)]
     if bad:
         raise ValueError(f"phases must be finite; got {bad}.")
-    wrapped = [_wrap_phase(p) for p in values]
+    with jax.enable_x64(True):
+        wrapped = [float(wrap_phase(p)) for p in values]
     seen: dict[float, float] = {}
     repeats = []
     for original, w in zip(values, wrapped):

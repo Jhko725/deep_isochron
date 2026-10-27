@@ -21,7 +21,6 @@ Section 2 (marker ``auto``) runs the pipeline against the oracles of
 
 import math
 import os
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -52,23 +51,13 @@ from deep_isochron.systems.normal_forms import (
 )
 from jaxtyping import Float
 
-from .helpers import ISOCHRON_SETTINGS, TOL
-
-
-GOLDEN = Path(__file__).parent / "golden"
-ANCHOR = jnp.array([-1.72170711, 0.5])
-"""The coworker's phase 0: the base point of their file 100."""
-
-
-def _golden(k: int) -> tuple[Float[np.ndarray, "2"], Float[np.ndarray, "n 2"]]:
-    """The base point and the points of the coworker's file `k`."""
-    data = np.loadtxt(GOLDEN / f"fncMultiSeg_Iso_{k}.csv")
-    return data[0, :2], data[:, 2:]
-
-
-def _golden_phase(k: int) -> float:
-    """The phase of the coworker's file `k`, wrapped to $(-π, π]$."""
-    return math.remainder(2 * math.pi * (1 - k / 100), 2 * math.pi)
+from .helpers import (
+    FHN_ANCHOR,
+    golden_isochron,
+    golden_phase,
+    ISOCHRON_SETTINGS,
+    TOL,
+)
 
 
 def _distance_to_curve(
@@ -304,7 +293,7 @@ def _components(solution: Any, ndim: int) -> Float[np.ndarray, "n d"]:
 
 
 SYSTEMS = {
-    "fitzhugh_nagumo": (FitzhughNagumo(), [1.0, 0.5], ANCHOR),
+    "fitzhugh_nagumo": (FitzhughNagumo(), [1.0, 0.5], FHN_ANCHOR),
     "hopf": (HopfNormalForm(1.3, 1.5, 0.4), [1.2, 0.1], jnp.array([1.0, 0.0])),
     "bautin": (BautinNormalForm(1.0, 0.3, 1.5, 0.5), [1.1, 0.1], jnp.array([1.0, 0.0])),
     "winfree": (WinfreeNormalForm(-0.25, -0.5), [1.1, 0.1], jnp.array([1.0, 0.0])),
@@ -461,8 +450,8 @@ def _check_against_golden(foliation, files, *, both_ways: bool):
     ``|x| = 10``, so the two curves end at different places."""
     assert not foliation.failures, foliation.failures
     for iso, k in zip(foliation.isochrons, files, strict=True):
-        base, curve = _golden(k)
-        assert iso.phase == pytest.approx(_golden_phase(k), abs=1e-12)
+        base, curve = golden_isochron(k)
+        assert iso.phase == pytest.approx(golden_phase(k), abs=1e-12)
         np.testing.assert_allclose(iso.base_point, base, atol=1e-6)
         assert _distance_to_curve(iso.points, curve).max() < TOL["isochron_curve"]
         if both_ways:
@@ -489,7 +478,7 @@ def test_fitzhugh_nagumo_isochrons_lie_on_the_coworkers(auto, fhn_cycle):
     its provenance."""
     files = (100, 26)
     foliation = isochron_foliation(
-        fhn_cycle, [_golden_phase(k) for k in files], ISOCHRON_SETTINGS["quick"]
+        fhn_cycle, [golden_phase(k) for k in files], ISOCHRON_SETTINGS["quick"]
     )
     _check_against_golden(foliation, files, both_ways=False)
     ode, horizon = fhn_cycle.ode, jnp.array([0.0, 5 * float(fhn_cycle.period)])
@@ -509,6 +498,6 @@ def test_fitzhugh_nagumo_isochrons_reproduce_the_coworkers(auto, fhn_cycle):
     with theirs within ``TOL["isochron_curve"]`` in both directions."""
     files = (100, 26, 51)
     foliation = isochron_foliation(
-        fhn_cycle, [_golden_phase(k) for k in files], ISOCHRON_SETTINGS["full"]
+        fhn_cycle, [golden_phase(k) for k in files], ISOCHRON_SETTINGS["full"]
     )
     _check_against_golden(foliation, files, both_ways=True)

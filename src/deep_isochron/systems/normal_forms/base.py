@@ -37,7 +37,7 @@ import jax.numpy as jnp
 import sympy as sp
 from jaxtyping import Array, ArrayLike, Bool, Complex, Float
 
-from ...utils.numerics import cartesian_to_polar, polar_to_cartesian
+from ...utils.numerics import cartesian_to_polar, polar_to_cartesian, wrap_phase
 from ..base import DEFAULT_SOLVER_CONFIG, SolverConfig
 from ..symbolic import AbstractSymbolicODE, CompiledExpressions, SymbolicODE
 
@@ -245,7 +245,7 @@ class AbstractNormalForm(AbstractSymbolicODE):
         r_in, r_out = self.basin_radii()
         inside = (r > r_in) & (r < r_out)
         r_safe = jnp.where(inside, r, 1.0)  # keep the closed forms off their poles
-        Theta = _wrap(theta + self.phase_shift(r_safe))
+        Theta = wrap_phase(theta + self.phase_shift(r_safe))
         Psi = self.isostable(r_safe)
         nan = jnp.asarray(jnp.nan, dtype=r.dtype)
         return jnp.stack((jnp.where(inside, Theta, nan), jnp.where(inside, Psi, nan)))
@@ -440,11 +440,6 @@ class AbstractEvenNormalForm(AbstractNormalForm):
         rho, w = self._log_growth_rate_sq(s), self._angular_rate_sq(s)
         x, y = u
         return jnp.stack((rho * x - w * y, rho * y + w * x))
-
-
-def _wrap(angle):
-    r"""`angle` wrapped to $(-\pi, \pi]$."""
-    return jnp.arctan2(jnp.sin(angle), jnp.cos(angle))
 
 
 # ------------------------------------------------------------ the root solve ------
