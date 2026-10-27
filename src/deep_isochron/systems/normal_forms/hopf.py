@@ -17,6 +17,7 @@ import sympy as sp
 from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
+from ..symbolic import SymbolicODE
 from .base import AbstractEvenNormalForm
 
 
@@ -70,17 +71,18 @@ class HopfNormalForm(AbstractEvenNormalForm):
         """The constrained radial rate, ``A_CONSTRAINT(raw_a)``."""
         return A_CONSTRAINT(self.raw_a)
 
-    def params(self):
-        """``{"a", "w", "w0"}`` as constrained floats."""
-        return {"a": float(self.a), "w": float(self.w), "w0": float(self.w0)}
-
     @classmethod
-    def _symbolic_rates_sq(cls):
-        r"""$\tilde\rho(s) = a(1 - s)$,
-        $\tilde\omega(s) = \omega_0 + (\omega_1 - \omega_0) s$."""
-        s = sp.Symbol("s", positive=True)
+    def _symbolic_template_polar(cls) -> SymbolicODE:
+        r"""$\dot r = a r (1 - r^2)$,
+        $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$."""
+        r = sp.Symbol("r", positive=True)
+        theta = sp.Symbol("theta", real=True)
         a, w, w0 = sp.symbols("a w w0", real=True)
-        return s, a * (1 - s), w0 + (w - w0) * s, {"a": a, "w": w, "w0": w0}
+        return SymbolicODE(
+            states=(r, theta),
+            params={"a": a, "w": w, "w0": w0},
+            rhs=(a * r * (1 - r**2), w0 + (w - w0) * r**2),
+        )
 
     def phase_shift(self, r):
         r"""$h(r) = c\ln r$ with $c = (\omega_1 - \omega_0)/a$."""

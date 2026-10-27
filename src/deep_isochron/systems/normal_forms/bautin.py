@@ -20,6 +20,7 @@ import sympy as sp
 from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
+from ..symbolic import SymbolicODE
 from .base import AbstractEvenNormalForm
 from .hopf import A_CONSTRAINT
 
@@ -86,26 +87,17 @@ class BautinNormalForm(AbstractEvenNormalForm):
         """The constrained quintic coefficient, ``B_CONSTRAINT(raw_b)``."""
         return B_CONSTRAINT(self.raw_b)
 
-    def params(self):
-        """``{"a", "b", "w", "w0"}`` as constrained floats."""
-        return {
-            "a": float(self.a),
-            "b": float(self.b),
-            "w": float(self.w),
-            "w0": float(self.w0),
-        }
-
     @classmethod
-    def _symbolic_rates_sq(cls):
-        r"""$\tilde\rho(s) = a(1 - s)(1 + bs)$,
-        $\tilde\omega(s) = \omega_0 + (\omega_1 - \omega_0) s$."""
-        s = sp.Symbol("s", positive=True)
+    def _symbolic_template_polar(cls) -> SymbolicODE:
+        r"""$\dot r = a r (1 - r^2)(1 + b r^2)$,
+        $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$."""
+        r = sp.Symbol("r", positive=True)
+        theta = sp.Symbol("theta", real=True)
         a, b, w, w0 = sp.symbols("a b w w0", real=True)
-        return (
-            s,
-            a * (1 - s) * (1 + b * s),
-            w0 + (w - w0) * s,
-            {"a": a, "b": b, "w": w, "w0": w0},
+        return SymbolicODE(
+            states=(r, theta),
+            params={"a": a, "b": b, "w": w, "w0": w0},
+            rhs=(a * r * (1 - r**2) * (1 + b * r**2), w0 + (w - w0) * r**2),
         )
 
     # The closed forms are written in 1/s = r⁻² so that they stay finite for r up to

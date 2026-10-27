@@ -33,20 +33,21 @@ deep_isochron
 │   │                        flow -> Solution (numerical; normal forms choose via
 │   │                        integration=) · flow_to(t, u0) -> state
 │   ├── symbolic.py          SymbolicODE (states, params, rhs as SymPy); AbstractSymbolicODE:
-│   │                        _symbolic_template() classmethod, rhs/params() derived, compiled
-│   │                        once per class in __init_subclass__; SupportsSymbolic ── ADR-0016
+│   │                        _symbolic_template() classmethod, rhs/params() derived; compiled
+│   │                        by _compile once a class has no abstract methods ── ADR-0016
 │   ├── fitzhugh_nagumo.py   FitzhughNagumo (dim 2; symbolic)
 │   ├── level_set.py         LevelSetCycle: f = s(R∇g − g∇g), the zero level set of g is the
 │   │                        attracting cycle; guckenheimer_meloon(), cassini() test orbits
 │   ├── hodgekin_huxley.py   HodgekinHuxley (dim 4; symbolic, rhs only — not AUTO material)
 │   └── normal_forms/
-│       ├── base.py          AbstractNormalForm: ρ(r), ω(r) declared as SymPy (_symbolic_rates,
-│       │                    _symbolic_rates_sq for the even family; JAX hooks derived) on a
-│       │                    basin (r_in, r_out); symbolic() = the cartesian field;
-│       │                    closed-form phase Θ, isostable Ψ, isochrons, κ, polar and
-│       │                    (Θ, Ψ) charts (nan outside the basin); closed_form default.
-│       │                    AbstractEvenNormalForm: data even in r via `_sq` hooks in
-│       │                    s = r², smooth at the origin, eigenvalues at 0   ── ADR-0013
+│       ├── base.py          AbstractNormalForm(AbstractSymbolicODE): the polar template
+│       │                    _symbolic_template_polar() gives ρ = ṙ/r, ω = θ̇ and the derived
+│       │                    cartesian template, checked at class creation; on a basin
+│       │                    (r_in, r_out); closed-form phase Θ, isostable Ψ, isochrons, κ,
+│       │                    polar and (Θ, Ψ) charts (nan outside the basin); closed_form
+│       │                    default. AbstractEvenNormalForm: declared family whose rates
+│       │                    are functions of s = r² (checked), `_sq` hooks, smooth at the
+│       │                    origin, eigenvalues at 0                         ── ADR-0013
 │       ├── hopf.py          HopfNormalForm   (even)
 │       ├── bautin.py        BautinNormalForm (even)
 │       ├── winfree.py       WinfreeNormalForm: Winfree's model with a hole (Langfield et
@@ -237,27 +238,29 @@ and so is the AUTO-07p Fortran `RHS` with its exact Jacobian, in
 hold their values (fields, or the constrained-value properties of the normal forms), so
 `getattr(self, name)` is the value and the template's `params` order is AUTO's
 `PAR(1..n)`. `AbstractODE` itself stays free: a learned or pushforward field is an ODE
-without being symbolic. The normal forms have the same structure one level down, in the
-next paragraph, and the code generator sees both through one protocol,
-`SupportsSymbolic` (`symbolic() -> SymbolicODE`, the cartesian field).
+without being symbolic. The normal forms are `AbstractSymbolicODE`s too, with a polar
+template from which the cartesian one is derived (next paragraph), so the code
+generator takes an `AbstractSymbolicODE` for every system.
 
-`AbstractNormalForm(AbstractODE)` is the subset with closed-form phase–amplitude
+`AbstractNormalForm(AbstractSymbolicODE)` is the subset with closed-form phase–amplitude
 structure, a conjugacy target or a reference with known isochrons. Such a form is planar
 and rotationally symmetric, `ṙ = rρ(r)`, `θ̇ = ω(r)`, with a stable cycle at `r = 1`, on
 a declared basin `basin_radii() = (r_in, r_out)` outside which the chart is `nan`
-(ADR-0013). A subclass supplies the two rates *as SymPy*, `_symbolic_rates()` in `r` or
-`_symbolic_rates_sq()` in `s = r²` for the even family, from which the JAX hooks are
-derived (ADR-0016), and two closed-form integrals, `phase_shift` `h(r)` and `isostable`
-`ψ(r)`, as hand-derived JAX that the tests verify symbolically. The base derives the
-rest: the cartesian `rhs`, `rhs_polar`, `symbolic()` (the cartesian field as SymPy,
-polynomial for the even family), `period`, `floquet_exponent` (`κ = ρ'(1)` by autodiff),
+(ADR-0013). A subclass supplies its field in polar coordinates *as SymPy*,
+`_symbolic_template_polar()` returning `(ṙ, θ̇)` in the states `(r, θ)`, from which the
+rates `ρ = ṙ/r` and `ω = θ̇` and the JAX hooks are derived (ADR-0016), and two
+closed-form integrals, `phase_shift` `h(r)` and `isostable` `ψ(r)`, as hand-derived JAX
+that the tests verify symbolically. The base derives the rest: the cartesian template
+(polynomial for the even family), the cartesian `rhs`, `rhs_polar`, `params()`,
+`period`, `floquet_exponent` (`κ = ρ'(1)` by autodiff),
 `phase` (`Θ = θ + h(r)`), `amplitude` (`Ψ`, `∂ᵣΨ(1) = 1`), `limit_cycle`, `isochron`,
 and the chart maps `to_polar`/`from_polar` (polar) and
 `to_phase_amplitude`/`from_phase_amplitude`. The latter goes through
 `radius_from_isostable`, a differentiable root solve, unless the subclass overrides it
 with the explicit inverse, as Hopf does. The mathematics and the implementation contract
-are `docs/design/normal-forms.md` (§9). `AbstractEvenNormalForm` is the family whose data
-are even in `r` (the `_sq` hooks in `s = r²`): smooth at the origin, with
+are `docs/design/normal-forms.md` (§9). `AbstractEvenNormalForm` is the family whose
+rates are functions of `s = r²`, declared by the base class and checked when a form is
+created; its `_sq` hooks are compiled in `s`, and its field is smooth at the origin, with
 `eigenvalues_origin` and the `r_squared` integration; Hopf and Bautin belong to it, and
 `WinfreeNormalForm` (Langfield et al. 2025) is the first form outside it, with a
 phaseless disk. The rule is that a class carries only what is available analytically.

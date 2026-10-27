@@ -28,6 +28,7 @@ import jax.numpy as jnp
 import sympy as sp
 from jaxtyping import Array, Complex, Float
 
+from ..symbolic import SymbolicODE
 from .base import AbstractNormalForm
 
 
@@ -63,16 +64,18 @@ class WinfreeNormalForm(AbstractNormalForm):
         self.a = float(a)
         self.w = float(w)
 
-    def params(self):
-        """``{"a", "w"}``."""
-        return {"a": self.a, "w": self.w}
-
     @classmethod
-    def _symbolic_rates(cls):
-        r"""$\rho(r) = (1 - r)(r - a)$, $\omega(r) = -(1 + w(1 - r))$; not even."""
+    def _symbolic_template_polar(cls) -> SymbolicODE:
+        r"""$\dot r = (1 - r)(r - a)\thinspace r$, $\dot\theta = -(1 + w(1 - r))$;
+        not even in $r$."""
         r = sp.Symbol("r", positive=True)
+        theta = sp.Symbol("theta", real=True)
         a, w = sp.symbols("a w", real=True)
-        return r, (1 - r) * (r - a), -(1 + w * (1 - r)), {"a": a, "w": w}
+        return SymbolicODE(
+            states=(r, theta),
+            params={"a": a, "w": w},
+            rhs=((1 - r) * (r - a) * r, -(1 + w * (1 - r))),
+        )
 
     def _on_basin(self, r, value):
         """`value` where `r` is in the basin, ``nan`` elsewhere.

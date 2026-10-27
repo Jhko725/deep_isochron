@@ -1,19 +1,23 @@
 """The symbolic layer (``deep_isochron.systems.symbolic``, ADR-0016): one SymPy
-definition per system, the JAX ``rhs`` derived from it.
+definition per system, with the JAX ``rhs`` and the normal forms' rate hooks derived
+from it.
 
-Section 1 checks the derivation: the derived ``rhs`` equals SymPy's own ``lambdify``
-of the template on every system to round-off, and the normal forms' derived hooks
-equal the template's rates. Section 2 checks the compilation: built once per
-concrete class at class creation, as a class attribute that is neither a dataclass
-field nor a pytree leaf, with abstract intermediates building nothing and a
-malformed template failing at class creation. Section 3 checks symbolically that the
-normal forms' hand-derived ``h(r)`` and ``Ψ(r)``, transcribed from their module
-docstrings, satisfy ``h' = (ω₁ − ω)/(rρ)`` and ``rρΨ' = κΨ`` with ``κ = ρ'(1)``.
-Section 4 converts ``symbolic()`` to polar coordinates: the normal forms' rates have
-no ``θ`` dependence, and FitzHugh–Nagumo's field does not separate.
+Section 1 checks the derivation. The derived ``rhs`` equals SymPy's own ``lambdify``
+of the cartesian template on every system, the normal forms' rate hooks equal the
+rates that SymPy reads off their polar templates, and ``params()`` returns the
+constructor's values. Section 2 checks the compilation: it happens once per class that
+has no abstract methods left, as a class attribute that is neither a dataclass field
+nor a pytree leaf, and a template that breaks a convention fails at class creation.
+Section 3 checks symbolically that the normal forms' hand-derived ``h(r)`` and
+``Ψ(r)``, transcribed from their module docstrings, satisfy ``h' = (ω₁ − ω)/(rρ)``
+and ``rρΨ' = κΨ`` with ``κ = ρ'(1)``. Section 4 converts the cartesian template back
+to polar coordinates: a normal form's field is its polar template again, and
+FitzHugh–Nagumo's field does not separate.
 """
 
+import abc
 import dataclasses
+from collections.abc import Callable
 
 import equinox as eqx
 import jax
@@ -30,12 +34,9 @@ from deep_isochron.systems import (
     HopfNormalForm,
     WinfreeNormalForm,
 )
-from deep_isochron.systems.symbolic import (
-    AbstractSymbolicODE,
-    SupportsSymbolic,
-    SymbolicODE,
-)
+from deep_isochron.systems.symbolic import AbstractSymbolicODE, SymbolicODE
 from hypothesis import given, settings, strategies as st
+from jaxtyping import Array, Float
 
 from tests.helpers import assert_close, TOL
 
@@ -49,17 +50,21 @@ SYSTEMS = [
     WinfreeNormalForm(-0.25, -0.5),
     WinfreeNormalForm(0.25, -0.5),
 ]
+NORMAL_FORMS = [ode for ode in SYSTEMS if isinstance(ode, AbstractNormalForm)]
 
 
-def _lambdified(ode):
-    """SymPy's own evaluation of the template, as an oracle independent of sympy2jax."""
+def _lambdified(
+    ode: AbstractSymbolicODE,
+) -> Callable[[Float[Array, " dim"]], np.ndarray]:
+    """SymPy's own evaluation of the cartesian template, as an oracle independent of
+    sympy2jax."""
     sym = ode.symbolic()
     f = sp.lambdify(sym.states + tuple(sym.params.values()), sym.rhs, modules="numpy")
     values = [float(getattr(ode, name)) for name in sym.params]
     return lambda u: np.asarray(f(*np.asarray(u, dtype=float), *values), dtype=float)
 
 
-def _points(ode, draw):
+def _points(ode: AbstractSymbolicODE, draw: Callable) -> Float[Array, " dim"]:
     """A Hypothesis-drawn state of `ode` in its domain: gates in ``(0, 1)`` and a
     potential away from the ``-40 mV`` singularity for Hodgkin–Huxley, a point of the
     basin otherwise."""
@@ -76,15 +81,26 @@ def _points(ode, draw):
     return jnp.array([r * np.cos(theta), r * np.sin(theta)])
 
 
+def _polar_rates(
+    cls: type[AbstractNormalForm],
+) -> tuple[sp.Symbol, sp.Expr, sp.Expr, dict[str, sp.Symbol]]:
+    """`(r, ρ, ω, params)` read off the polar template by the test itself, as
+    ``ρ = ṙ/r`` canceled and ``ω = θ̇``."""
+    template = cls._symbolic_template_polar()
+    r, _ = template.states
+    r_dot, theta_dot = template.rhs
+    return r, sp.cancel(r_dot / r), theta_dot, template.params
+
+
 # ------------------------------------------------------------- 1. derivation -----
 @pytest.mark.parametrize("ode", SYSTEMS, ids=repr)
 @settings(max_examples=20)
 @given(data=st.data())
 def test_rhs_is_the_template(ode, data):
-    """The derived `rhs` equals SymPy's `lambdify` of the template at a drawn state,
-    to `TOL["identity"]`, on every system."""
+    """The derived `rhs` equals SymPy's `lambdify` of the cartesian template at a
+    drawn state, to `TOL["identity"]`, on every system."""
     u = _points(ode, data.draw)
-    assert isinstance(ode, SupportsSymbolic)
+    assert isinstance(ode, AbstractSymbolicODE)
     assert_close(
         ode.rhs(0.0, u), _lambdified(ode)(u), rtol=TOL["identity"], atol=TOL["identity"]
     )
@@ -112,65 +128,107 @@ def test_rhs_jits_vmaps_and_differentiates(ode):
     )
 
 
+@pytest.mark.parametrize("nf", NORMAL_FORMS, ids=repr)
+@given(fraction=st.floats(0.0, 1.0))
+def test_rate_hooks_are_the_polar_template(nf, fraction):
+    """`log_growth_rate` and `angular_rate` equal ``ṙ/r`` and ``θ̇`` of the polar
+    template, evaluated by SymPy at a radius of the basin; the even forms'
+    `_log_growth_rate_sq` and `_angular_rate_sq` equal the same rates at
+    ``s = r²``."""
+    r_in = nf.basin_radii()[0]
+    radius = r_in + 0.05 + fraction * (3.0 - r_in)
+    r, rho, omega, params = _polar_rates(type(nf))
+    values = {symbol: float(getattr(nf, name)) for name, symbol in params.items()}
+    expected_rho = float(rho.subs(values).subs(r, radius))
+    expected_omega = float(omega.subs(values).subs(r, radius))
+    tol = dict(rtol=TOL["identity"], atol=TOL["identity"])
+    assert_close(nf.log_growth_rate(jnp.asarray(radius)), expected_rho, **tol)
+    assert_close(nf.angular_rate(jnp.asarray(radius)), expected_omega, **tol)
+    if isinstance(nf, AbstractEvenNormalForm):
+        s = jnp.asarray(radius**2)
+        assert_close(nf._log_growth_rate_sq(s), expected_rho, **tol)
+        assert_close(nf._angular_rate_sq(s), expected_omega, **tol)
+
+
 @pytest.mark.parametrize(
-    "nf",
-    [HopfNormalForm(1.3, 1.5, 0.4), BautinNormalForm(1.0, 0.3, 1.5, 0.5)],
-    ids=repr,
+    ("ode", "expected"),
+    [
+        (FitzhughNagumo(), {"a": 0.7, "b": 0.8, "c": 3.0, "z": -0.4}),
+        (HopfNormalForm(1.3, 1.5, 0.4), {"a": 1.3, "w": 1.5, "w0": 0.4}),
+        (
+            BautinNormalForm(1.0, 0.3, 1.5, 0.5),
+            {"a": 1.0, "b": 0.3, "w": 1.5, "w0": 0.5},
+        ),
+        (WinfreeNormalForm(-0.25, -0.5), {"a": -0.25, "w": -0.5}),
+    ],
+    ids=lambda v: type(v).__name__ if not isinstance(v, dict) else "",
 )
-@given(s=st.floats(0.0, 9.0))
-def test_even_hooks_are_the_template(nf, s):
-    """The even forms' `_log_growth_rate_sq` and `_angular_rate_sq` equal the
-    template's rates evaluated by SymPy at ``s = r²``."""
-    _, rho, omega, params = type(nf)._symbolic_rates_sq()
-    subs = {sym: float(getattr(nf, name)) for name, sym in params.items()}
-    s_sym = next(iter(rho.free_symbols - set(params.values())))
+def test_params_are_the_constructor_values(ode, expected):
+    """`params()` returns the values given to the constructor, constrained ones
+    included, in the template's order."""
+    params = ode.params()
+    assert list(params) == list(expected)
     assert_close(
-        nf._log_growth_rate_sq(jnp.asarray(s)),
-        float(rho.subs(subs).subs(s_sym, s)),
-        rtol=TOL["identity"],
-        atol=TOL["identity"],
-    )
-    assert_close(
-        nf._angular_rate_sq(jnp.asarray(s)),
-        float(omega.subs(subs).subs(s_sym, s)),
-        rtol=TOL["identity"],
-        atol=TOL["identity"],
+        np.array(list(params.values())),
+        np.array(list(expected.values())),
+        rtol=TOL["closed_form"],
+        atol=TOL["closed_form"],
     )
 
 
 # ----------------------------------------------------------- 2. compilation ------
 @pytest.mark.parametrize(
-    "cls", [type(ode) for ode in SYSTEMS], ids=lambda c: c.__name__
+    "ode", SYSTEMS, ids=lambda ode: type(ode).__name__ + "-" + repr(ode)[-12:]
 )
-def test_compiled_form_is_a_class_attribute_not_a_field_or_leaf(cls):
-    """The compiled form lives in the concrete class's ``__dict__``, is not a
+def test_compiled_forms_are_class_attributes_not_fields_or_leaves(ode):
+    """Every compiled form lives in the concrete class's ``__dict__``, is not a
     dataclass field, is not a pytree leaf, and is not rebuilt per instance."""
-    name = "_compiled" if issubclass(cls, AbstractSymbolicODE) else "_compiled_rates"
-    assert name in cls.__dict__, "built on the concrete class itself"
-    assert name not in {f.name for f in dataclasses.fields(cls)}
-    ode = SYSTEMS[[type(o) for o in SYSTEMS].index(cls)]
+    cls = type(ode)
+    names = ["_compiled"]
+    if isinstance(ode, AbstractNormalForm):
+        names.append("_compiled_rates")
+    if isinstance(ode, AbstractEvenNormalForm):
+        names.append("_compiled_rates_sq")
+    fields = {f.name for f in dataclasses.fields(cls)}
+    for name in names:
+        assert name in cls.__dict__, f"{name} is built on the concrete class itself"
+        assert name not in fields
+        assert getattr(ode, name) is getattr(cls, name), "no per-instance rebuild"
     for leaf in jax.tree.leaves(ode):
         assert not hasattr(leaf, "module"), "a compiled form leaked into the pytree"
-    assert getattr(ode, name) is getattr(cls, name), "no per-instance rebuild"
 
 
-def test_abstract_intermediates_build_nothing():
-    """The abstract classes, and an abstract layer with no template of its own, have
-    no compiled form."""
-    assert "_compiled" not in AbstractSymbolicODE.__dict__
-    assert "_compiled_rates" not in AbstractNormalForm.__dict__
-    assert "_compiled_rates" not in AbstractEvenNormalForm.__dict__
-    assert "_compiled_rates_sq" not in AbstractEvenNormalForm.__dict__
+def test_classes_with_abstract_methods_build_nothing():
+    """A class compiles only when no abstract method is left. The abstract bases
+    build nothing; a layer that defines the template and adds an abstract method
+    builds nothing; its concrete subclass, which inherits the template, builds."""
+    for cls in (AbstractSymbolicODE, AbstractNormalForm, AbstractEvenNormalForm):
+        for name in ("_compiled", "_compiled_rates", "_compiled_rates_sq"):
+            assert name not in cls.__dict__, f"{cls.__name__} built {name}"
+    x, y = sp.symbols("x y")
 
-    class Mid(AbstractSymbolicODE):  # an abstract layer with no template of its own
-        pass
+    class TemplateButAbstract(AbstractSymbolicODE):
+        dim: int = eqx.field(static=True, default=2, init=False)
 
-    assert "_compiled" not in Mid.__dict__
+        @classmethod
+        def _symbolic_template(cls):
+            return SymbolicODE((x, y), {}, (-y, x))
+
+        @abc.abstractmethod
+        def extra(self) -> None: ...
+
+    assert "_compiled" not in TemplateButAbstract.__dict__
+
+    class Concrete(TemplateButAbstract):
+        def extra(self) -> None:
+            return None
+
+    assert "_compiled" in Concrete.__dict__
 
 
 def test_template_conventions_are_checked_at_class_creation():
-    """A template with a parameter not named after its attribute, a free symbol, or
-    too few expressions raises `ValueError` at class creation."""
+    """A cartesian template with a parameter not named after its attribute, a free
+    symbol, or too few expressions raises `ValueError` at class creation."""
     x, y, k = sp.symbols("x y k")
     with pytest.raises(ValueError, match="named after its attribute"):
 
@@ -201,8 +259,88 @@ def test_template_conventions_are_checked_at_class_creation():
                 return SymbolicODE((x, y), {}, (-y,))
 
 
+def _normal_form_class(
+    base: type[AbstractNormalForm], r_dot: Callable, theta_dot: Callable
+) -> type[AbstractNormalForm]:
+    """A concrete normal form whose polar template is ``(r_dot(r, θ), theta_dot(r,
+    θ))``; its closed forms are placeholders, since only class creation is tested."""
+    r = sp.Symbol("r", positive=True)
+    theta = sp.Symbol("theta", real=True)
+
+    class Planted(base):
+        @classmethod
+        def _symbolic_template_polar(cls):
+            rhs = (sp.sympify(r_dot(r, theta)), sp.sympify(theta_dot(r, theta)))
+            return SymbolicODE((r, theta), {}, rhs)
+
+        def phase_shift(self, r):
+            return 0.0 * r
+
+        def isostable(self, r):
+            return 0.0 * r
+
+    return Planted
+
+
+def test_polar_template_conventions_are_checked_at_class_creation():
+    """A normal form whose polar field depends on ``θ``, whose ``ṙ`` lacks the factor
+    ``r``, or whose template has three states raises `ValueError` at class creation;
+    the well-formed control compiles."""
+    good = _normal_form_class(
+        AbstractNormalForm, lambda r, t: r * (1 - r), lambda r, t: 1
+    )
+    assert "_compiled_rates" in good.__dict__
+    with pytest.raises(ValueError, match="rotationally symmetric"):
+        _normal_form_class(
+            AbstractNormalForm, lambda r, t: r * (1 - r) * sp.cos(t), lambda r, t: 1
+        )
+    with pytest.raises(ValueError, match="rotationally symmetric"):
+        _normal_form_class(AbstractNormalForm, lambda r, t: r * (1 - r), lambda r, t: t)
+    with pytest.raises(ValueError, match="lacks the factor r"):
+        _normal_form_class(AbstractNormalForm, lambda r, t: 1 - r, lambda r, t: 1)
+    with pytest.raises(ValueError, match="has two states"):
+        r, theta, z = sp.symbols("r theta z")
+
+        class ThreeStates(AbstractNormalForm):
+            @classmethod
+            def _symbolic_template_polar(cls):
+                return SymbolicODE(
+                    (r, theta, z), {}, (r * (1 - r), sp.Integer(1), sp.Integer(0))
+                )
+
+            def phase_shift(self, r):
+                return 0.0 * r
+
+            def isostable(self, r):
+                return 0.0 * r
+
+
+def test_even_family_membership_is_checked_at_class_creation():
+    """A declared `AbstractEvenNormalForm` whose rates are not functions of ``r²``
+    raises `ValueError` at class creation, for an odd power and for a function of
+    ``r`` such as ``cos r``; the even control compiles its ``s``-form."""
+    good = _normal_form_class(
+        AbstractEvenNormalForm, lambda r, t: r * (1 - r**2), lambda r, t: 1 + r**2
+    )
+    assert "_compiled_rates_sq" in good.__dict__
+    with pytest.raises(ValueError, match="is declared even"):
+        _normal_form_class(
+            AbstractEvenNormalForm, lambda r, t: r * (1 - r**3), lambda r, t: 1
+        )
+    with pytest.raises(ValueError, match="is declared even"):
+        _normal_form_class(
+            AbstractEvenNormalForm, lambda r, t: r * (1 - r), lambda r, t: 1
+        )
+    with pytest.raises(ValueError, match="is declared even"):
+        _normal_form_class(
+            AbstractEvenNormalForm, lambda r, t: r * (1 - r**2), lambda r, t: sp.cos(r)
+        )
+
+
 # ------------------------------------------------------------ 3. closed forms ----
-def _closed_forms(cls):
+def _closed_forms(
+    cls: type[AbstractNormalForm],
+) -> tuple[sp.Symbol, sp.Expr, sp.Expr, dict[str, sp.Symbol]]:
     """`(r, h(r), Ψ(r), params)` transcribed from the module docstrings."""
     r = sp.Symbol("r", positive=True)
     if cls is HopfNormalForm:
@@ -230,8 +368,8 @@ def _closed_forms(cls):
 )
 def test_closed_forms_satisfy_their_defining_odes_symbolically(cls):
     """SymPy verifies ``ω + h' r ρ = ω₁`` and ``(log Ψ)' r ρ = κ`` against the
-    symbolic rates, with ``Ψ(1) = 0``, ``Ψ'(1) = 1`` and ``h(1) = 0``."""
-    r_t, rho, omega, params_t = cls._symbolic_rates()
+    rates of the polar template, with ``Ψ(1) = 0``, ``Ψ'(1) = 1`` and ``h(1) = 0``."""
+    r_t, rho, omega, params_t = _polar_rates(cls)
     r, h, psi, params = _closed_forms(cls)
     rho = rho.subs(r_t, r).subs({params_t[k]: params[k] for k in params})
     omega = omega.subs(r_t, r).subs({params_t[k]: params[k] for k in params})
@@ -251,30 +389,36 @@ def test_closed_forms_satisfy_their_defining_odes_symbolically(cls):
 
 
 # ------------------------------------------------------------------ 4. charts ----
-def _to_polar(sym: SymbolicODE):
-    """``(r, θ, ṙ, θ̇)`` of a planar symbolic field in polar coordinates."""
+def _to_polar(sym: SymbolicODE) -> tuple[sp.Symbol, sp.Symbol, sp.Expr, sp.Expr]:
+    """``(r, θ, ṙ, θ̇)`` of a planar cartesian symbolic field in polar coordinates.
+
+    `trigsimp` runs before `simplify`, because `simplify` alone leaves powers of
+    ``sin θ`` and ``cos θ`` that sum to a constant in Bautin's expanded field."""
     x, y = sym.states
     f, g = sym.rhs
     r, theta = sp.symbols("r theta", positive=True)
     polar = {x: r * sp.cos(theta), y: r * sp.sin(theta)}
     r_dot = ((x * f + y * g) / sp.sqrt(x**2 + y**2)).subs(polar)
     theta_dot = ((x * g - y * f) / (x**2 + y**2)).subs(polar)
-    return r, theta, sp.simplify(r_dot), sp.simplify(theta_dot)
+    return (
+        r,
+        theta,
+        sp.simplify(sp.trigsimp(r_dot)),
+        sp.simplify(sp.trigsimp(theta_dot)),
+    )
 
 
-@pytest.mark.parametrize(
-    "nf",
-    [HopfNormalForm(1.3, 1.5, 0.4), BautinNormalForm(1.0, 0.3), WinfreeNormalForm()],
-    ids=repr,
-)
-def test_cartesian_symbolic_field_recovers_the_rates(nf):
-    """The cartesian field of a normal form in polar coordinates is ``ṙ = r ρ(r)``
-    and ``θ̇ = ω(r)`` with no ``θ`` dependence."""
+@pytest.mark.parametrize("nf", NORMAL_FORMS[:3], ids=repr)
+def test_cartesian_template_is_the_polar_template(nf):
+    """The derived cartesian template of a normal form, converted back to polar
+    coordinates, is its polar template ``(ṙ, θ̇)``, with no ``θ`` dependence."""
     r, theta, r_dot, theta_dot = _to_polar(nf.symbolic())
-    r_t, rho, omega, _ = type(nf)._symbolic_rates()
+    template = type(nf)._symbolic_template_polar()
+    r_t, _ = template.states
+    expected_r_dot, expected_theta_dot = (e.subs(r_t, r) for e in template.rhs)
     assert not r_dot.has(theta) and not theta_dot.has(theta)
-    assert sp.simplify(r_dot - r * rho.subs(r_t, r)) == 0
-    assert sp.simplify(theta_dot - omega.subs(r_t, r)) == 0
+    assert sp.simplify(r_dot - expected_r_dot) == 0
+    assert sp.simplify(theta_dot - expected_theta_dot) == 0
 
 
 def test_fitzhugh_nagumo_is_not_rotationally_symmetric():

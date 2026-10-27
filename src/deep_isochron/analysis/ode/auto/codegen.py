@@ -29,7 +29,7 @@ from typing import NamedTuple
 import sympy as sp
 from sympy.printing.fortran import FCodePrinter
 
-from ....systems.symbolic import SupportsSymbolic, SymbolicODE
+from ....systems.symbolic import AbstractSymbolicODE, SymbolicODE
 
 
 GENERIC_SOURCE = "isochron_multiseg.f90"
@@ -133,7 +133,7 @@ def parameter_map(sym: SymbolicODE) -> dict[int, str]:
     return {i + 1: name for i, name in enumerate(sym.params)}
 
 
-def auto_pars(ode: SupportsSymbolic) -> dict[int, float]:
+def auto_pars(ode: AbstractSymbolicODE) -> dict[int, float]:
     """The ``PAR`` dict for `ode`, slot to value, from its current parameter values."""
     return {
         i: float(getattr(ode, name))
@@ -275,7 +275,7 @@ class AutoProblem:
 
 
 def write_problem(
-    ode: SupportsSymbolic, workdir: str | Path, name: str = "isochron"
+    ode: AbstractSymbolicODE, workdir: str | Path, name: str = "isochron"
 ) -> AutoProblem:
     """Write the AUTO problem for `ode` into `workdir`, creating the directory if
     needed.

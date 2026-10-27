@@ -1,20 +1,20 @@
 r"""Vector fields declared once, as SymPy expressions, with JAX and Fortran derived.
 
-An observed system such as FitzHugh–Nagumo writes its right-hand side in the classmethod
-``_symbolic_template`` of an ``AbstractSymbolicODE``; the JAX ``rhs`` (through
-``sympy2jax``), ``params()``, and, in ``analysis.ode.auto``, the AUTO-07p Fortran
-``RHS`` with its exact Jacobian are derived from that one definition. The normal forms
-declare their rates $\rho(r)$ and $\omega(r)$ the same way (``normal_forms.base``) and
-expose the same cartesian ``symbolic()`` view, so the code generator sees one protocol,
-``SupportsSymbolic``.
+A system writes its vector field in a classmethod of an ``AbstractSymbolicODE``:
+``_symbolic_template`` in cartesian coordinates for an observed system such as
+FitzHugh–Nagumo, or ``_symbolic_template_polar`` for a normal form
+(``normal_forms.base``), whose cartesian template is then derived. The JAX ``rhs``,
+``params()``, and, in ``analysis.ode.auto``, the AUTO-07p Fortran ``RHS`` with its
+exact Jacobian all come from that one definition.
 
-The expressions are compiled once per concrete class, in ``__init_subclass__``, and
-stored as a class attribute, so a malformed template fails when the class is created
-and only the parameter values are read per call. Under ``jit`` the jaxpr is the bare
-arithmetic of the expressions. A template must name each parameter symbol after the
-attribute that holds its value, list ``states`` in the order of the state vector, and
-write numeric literals as plain constants; ``SymbolicODE.validate`` checks the first
-two.
+The expressions are compiled when a class with no abstract methods left is created:
+``__init_subclass__`` calls the classmethod ``_compile``, which each layer extends
+through ``super()``. The compiled forms are class attributes, so a malformed template
+fails when the class is created and only the parameter values are read per call.
+Under ``jit`` the jaxpr is the bare arithmetic of the expressions. A template must name
+each parameter symbol after the attribute that holds its value, list ``states`` in the
+order of the state vector, and write numeric literals as plain constants;
+``SymbolicODE.validate`` checks the first two.
 
 ADR-0016 has the reasoning, the rejected alternatives and the ADR-0004 edge.
 """
@@ -22,7 +22,7 @@ ADR-0016 has the reasoning, the rejected alternatives and the ADR-0004 edge.
 from __future__ import annotations
 
 import abc
-from typing import Any, ClassVar, NamedTuple, Protocol, runtime_checkable
+from typing import Any, ClassVar, NamedTuple
 
 import jax.numpy as jnp
 import sympy as sp
@@ -88,16 +88,6 @@ class SymbolicODE(NamedTuple):
         return self
 
 
-@runtime_checkable
-class SupportsSymbolic(Protocol):
-    """What the AUTO code generator needs of a system: its cartesian ``symbolic()``
-    view, and the attributes that the view's ``params`` names."""
-
-    def symbolic(self) -> SymbolicODE:
-        """The cartesian vector field as SymPy."""
-        ...
-
-
 class CompiledExpressions(NamedTuple):
     """SymPy expressions compiled to JAX, with the bookkeeping to evaluate them on an
     owner object: positional inputs by symbol name, parameters by attribute name.
@@ -130,44 +120,54 @@ class CompiledExpressions(NamedTuple):
         params = {name: getattr(owner, name) for name in self.params}
         return self.module(**inputs, **params)
 
+    @classmethod
+    def from_expressions(
+        cls,
+        exprs: tuple[sp.Expr, ...],
+        inputs: tuple[sp.Symbol, ...],
+        params: tuple[str, ...],
+    ) -> CompiledExpressions:
+        """Compile `exprs`; numeric literals stay constants rather than becoming
+        trainable leaves.
 
-def compile_expressions(
-    exprs: tuple[sp.Expr, ...], inputs: tuple[sp.Symbol, ...], params: tuple[str, ...]
-) -> CompiledExpressions:
-    """Compile `exprs` to a `CompiledExpressions`; numeric literals stay constants.
+        **Arguments:**
 
-    **Arguments:**
+        - `exprs`: The expressions to compile.
+        - `inputs`: The symbols supplied positionally at each call.
+        - `params`: The attribute names of the remaining free symbols.
 
-    - `exprs`: The expressions to compile.
-    - `inputs`: The symbols supplied positionally at each call.
-    - `params`: The attribute names of the remaining free symbols.
+        **Returns:**
 
-    **Returns:**
+        The compiled expressions.
+        """
+        module = sympy2jax.SymbolicModule(
+            list(exprs), extra_funcs=EXTRA_FUNCS, make_array=False
+        )
+        return cls(module, tuple(s.name for s in inputs), tuple(params))
 
-    The compiled expressions.
+
+def _abstract_methods(cls: type) -> set[str]:
+    """The names of the abstract methods that `cls` still has.
+
+    This is the rule that ``ABCMeta.__new__`` applies (CPython ``Lib/_py_abc.py``): the
+    class's own abstract attributes, plus every abstract name of a base that `cls`
+    does not override with a concrete one. ``ABCMeta`` stores the result in
+    ``__abstractmethods__`` only after ``type.__new__``, and so ``__init_subclass__``,
+    has run, which is why the guard computes it itself.
     """
-    module = sympy2jax.SymbolicModule(
-        list(exprs), extra_funcs=EXTRA_FUNCS, make_array=False
-    )
-    return CompiledExpressions(module, tuple(s.name for s in inputs), tuple(params))
 
+    def is_abstract(attr: Any) -> bool:
+        func = getattr(attr, "__func__", attr)  # unwrap classmethod and staticmethod
+        return bool(getattr(func, "__isabstractmethod__", False))
 
-def is_abstract(attr: Any) -> bool:
-    """Whether `attr` (a function, classmethod or staticmethod) is abstract."""
-    func = getattr(attr, "__func__", attr)  # unwrap classmethod/staticmethod
-    return bool(getattr(func, "__isabstractmethod__", False))
-
-
-def defines_concretely(cls: type, name: str) -> bool:
-    """Whether `cls` itself, not a base, defines a non-abstract attribute `name`.
-
-    This is the guard for building per-class machinery in `__init_subclass__`.
-    `inspect.isabstract(cls)` is not usable there, because `ABCMeta` computes
-    `__abstractmethods__` only after `type.__new__`, and so `__init_subclass__`, has
-    run.
-    """
-    attr = cls.__dict__.get(name)
-    return attr is not None and not is_abstract(attr)
+    own = {name for name, value in cls.__dict__.items() if is_abstract(value)}
+    inherited = {
+        name
+        for base in cls.__bases__
+        for name in getattr(base, "__abstractmethods__", ())
+        if is_abstract(getattr(cls, name, None))
+    }
+    return own | inherited
 
 
 class AbstractSymbolicODE(AbstractODE):
@@ -175,33 +175,46 @@ class AbstractSymbolicODE(AbstractODE):
     `symbolic()` and `params()` derived.
 
     A subclass supplies the classmethod `_symbolic_template` and the attributes it
-    names: fields, or properties computing constrained values from raw leaves. The
-    compiled form is built once when the class is created; an intermediate abstract
-    subclass that does not define the template builds nothing.
+    names: fields, or properties computing constrained values from raw leaves. When a
+    class with no abstract methods left is created, `__init_subclass__` calls
+    `_compile`; a layer that compiles more, such as `AbstractNormalForm`, extends
+    `_compile` and calls `super()._compile()` first.
 
     **Attributes:**
 
-    - `_compiled`: The compiled expressions, set on each concrete subclass by
-        `__init_subclass__`. A class attribute rather than a field: it implements no
-        `AbstractVar`, so ADR-0004 does not apply (ADR-0016 §3).
+    - `_compiled`: The compiled cartesian template, set on each concrete class by
+        `_compile`. A class attribute rather than a field: it implements no
+        `AbstractVar`, so ADR-0004 does not apply (ADR-0016).
     """
 
     _compiled: ClassVar[CompiledExpressions]
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
-        if not defines_concretely(cls, "_symbolic_template"):
-            return
+        if not _abstract_methods(cls):
+            cls._compile()
+
+    @classmethod
+    def _compile(cls) -> None:
+        """Validate the cartesian template and compile it into `_compiled`.
+
+        **Raises:**
+
+        `ValueError` from `SymbolicODE.validate`.
+        """
         sym = cls._symbolic_template().validate()
-        cls._compiled = compile_expressions(sym.rhs, sym.states, tuple(sym.params))
+        cls._compiled = CompiledExpressions.from_expressions(
+            sym.rhs, sym.states, tuple(sym.params)
+        )
 
     @classmethod
     @abc.abstractmethod
     def _symbolic_template(cls) -> SymbolicODE:
-        """The vector field as SymPy, with symbols only and no values."""
+        """The vector field in cartesian coordinates as SymPy, with symbols only and
+        no values."""
 
     def symbolic(self) -> SymbolicODE:
-        """The cartesian symbolic view, for the code generator (`SupportsSymbolic`)."""
+        """The cartesian template, for the AUTO code generator."""
         return self._symbolic_template()
 
     def rhs(
@@ -225,17 +238,16 @@ class AbstractSymbolicODE(AbstractODE):
         return jnp.stack(components, axis=0)
 
     def params(self) -> dict[str, Any]:
-        """The parameters that the template names, as floats keyed by name."""
-        return {name: float(getattr(self, name)) for name in self.symbolic().params}
+        """The parameters that the template names, as floats keyed by name, in the
+        template's order."""
+        return {
+            name: float(getattr(self, name)) for name in type(self)._compiled.params
+        }
 
 
 __all__ = [
     "AbstractSymbolicODE",
     "CompiledExpressions",
     "EXTRA_FUNCS",
-    "SupportsSymbolic",
     "SymbolicODE",
-    "compile_expressions",
-    "defines_concretely",
-    "is_abstract",
 ]
