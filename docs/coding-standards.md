@@ -81,7 +81,7 @@ the rules `scripts/check_md_math.py` enforces, with the reason each exists:
 Every span has also been checked against KaTeX as VS Code configures it, so the two
 previews agree.
 
-## Checks that replace prose
+## Deterministic checks
 
 The configuration lives in `pyproject.toml`, in `[tool.codespell]` and in the `banned-api`
 table with `TID251` in ruff's `select`, with a comment there on each non-obvious setting.

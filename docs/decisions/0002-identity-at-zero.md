@@ -26,8 +26,7 @@ Every constraint primitive with a neutral value takes an `at_zero` argument and 
 `raw = 0` to it (`Positive(eps, at_zero)`, `Interval(lo, hi, at_zero)`,
 `BoundedPositive(eps, at_zero, a)`, `Widths` → equal widths). `constrain(0)` is the identity
 map's parameters for every scalar bijection, and `identity_like()` is
-`from_unconstrained(0)`. The shift is a constant computed once with `math` in the
-primitive's constructor.
+`from_unconstrained(0)`. The shift is a constant computed once under the `jax.ensure_compile_time_eval` context manager if necessary.
 
 ## Consequences
 
@@ -39,3 +38,4 @@ primitive's constructor.
 ## Alternatives rejected
 
 - Preimage initialization (flowjax, bijx): incompatible with zero-initialized conditioners.
+- Shift computation using the `math` module. Avoids triggering recompilation without `jax.ensure_compile_time_eval`, but requires one to duplicate the `.inverse` logic with `math` functions.

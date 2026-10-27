@@ -13,13 +13,15 @@ verified_by: joon
 ## Context
 
 Equinox's `AbstractVar` accepts any implementation at runtime: a class attribute, a
-`ClassVar`, a property or a field. Type checkers (`ty`, pyright) see the base-class
+`ClassVar`, a property or a field. In contrast, type checkers (`ty`, pyright) see the base-class
 `AbstractVar` as an ordinary instance attribute. This is [equinox issue #1256](https://github.com/patrick-kidger/equinox/issues/1256):
 the annotation is stripped at runtime but looks like a dataclass field to a checker, so it
-becomes a phantom required `__init__` argument in subclasses. The maintainer's position is
-that Python has no static spelling for "accessible attribute, not an init field". The
-`init=False` override below is that spelling *for the subclass*, which is where the
-phantom argument appears. Verified behavior (equinox 0.13.8, ty 0.0.84, pyright 1.1):
+becomes a phantom required `__init__` argument in subclasses.
+
+The maintainer's position is
+that Python has no static spelling for "accessible attribute, not an init field". The goal of this document is to choose a convention that indicates that spelling *for the subclass*, while being compatible with type checkers.
+
+Below table shows the verified behavior (equinox 0.13.8, ty 0.0.84, pyright 1.1) for different conventions:
 
 | subclass implementation | runtime | type checkers |
 |---|---|---|
@@ -54,7 +56,9 @@ ty 0.0.88 enforces what the table above predicted and 0.0.84 let through. A `@pr
 implementing `num_params` is an `invalid-property-type-override`, a read-only attribute
 over a writable one. The five properties (`ScalarChain`, `OffsetedBijection`, the three
 splines) became `num_params: int = eqx.field(static=True, init=False)` assigned in
-`__init__`, which is the decision as written. ty 0.0.88 also rejects narrowing a mutable
+`__init__`, which is the decision as written.
+
+ty 0.0.88 also rejects narrowing a mutable
 attribute in a subclass (`invalid-mutable-override`): the template classes declared
 `raw: None`, which is now `raw: Float[Array, " num_params"] | None = eqx.field(static=True, default=None,
 init=False)`, the base's annotation with the default. CI runs `uvx ty@latest` on purpose,

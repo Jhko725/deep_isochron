@@ -1,7 +1,7 @@
 ---
 type: decision
 id: ADR-0007
-status: accepted; amended (ADR-0013: basins, even subfamily; ADR-0016: symbolic defining data)
+status: accepted; amended (ADR-0013 - basins, even subfamily; ADR-0016 - symbolic defining data)
 updated: 2026-10-27
 verified_by: joon
 ---
@@ -28,7 +28,7 @@ them.
 
 ## Decisions
 
-### 1. Two layers, one rule
+### 1. Unified interface for general ODEs and normal forms
 
 `AbstractODE` is *any* ODE in the study: `rhs(t, u, args)`, `dim`, and the numerical
 `flow`/`flow_result`. `AbstractNormalForm(AbstractODE)` is the subset usable as a conjugacy
@@ -78,14 +78,15 @@ replaced (`eqx.tree_at`), so callers always read cartesian `.ys`.
 from `systems/normal_forms/integration.py`: `CartesianIntegration`, `PolarIntegration`,
 `RadiusSquaredIntegration`, or `ClosedFormIntegration` (B11: `Θ(t) = Θ₀ + ω₁t`,
 `Ψ(t) = Ψ₀e^{κt}` in the phase–amplitude chart, then `from_phase_amplitude`; no ODE solve,
-the `SolverConfig` is ignored). The word *strategy* was dropped because
-`tests/strategies.py` already means Hypothesis strategies. In place of an instance, one of
-the names `"cartesian" | "polar" | "r_squared" | "closed_form"` maps to a default
-instance, and `None` selects the class's `default_integration`, which is `"closed_form"`
-for every normal form (review round 3): it is exact and cheaper than any ODE solve, so a
-numerical integration is an explicit choice made for comparison. This is the diffrax
-pattern of passing a solver object. A strategy is an `eqx.Module` with no array leaves,
-hence static under the filter transforms: each traces separately and dispatch costs nothing
+the `SolverConfig` is ignored).
+
+This design corresponds to the Strategy pattern, but we deliberately avoid that word here since `tests/strategies.py` already reserves the word for Hypothesis strategies. Instead directly passing `Integration` classes, one of the names `"cartesian" | "polar" | "r_squared" | "closed_form"` maps to a default
+instance, and `None` selects the class's `default_integration`.
+
+For every normal form, `default_integration` is `"closed_form"` (review round 3): it is exact and cheaper than any ODE solve, so a
+numerical integration is an explicit choice made for comparison.
+
+Note that diffrax also adopts the same pattern to pass solver objects to `diffeqsolve`. Since a strategy is an `eqx.Module` with no array leaves, it is static under the filter transforms: each traces separately and dispatch costs nothing
 at run time (`test_strategies_are_static_under_filter_jit`). Every strategy takes and
 returns **cartesian** coordinates, so the caller never knows which chart was used
 internally; `ConjugateLatentDynamics` lost its polar conversion as a result.

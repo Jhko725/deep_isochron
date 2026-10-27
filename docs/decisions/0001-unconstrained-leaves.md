@@ -29,7 +29,7 @@ at construction only and `eqx.apply_updates` bypasses `__init__`. That design fo
 
 ## Decision
 
-Every `AbstractScalarBijection` has exactly one trainable leaf, `raw`, an unconstrained
+Every `AbstractScalarBijection` has exactly one trainable leaf, `raw`, which is an unconstrained
 vector of length `num_params`. One method, `constrain(raw) -> Params`, computes the
 constrained parameters on read from the primitives in `invertible/constraints.py`;
 `Params` is a NamedTuple that the class is generic over. `__call__` and `inverse` read

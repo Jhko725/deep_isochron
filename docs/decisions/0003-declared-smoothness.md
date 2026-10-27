@@ -20,12 +20,13 @@ facts as a `JOIN_ORDER` table in the test file.
 
 ## Decision
 
-`AbstractBijection` declares `smoothness: eqx.AbstractVar[int | None]`, the `k` of C^k,
-with `None` for C^∞. Leaf classes fix it (`CubicBSpline`: 2). Containers derive it:
+`AbstractBijection` declares `smoothness: eqx.AbstractVar[int | None]`, corresponding to the `k` of $C^k$. `None` corresponds to C^∞. Leaf classes fix `smoothness` (`CubicBSpline`: 2). Containers derive it:
 `CouplingFlow` reports its template's, `ScalarChain` and `SequentialINN` the minimum over
-their members with `None` as +∞, and a wrapper the wrapped bijection's. The conditioner's
+their members with `None` as +∞, and a wrapper the wrapped bijection's.
+
+Note that the conditioner's
 activation is *not* tracked. The docstring states that it must be at least as smooth as
-the template, and `CouplingFlow.__init__` rejects the non-smooth `jax.nn` activations
+the template, and `CouplingFlow.__init__` performs only a minimal check, rejecting the non-smooth `jax.nn` activations
 (`relu`, `relu6`, `leaky_relu`, `hard_tanh`, `hard_sigmoid`, `hard_swish`, `hard_silu`)
 when the template is C¹ or better. A custom conditioner is assumed smooth.
 
