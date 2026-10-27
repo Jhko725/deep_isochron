@@ -108,8 +108,11 @@ deep_isochron
 │       │   ├── codegen.py   write_problem(ode, workdir) -> AutoProblem: rhs.inc (F and the
 │       │   │                exact Jacobian from symbolic()), indices.inc (IP_* slots), c.<name>;
 │       │   │                internal_indices -> Idx; auto_pars; never imports AUTO
+│       │   ├── _env.py      load_auto() -> AutoHandle: finds the built AUTO tree (argument,
+│       │   │                DEEP_ISOCHRON_AUTO_DIR, AUTO_DIR, ~/.local/opt/auto-07p), sets
+│       │   │                AUTO_DIR, imports `auto`; the only importer of AUTO (docs/auto.md)
 │       │   └── fortran/     isochron_multiseg.f90 — the generic multi-segment BVP (plain
-│       │                    Fortran; INCLUDEs the two generated files)
+│       │                    Fortran; INCLUDEs the two generated files; adjoint bundle)
 │       ├── sections.py      CrossSection: a hyperplane (point, unit normal); signed_distance;
 │       │                    normal_to_flow(ode, p)
 │       ├── poincare.py      PoincareMap: first-return map on a section (direction, reverse
