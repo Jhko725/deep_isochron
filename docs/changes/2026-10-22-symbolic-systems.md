@@ -85,13 +85,13 @@ Review round 1 (2026-10-27) unified the normal forms' contract with the observed
 | `docs/decisions/0007-…`: amendment | Looks good. | None |
 | `docs/design/normal-forms.md`: §9 note | Looks good. | None |
 | `docs/architecture.md`, `docs/index.md`, `docs/roadmap.md` | Looks good. | None |
-| `systems/symbolic.py` (round 1): `CompiledExpressions.from_expressions`, private `_abstract_methods` guard, `_compile` extension point, `params()` from compiled names; `SupportsSymbolic`, `compile_expressions`, `is_abstract`, `defines_concretely` removed | | |
-| `systems/normal_forms/base.py` (round 1): `AbstractNormalForm(AbstractSymbolicODE)` with `_symbolic_template_polar`, `_polar_rates` checks, derived cartesian template, `_compile` on both families | | |
-| `systems/normal_forms/hopf.py`, `bautin.py`, `winfree.py` (round 1): `_symbolic_template_polar`; hand-written `params()` removed | | |
-| `analysis/ode/auto/codegen.py` (round 1): typed on `AbstractSymbolicODE` | | |
-| `tests/test_symbolic.py` (round 1): oracles from the polar template, `params()` against constructor values, the guard, four planted-violation tests | | |
-| `docs/decisions/0016-symbolic-systems.md` (round 1): Decisions 1–3 rewritten; superseded hooks, protocol and guard | | |
-| `docs/decisions/0013-normal-form-basins.md` (round 1): Decision 1 restated for the polar template | | |
-| `docs/decisions/0007-…` (round 1): defining-data paragraphs restated | | |
-| `docs/design/normal-forms.md` (round 1): §9 note revised | | |
-| `docs/architecture.md`, `docs/index.md`, `docs/roadmap.md` (round 1): map, ADR summary, O7 row and Done ledger | | |
+| `systems/symbolic.py` (round 1): `CompiledExpressions.from_expressions`, private `_abstract_methods` guard, `_compile` extension point, `params()` from compiled names; `SupportsSymbolic`, `compile_expressions`, `is_abstract`, `defines_concretely` removed | Looks good. | None |
+| `systems/normal_forms/base.py` (round 1): `AbstractNormalForm(AbstractSymbolicODE)` with `_symbolic_template_polar`, `_polar_rates` checks, derived cartesian template, `_compile` on both families | Looks good. | None |
+| `systems/normal_forms/hopf.py`, `bautin.py`, `winfree.py` (round 1): `_symbolic_template_polar`; hand-written `params()` removed | Looks much better than before. | None |
+| `analysis/ode/auto/codegen.py` (round 1): typed on `AbstractSymbolicODE` | Confirmed. |None |
+| `tests/test_symbolic.py` (round 1): oracles from the polar template, `params()` against constructor values, the guard, four planted-violation tests | Confirmed. | None |
+| `docs/decisions/0016-symbolic-systems.md` (round 1): Decisions 1–3 rewritten; superseded hooks, protocol and guard | Looks good. | None |
+| `docs/decisions/0013-normal-form-basins.md` (round 1): Decision 1 restated for the polar template | Confirmed. | None |
+| `docs/decisions/0007-…` (round 1): defining-data paragraphs restated | Confirmed. | None |
+| `docs/design/normal-forms.md` (round 1): §9 note revised | Confirmed. | None |
+| `docs/architecture.md`, `docs/index.md`, `docs/roadmap.md` (round 1): map, ADR summary, O7 row and Done ledger | Confirmed | None
