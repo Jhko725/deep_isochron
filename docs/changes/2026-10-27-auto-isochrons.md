@@ -186,14 +186,14 @@ built.
 | `tests/test_auto_codegen.py` — gfortran driver and compile tests in place of f2py; tests for the wrap, `indices.inc` and the adjoint sign  | Skimmed through. Will scrutinize later if needed. | None |
 | `.github/workflows/ci.yml` — the `slow` job installs gfortran | Confirmed. | None |
 | `docs/roadmap.md` — Done ledger row for Step A; the O7 row names the gfortran tests | Confirmed. | None |
-| `pyproject.toml`, `uv.lock` — the `auto` dependency group (AUTO's Python layer from git at `44cc1c4`), the `auto` marker | | |
-| `scripts/install_auto.sh` — builds AUTO's Fortran tree at the locked commit | | |
-| `src/deep_isochron/analysis/ode/auto/_env.py` — `load_auto`, `auto_dir`, `pinned_commit`, `AutoNotInstalled` | | |
-| `src/deep_isochron/analysis/ode/auto/__init__.py` — docstring | | |
-| `tests/test_auto_env.py` — tree resolution; the FitzHugh–Nagumo Hopf point through AUTO | | |
-| `.github/workflows/ci.yml` — the `auto` job | | |
-| `docs/auto.md` — installing AUTO | | |
-| `docs/architecture.md` — `_env.py` in the module map | | |
-| `docs/index.md` — the `auto.md` row | | |
-| `CLAUDE.md` — `-n 2` in the cloud sessions; the AUTO setup line | | |
-| `docs/roadmap.md` — Done ledger row for Step B | | |
+| `pyproject.toml`, `uv.lock` — the `auto` dependency group (AUTO's Python layer from git at `44cc1c4`), the `auto` marker | Confirmed. | None |
+| `scripts/install_auto.sh` — builds AUTO's Fortran tree at the locked commit | Had a look. For uv projects that have additional non-uv dependencies (compilers for c, c++, fortran, etc, interop with other languages, etc.), is using shell scripts the established way? | To be discussed. |
+| `src/deep_isochron/analysis/ode/auto/_env.py` — `load_auto`, `auto_dir`, `pinned_commit`, `AutoNotInstalled` | Do we bake the auto installation dir in the module or expose it so that the user may provide a preferred path, with the current choice as the default? | To be discussed. |
+| `src/deep_isochron/analysis/ode/auto/__init__.py` — docstring | Looks good. | None |
+| `tests/test_auto_env.py` — tree resolution; the FitzHugh–Nagumo Hopf point through AUTO | Confirmed. | None |
+| `.github/workflows/ci.yml` — the `auto` job | Confirmed. | None |
+| `docs/auto.md` — installing AUTO | Looks good for now. Can we even ease the entire repo setup process even easier with say, a makefile? | To be discussed with Claude. |
+| `docs/architecture.md` — `_env.py` in the module map | Simple change. | None |
+| `docs/index.md` — the `auto.md` row | Confirmed. | None |
+| `CLAUDE.md` — `-n 2` in the cloud sessions; the AUTO setup line | Confirmed. | None |
+| `docs/roadmap.md` — Done ledger row for Step B | Confirmed. | None |
