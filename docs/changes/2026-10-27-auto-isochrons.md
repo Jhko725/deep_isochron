@@ -509,6 +509,28 @@ but the tier is still 5.8 minutes, above the 3.5–4 estimated: the foliation te
 trace their phases one after the other, and JAX's own threads in each pytest worker
 still share the two cores.
 
+**Stage-4 settings against cost and reach** (Joon's question 9, 2026-10-28): the
+isochron of the coworker's file 26 on FitzHugh–Nagumo with `box_scale = 2.5`, one
+worker, run alone on the two-core session; the time includes about 50 s of cycle and
+stages 1–3. The fixed point is at $(0.9066, -0.2582)$, and the coworker's curve comes
+within $1.6\times 10^{-4}$ of it.
+
+| `n_periods` | `ntst` (per period) | Time | Points | Closest to the fixed point | Farthest from the coworker's curve |
+|---|---|---|---|---|---|
+| 5 | 300 (60) | 491 s | 7005 | $1.6\times 10^{-4}$ | $8.6\times 10^{-6}$ |
+| 5 | 200 (40) | 331 s | 7005 | $1.6\times 10^{-4}$ | $8.6\times 10^{-6}$ |
+| 5 | 150 (30) | 264 s | 7010 | $1.6\times 10^{-4}$ | $8.0\times 10^{-6}$ |
+| 4 | 240 (60) | 294 s | 4950 | $6.5\times 10^{-4}$ | $8.8\times 10^{-6}$ |
+| 4 | 160 (40) | 221 s | 4948 | $6.5\times 10^{-4}$ | $8.8\times 10^{-6}$ |
+| 3 | 180 (60) | 198 s | 3708 | $2.7\times 10^{-3}$ | $8.8\times 10^{-6}$ |
+
+The number of periods sets how close the inward half reaches: each period fewer
+leaves it about four times farther from the fixed point. The mesh per period does not
+change the curve, its reach or its agreement with the coworker's down to 30 intervals,
+and the time falls with it: five periods at 30 intervals per period take 264 s against
+491 s at 60. The first row ran while other work used the session for a few minutes,
+so its time may be high. Whether to lower the default `ntst` is Joon's decision.
+
 **The isochron script and `resample`**: `tests/test_experiment_isochrons.py` composes
 both configs against their data configs, checks the phases from `count` or `values`,
 that the hash follows the system, anchor, phases and settings and not `max_workers`,
