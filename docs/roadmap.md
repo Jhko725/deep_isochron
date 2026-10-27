@@ -135,6 +135,7 @@ lives in the ADRs. Each round is one commit, reviewed before the next starts; th
 | P5 | `tests/`: one-sentence docstrings per module and test, `helpers.py`, `strategies.py` | *done 2026-10-27*: `D` on for `tests/` and `scripts/`; only notebooks and `src/Isochron2PBVP` exempt |
 | P6 | Documents: ADRs, `architecture.md`, `coding-standards.md` in full; `analysis.md`, `cubic-bspline.md`, `training-step-performance.md`, `validation-split.md` paragraph and word passes | *done 2026-10-27*: 23 files, invariants compared mechanically; ADR-0018's example and claim corrected |
 | P7 | `docs/design/normal-forms.md`, alone (966 lines; manuscript source) | *done 2026-10-27*: invariants unchanged by the comparison |
+| P8 | ADR format (ADR-0019): Motivation and Forces, current design in the main text, History; relative links checked; all 17 ADRs restructured | *done 2026-10-27* |
 
 The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when `phase` is reviewed, not here.
 
@@ -210,3 +211,4 @@ The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when 
 | 2026-10-27 | `prose` | P4b: the 66 inline docstring headers left after P3 fixed and `scripts/check_docstring_headers.py` added to `prek` and CI; `src/Isochron2PBVP` excluded from ruff and ty, which is what failed CI on `master` | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-27 | `prose` | P6: the 17 ADRs, `architecture.md`, `coding-standards.md` and four design documents revised under the prose rules with citations, equations, numbers and cross-references held fixed by a mechanical comparison; ADR-0018's drifted-forms example restored and its wrong claim about ADR-0015 corrected; P5 (`tests/`) and P7 (`normal-forms.md`) remain | `docs/changes/2026-10-26-prose.md` |
 | 2026-10-27 | `prose` | P5 and P7: docstrings for every test and script (`D` on everywhere but notebooks and `src/Isochron2PBVP`); `normal-forms.md` revised with every equation and citation unchanged; the architecture map brought up to the tree; ADR-0015's Sources folded into `sources:`. Phase P complete | `docs/changes/2026-10-26-prose.md` |
+| 2026-10-27 | `prose` | P8: ADR-0019 fixes the ADR format (Motivation with evidence, Forces, the current design in Decision, superseded designs in Alternatives rejected, a dated History) and `check_references.py` checks relative links; the 17 ADRs restructured, every motivation sourced, every amendment folded into the main text | `docs/changes/2026-10-26-prose.md` |
