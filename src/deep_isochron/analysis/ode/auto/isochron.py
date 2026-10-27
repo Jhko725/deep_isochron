@@ -607,6 +607,7 @@ def _isochron(
 # ------------------------------------------------------------------ the driver ----
 def _init_worker() -> None:
     """A pool worker traces one phase at a time on one core (decision 17)."""
+    jax.config.update("jax_platforms", "cpu")
     os.environ["OMP_NUM_THREADS"] = "1"
 
 
