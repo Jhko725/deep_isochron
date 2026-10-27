@@ -23,6 +23,12 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-22, p
   FitzHugh–Nagumo `F` and `A` by hand (lines 9–33).
 - The Jacobian is not optional, because the adjoint stages of the extended system
   integrate `Aᵀw`.
+- A normal form first wrote its template in a different shape from an observed
+  system's: Hopf returned a tuple `(s, ρ̃(s), ω̃(s), params)` from `_symbolic_rates_sq`,
+  Winfree a tuple in `r` from `_symbolic_rates`, and FitzHugh–Nagumo a `SymbolicODE`
+  from `_symbolic_template`. The review of 2026-10-27 named this a "smell of
+  inconsistent API design"
+  ([the change document](../changes/2026-10-22-symbolic-systems.md), *Review notes*).
 
 ### Forces
 
@@ -40,46 +46,82 @@ symbolic, so the symbolic declaration cannot be a requirement of every ODE.
 attribute that holds their value, and one expression per state. `rhs` is concrete and
 evaluates the compiled expressions with the instance's current parameter values;
 `params()` and the AUTO Fortran (`analysis.ode.auto.codegen`) are derived from the same
-tuple. `AbstractODE` itself is unchanged: a learned or pushforward vector field is still
-an ODE without being symbolic. The code generator sees one protocol, `SupportsSymbolic`
-(`symbolic() -> SymbolicODE`).
+template. `AbstractODE` itself is unchanged: a learned or pushforward vector field is
+still an ODE without being symbolic. The code generator takes an `AbstractSymbolicODE`,
+and every symbolic system is one, the normal forms included.
 
-### 2. The normal forms' defining data are symbolic too
+### 2. A normal form declares its field in polar coordinates
 
-`AbstractNormalForm` requires `_symbolic_rates() -> (r, ρ(r), ω(r), params)` and
-`AbstractEvenNormalForm` requires `_symbolic_rates_sq() -> (s, ρ̃(s), ω̃(s), params)`,
-from which `_symbolic_rates` is derived by `s → r²`. The JAX hooks `log_growth_rate`,
-`angular_rate`, `_log_growth_rate_sq`, `_angular_rate_sq` are now concrete and derived;
-a concrete normal form supplies its two expressions and nothing else about the field.
-The cartesian `symbolic()` is the chain rule `ẋ = xρ − yω`, `ẏ = yρ + xω` with
-`r = sqrt(x² + y²)` substituted, or `s = x² + y²` for the even family, which is why
-their cartesian fields are polynomial.
+`AbstractNormalForm` is an `AbstractSymbolicODE` whose subclasses write the classmethod
+`_symbolic_template_polar() -> SymbolicODE`. The template has the states $(r, \theta)$
+and the polar field $(\dot r, \dot\theta)$, so it is the type that an observed system
+returns, in another chart. The base class reads the defining data off it, with
+$\rho = \dot r / r$ canceled and $\omega = \dot\theta$. It derives the cartesian
+`_symbolic_template` by substituting $r = \sqrt{x^2 + y^2}$ into
+$\dot x = x\rho - y\omega$ and $\dot y = y\rho + x\omega$. SymPy reduces
+$(\sqrt q)^2$ to $q$, so a form whose rates are functions of $r^2$ comes out polynomial
+with no further step. The JAX hooks `log_growth_rate` and `angular_rate`, and the even
+family's `_log_growth_rate_sq` and `_angular_rate_sq`, are compiled from the same
+rates. `params()` and `symbolic()` are inherited from `AbstractSymbolicODE`.
 
-The closed forms `h(r)`, `Ψ(r)` stay hand-derived JAX, since they are reviewed and
+When a normal form is created, the base class raises `ValueError` in three cases: the
+template does not have two states, an expression depends on $\theta$ (a normal form is
+rotationally symmetric), or $\dot r$ lacks the factor $r$, which would make $\rho$
+singular at $r = 0$.
+
+`AbstractEvenNormalForm` stays a declared family, because membership changes behavior
+and is a precondition. It selects the square-root-free `rhs` and `eigenvalues_origin`,
+and the `r_squared` integration refuses any other form
+([ADR-0013](0013-normal-form-basins.md)). A form joins the family by declaring it as its
+base class, and it writes the same hook as any normal form. The class then checks that
+both rates are functions of $r^2$: after $r = \sqrt s$ is substituted, no power of $s$
+with a non-integer exponent may remain. The test is stricter than evenness, and it is
+the property that the square-root-free field needs. $\cos r$ is even, but
+$\cos\sqrt s$ has no derivative at $s = 0$.
+
+Both `rhs` overrides stay. The compiled cartesian field of Winfree's form has a `nan`
+Jacobian at the origin, so `AbstractNormalForm.rhs` keeps its safe square root, and
+`AbstractEvenNormalForm.rhs` keeps its square-root-free body.
+
+The closed forms `h(r)` and `Ψ(r)` stay hand-derived JAX, since they are reviewed and
 Winfree's carry basin logic; [`tests/test_symbolic.py`](../../tests/test_symbolic.py)
-verifies them *symbolically* against the symbolic rates: `ω + h'rρ = ω₁` and
-`(log Ψ)' rρ = κ` with `κ = ρ'(1)`.
+verifies them *symbolically* against the rates of the polar template: `ω + h'rρ = ω₁`
+and `(log Ψ)' rρ = κ` with `κ = ρ'(1)`.
 [ADR-0007](0007-systems-hierarchy-and-flow-strategies.md)'s rule that a class carries
 only what is analytically available is unchanged; the language of the defining data
 changed.
 
-### 3. Compiled once per class, in `__init_subclass__`, as a class attribute
+### 3. Compiled once per concrete class, through one extension point
 
-The `sympy2jax` module for a template is built when the concrete class is created and
-stored as a `ClassVar` (`_compiled`, `_compiled_rates`, `_compiled_rates_sq`). The
-expression structure is a class property; only parameter values are per instance, and
-they are read at call time (`getattr(self, name)`, so constrained values behind
-properties, Bautin's `a` and `b`, work unchanged). It is not a dataclass field and not a
-pytree leaf, so `filter_vmap`, `jacfwd`, `tree_at` and jaxtyping see nothing new. Under
-`jit`, the Python bookkeeping in `rhs` runs at trace time; the jaxpr is the bare
-arithmetic (checked: FHN traces to the same operations as the former hand-written
-field). A malformed template fails at import.
+`AbstractSymbolicODE.__init_subclass__` calls the classmethod `_compile` when the new
+class has no abstract methods left. `AbstractSymbolicODE._compile` validates the
+cartesian template and compiles it into `_compiled`. `AbstractNormalForm._compile`
+calls `super()._compile()`, reads the rates off the polar template with the checks of
+Decision 2, and compiles them into `_compiled_rates`. `AbstractEvenNormalForm._compile`
+calls `super()._compile()`, checks that the rates are functions of $r^2$, and compiles
+them in $s$ into `_compiled_rates_sq`. Every concrete class therefore has `_compiled`,
+the normal forms included, although their `rhs` overrides do not read it; the build
+costs one `sympy2jax` module per class at import and checks that the cartesian template
+translates to JAX.
 
-The guard builds only when `_symbolic_template` (or the rates hook) is defined on
-*this* class and is not abstract, because `inspect.isabstract(cls)` is unreliable
-inside `__init_subclass__`, which runs before `ABCMeta` computes `__abstractmethods__`.
-Abstract intermediates (`AbstractEvenNormalForm` defines a *derived* `_symbolic_rates`
-while its `_symbolic_rates_sq` is still abstract) build nothing.
+The guard "no abstract methods left" is the private function `_abstract_methods(cls)`,
+which applies the rule of `ABCMeta.__new__` (CPython `Lib/_py_abc.py`): the class's own
+abstract attributes, plus every inherited abstract name that the class does not override
+with a concrete one. `inspect.isabstract(cls)` cannot be used, because `ABCMeta` sets
+`__abstractmethods__` only after `type.__new__`, and so `__init_subclass__`, has run.
+The rule needs no hook names. It skips `AbstractNormalForm`, whose derived
+`_symbolic_template` is concrete while `_symbolic_template_polar` is still abstract, and
+it fires on every concrete system. A concrete subclass of a concrete system recompiles
+the template it inherits, which takes milliseconds.
+
+The compiled forms are stored as `ClassVar`s. The expression structure is a class
+property; only parameter values are per instance, and they are read at call time
+(`getattr(self, name)`, so constrained values behind properties, Bautin's `a` and `b`,
+work unchanged). A compiled form is not a dataclass field and not a pytree leaf, so
+`filter_vmap`, `jacfwd`, `tree_at` and jaxtyping see nothing new. Under `jit`, the
+Python bookkeeping in `rhs` runs at trace time; the jaxpr is the bare arithmetic
+(checked: FHN traces to the same operations as the former hand-written field). A
+malformed template fails at import.
 
 **These class attributes are an edge of ADR-0004, not a violation.**
 [ADR-0004](0004-abstractvar-fields.md) forbids class attributes *for `AbstractVar`
@@ -114,8 +156,12 @@ Hodgkin–Huxley is symbolic for `rhs` only.
 
 ## Consequences
 
-- Adding a planar system is one classmethod: `rhs`, `params()`, the Fortran `RHS` and
-  Jacobian, the `PAR` dict and the constants file follow.
+- Adding a planar system is one classmethod, `_symbolic_template` for an observed
+  system or `_symbolic_template_polar` for a normal form: `rhs`, `params()`, the
+  Fortran `RHS` and Jacobian, the `PAR` dict and the constants file follow. A normal
+  form chooses its family by its base class, and a wrong choice fails at import.
+- A normal form's $\rho$ is compiled in SymPy's canceled form, an expanded polynomial
+  for Hopf and Bautin rather than the factored product that the template writes.
 - `sympy` and `sympy2jax` are core dependencies (`rhs` depends on them). `EXTRA_FUNCS`
   maps `expm1`/`log1p` (used by Hodgkin–Huxley for its removable singularities) to
   `jnp`; the Fortran printer knows neither, so such a system is not AUTO material, and
@@ -129,6 +175,16 @@ Hodgkin–Huxley is symbolic for `rhs` only.
 
 ## Alternatives rejected
 
+- *Superseded 2026-10-27*: `_symbolic_rates() -> (r, ρ(r), ω(r), params)` on
+  `AbstractNormalForm` and `_symbolic_rates_sq() -> (s, ρ̃(s), ω̃(s), params)` on
+  `AbstractEvenNormalForm`, under an `AbstractNormalForm(AbstractODE)` that shared only
+  the protocol `SupportsSymbolic` with the observed systems. Replaced because the
+  template's shape differed from an observed system's and changed a second time for the
+  even family (Motivation); the protocol lost its second adopter when the normal forms
+  became `AbstractSymbolicODE`s.
+- *Superseded 2026-10-27*: the guard "the class itself defines the hook concretely"
+  (`defines_concretely`), which needed a special case for the even family's derived
+  `_symbolic_rates`. Replaced by the `ABCMeta` rule of Decision 3.
 - *Decision 1*: keeping the hand-written `rhs` and only generating the Fortran, which
   leaves two places to edit per system; the conformance test catches divergence but
   does not prevent it.
@@ -136,6 +192,17 @@ Hodgkin–Huxley is symbolic for `rhs` only.
   that SymPy already solves, with no exact Jacobian.
 - *Decision 2*: deriving `h`, `Ψ` by `sympy.integrate`, which is possible for Bautin's
   rational integrands; the reviewed closed forms are kept and checked instead.
+- *Decision 2*: detecting evenness and dropping the family, either as a
+  `ClassVar[bool]` that `r_squared` tests or as behavior that switches on the detection
+  alone. A typo that added an odd power of $r$ to Bautin's $\rho$ would then move Bautin
+  to the square-root `rhs` and remove `r_squared` without an error.
+- *Decision 2*: $(\rho, \omega)$ in the `rhs` slot of a `SymbolicODE`, which keeps the
+  type but stores something that is not a vector field.
+- *Decision 2*: keeping `AbstractNormalForm` under `AbstractODE`, which keeps three
+  hand-written `params()` (or a second copy of the derived one) and a protocol as the
+  type that the two hierarchies share.
+- *Decision 3*: an `__init_subclass__` per layer, which repeats the guard in three
+  places and keeps the helper public.
 - *Decision 3*: a module-level `functools.cache` keyed on the class, which has the same
   cost, fails lazily and is a global.
 - *Decision 3*: the module as a field, which is rebuilt per instance and per `tree_at`
@@ -151,3 +218,7 @@ Hodgkin–Huxley is symbolic for `rhs` only.
   defining data, Decision 2) and notes an edge of ADR-0004 (Decision 3).
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md).
+- 2026-10-27 (`symbolic-systems`, review round 1): Decision 2 rewritten (normal forms
+  write `_symbolic_template_polar` and subclass `AbstractSymbolicODE`; the even family is
+  checked, not declared by a second hook); Decision 3 rewritten (the `ABCMeta` guard and
+  the `_compile` extension point); `SupportsSymbolic` removed from Decision 1.

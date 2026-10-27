@@ -779,7 +779,7 @@ reports the constrained values. $b > -1$ is exactly the stability condition $\rh
 
 ## 9. API implied (for B11; amended 2026-10-08; amended 2026-10-22)
 
-> **Amendment 2026-10-22 (ADR-0016).** The hooks `log_growth_rate`/`angular_rate` (and the even family's `_log_growth_rate_sq`/`_angular_rate_sq`) are no longer what a subclass writes: a subclass declares the same two functions as SymPy expressions in the classmethod `_symbolic_rates()` (`(r, ρ(r), ω(r), params)`) or `_symbolic_rates_sq()` in $s$, and the base class compiles them once per class to the JAX hooks listed below (whose contracts are unchanged) and to the cartesian `symbolic()` view used by the AUTO-07p code generator. Everything else in this section stands.
+> **Amendment 2026-10-22, revised 2026-10-27 (ADR-0016).** The hooks `log_growth_rate`/`angular_rate` (and the even family's `_log_growth_rate_sq`/`_angular_rate_sq`) are no longer what a subclass writes. A subclass writes its field in polar coordinates as a SymPy template, the classmethod `_symbolic_template_polar()` returning the states $(r, \theta)$ and the expressions $(\dot r, \dot\theta)$. The base class reads $\rho = \dot r / r$ and $\omega = \dot\theta$ off it and compiles them once per class to the JAX hooks listed below, whose contracts are unchanged, and to the cartesian template used by the AUTO-07p code generator. A form joins the even family by declaring `AbstractEvenNormalForm` as its base class, which checks that both rates are functions of $r^2$. Everything else in this section stands.
 
 
 **Decided 2026-10-03: Option B.** The defining data are even functions of $r$, enforced

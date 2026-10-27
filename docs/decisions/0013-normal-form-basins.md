@@ -44,13 +44,15 @@ diffeomorphism of the plane and cannot map a disk to a point.
 
 ### 1. Base class in $r$ with a declared basin; the even forms become a subclass
 
-`AbstractNormalForm` declares `log_growth_rate(r)`, `angular_rate(r)`,
-`phase_shift(r)`, `isostable(r)` abstract in $r$, plus `basin_radii() -> (r_in, r_out)`
-(default $(0, \infty)$; Python floats) and `in_basin(u)`. Its `rhs` uses $|u|$ through a
-safe square root. `AbstractEvenNormalForm(AbstractNormalForm)` keeps the former
-contract (the `_sq` hooks, the derived $r$-views, the square-root-free `rhs`,
-`eigenvalues_origin`), and Hopf and Bautin move under it unchanged. The `r_squared`
-integration requires the even family and raises otherwise.
+`AbstractNormalForm` takes its rates $\rho(r)$ and $\omega(r)$ from the polar template
+that a subclass writes ([ADR-0016](0016-symbolic-systems.md)), declares `phase_shift(r)`
+and `isostable(r)` abstract in $r$, and has `basin_radii() -> (r_in, r_out)` (default
+$(0, \infty)$; Python floats) and `in_basin(u)`. Its `rhs` uses $|u|$ through a safe
+square root. `AbstractEvenNormalForm(AbstractNormalForm)` is the family whose rates are
+functions of $r^2$; it has the `_sq` hooks, the square-root-free `rhs` and
+`eigenvalues_origin`, and Hopf and Bautin belong to it. A form joins the family by
+declaring it as its base class, and ADR-0016 checks the membership when the class is
+created. The `r_squared` integration requires the even family and raises otherwise.
 
 *Rejected*: a sibling class with the chart methods duplicated, or a Winfree
 `AbstractODE` with hand-written phase and amplitude. One chart API means one `Evaluator`
@@ -133,3 +135,6 @@ Alternatives rejected for a single decision are listed under that decision.
   $a < 0$; `basin_radii` became $(\max(a, 0), \infty)$.
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md).
+- 2026-10-27 (`symbolic-systems`, ADR-0016 review round 1): Decision 1 restated for the
+  polar template; even-family membership is declared by the base class and checked, no
+  longer written as a second hook.

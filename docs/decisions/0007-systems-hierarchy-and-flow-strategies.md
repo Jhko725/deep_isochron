@@ -42,8 +42,9 @@ both without pretending the observed systems carry what they do not.
 ### 1. Unified interface for general ODEs and normal forms
 
 `AbstractODE` is *any* ODE in the study: `rhs(t, u, args)`, `dim`, `params()` and the
-numerical `flow`. `AbstractNormalForm(AbstractODE)` is the subset usable as a conjugacy
-target: planar, with a stable cycle at `r = 1` inside a declared basin
+numerical `flow`. `AbstractNormalForm`, an `AbstractODE` through
+`AbstractSymbolicODE` ([ADR-0016](0016-symbolic-systems.md)), is the subset usable as a
+conjugacy target: planar, with a stable cycle at `r = 1` inside a declared basin
 `basin_radii() -> (r_in, r_out)` (default $(0, \infty)$) with `in_basin(u)`, written
 through two rates `ρ(r)` (log growth rate, `ṙ = rρ(r)`) and `ω(r)` (`θ̇ = ω(r)`), and
 carrying in **closed form** what the observed systems cannot: `period`,
@@ -55,21 +56,21 @@ phase `Θ = θ + h(r)`), `amplitude` (isostable coordinate `Ψ(r)`, normalized
 because `to_chart` was ambiguous once there were two charts. The basin and its `nan`
 convention outside it are [ADR-0013](0013-normal-form-basins.md)'s.
 
-The defining data `ρ(r)` and `ω(r)` are declared as SymPy expressions,
-`_symbolic_rates()` returning `(r, ρ(r), ω(r), params)`, and the JAX hooks
-`log_growth_rate` and `angular_rate` are *derived* from them, compiled once per class
-through `sympy2jax` ([ADR-0016](0016-symbolic-systems.md)); the same expressions
-generate the AUTO-07p Fortran. `h(r)` and `Ψ(r)` stay hand-derived JAX, verified
-symbolically in `tests/test_symbolic.py`. Observed systems have the same structure one
-level up (`AbstractSymbolicODE`, `_symbolic_template`).
+A subclass writes the field in polar coordinates as a SymPy template,
+`_symbolic_template_polar()`. The defining data `ρ = ṙ/r` and `ω = θ̇` are read off it,
+and the JAX hooks `log_growth_rate` and `angular_rate` are compiled from them; the
+mechanism, and the same expressions' second use as the AUTO-07p Fortran, are ADR-0016's.
+`h(r)` and `Ψ(r)` stay hand-derived JAX, verified symbolically in
+`tests/test_symbolic.py`.
 
-The even subfamily `AbstractEvenNormalForm(AbstractNormalForm)` declares its data in
-`s = r²` instead, `_symbolic_rates_sq()`, with the derived hooks `_log_growth_rate_sq`
-and `_angular_rate_sq` (design document §9, "Option B"), so that its cartesian `rhs` is
-smooth at the origin; it alone has `eigenvalues_origin`. The public API is in `r` for
-every form. The `_sq` hooks carry a leading underscore like the spline contract's
-`_forward_in_range` / `_inverse_in_range`: they are the subclass's implementation hooks,
-not the user API.
+The even subfamily `AbstractEvenNormalForm(AbstractNormalForm)` is the family whose
+rates are functions of `s = r²` (design document §9, "Option B"), so that its cartesian
+`rhs` is smooth at the origin; it alone has `eigenvalues_origin`, and its rates are also
+compiled in `s` as the hooks `_log_growth_rate_sq` and `_angular_rate_sq`. A form joins
+it by declaring it as its base class, and ADR-0016 checks the membership when the class
+is created. The public API is in `r` for every form. The `_sq` hooks carry a leading
+underscore like the spline contract's `_forward_in_range` / `_inverse_in_range`: they
+are internal hooks of the `r_squared` integration, not the user API.
 
 The rule is that **a class carries only what is analytically available; everything
 numerical is a function over `AbstractODE`** (`deep_isochron.analysis`: limit-cycle
@@ -196,3 +197,6 @@ made `θ̇ = w` but reported zero imaginary part at the origin.
   basin; the `s = r²` contract moved to `AbstractEvenNormalForm`.
 - 2026-10-22 (`symbolic-systems`, ADR-0016): the defining data declared in SymPy and the
   JAX hooks derived.
+- 2026-10-27 (`symbolic-systems`, ADR-0016 review round 1): the defining data read off
+  a polar template, `_symbolic_template_polar`; the even family declared by its base
+  class and checked, with no hook of its own.
