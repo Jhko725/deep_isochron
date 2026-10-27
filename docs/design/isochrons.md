@@ -1,6 +1,6 @@
 ---
 type: design
-status: draft for review; §3 and §11 hold open decisions
+status: draft for review; the decisions of §11 settled 2026-10-27
 updated: 2026-10-27
 verified_by: pending (Joon); the measurements in §3, §5 and §7 were made on 2026-10-27 with AUTO-07p at commit 44cc1c4 and are recorded in the branch's change document
 sources: [Langfield et al. 2014, Osinga & Moehlis 2010, Hannam et al. 2022, Krauskopf & Rieß 2008, Guckenheimer 1975, Nakao 2016, AUTO-07p (manual doc/auto.tex and source at 44cc1c4), the coworker's src/Isochron2PBVP, ADR-0014, ADR-0015, ADR-0016]
@@ -185,16 +185,19 @@ correct when the bundle $w$ solves the adjoint equation.
 
 **The coworker's bundle solves $\dot w = +A^{\mathsf T} w$, which is neither equation.**
 `FUNC` sets `F(5:6) = PAR(12)*MATMUL(TRANSPOSE(A),U(5:6))` and the same for `F(7:8)`
-[code] (`fncMultiSegIso.f90:49-50`; the generic file keeps it). Its transition matrix
+[code] (`fncMultiSegIso.f90:49-50`; the generic file kept it until D1). The script's
+own header calls the slots the "Adjoint Floquet multipliers" and the "Adjoint Floquet
+Bundle" (`mainIsochronMultiSegFNC.py:20-21`), so the sign is a slip, not a different
+method. Its transition matrix
 $\Psi(t)$ has no fixed relation to $\Phi(t)$ in general, and two measurements show the
 consequence [code]:
 
 - For `HopfNormalForm(1.3, 1.5, 0.4)` the multipliers of $\Psi(T)$ are
   $-0.0043 \pm 0.0004\thinspace i$, and for `BautinNormalForm(1.0, 0.3, 1.5, 0.5)` they
-  are $-0.0039 \pm 0.0018\thinspace i$. Neither has the
-  multiplier 1, so the bundle stage, which looks for a branch point at $\lambda = 1$,
-  has nothing to find. The coworker's pipeline would fail at stage 2 on every
-  normal form.
+  are $-0.0039 \pm 0.0018\thinspace i$. Neither has the multiplier 1, so the bundle
+  stage, which looks for a branch point at $\lambda = 1$, has nothing to find. Run
+  unchanged in AUTO on the generated problems, the coworker's runs 4–5 walk the trivial
+  branch from $\lambda = 1.2$ to $-8.7$ without a branch point, for both forms.
 - For FitzHugh–Nagumo, $\Psi(T)$ does have the multipliers 1 and $\mu$, and AUTO's run
   4 detects branch points at $\lambda = 1$ and at $\lambda = 1.68948\times 10^{-12}$.
 
@@ -223,9 +226,12 @@ With `F(5:6)` and `F(7:8)` negated and every run constant of runs 4–5 unchange
 finds the branch point at $\lambda = 1$, and the normalized bundle at the same base
 point is $w = (-0.37971, 0.92511)$. Its rotation $Jw$ agrees with $-v_s$ to eight digits
 [code]. The bundle vector $w$ itself is the phase sensitivity up to its scale:
-$w\cdot F = 1.1147$ for $\vert w\vert = 1$, against $Z\cdot F = 2\pi/T = 0.5596$.
+$w\cdot F = 1.1147$ for $\vert w\vert = 1$, against $Z\cdot F = 2\pi/T = 0.5596$. On
+the Hopf and Bautin forms of the previous paragraph, the negated runs find the branch
+point at $\lambda = 0.99999999998$, and $w$ equals the direction of the closed-form
+$\nabla\Theta$ at the base point to round-off [code].
 
-**Three ways to get the stable direction remain, and the choice is open (§11, D1).**
+**Three ways to get the stable direction were weighed; D1 chose (a).**
 
 | Option | Equation in `FUNC` | Branch point at | What $w$ is | Cost |
 |---|---|---|---|---|
@@ -234,7 +240,7 @@ $w\cdot F = 1.1147$ for $\vert w\vert = 1$, against $Z\cdot F = 2\pi/T = 0.5596$
 | (c) from O2 | none; the bundle stage is removed | — | O2's `Floquet.vectors`, carried to each base point | new slots for $d$; $d$ must follow the rotation of stage 3 |
 
 Option (a) keeps every stage of the coworker's pipeline and makes $w$ double as the
-phase sensitivity that O4 needs. Option (b) is the published route. AUTO does detect the
+phase sensitivity that O4 needs; `isochron_multiseg.f90` integrates it since D1. Option (b) is the published route. AUTO does detect the
 branch point at $1.69\times 10^{-12}$ in the coworker's run 4, so (b) is feasible, but
 its branch point moves with the system's contraction rate. Option (c) duplicates O2 inside
 the pipeline and loses AUTO's own consistency between the bundle and the collocated orbit.
@@ -383,9 +389,9 @@ The mapping is:
 | run 2, growing segment 2 | stage 1, `_periodic_orbit` | the two segments are cut from O1's cycle at half the period and corrected once |
 | run 3, sliding the anchor | `reanchor` before stage 1 | phase 0 is set on the `LimitCycle`, not in AUTO |
 | `FB(6)`, $y = $ const | $(u_1(0) - p)\cdot n = 0$ | the anchor is O1's section through phase 0 (decision 3) |
-| runs 4–5 | stage 2, `_adjoint_bundle` | the equation of §3, option (a), (b) or (c) (D1) |
+| runs 4–5 | stage 2, `_adjoint_bundle` | the adjoint equation, option (a) of §3 (D1) |
 | runs 6–8 | stage 3, `_rotate_phase` | `UZR` at the requested phases only |
-| `createMultSegPeriodCopy2D` | the start of stage 4 | `U(9:10)` integrated by O1's solver; `U(1:8)` evaluated from AUTO's polynomials (D2) |
+| `createMultSegPeriodCopy2D` | the start of stage 4 | on AUTO's stored grid: `U(1:8)` as stored, `U(9:10)` integrated by O1's solver; no splines (D2) |
 | the two isochron runs | stage 4, `_isochron` | stop when the traced point leaves a box relative to the cycle (decision 15) |
 | the loop over phases | `isochron_foliation` | a process pool (decision 17) |
 
@@ -418,21 +424,31 @@ and stage 3 places one `UZR` value per requested phase [deduced; consistent with
 coworker's files, §5]. Phase 0 is $\tau_2 = T$; stage 3 continues to $1.01T$, as the
 coworker does, so that it is an interior `UZ` point.
 
-**Stage 4 builds its start solution without splines.** The isochron segment `U(9:10)`
-spans $n$ periods on the same $[0, 1]$ as the one-period pieces, so the start needs
-$n$ times as many points as the stored solution has. `U(9:10)` is integrated from the
-base point with O1's solver at those points. `U(1:8)` must be evaluated between AUTO's
-stored points; AUTO's solution is a polynomial of degree `NCOL` on each mesh interval,
-so Lagrange interpolation on the interval's stored points evaluates it exactly (§2).
-The first plan's statement that no interpolation is needed was wrong; D2 decides between
-this evaluation and SciPy splines.
+**Stage 4 builds its start solution on AUTO's stored grid.** `U(1:8)` is the rotated
+solution as AUTO stored it, and `U(9:10)` is integrated from the base point with O1's
+solver at the same points $t$, scaled to $n$ periods (D2). No interpolation is needed,
+because every component shares AUTO's one mesh: with `NTST` intervals over $[0, 1]$, the
+isochron segment gets `NTST`$/n$ intervals per period whatever start data it is given,
+and AUTO adapts the mesh to the data. The coworker's fivefold spline resampling
+therefore adds nothing the mesh keeps. Isochron 26 traced from this start agrees with
+the spline start to $3.3\times 10^{-6}$, the size of AUTO's rerun-to-rerun difference,
+with 7064 against 7065 points [code]. Evaluating AUTO's piecewise polynomials exactly by
+Lagrange interpolation on the `NCOL + 1` equally spaced points of each interval
+(`src/mesh.f90:163` of AUTO-07p) was the other candidate; it is not needed.
 
-**Stage 4 stops on the cycle's own scale.** The two runs trace the halves of the
-isochron with `DS` $= \pm 10^{-5}$ and stop at $\vert\eta\vert$ = `eta_stop` or when the
-traced point leaves the cycle's bounding box enlarged `box_scale` times about its
-center, in either coordinate. For FitzHugh–Nagumo, whose cycle has $\vert x\vert$ up to
-about 2, `box_scale = 5` reproduces the coworker's bound of 10 and adds the lost bound
-on $y$.
+**Stage 4 stops on the cycle's own scale and says why.** The two runs trace the halves
+of the isochron with `DS` $= \pm 10^{-5}$ and stop at $\vert\eta\vert$ = `eta_stop`,
+when the traced point leaves the cycle's bounding box enlarged `box_scale` times about
+its center in either coordinate, or at the step limit `NMX`. Each `Isochron` records
+which of `"eta"`, `"box"` and `"max_steps"` ended each half (D7); a half that ran out of
+steps is correct as far as it goes, so it is flagged rather than raised. For
+FitzHugh–Nagumo, whose cycle has $\vert x\vert$ up to about 2, `box_scale = 5`
+reproduces the coworker's bound of 10 and adds the lost bound on $y$.
+
+**The mesh grows with the number of periods.** `IsochronSettings.ntst` defaults to
+`60 * n_periods`, 300 for the default 5, so that the isochron segment keeps 60 intervals
+per period when `n_periods` changes (D6). With a fixed `NTST`, doubling `n_periods`
+would halve the mesh per period without any sign of it.
 
 ## 7. What is exact and what is approximated
 
@@ -468,8 +484,8 @@ the segments are piecewise polynomials on `NTST = 300` intervals of degree `NCOL
 corrected to `EPSU = 1e-10`. The isochron segment winds $n$ times around the cycle on
 the same number of intervals, so its mesh is $n$ times coarser per period than the
 orbit's; the adaptive mesh redistributes the intervals, and the coworker's results show
-that this is enough for FitzHugh–Nagumo. Another system may need a larger `ntst`, which
-`IsochronSettings` carries.
+that this is enough for FitzHugh–Nagumo. D6 keeps that resolution per period when
+`n_periods` changes; a system that needs more raises `ntst` itself.
 
 **Phase is extremely sensitive near the source, which limits forward-time checks.**
 Integrating the coworker's points forward for four periods and comparing with the base
@@ -486,14 +502,13 @@ AUTO's error from its own (§8) [deduced].
 | The coworker's isochrons, files 100, 26 and 51 | the whole pipeline on FitzHugh–Nagumo, with phase 0 at the coworker's anchor and each stored curve's phase from its base point | a two-way distance from points to the other curve's polyline of $2\times 10^{-5}$, above the $3.6\times 10^{-6}$ of AUTO's own rerun and the $8.1\times 10^{-6}$ between the coworker's bundle and option (a) (D3) |
 | O1's cycle | the period of stage 1 (11.2279; Langfield et al. 2014, §III) and its points | AUTO's correction tolerance against O1's shooting tolerance |
 | The Hopf route (runs 0–1) | O1's cycle by an independent method (decision 12) | the same |
-| O2's Floquet vectors | $Jw$ (option a) or $w$ (option b) parallel to `floquet(cycle).vectors` at the points `x0s` | the angle at the accuracy of O2's vectors |
-| The closed forms of Bautin and Winfree | `nf.phase(point)` $= \theta$ along every traced isochron, with phase 0 at $(1, 0)$ (decision 14) | $O(\eta^2)$ plus collocation error with option (a) or (b); first order in $\eta$ with the coworker's bundle |
+| O2's Floquet vectors | $Jw$ parallel to `floquet(cycle).vectors` at the points `x0s` | the angle at the accuracy of O2's vectors |
+| The closed forms of Bautin and Winfree | `nf.phase(point)` $= \theta$ along every traced isochron, with phase 0 at $(1, 0)$ (decision 14) | $O(\eta^2)$ plus collocation error, since the end direction is $v_s$ |
 | Forward integration | for traced points farther than a set distance from the phaseless set, the phase after $k$ periods against the base point's orbit | scaled by the local phase sensitivity; points near the source are excluded |
-| The bundle's scale | $w\cdot F$ constant along the cycle with option (a), since $Z\cdot F = 2\pi/T$ | round-off times the condition of the bundle |
+| The bundle's scale | $w\cdot F$ constant along the cycle, since $Z\cdot F = 2\pi/T$ | round-off times the condition of the bundle |
 
 O3's phase field and O4's $Z(\theta)$ add two more oracles when they exist: the phase
-field is constant along every AUTO isochron, and $w$ with option (a) is parallel to
-$Z(\theta)$.
+field is constant along every AUTO isochron, and $w$ is parallel to $Z(\theta)$.
 
 ## 9. Limits and deferred work
 
@@ -504,7 +519,9 @@ $Z(\theta)$.
 - **Forward-time isochrons of attracting cycles only.** Backward-time isochrons of
   repelling cycles, which Langfield et al. (2014, §V) mention, are deferred.
 - **One `n_periods` for the whole isochron.** Langfield's staged extension (§4) is
-  deferred unless D4 adopts it.
+  deferred (D4) until a system's isochrons stop at `"max_steps"` or fall short of its
+  phaseless set. The outward halves run with $\eta$ near $10^{-14}$ and points up to
+  0.19 apart; resampling by arclength is a follow-up if a consumer needs even spacing.
 - **No parameter sweeps.** Following a family of cycles in a parameter is not part of
   O7; the Hopf-route test of decision 12 is its starting point.
 - **The bundle and O4.** Replacing the bundle stage by O4's $Z(\theta)$ is deferred to
@@ -512,7 +529,10 @@ $Z(\theta)$.
 
 ## 10. The tests this document promises
 
-- `rhs.inc`, compiled by the gfortran driver, against `rhs` and `jacfwd(rhs)` (Step A).
+- `rhs.inc`, compiled by the gfortran driver, against `rhs` and `jacfwd(rhs)`; the
+  generic file compiled with each planar system's includes; every wrap cut at a blank;
+  `indices.inc` one slot per line; the bundle's adjoint sign (Step A,
+  `tests/test_auto_codegen.py`).
 - The FitzHugh–Nagumo problem builds with AUTO and finds the Hopf point at $c = 2.1192$
   (Step B smoke test).
 - `reanchor`: the period is unchanged, the new `x0s[0]` lies on the cycle, and
@@ -521,37 +541,41 @@ $Z(\theta)$.
 - Stage 2: the branch point is at $\lambda = 1$ for FitzHugh–Nagumo, Hopf, Bautin and
   Winfree; the end direction is parallel to O2's $v_s$ at the mesh points.
 - Stage 3: the base point of each `UZ` solution has the requested phase on O1's cycle.
-- Stage 4: the oracles of §8, on three phases of each system.
+- Stage 4: the oracles of §8, on three phases of each system; the stop reason of each
+  half; `ntst` scaling with `n_periods`.
 - The Hopf route against O1's cycle.
 - `IsochronFoliation.save` and `load` round-trip every field.
 - Refusals: a non-planar system, an unknown phase type, a missing AUTO tree.
 
-## 11. Decisions for Joon
+## 11. Decisions
 
-Each question is phrased so that "yes" accepts the recommendation.
+Joon settled these on 2026-10-27; each was phrased so that "yes" accepted the
+recommendation, and each was accepted.
 
-- **D1 — The stable direction.** Should stage 2 integrate the adjoint equation,
-  option (a) of §3, by negating `F(5:6)` and `F(7:8)`? It keeps the coworker's stages,
-  has its branch point at $\lambda = 1$ for every system, and gives $Z(\theta)$ for O4.
-  *Recommended: yes.* Decision 11 of the plan (keep AUTO's bundle) then stands with the
-  corrected equation.
-- **D2 — Evaluating AUTO's solution between its points.** Should stage 4 evaluate
-  `U(1:8)` by Lagrange interpolation within AUTO's mesh intervals, which is exact for
-  AUTO's representation and needs only NumPy, rather than SciPy splines? *Recommended:
-  yes.*
-- **D3 — The regression oracle's tolerance.** Should the coworker's files stay the
-  oracle under option (a), compared by the two-way distance from points to the other
-  curve's polyline at $2\times 10^{-5}$? This replaces decision 13's $2\times 10^{-3}$,
-  which rested on a point-to-point distance that measured the spacing of the points
-  (§5). The measured differences are $3.6\times 10^{-6}$ for AUTO's rerun and
-  $8.1\times 10^{-6}$ between the two bundles (§7). *Recommended: yes.*
-- **D4 — One segment per isochron.** Should stage 4 keep the coworker's single
-  segment of `n_periods` periods, rather than Langfield's staged extension in $k$?
-  *Recommended: yes*, since it reproduces the published FitzHugh–Nagumo isochrons; the
-  staged extension stays deferred until a system needs more of the spiral than
-  `n_periods` reaches.
-- **D5 — The rotating base point.** Should the pipeline keep the coworker's rotation of
-  the base point and the bundle (Hannam et al. 2022), rather than Langfield's single
-  base point with segments of $(k + 1 - \vartheta)T$? *Recommended: yes.* With the
-  corrected bundle, each base point has its own accurate stable direction, and the
-  plan's stages already follow this structure.
+- **D1 — The adjoint bundle.** Stage 2 integrates $\dot w = -\tau A^{\mathsf T}w$,
+  option (a) of §3; the coworker's $+A^{\mathsf T}$ was a sign slip, confirmed by its
+  failure on the Hopf and Bautin forms. Decision 11 of the plan (keep AUTO's bundle)
+  stands with the corrected equation. Recorded in ADR-0017.
+- **D2 — The stage-4 start on AUTO's grid.** No interpolation and no SciPy (§6).
+  Lagrange evaluation within AUTO's mesh intervals and the coworker's splines were the
+  alternatives.
+- **D3 — The regression oracle's tolerance.** The coworker's files stay the oracle,
+  compared by the two-way distance from points to the other curve's polyline at
+  $2\times 10^{-5}$. This replaces decision 13's $2\times 10^{-3}$, which rested on a
+  point-to-point distance that measured the spacing of the points (§5).
+- **D4 — One segment per isochron.** Stage 4 keeps the coworker's single segment of
+  `n_periods` periods; Langfield's staged extension is deferred (§9).
+- **D5 — The rotating base point.** The pipeline keeps the coworker's rotation of the
+  base point and the bundle (Hannam et al. 2022), rather than Langfield's single base
+  point with segments of $(k + 1 - \vartheta)T$. With the corrected bundle, each base
+  point has its own accurate stable direction, and every isochron gets the same
+  treatment. Recorded in ADR-0017.
+- **D6 — The mesh against the number of periods.** `ntst` defaults to `60 * n_periods`
+  (§6).
+- **D7 — The stop reason of each half.** `"eta"`, `"box"` or `"max_steps"`, flagged
+  rather than raised (§6).
+- **D8 — Wrapping between tokens.** `codegen._wrap` cuts only at blanks, which SymPy's
+  printer puts only between tokens. The earlier cut at a fixed width split `PAR` in
+  Bautin's `rhs.inc`, which then did not compile.
+- **D9 — The coworker.** Claude drafts a note on the sign slip; Joon decides whether to
+  send it.

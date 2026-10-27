@@ -54,6 +54,9 @@ jobs:
           enable-cache: true
       - run: uv python install 3.13
       - run: uv sync --group dev
+      # gfortran compiles the generated AUTO Fortran in tests/test_auto_codegen.py;
+      # installed explicitly rather than relying on the runner image.
+      - run: sudo apt-get update && sudo apt-get install -y gfortran
       - run: uv run pytest --hypothesis-profile=ci -n 2 -m slow
       - name: end-to-end smoke run (generate + 20 training steps + reopen)
         run: |

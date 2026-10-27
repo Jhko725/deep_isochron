@@ -11,8 +11,10 @@
 !   2   the vector field itself (equilibria, periodic orbits)
 !   4   two orbit segments U(1:2), U(3:4) with times IP_SEG1, IP_SEG2
 !       joined into one periodic orbit (period IP_PERIOD = IP_SEG1 + IP_SEG2)
-!   8   plus w' = A^T w on both segments (U(5:6), U(7:8)); at the branch
-!       point IP_MULT = 1 the perpendicular of w is the stable direction
+!   8   plus the adjoint equation w' = -A^T w on both segments (U(5:6),
+!       U(7:8)); at the branch point IP_MULT = 1, w is the direction of the
+!       phase sensitivity Z and its perpendicular the stable direction
+!       (docs/design/isochrons.md, section 3)
 !  10   plus an orbit segment U(9:10) of time IP_COPIES ending on the stable
 !       direction at the junction, at distance IP_ETA: its start traces
 !       the isochron (IP_POINT_X, IP_POINT_Y) of the junction (IP_BASE_*)
@@ -41,8 +43,8 @@
         CALL RHS(2,U(3:4),PAR,F(3:4),.TRUE.,B)
         F(3:4)  =  PAR(IP_SEG2)*F(3:4)
         IF(NDIM==4) RETURN
-        F(5:6)  =  PAR(IP_SEG1)*(MATMUL(TRANSPOSE(A),U(5:6)))
-        F(7:8)  =  PAR(IP_SEG2)*(MATMUL(TRANSPOSE(B),U(7:8)))
+        F(5:6)  = -PAR(IP_SEG1)*(MATMUL(TRANSPOSE(A),U(5:6)))
+        F(7:8)  = -PAR(IP_SEG2)*(MATMUL(TRANSPOSE(B),U(7:8)))
         IF(NDIM==8) RETURN
         CALL RHS(2,U(9:10),PAR,F(9:10),.FALSE.,A)
         F(9:10)  = PAR(IP_COPIES)*F(9:10)
@@ -73,7 +75,7 @@
         FB(5)    = PAR(IP_PERIOD)-PAR(IP_SEG1)-PAR(IP_SEG2)
         FB(6)    = U0(2)-PAR(IP_ANCHOR_Y)
         IF (NDIM==4) RETURN
-        ! w' = A^T w: periodic up to the multiplier, normalized at the junction
+        ! w' = -A^T w: periodic up to the multiplier, normalized at the junction
         FB(7:8)  = U1(7:8)- U0(5:6)
         FB(9:10) = U1(5:6)- PAR(IP_MULT)*U0(7:8)
         FB(11)   = DOT_PRODUCT(U0(7:8),U0(7:8)) - PAR(IP_NORM)

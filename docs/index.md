@@ -32,7 +32,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`cubic-bspline.md`](design/cubic-bspline.md) | agreed | the `CubicBSpline` boundary treatment and inverse error bound |
 | [`validation-split.md`](design/validation-split.md) | tentative | why `val/mse` is a near-cycle metric and the early/late split by window start (`t_split`); how to choose the threshold; what it does not do |
 | [`analysis.md`](design/analysis.md) | tentative (§1 E1, §2 O1) | the `Cycle` representation; per analysis function (E1, O1 so far): literature survey with cited/deduced claims, method, oracles, limits |
-| [`isochrons.md`](design/isochrons.md) | draft for review (§3 and §11 open) | isochrons by AUTO-07p continuation: the method of Langfield et al. 2014, the coworker's run-by-run algorithm, ours; AUTO from the ground up; the stable direction (variational, adjoint, and the coworker's $+A^{\mathsf T}$ defect); accuracy, oracles, limits, tests (roadmap O7) |
+| [`isochrons.md`](design/isochrons.md) | draft for review (decisions D1–D9 settled 2026-10-27) | isochrons by AUTO-07p continuation: the method of Langfield et al. 2014, the coworker's run-by-run algorithm, ours; AUTO from the ground up; the stable direction (variational, adjoint, and the coworker's $+A^{\mathsf T}$ defect); accuracy, oracles, limits, tests (roadmap O7) |
 | [`training-step-performance.md`](design/training-step-performance.md) | tentative | where a JAX training step spends its time: asynchronous dispatch, committed/uncommitted placement, the GIL and grain's threads, what `bench_dataloader.py` measures, the bottleneck taxonomy, and the Phase C case history |
 
 ## Decision records (`decisions/`)

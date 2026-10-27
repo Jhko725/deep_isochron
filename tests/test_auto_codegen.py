@@ -9,14 +9,17 @@ FitzHugh–Nagumo output equals the golden file, which is the coworker's hand-wr
 ``RHS`` up to term order. Section 2 tests the index block after the system's slots:
 the period on ``PAR(11)`` for up to ten parameters, contiguous and named, more than
 ten rejected. Section 3 checks that every ``PAR(`` reference in the generic file is a
-named slot that ``indices.inc`` declares. Section 4 tests `write_problem`: the four
-files, the ``PAR`` dict and slot lookup, a stable source hash, non-planar systems
-rejected. Section 5 (slow) compiles the generated ``RHS`` with gfortran through f2py
-and compares it with the JAX ``rhs`` and ``jacfwd(rhs)``.
+named slot that ``indices.inc`` declares, and that the bundle integrates the adjoint
+equation. Section 4 tests `write_problem`: the four files, the ``PAR`` dict and slot
+lookup, a stable source hash, non-planar systems rejected. Section 5 (slow, needs
+``gfortran``) compiles the generic file with each system's includes, and compiles a
+driver around ``rhs.inc`` whose ``F`` and ``A`` are compared with the JAX ``rhs`` and
+``jacfwd(rhs)``.
 """
 
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 import jax
@@ -57,8 +60,9 @@ PLANAR = [
 
 # ----------------------------------------------------------------- 1. rhs.inc ----
 def _statements(block: str) -> dict[str, str]:
-    """``{"F(1)": "<fortran expr>", "A(1,2)": ...}`` with continuations joined."""
-    joined = re.sub(r" &\n\s*& ", "", block)
+    """``{"F(1)": "<fortran expr>", "A(1,2)": ...}`` with continuations joined by a
+    blank, which is only correct if `rhs_block` never cuts inside a token."""
+    joined = re.sub(r"\s*&\n\s*&\s*", " ", block)
     out = {}
     for line in joined.splitlines():
         m = re.match(r"\s*([FA]\([\d,]+\)) = (.*)$", line)
@@ -121,13 +125,34 @@ def test_rhs_block_prints_the_field_and_its_jacobian(ode, data):
 
 @pytest.mark.parametrize("ode", PLANAR, ids=repr)
 def test_rhs_block_lines_fit_the_width(ode):
-    """Every line of `rhs_block` is at most ``codegen.LINE_WIDTH`` wide, and a
-    continuation line follows exactly the lines that end in ``&``."""
+    """Every line of `rhs_block` is at most ``codegen.LINE_WIDTH`` wide, a
+    continuation line follows exactly the lines that end in ``&``, and every cut is
+    at a blank: ``" &"`` ends the line and ``"& "`` starts the next."""
     lines = rhs_block(ode.symbolic()).splitlines()
     assert all(len(line) <= codegen.LINE_WIDTH for line in lines)
-    # a wrapped statement: trailing `&` on the line, leading `&` on the continuation
     for prev, line in zip(lines, lines[1:]):
         assert line.lstrip().startswith("&") == prev.rstrip().endswith("&")
+        if prev.endswith("&"):
+            assert prev.endswith(" &") and line.lstrip().startswith("& ")
+
+
+def test_long_statements_are_cut_between_tokens():
+    """A statement far longer than the width is cut only at blanks, so that joining
+    the pieces with one blank gives the statement back."""
+    x = sp.Symbol("x")
+    expr = sum(sp.Symbol(f"PAR({i})") * x**i for i in range(1, 40))
+    text = "        F(1) = " + codegen._printer()._print(expr)  # noqa: SLF001
+    wrapped = codegen._wrap(text, "        ")  # noqa: SLF001
+    assert len(wrapped.splitlines()) > 2
+    assert re.sub(r" &\n\s*& ", " ", wrapped) == text
+
+
+def test_indices_block_has_one_declaration_per_line():
+    """`indices_block` declares one slot per line, so it stays far below Fortran's
+    132-character limit."""
+    lines = indices_block(internal_indices(4)).splitlines()
+    assert len(lines) == len(internal_indices(4).fortran_constants())
+    assert all(len(line) <= codegen.LINE_WIDTH for line in lines)
 
 
 def test_fitzhugh_nagumo_rhs_block_matches_the_golden_file():
@@ -178,6 +203,15 @@ def test_generic_file_uses_only_named_slots_that_indices_inc_declares():
         assert re.search(rf"\b{name} = \d+", block)
 
 
+def test_bundle_integrates_the_adjoint_equation():
+    """Both bundle segments are ``w' = -τ Aᵀ w``, the adjoint equation, whose
+    multiplier-1 solution is the phase sensitivity (`docs/design/isochrons.md` §3); the
+    coworker's file had the sign ``+``."""
+    src = generic_source()
+    assert "F(5:6)  = -PAR(IP_SEG1)*(MATMUL(TRANSPOSE(A),U(5:6)))" in src
+    assert "F(7:8)  = -PAR(IP_SEG2)*(MATMUL(TRANSPOSE(B),U(7:8)))" in src
+
+
 # ----------------------------------------------------------- 4. write_problem ----
 def test_write_problem_lays_down_the_files(tmp_path):
     """`write_problem` writes the four files, returns the ``PAR`` dict, parameter map
@@ -208,44 +242,76 @@ def test_non_planar_systems_are_rejected(tmp_path):
         write_problem(HodgekinHuxley(), tmp_path)
 
 
-# --------------------------------------------------------------- 5. f2py (slow) ----
-@pytest.mark.slow
-@pytest.mark.skipif(shutil.which("gfortran") is None, reason="needs gfortran")
-@pytest.mark.parametrize("ode", PLANAR, ids=repr)
-def test_compiled_rhs_agrees_with_jax(ode, tmp_path):
-    """Compile ``RHS`` alone (the generic file's other routines need AUTO's ``GETP``)
-    with the generated include, through ``numpy.f2py``; compare ``F`` and ``A``."""
-    import importlib
-    import subprocess
-    import sys
+# ------------------------------------------------------------ 5. gfortran (slow) ----
+DRIVER = """\
+      PROGRAM DRIVER
+        IMPLICIT NONE
+        DOUBLE PRECISION U(2), PAR(36), F(2), A(2,2)
+        READ(*,*) U, PAR
+        CALL RHS(2, U, PAR, F, .TRUE., A)
+        WRITE(*,'(ES25.17E3)') F, A
+      CONTAINS
+        SUBROUTINE RHS(NDIM,U,PAR,F,JAC,A)
+          INTEGER, INTENT(IN) :: NDIM
+          DOUBLE PRECISION, INTENT(IN) :: U(NDIM), PAR(*)
+          LOGICAL, INTENT(IN) :: JAC
+          DOUBLE PRECISION, INTENT(OUT) :: F(NDIM), A(NDIM,NDIM)
+          INCLUDE 'rhs.inc'
+        END SUBROUTINE RHS
+      END PROGRAM DRIVER
+"""
+"""A program around ``rhs.inc`` that reads ``U`` and ``PAR`` and prints ``F`` and
+``A`` (column-major) to 17 significant digits, which round-trips a double."""
 
-    problem = write_problem(ode, tmp_path)
-    src = tmp_path / "rhs_only.f90"
-    src.write_text(
-        "      SUBROUTINE RHS(NDIM,U,PAR,F,JAC,A)\n"
-        "        IMPLICIT NONE\n"
-        "        INTEGER, INTENT(IN) :: NDIM\n"
-        "        DOUBLE PRECISION, INTENT(IN) :: U(NDIM), PAR(36)\n"
-        "        LOGICAL, INTENT(IN) :: JAC\n"
-        "        DOUBLE PRECISION, INTENT(OUT) :: F(NDIM), A(NDIM,NDIM)\n"
-        "        INCLUDE 'rhs.inc'\n"
-        "      END SUBROUTINE RHS\n"
-    )
+needs_gfortran = pytest.mark.skipif(
+    shutil.which("gfortran") is None, reason="needs gfortran"
+)
+
+
+@pytest.mark.slow
+@needs_gfortran
+@pytest.mark.parametrize("ode", PLANAR, ids=repr)
+def test_generic_file_compiles_with_the_generated_includes(ode, tmp_path):
+    """``gfortran -c`` compiles the generic file with the system's ``rhs.inc`` and
+    ``indices.inc``; ``-c`` does not link, so AUTO's ``GETP`` is not needed."""
+    write_problem(ode, tmp_path)
     subprocess.run(
-        [sys.executable, "-m", "numpy.f2py", "-c", "-m", "rhs_only", str(src)],
+        ["gfortran", "-c", "isochron.f90", "-o", "isochron.o"],
         cwd=tmp_path,
         check=True,
         capture_output=True,
     )
-    sys.path.insert(0, str(tmp_path))
-    try:
-        mod = importlib.import_module("rhs_only")
-    finally:
-        sys.path.remove(str(tmp_path))
+
+
+@pytest.mark.slow
+@needs_gfortran
+@pytest.mark.parametrize("ode", PLANAR, ids=repr)
+def test_compiled_rhs_agrees_with_jax(ode, tmp_path):
+    """The driver, compiled with ``gfortran -I`` against the generated ``rhs.inc``,
+    gives ``F`` and ``A`` equal to ``rhs`` and ``jacfwd(rhs)`` at several points."""
+    problem = write_problem(ode, tmp_path)
+    (tmp_path / "driver.f90").write_text(DRIVER)
+    subprocess.run(
+        ["gfortran", "-I", str(tmp_path), "-o", "driver", "driver.f90"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
     par = np.zeros(36)
     for i, v in problem.pars.items():
         par[i - 1] = v
-    u = np.array([0.5, -0.2])
-    f, a = mod.rhs(u, par, True)  # f2py infers NDIM from U and makes F, A outputs
-    assert_close(f, ode.rhs(0.0, jnp.asarray(u)))
-    assert_close(a, jax.jacfwd(ode.rhs, argnums=1)(0.0, jnp.asarray(u)))
+    jac = jax.jacfwd(ode.rhs, argnums=1)
+    for u in ([0.5, -0.2], [1.1, 0.3], [-0.7, 0.9], [0.05, -1.3]):
+        stdin = " ".join(repr(float(v)) for v in (*u, *par))
+        out = subprocess.run(
+            [str(tmp_path / "driver")],
+            input=stdin,
+            text=True,
+            check=True,
+            capture_output=True,
+        ).stdout.split()
+        values = np.array([float(v) for v in out])
+        f, a = values[:2], values[2:].reshape(2, 2, order="F")
+        x = jnp.asarray(u)
+        assert_close(f, ode.rhs(0.0, x), rtol=TOL["identity"], atol=TOL["identity"])
+        assert_close(a, jac(0.0, x), rtol=TOL["identity"], atol=TOL["identity"])

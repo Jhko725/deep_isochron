@@ -12,7 +12,7 @@ the pipeline's own parameter slots after the system's ``PAR(1..n)``.
 the pipeline needs to address them: the ``PAR`` dict, the named slots ``Idx``, and a
 hash of the generated source for provenance. AUTO is not needed to run this module;
 the tests compare the output against a golden file and, when ``gfortran`` is present,
-compile ``rhs.inc`` with ``f2py`` against the JAX ``rhs``.
+compile a small driver around ``rhs.inc`` and compare it with the JAX ``rhs``.
 
 ADR-0016 §4 and §5 have the reasoning: ``INCLUDE`` rather than a template engine, and
 the slot layout.
@@ -57,8 +57,9 @@ class Idx(NamedTuple):
         ``IP_SEG2``.
     - `copies`: The integration time of the isochron segment, ``n_periods`` periods,
         ``IP_COPIES``.
-    - `mult`: The multiplier of the ``w' = Aᵀw`` bundle, ``IP_MULT``; the branch point
-        is at 1.
+    - `mult`: The multiplier of the adjoint bundle ``w' = -Aᵀw``, ``IP_MULT``; the
+        branch point is at 1, where ``w`` is the direction of the phase sensitivity
+        (`docs/design/isochrons.md` §3).
     - `norm`: The squared norm of ``w`` at the junction, ``IP_NORM``.
     - `eta`: The distance along the stable direction, the continuation parameter of
         an isochron, ``IP_ETA``.
@@ -143,9 +144,9 @@ def auto_pars(ode: AbstractSymbolicODE) -> dict[int, float]:
 
 LINE_WIDTH = 100
 """The wrap width, below the 132 characters free-form Fortran allows. A statement is
-wrapped with a trailing ``&`` and a leading ``&`` on the continuation line, which makes
-the split point irrelevant: a token may be cut. SymPy's own wrapper omits the leading
-``&`` and may cut ``**`` into ``* *``, so it is not used."""
+cut only at a blank, which SymPy's printer puts only between tokens, so no token is
+split; the line ends in ``" &"`` and the continuation starts with ``"& "``. SymPy's own
+wrapper omits the leading ``&`` and may cut ``**`` into ``* *``, so it is not used."""
 
 
 def _printer() -> FCodePrinter:
@@ -154,16 +155,24 @@ def _printer() -> FCodePrinter:
 
 
 def _wrap(text: str, indent: str) -> str:
-    """Split one statement into continuation lines of at most `LINE_WIDTH`."""
+    """Split one statement into continuation lines of at most `LINE_WIDTH`, cutting
+    only at blanks.
+
+    **Raises:**
+
+    `ValueError` if a stretch without a blank is too long for one line.
+    """
     cont = indent + "   & "
-    first, rest = LINE_WIDTH - 2, LINE_WIDTH - 2 - len(cont)  # room for the " &"
+    width = LINE_WIDTH - 2  # room for the trailing " &"
     chunks = []
-    width = first
     while len(text) > width:
-        chunks.append(text[:width])
-        text, width = text[width:], rest
+        cut = text.rfind(" ", len(cont) if chunks else len(indent), width + 1)
+        if cut < 0:
+            raise ValueError(f"no blank to wrap at within {width} characters: {text}")
+        chunks.append(text[:cut])
+        text = cont + text[cut + 1 :]
     chunks.append(text)
-    return (" &\n" + cont).join(chunks)
+    return " &\n".join(chunks)
 
 
 def rhs_block(sym: SymbolicODE, indent: str = "        ") -> str:
@@ -203,10 +212,12 @@ def rhs_block(sym: SymbolicODE, indent: str = "        ") -> str:
 
 
 def indices_block(idx: Idx, indent: str = "        ") -> str:
-    """The text of ``indices.inc``: one ``INTEGER, PARAMETER`` declaration naming
-    every slot of `idx`."""
-    decls = ", ".join(f"{k} = {v}" for k, v in idx.fortran_constants().items())
-    return f"{indent}INTEGER, PARAMETER :: {decls}\n"
+    """The text of ``indices.inc``: one ``INTEGER, PARAMETER`` declaration per slot
+    of `idx`, so that no line approaches the 132-character limit."""
+    return "".join(
+        f"{indent}INTEGER, PARAMETER :: {k} = {v}\n"
+        for k, v in idx.fortran_constants().items()
+    )
 
 
 def constants_file(sym: SymbolicODE, idx: Idx) -> str:
