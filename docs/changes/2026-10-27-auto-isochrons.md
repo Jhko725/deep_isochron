@@ -1,6 +1,6 @@
 ---
 type: change
-status: in progress; Step A done, the design document out for review
+status: in progress; Steps A and B done, the design document out for review
 updated: 2026-10-27
 branch: auto-isochrons
 ---
@@ -24,7 +24,9 @@ branch point.
 
 The second commit is Step A of the plan: the corrected bundle (D1), the generator's two
 compile bugs, and tests that compile the generated Fortran with gfortran, replacing the
-f2py test that had never run. The pipeline itself (Steps B–E) follows.
+f2py test that had never run. The third commit is Step B: AUTO as a dependency, with
+its Python layer locked by commit in `uv.lock` and its Fortran tree built at the same
+commit by `scripts/install_auto.sh`. The pipeline itself (Steps C–E) follows.
 
 ## Files
 
@@ -37,12 +39,25 @@ f2py test that had never run. The pipeline itself (Steps B–E) follows.
 - `tests/test_auto_codegen.py`: `_statements` joins continuations with a blank; new
   tests for the wrap, `indices.inc`, the adjoint sign, the compile of the generic file,
   and the gfortran driver, which replaces the f2py test.
-- `.github/workflows/ci.yml`: the `slow` job installs gfortran.
+- `.github/workflows/ci.yml`: the `slow` job installs gfortran; a new `auto` job builds
+  AUTO, cached under the pinned commit, and runs `pytest -m auto`.
+- `pyproject.toml` / `uv.lock`: the dependency group `auto` (`auto-07p` from git at
+  `44cc1c4`), included by `dev`; the pytest marker `auto`.
+- `scripts/install_auto.sh` (**new**): builds the Fortran tree at the commit in
+  `uv.lock`; `--commit` prints the commit.
+- `src/deep_isochron/analysis/ode/auto/_env.py` (**new**): `auto_dir`, `pinned_commit`,
+  `load_auto` returning an `AutoHandle`; `AutoNotInstalled`.
+- `src/deep_isochron/analysis/ode/auto/__init__.py`: the docstring describes `_env`.
+- `tests/test_auto_env.py` (**new**): see *Tests*.
+- `docs/auto.md` (**new**): installing AUTO, the variables, the pin, the tests,
+  troubleshooting.
+- `docs/architecture.md`: `_env.py` in the module map.
+- `CLAUDE.md`: `-n 2` in the cloud sessions; the AUTO setup line.
 - `docs/references.md`: entries for Hannam et al. 2022, Krauskopf & Rieß 2008 and
   Osinga & Moehlis 2010.
-- `docs/index.md`: the design document's row.
+- `docs/index.md`: the rows of the design document and `auto.md`.
 - `docs/roadmap.md`: the O7 row points to the design document and names the gfortran
-  tests; the Done ledger records Step A.
+  tests; the Done ledger records Steps A and B.
 - `docs/changes/2026-10-27-auto-isochrons.md` (**new**): this document.
 
 ## Design
@@ -67,6 +82,17 @@ f2py test that had never run. The pipeline itself (Steps B–E) follows.
   so no token is split. Cutting mid-token with no blank on either side of the `&` is also
   legal Fortran; it was rejected because it keeps the generated file harder to read and
   rests on a finer point of the standard.
+- **AUTO's Python layer is a locked git dependency, loaded only by `_env.load_auto`**
+  (plan decision 4; ADR-0017 to come). Installing it into the environment from the tree
+  was rejected because `uv sync` removes what the lock does not list; putting the tree's
+  `python/` on `sys.path` was rejected because it leaves the version unrecorded. The
+  commit lives once, in `pyproject.toml`; the install script and CI's cache key read it
+  from `uv.lock`.
+- **`load_auto` sets `AUTO_DIR` before importing.** AUTO's Python layer reads the
+  variable at import time and fails with `FileNotFoundError` without it.
+- **The bundle's branch-point test moves to Step C.** The plan put it in Step B's smoke
+  tests, but it needs the two-segment start that stage 1 builds; written now, it would
+  be a second, test-only construction of that start.
 - **The remaining decisions are design-document decisions for later steps:** D2 (the
   stage-4 start on AUTO's grid), D3 (the oracle's tolerance), D4 (one segment per
   isochron), D5 (the rotating base point, for ADR-0017), D6 (`ntst` scaling with
@@ -124,6 +150,21 @@ running the coworker's script and variants of it in a scratch directory:
   AUTO's grid ($3.3\times 10^{-6}$ from the spline start);
 - the stored points of files 26, 51 and 100 integrated forward four periods.
 
+Step B adds `tests/test_auto_env.py`, 4 passed with a built tree:
+
+- `test_missing_tree_raises_and_names_the_install_script` and
+  `test_explicit_path_then_variables_then_default`: how `auto_dir` resolves the tree,
+  with fake trees; no AUTO needed.
+- `test_the_python_layer_is_pinned_by_commit`: the installed `auto-07p` has a
+  40-character commit.
+- `test_fitzhugh_nagumo_problem_finds_its_hopf_point` (`auto`): the generated problem,
+  built and run by AUTO, stops at the Hopf point; the oracle is the $c$ where the
+  Jacobian's trace vanishes at the equilibrium, computed from the cubic, to a relative
+  $10^{-6}$.
+
+`scripts/install_auto.sh` built the tree in 37 s, and a second run reported it already
+built.
+
 ## Open issues
 
 - **The canceled `checks` job** is fixed on its own branch before this one is reviewed
@@ -145,3 +186,14 @@ running the coworker's script and variants of it in a scratch directory:
 | `tests/test_auto_codegen.py` — gfortran driver and compile tests in place of f2py; tests for the wrap, `indices.inc` and the adjoint sign | | |
 | `.github/workflows/ci.yml` — the `slow` job installs gfortran | | |
 | `docs/roadmap.md` — Done ledger row for Step A; the O7 row names the gfortran tests | | |
+| `pyproject.toml`, `uv.lock` — the `auto` dependency group (AUTO's Python layer from git at `44cc1c4`), the `auto` marker | | |
+| `scripts/install_auto.sh` — builds AUTO's Fortran tree at the locked commit | | |
+| `src/deep_isochron/analysis/ode/auto/_env.py` — `load_auto`, `auto_dir`, `pinned_commit`, `AutoNotInstalled` | | |
+| `src/deep_isochron/analysis/ode/auto/__init__.py` — docstring | | |
+| `tests/test_auto_env.py` — tree resolution; the FitzHugh–Nagumo Hopf point through AUTO | | |
+| `.github/workflows/ci.yml` — the `auto` job | | |
+| `docs/auto.md` — installing AUTO | | |
+| `docs/architecture.md` — `_env.py` in the module map | | |
+| `docs/index.md` — the `auto.md` row | | |
+| `CLAUDE.md` — `-n 2` in the cloud sessions; the AUTO setup line | | |
+| `docs/roadmap.md` — Done ledger row for Step B | | |

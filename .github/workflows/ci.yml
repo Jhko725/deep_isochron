@@ -73,3 +73,25 @@ jobs:
           assert int(state.step) == 20, int(state.step)
           print('reopened run at step', int(state.step))
           "
+
+  # AUTO-07p: the Fortran tree is built at the commit uv.lock pins and cached under it,
+  # so a second run skips the build; then the tests that carry the `auto` marker.
+  auto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.13
+      - run: uv sync --group dev
+      - run: sudo apt-get update && sudo apt-get install -y gfortran make
+      - id: pin
+        run: echo "commit=$(scripts/install_auto.sh --commit)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/opt/auto-07p
+          key: auto-07p-${{ runner.os }}-${{ steps.pin.outputs.commit }}
+      - run: scripts/install_auto.sh
+      - run: uv run pytest -m auto -q

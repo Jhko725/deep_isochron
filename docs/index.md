@@ -22,6 +22,7 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`roadmap.md`](roadmap.md) | roadmap | the single current plan, phase by phase, with the Done ledger |
 | [`../CLAUDE.md`](../CLAUDE.md) | conventions | how Claude works in this repository (change documents, review notes, tooling) |
 | [`coding-standards.md`](coding-standards.md) | reference | where each convention is enforced here: tiers, named tolerances, the contracts the ADRs fix, the Markdown rules, the docstring and citation forms, the checks that replace prose |
+| [`auto.md`](auto.md) | guide | installing AUTO-07p for the isochron pipeline: the `auto` dependency group, `scripts/install_auto.sh`, the variables, the pinned commit, the `auto` test tier, troubleshooting |
 | [`references.md`](references.md) | reference | the one bibliography: every work the documents, docstrings and tests cite, by key, with DOI and the locators used |
 
 ## Design documents (`design/`) — the mathematics behind the code

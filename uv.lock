@@ -88,6 +88,11 @@ wheels = [
 ]
 
 [[package]]
+name = "auto-07p"
+version = "0.0.1"
+source = { git = "https://github.com/auto-07p/auto-07p?rev=44cc1c42a888179bdbd608a40613caee9cbc4675#44cc1c42a888179bdbd608a40613caee9cbc4675" }
+
+[[package]]
 name = "beartype"
 version = "0.22.9"
 source = { registry = "https://pypi.org/simple" }
@@ -469,7 +474,11 @@ cuda = [
 ]
 
 [package.dev-dependencies]
+auto = [
+    { name = "auto-07p" },
+]
 dev = [
+    { name = "auto-07p" },
     { name = "beartype" },
     { name = "hypothesis" },
     { name = "ipykernel" },
@@ -506,7 +515,9 @@ requires-dist = [
 provides-extras = ["cuda"]
 
 [package.metadata.requires-dev]
+auto = [{ name = "auto-07p", git = "https://github.com/auto-07p/auto-07p?rev=44cc1c42a888179bdbd608a40613caee9cbc4675" }]
 dev = [
+    { name = "auto-07p", git = "https://github.com/auto-07p/auto-07p?rev=44cc1c42a888179bdbd608a40613caee9cbc4675" },
     { name = "beartype", specifier = ">=0.22.9" },
     { name = "hypothesis", specifier = ">=6.168.3" },
     { name = "ipykernel", specifier = ">=7.3.0" },

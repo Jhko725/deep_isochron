@@ -50,9 +50,15 @@ fails silently.
 
 ## Repository facts
 
-- Python 3.13; `uv sync --group dev`; `uv run pytest`, where `-n 4` (pytest-xdist) helps.
-  Hypothesis profiles: `--hypothesis-profile=dev` (10 examples), default (50), `ci`
-  (300, derandomized).
+- Python 3.13; `uv sync --group dev`; `uv run pytest`, with `-n` (pytest-xdist) at the
+  machine's core count: `-n 2` in the cloud sessions, which have two cores and 7 GB and
+  lost two workers at `-n 4` on 2026-10-27; `-n 4` in CI. Hypothesis profiles:
+  `--hypothesis-profile=dev` (10 examples), default (50), `ci` (300, derandomized).
+- AUTO-07p for the isochron pipeline (`docs/auto.md`): in a cloud session, run
+  `apt-get update && apt-get install -y gfortran make`, then `scripts/install_auto.sh`
+  (about 40 s). Tests that need AUTO carry the marker `auto` and skip without a tree;
+  the gfortran tests of `tests/test_auto_codegen.py` are `slow` and skip without
+  gfortran.
 - The jaxtyping/beartype import hook runs in the tests, so shape annotations are checked
   at runtime: the first occurrence of an axis name is a plain name (`" K"`, not
   `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a
