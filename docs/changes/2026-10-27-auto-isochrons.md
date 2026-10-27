@@ -252,7 +252,11 @@ FitzHugh–Nagumo with phase 0 at the coworker's anchor: the orbit corrected wit
 section anchor (period 11.227886761), the bundle's branch point at multiplier 1, the
 normalization at 1. Stage 4 had not finished when this was committed: its first run
 shared the two cores with the test-timing run, and its "test-sized" `eta_stop = 1e-4`
-lengthens the inward half rather than shortening it (to be corrected in G3). Every AUTO
+lengthens the inward half rather than shortening it. Decision G3 is corrected
+accordingly: the test-sized settings are `eta_stop = 1e-9` and `box_scale = 2`. The
+inward half is the costly one, and $\vert\eta\vert$ grows along it as it spirals toward
+the source, so a smaller `eta_stop` ends it near the cycle; the outward half ends at
+the box after a few hundred steps whatever `eta_stop` is. Every AUTO
 run now passes `IPS`, `NDIM`, `NBC` and `NINT`, because each run reloads the
 constants file; the first version relied on constants carried over from the previous
 run and stage 2 failed at its first step (`MX`).
