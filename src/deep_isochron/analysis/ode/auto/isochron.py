@@ -86,7 +86,7 @@ class IsochronSettings:
 
     n_periods: int = 5
     eta_stop: float = 1e-6
-    box_scale: float = 5.0
+    box_scale: float = 2.5
     ntst: int | None = None
     max_workers: int | None = None
     max_steps: int = 8000
