@@ -1,6 +1,6 @@
 ---
 type: change
-status: review round 1 applied; review pending
+status: review closed 2026-10-27 (round 1 applied); merged to master
 updated: 2026-10-27
 branch: symbolic-systems
 ---
