@@ -102,8 +102,11 @@ AUTO compiles each equation file at run time (R1).
 ### 5. The phases run in a pool of spawned processes
 
 Stages 1–3 run once in the calling process; stage 4 runs for each phase in a
-`ProcessPoolExecutor` started with `spawn`, one temporary working directory and
-`OMP_NUM_THREADS=1` per worker (decisions 17 and G2). Processes, because AUTO writes
+`ProcessPoolExecutor` started with `spawn`, one temporary working directory per worker
+(decisions 17 and G2). Every AUTO run sets `OMP_NUM_THREADS=1`, since AUTO's OpenMP
+build otherwise starts one thread per core, which on a 24-core node kept stages 1–3 of
+one phase busy for 8.5 minutes; and each worker runs JAX on the CPU, since a worker
+that started a GPU backend preallocated most of the GPU's memory. Processes, because AUTO writes
 into the working directory of its process; `spawn`, because JAX runs threads and a
 forked copy of a threaded process can deadlock. The pool has
 `os.process_cpu_count()` workers unless `IsochronSettings.max_workers` says otherwise
@@ -131,10 +134,12 @@ another phase origin, listing every mismatch (L1).
 - The FitzHugh–Nagumo isochrons reproduce Andrus's files 26, 51 and 100 within
   $2\times 10^{-5}$ in both directions. The Bautin and Winfree isochrons carry their
   closed-form phase to $4\times 10^{-10}$.
-- A FitzHugh–Nagumo phase costs 140–290 s in the two-core session with the default
-  settings, and
-  the pool divides the wall time by about the number of cores; the timing of a full
-  foliation is recorded in the branch's change document.
+- A FitzHugh–Nagumo foliation with the default settings costs 47 s for stages 1–3
+  and about 290 s of stage 4 per phase on one core. On the two-core session, four
+  phases took 1208 s with one worker and 700 s with two, a speed-up of 1.8 on stage 4.
+  By that rate the 100 phases of the coworker's overnight run would take about 20
+  minutes on a 24-core node **[deduced]**, provided every AUTO run is single-threaded
+  (§5 and the History line of 2026-10-28).
 - An isochron that needs to reach further than its `n_periods` allow stops at
   `"max_steps"` and says so (D7); the staged extension is the remedy if it is ever
   needed.
@@ -175,3 +180,5 @@ another phase origin, listing every mismatch (L1).
 ## History
 
 - 2026-10-28 (`auto-isochrons`): accepted.
+- 2026-10-28 (`auto-isochrons`): every AUTO run, in the calling process as in the
+  workers, sets `OMP_NUM_THREADS=1`; the workers run JAX on the CPU.

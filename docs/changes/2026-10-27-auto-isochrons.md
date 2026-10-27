@@ -437,12 +437,26 @@ normal-form foliations 107 s and 118 s, because each foliation's own pool of two
 processes shares the two cores with the second pytest worker. Run alone, stages 1–3 of
 FitzHugh–Nagumo take 82 s and the quick foliation 70 s.
 
-**After the cluster fixes**: the isochron tests have not yet been rerun; the next
-commit records them with the timing.
+**After the cluster fixes**: `uv run pytest -q -n 2 tests/test_isochron.py
+tests/test_auto_codegen.py tests/test_auto_env.py -m "not slow"
+--hypothesis-profile=dev`: 52 passed in 351 s, against 504 s for the isochron file
+alone before; phase π passes. One worker per foliation removed the oversubscription,
+but the tier is still 5.8 minutes, above the 3.5–4 estimated: the foliation tests now
+trace their phases one after the other, and JAX's own threads in each pytest worker
+still share the two cores.
 
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
-coworker's files 100, 76, 51 and 26, run alone on the two-core session): running at the time of this commit; the next
-commit records it.
+coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
+changes little):
+
+| | Stages 1–3 | Four phases, total | Stage 4 per phase |
+|---|---|---|---|
+| one worker | 47 s | 1208 s | 290 s |
+| two workers | — | 700 s | — |
+
+No phase failed; the curves have 4749–7058 points, and every half stopped at
+`eta_stop` or at the box. Two workers cut stage 4 from 1161 s to 653 s, a speed-up of
+1.8.
 
 ## Open issues
 
@@ -530,3 +544,4 @@ commit records it.
 | `docs/decisions/0016-symbolic-systems.md` — the History line dated 2026-10-28 | | |
 | `src/deep_isochron/analysis/ode/auto/isochron.py` — one OpenMP thread per AUTO run; phase π; workers' JAX on the CPU | | |
 | `tests/test_isochron.py`, `tests/helpers.py` — phase π in the stage test; one worker in the named settings | | |
+| `docs/decisions/0017-isochrons-by-auto-continuation.md` — the timing; one thread per AUTO run, workers on the CPU | | |
