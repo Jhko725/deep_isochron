@@ -57,20 +57,18 @@ First step of the AUTO isochron work (roadmap O7; plan `claude/isochron-auto-pla
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `pyproject.toml` / `uv.lock`: sympy, sympy2jax core deps | | |
-| `systems/symbolic.py`: the layer (`SymbolicODE`, `AbstractSymbolicODE`, compile machinery, protocol) | | |
-| `systems/base.py`: `params()` over `dataclasses.fields` | | |
-| `systems/fitzhugh_nagumo.py`: template | | |
-| `systems/hodgekin_huxley.py`: template with `expm1` | | |
-| `systems/normal_forms/base.py`: symbolic rates, derived hooks, `symbolic()` | | |
-| `systems/normal_forms/hopf.py`: `_symbolic_rates_sq` | | |
-| `systems/normal_forms/bautin.py`: `_symbolic_rates_sq` | | |
-| `systems/normal_forms/winfree.py`: `_symbolic_rates` | | |
-| `analysis/ode/auto/__init__.py`, `codegen.py`: the generator | | |
-| `analysis/ode/auto/fortran/isochron_multiseg.f90`: generic BVP with named slots and includes | | |
-| `tests/test_symbolic.py` | | |
-| `tests/test_auto_codegen.py`, `tests/golden/fitzhugh_nagumo_rhs.inc` | | |
-| `docs/decisions/0016-symbolic-systems.md` | | |
-| `docs/decisions/0007-…`: amendment | | |
-| `docs/design/normal-forms.md`: §9 note | | |
-| `docs/architecture.md`, `docs/index.md`, `docs/roadmap.md` | | |
+| `pyproject.toml` / `uv.lock`: sympy, sympy2jax core deps | Confirmed. | None |
+| `systems/symbolic.py`: the layer (`SymbolicODE`, `AbstractSymbolicODE`, compile machinery, protocol) | Like the machinery, but some minor thoughts. <ul><li>`is_abstract` and `defines_concretely` are utility functions. Move to `utils?` <li>`compile_expressions` is essentially an alternate constructor for `CompiledExpressions`. Benefit to making this a classmethod?<ul>| To be discussed with Claude. |
+| `systems/base.py`: `params()` over `dataclasses.fields` | Looks good. | None |
+| `systems/fitzhugh_nagumo.py`: template | Looks good. | None |
+| `systems/hodgekin_huxley.py`: template with `expm1` | Looks good. | None |
+| `systems/normal_forms/base.py`: symbolic rates, derived hooks, `symbolic()` | Don't like the fact that the user facing interface of `AbstractNormalForm` is quite different from that of `AbstractSymbolicODE`. It does make sense to receive the symbolic form in polar coordinates, but despite our terminalogy, `_symbolic_template_polar` would be more in line than `symbolic_rates`. Also, the contract changing once more in the `AbstractEvenNormalForm` so that the user has to pass the equations as a function of `r^2` feels avoidable complexity to me. Why not just symbolically determine whether it is even or not? Argue your position. | Need discussions and grilling for a more consistent (minimal mental load to the user; subclasses should feel similar to the superclass interface) design of the API. |
+| `systems/normal_forms/hopf.py`, `systems/normal_forms/bautin.py`, `systems/normal_forms/winfree.py`: `_symbolic_rates_sq` | Note that their `_symbol_rates(_sq)` function body look completely different from the `_symbolic_templat`s of FHN or HH. This feels like smell of inconsistent API design to me. | To be extensively discussed with Claude. |
+| `analysis/ode/auto/__init__.py`, `codegen.py`: the generator | Looks good. | None |
+| `analysis/ode/auto/fortran/isochron_multiseg.f90`: generic BVP with named slots and includes | Looks good. | None |
+| `tests/test_symbolic.py` | Confirmed. | None |
+| `tests/test_auto_codegen.py`, `tests/golden/fitzhugh_nagumo_rhs.inc` | Had a lookthrough. Will scrutinize later. | None |
+| `docs/decisions/0016-symbolic-systems.md` | Looks good. | None |
+| `docs/decisions/0007-…`: amendment | Looks good. | None |
+| `docs/design/normal-forms.md`: §9 note | Looks good. | None |
+| `docs/architecture.md`, `docs/index.md`, `docs/roadmap.md` | Looks good. | None |
