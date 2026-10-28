@@ -54,8 +54,7 @@ def wrap_phases(
     values = np.atleast_1d(np.asarray(phases, dtype=float))
     if not np.all(np.isfinite(values)):
         raise ValueError(f"phases must be finite; got {values[~np.isfinite(values)]}.")
-    with jax.enable_x64(True):  # the caller's process may run in float32
-        wrapped = np.asarray(wrap_phase(values), dtype=float)
+    wrapped = np.asarray(wrap_phase(values))  # NumPy in, NumPy out: float64 as given
     _, first, counts = np.unique(
         np.round(wrapped, 12), return_index=True, return_counts=True
     )
@@ -163,9 +162,9 @@ def isochron_foliation(
     """
     if cycle.reverse_time:
         raise ValueError("isochrons are traced for attracting cycles only.")
-    wrapped = wrap_phases(phases)
     start = time.perf_counter()
     with auto_session(cycle.ode) as run:
+        wrapped = wrap_phases(phases)
         orbit = periodic_orbit(run, cycle)
         bundle = adjoint_bundle(run, orbit)
         rotated = rotate_phase(run, bundle, wrapped)

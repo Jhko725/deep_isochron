@@ -225,6 +225,9 @@ and `Isochron.resample` for evenly spaced points.
   the shipped hashes pinned; the schema's refusals tested.
 - `docs/decisions/0011-experiment-layer.md`: Decision 1 rewritten; History.
 - `docs/architecture.md`, `docs/auto.md`: the schemas and the `cycle` group.
+- `src/deep_isochron/utils/numerics.py`, review round 4: `wrap_phase` against the
+  array API, NumPy or JAX by its input; `foliation.py`: `wrap_phases` with no x64
+  context, called inside the session; `tests/test_phase.py`: the five forms.
 - `src/deep_isochron/utils/numerics.py`: `arclength` by `cumulative_sum`.
 
 ## Design
@@ -441,6 +444,19 @@ and `Isochron.resample` for evenly spaced points.
   sets `jax_enable_x64` from the training config, and a float32 run must stay
   possible, so the package does not set it at import; `auto_session` enters
   `jax.enable_x64(True)` for its block, one place instead of four.
+- **`wrap_phase` against the array API (Joon, review round 4).** `wrap_phases` had
+  kept a `jax.enable_x64` context of its own, since `wrap_phase` cast its input through
+  `jax.numpy` and a float32 process would have wrapped the phases in float32; and
+  `IsochronConfig.wrapped_phases()` calls it outside any session. Rather than a NumPy
+  twin or a precondition on two callers, `wrap_phase` dispatches on the input's
+  `__array_namespace__`: a JAX array or tracer is wrapped with `jax.numpy`, under
+  `jit`, `vmap` and `grad`, and a NumPy array with `numpy` in its own dtype, whatever
+  the flag; a Python scalar goes through NumPy. The truncated remainder the exactness
+  argument needs is `fmod` in both namespaces, which the standard does not name but
+  both provide; NumPy 2.5 and JAX 0.11 both implement `__array_namespace__`, so
+  nothing is added. Measured: NumPy, JAX, `jit` and `vmap` all equal
+  `math.remainder` bit for bit on the test vector, `grad` is 1, and a NumPy float64
+  input stays float64 with x64 off.
 - **`wrap_phases` vectorized** (review round 2): `np.isfinite`, `wrap_phase` on the
   array, `np.unique` with counts for the repeats; no Python loop.
 
@@ -781,6 +797,9 @@ profile, `-n 2`: 528 s, 29 passed, no worker killed (2577 s with one killed befo
 `test_hopf_floquet_multiplier_is_the_polar_monodromy`, which builds a lambda for
 `diffeqsolve` per example; a test to rewrite.
 
+**Round 4** (`wrap_phase` on the array API): the phase, isochron and config tests, 34
+passed in 166 s without AUTO and 2 passed in 134 s with it.
+
 **The schema**: `tests/test_experiment_isochrons.py` without AUTO, 10 passed in 5 s;
 its `auto` test 1 passed in 103 s. **The round-3 changes** (`nearest_cycle_time` from
 the previous sample, float64 in `auto_session`): the reanchor, phase, stage and
@@ -946,3 +965,4 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `configs/cycle/{fhn,fhn-easy}.yaml`, `configs/isochrons/{fhn,fhn-easy}.yaml` — the shared cycle group; the isochron configs on the schema | Confirmed. | None |
 | `scripts/compute_isochrons.py`, `tests/test_experiment_isochrons.py` — on the schema; the hashes pinned; refusals | Looks good. | None |
 | `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md`, `docs/auto.md` — Decision 1 rewritten; the schemas in the map | Confirmed. | None |
+| `src/deep_isochron/utils/numerics.py`, `foliation.py`, `tests/test_phase.py` — `wrap_phase` against the array API; `wrap_phases` inside the session, no x64 context | | |

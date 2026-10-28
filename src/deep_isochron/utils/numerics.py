@@ -1,9 +1,13 @@
 """Numerical helpers shared by the invertible constraints, the normal forms and the
 analysis: the bounded positive scale transforms, the polar-to-cartesian change of
-coordinates and the wrapping of a phase."""
+coordinates and the wrapping of a phase, which is written against the array API so that
+it serves NumPy arrays on the host as well as JAX arrays under ``jit`` and ``vmap``."""
 
-import jax
+import math
+from typing import Any
+
 import jax.numpy as jnp
+import numpy as np
 from jaxtyping import Array, ArrayLike, Float
 
 
@@ -41,19 +45,32 @@ def polar_to_cartesian(rtheta: Float[Array, " 2 *rest"]) -> Float[Array, " 2 *re
     return jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)))
 
 
-def wrap_phase(angle: Float[ArrayLike, "*shape"]) -> Float[Array, "*shape"]:
+def wrap_phase(
+    angle: Float[ArrayLike, "*shape"],
+) -> Float[Array, "*shape"] | Float[np.ndarray, "*shape"]:
     r"""`angle` wrapped to $(-\pi, \pi]$, with $-\pi$ sent to $\pi$.
 
     The truncated remainder by $2\pi$ is exact, and so is the one correction by
     $\pm 2\pi$ that follows (Sterbenz's lemma), so the result equals
     ``math.remainder(angle, 2π)`` bit for bit away from the ties at $\pm\pi$. The
     derivative is 1.
+
+    Written against the array API (``__array_namespace__``): a JAX array or tracer is
+    wrapped with ``jax.numpy``, under ``jit``, ``vmap`` and ``grad``, and a NumPy
+    array with ``numpy``, in its own dtype whatever ``jax_enable_x64`` is; a Python
+    scalar goes through NumPy. The truncated remainder is ``fmod`` in both
+    namespaces, which the standard does not name but both provide.
     """
-    angle = jnp.asarray(angle, dtype=float)
-    two_pi = jnp.asarray(2 * jnp.pi, dtype=angle.dtype)
-    rem = jax.lax.rem(angle, two_pi)
-    rem = jnp.where(rem > jnp.pi, rem - two_pi, rem)
-    return jnp.where(rem <= -jnp.pi, rem + two_pi, rem)
+    array: Array | np.ndarray = (
+        angle
+        if isinstance(angle, Array | np.ndarray)
+        else np.asarray(angle, dtype=float)
+    )
+    xp: Any = array.__array_namespace__()
+    two_pi = xp.asarray(2 * math.pi, dtype=array.dtype)
+    rem = xp.fmod(array, two_pi)
+    rem = xp.where(rem > math.pi, rem - two_pi, rem)
+    return xp.where(rem <= -math.pi, rem + two_pi, rem)
 
 
 def arclength(points: Float[ArrayLike, "n dim"]) -> Float[Array, " n"]:

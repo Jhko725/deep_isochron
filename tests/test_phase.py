@@ -90,10 +90,20 @@ def test_wrap_phase_equals_the_ieee_remainder():
     angles = [2 * math.pi * k / n for n in (7, 64, 100) for k in range(-3 * n, 3 * n)]
     angles += rng.uniform(-1e3, 1e3, 1000).tolist()
     angles += [math.pi, -math.pi, 3 * math.pi, -3 * math.pi, 0.0]
-    got = np.asarray(wrap_phase(jnp.asarray(angles)))
-    for angle, value in zip(angles, got, strict=True):
-        expected = math.remainder(angle, 2 * math.pi)
-        assert value == (math.pi if expected == -math.pi else expected), angle
+    expected = np.array(
+        [math.remainder(a, 2 * math.pi) for a in angles], dtype=np.float64
+    )
+    expected[expected == -math.pi] = math.pi
+    got = {
+        "jax": wrap_phase(jnp.asarray(angles)),
+        "jit": jax.jit(wrap_phase)(jnp.asarray(angles)),
+        "vmap": jax.vmap(wrap_phase)(jnp.asarray(angles)),
+        "numpy": wrap_phase(np.asarray(angles)),
+        "scalars": np.array([wrap_phase(a) for a in angles]),
+    }
+    for name, value in got.items():
+        assert np.array_equal(np.asarray(value), expected), name
+    assert isinstance(got["numpy"], np.ndarray) and isinstance(got["jax"], jax.Array)
     assert float(jax.grad(wrap_phase)(7.0)) == 1.0
 
 
