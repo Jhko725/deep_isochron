@@ -595,6 +595,40 @@ which fits the memory growth and the abort, and likely much of the time of the f
 slowest files **[deduced]**. Passing them as arrays should remove it; that is O1's code
 and decision 8's question, left for Joon.
 
+**Reassessed 2026-10-28 (Fable 5.1), measured [code]:**
+
+- The abort is the kernel's mapping limit, not memory. With pytest's fd capture off
+  (`-s`) LLVM's message survives: "allocateMappedMemory failed with error: Cannot
+  allocate memory … LLVM ERROR: Unable to allocate section memory!". XLA's CPU backend
+  mmaps each compiled program's sections and keeps them while the program is cached;
+  `vm.max_map_count` is 65530, and a `find_limit_cycle` call with a new `t_settle` adds
+  about 470 mappings, so the limit falls near example 140, about 600 s in: the abort came
+  at 673 s. A larger runner does not help; a count, not a size.
+- The session's shell cgroup limit is 5.84 GiB (`memory.limit_in_bytes`), not 7 GB;
+  the two killed workers, 3.8 and 3.1 GB, exceeded it together.
+- Per call after warm-up: `find_limit_cycle` with a new `t_settle` 3 compiles, 22 MB,
+  about 4 s; with the same `t_settle` 1 compile (`polish`, since `period_hat` always
+  differs), 11 MB, 2 s. `t_max = 10 t_settle` is a static field of `PoincareMap`, the
+  third program.
+- Two more sources, recompiling on every call even for the same instance: the
+  `r_squared` integration's `rhs_s`, a closure built inside `__call__`
+  (`integration.py:117`), so diffrax's `filter_jit` sees a new function each time; and
+  the closed form's `_radius_from_isostable`, whose two `fori_loop`s run op-by-op and
+  compile their closure each call. `test_integrations_agree` makes about 5 compiles per
+  example, 12 MB; 300 examples give its 4.2 GB.
+- `test_splines.py` and `test_bijections.py` have a different profile: about 2500
+  tiny op-by-op compiles per file at the `dev` profile (`jit(add)`, `jit(multiply)`,
+  `jit(searchsorted)`), one per new shape the strategies draw, and heavy per-example
+  work; no program-level recompile. Their cost is eager execution over shape-varying
+  draws, not static floats.
+- Fixes, in order: `t_settle`, `period_hat` and `t_max` as arrays; `rhs_s` as a method
+  (`rhs_r_squared`, as `rhs_polar`); `filter_jit` on the closed form or on
+  `radius_from_isostable`; a test that runs each driver twice with new values and
+  asserts zero compilations the second time (`jax_log_compiles` plus a logging handler),
+  recorded in `docs/coding-standards.md`; for the spline and bijection files, jitted
+  checkers and strategies drawing shapes from a few sizes, or a lower `max_examples` on
+  the heaviest tests. JAX's persistent cache would not lift the mapping limit.
+
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
 changes little):
