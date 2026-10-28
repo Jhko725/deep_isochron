@@ -30,7 +30,7 @@ from deep_isochron.systems import (
 )
 from hypothesis import given, settings, strategies as st
 
-from tests.helpers import assert_close, SOLVERS, TOL
+from tests.helpers import assert_close, CompileCounter, SOLVERS, TOL
 
 
 normal_forms = st.one_of(
@@ -415,6 +415,24 @@ def test_integrations_agree(nf, r, theta):
         ys = nf.flow(ts, u0, config=SOLVERS["tight"], integration=name).ys
         assert_close(ys, ref, rtol=TOL["flow"], atol=TOL["flow"], msg=name)
         assert_close(ys[0], u0, atol=TOL["closed_form"], msg=f"{name}: y(0) != u0")
+
+
+def test_integrations_compile_nothing_for_new_parameters():
+    """A second `flow` with other parameters compiles no program, for each of the four
+    integrations: the normal form reaches diffrax's jit as a pytree. The `r_squared`
+    field was a closure built per call, and the closed form's root solves ran op by
+    op, so both compiled on every call."""
+    ts = jnp.linspace(0.0, 2.0, 9)
+    u0 = jnp.array([1.3, 0.2])
+    first, second = (
+        BautinNormalForm(1.0, 0.5, 2.0, 0.3),
+        BautinNormalForm(1.1, 0.6, 2.1, 0.4),
+    )
+    for name in INTEGRATIONS:
+        first.flow(ts, u0, config=SOLVERS["tight"], integration=name)
+        with CompileCounter() as counter:
+            second.flow(ts, u0, config=SOLVERS["tight"], integration=name)
+        assert counter.count == 0, name
 
 
 def test_integration_is_a_constructor_argument():

@@ -3,6 +3,7 @@
 FitzHugh–Nagumo isochrons, jitted checkers for the bijection laws, and an optimizer
 step along a random direction."""
 
+import logging
 import math
 from pathlib import Path
 
@@ -211,6 +212,35 @@ def golden_isochron(k: int) -> tuple[Float[np.ndarray, "2"], Float[np.ndarray, "
 def golden_phase(k: int) -> float:
     """The phase of the coworker's file `k`, wrapped to $(-π, π]$."""
     return math.remainder(2 * math.pi * (1 - k / 100), 2 * math.pi)
+
+
+class CompileCounter(logging.Handler):
+    """Counts XLA compilations while ``jax_log_compiles`` is on: the guard against a
+    driver that compiles again for every new value (a Python float reaching
+    ``filter_jit`` as a static argument, a closure built per call, an eager loop).
+
+    Use as a context manager; `count` is the number of programs compiled inside it.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.count = 0
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Count a record of jax's compile log."""
+        if "Compiling" in record.getMessage():
+            self.count += 1
+
+    def __enter__(self) -> "CompileCounter":
+        self.count = 0
+        self._previous = jax.config.jax_log_compiles
+        jax.config.update("jax_log_compiles", True)
+        logging.getLogger("jax").addHandler(self)
+        return self
+
+    def __exit__(self, *exc) -> None:
+        logging.getLogger("jax").removeHandler(self)
+        jax.config.update("jax_log_compiles", self._previous)
 
 
 @eqx.filter_jit

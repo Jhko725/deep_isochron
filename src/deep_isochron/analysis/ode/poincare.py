@@ -96,7 +96,9 @@ class PoincareMap(eqx.Module):
     - `section`: The cross-section.
     - `config`: The solver settings; its `rtol` and `atol` also set the crossing root
         finder's.
-    - `t_max`: The bound on the integration time of one return (static).
+    - `t_max`: The bound on the integration time of one return, an array leaf so that
+        a new bound does not recompile the map (a float was static, and every
+        `find_limit_cycle` with a new `t_settle` compiled the return map again).
     - `direction`: Which crossings count; ``"positive"`` by default (static).
     - `reverse_time`: Whether to integrate the time-reversed field (static).
     - `departure`: The window after the start in which crossings are ignored, as a
@@ -113,7 +115,7 @@ class PoincareMap(eqx.Module):
     ode: AbstractODE
     section: CrossSection
     config: SolverConfig
-    t_max: float = eqx.field(static=True)
+    t_max: Float[Array, ""] = eqx.field(converter=lambda t: jnp.asarray(t, dtype=float))
     direction: Direction = eqx.field(static=True, default="positive")
     reverse_time: bool = eqx.field(static=True, default=False)
     departure: float = eqx.field(static=True, default=1e-3)
@@ -123,7 +125,7 @@ class PoincareMap(eqx.Module):
         """Validate `direction`, `t_max` and `departure`."""
         if self.direction not in ("positive", "negative", "both"):
             raise ValueError("direction must be 'positive', 'negative' or 'both'.")
-        if not self.t_max > 0:
+        if not float(self.t_max) > 0:
             raise ValueError("t_max must be positive.")
         if not 0 < self.departure < 1:
             raise ValueError("departure is a fraction of t_max in (0, 1).")

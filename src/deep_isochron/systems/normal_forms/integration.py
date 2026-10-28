@@ -115,21 +115,28 @@ class RadiusSquaredIntegration(AbstractFlowIntegration):
                 f"in r); got {type(normal_form).__name__}."
             )
 
-        def rhs_s(t, state, args):
-            del t, args
-            s, _ = state
-            return jnp.stack(
-                (
-                    2 * s * normal_form._log_growth_rate_sq(s),
-                    normal_form._angular_rate_sq(s),
-                )
-            )
-
         r0, theta0 = normal_form.to_polar(u0)
-        sol = diffeqsolve(rhs_s, ts, jnp.stack((r0**2, theta0)), args, config)
+        sol = diffeqsolve(
+            _rhs_r_squared, ts, jnp.stack((r0**2, theta0)), (normal_form, args), config
+        )
         assert sol.ys is not None
         r, theta = jnp.sqrt(sol.ys[:, 0]), sol.ys[:, 1]
         return _with_ys(sol, jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)), -1))
+
+
+def _rhs_r_squared(t, state, args):
+    r"""The field in $(s, \theta)$, $s = r^2$: $(2s\tilde\rho(s), \tilde\omega(s))$.
+
+    A module-level function with the normal form in `args`, as diffrax passes
+    parameters: a closure built per call was a new function object each time, and
+    diffrax's jit of ``diffeqsolve`` compiled again on every call.
+    """
+    del t
+    normal_form, _ = args
+    s, _ = state
+    return jnp.stack(
+        (2 * s * normal_form._log_growth_rate_sq(s), normal_form._angular_rate_sq(s))
+    )
 
 
 class ClosedFormIntegration(AbstractFlowIntegration):
@@ -141,9 +148,13 @@ class ClosedFormIntegration(AbstractFlowIntegration):
     (design document §6.1). `config` is ignored.
     """
 
+    @eqx.filter_jit
     def __call__(self, normal_form, ts, u0, args, config):
         """Evolve the phase–amplitude coordinates of `u0` and map back; see
-        `AbstractFlowIntegration.__call__`. `args` and `config` are ignored."""
+        `AbstractFlowIntegration.__call__`. `args` and `config` are ignored.
+
+        Jitted as ``diffeqsolve`` is for the other integrations: run op by op, the
+        root solve's ``fori_loop``s compiled their closure on every call."""
         del args, config
         Theta0, Psi0 = normal_form.to_phase_amplitude(u0)
         dt = ts - ts[0]

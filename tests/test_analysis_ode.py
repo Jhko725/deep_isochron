@@ -54,7 +54,7 @@ from deep_isochron.systems.normal_forms import (
 )
 from hypothesis import given, settings, strategies as st
 
-from .helpers import assert_close, TOL
+from .helpers import assert_close, CompileCounter, TOL
 
 
 CFG = SHOOTING_SOLVER_CONFIG
@@ -768,3 +768,20 @@ def test_floquet_refuses_non_planar_systems():
         floquet(fake, method="liouville")
     with pytest.raises(ValueError):
         fake.orientation()
+
+
+def test_find_limit_cycle_compiles_nothing_for_new_values():
+    """A second `find_limit_cycle` with another `t_settle` and other parameters
+    compiles no program: the times reach the jitted stages as arrays. Three programs
+    per call were compiled before, which exhausted a process's memory mappings over
+    the 300 examples of the `ci` profile."""
+    find_limit_cycle(HOPF, X0, t_settle=8.0, m=2, config=CFG)
+    with CompileCounter() as counter:
+        find_limit_cycle(
+            HopfNormalForm(a=1.3, w=1.7, **INTEGRATION),
+            X0,
+            t_settle=9.0,
+            m=2,
+            config=CFG,
+        )
+    assert counter.count == 0

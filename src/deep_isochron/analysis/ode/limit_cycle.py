@@ -18,8 +18,14 @@ the orbit integrates the same system the same way. An orbit's properties beyond 
 location are functions of a ``LimitCycle`` (roadmap O2–O6), not products of the
 search.
 
+``nearest_cycle_time`` finds the cycle point nearest a given point, as a time from
+``x0s[0]``, and ``reanchor`` moves a cycle's phase origin there (roadmap O7, which
+anchors its isochrons at phase 0) without solving the orbit again.
+
 The stages and the map are jit- and vmap-compatible and left unjitted; the host-side
-driver ``find_limit_cycle`` jits the stages it calls and raises informative errors. A
+driver ``find_limit_cycle`` jits the stages it calls and raises informative errors.
+Times reach the jitted stages as arrays, never as Python floats, which would be static
+and compile a new program for every value. A
 ``LimitCycle`` is a fixed-shape pytree, so functions of a cycle can be jitted and
 vmapped as they stand. ADR-0014 has the decisions; ``docs/design/analysis.md`` §2 the
 survey of shooting methods.
@@ -33,6 +39,7 @@ from typing import cast
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import optimistix as optx
 from jaxtyping import Array, ArrayLike, Float
 
 from ...systems import AbstractODE, SolverConfig
@@ -40,7 +47,18 @@ from ..data.cycle import orientation
 from ..errors import NotConvergedError
 from .poincare import FixedPoint, PoincareMap
 from .sections import CrossSection
-from .shooting import multiple_shooting, SHOOTING_SOLVER_CONFIG, ShootingResult
+from .shooting import (
+    multiple_shooting,
+    shooting_residual,
+    SHOOTING_SOLVER_CONFIG,
+    ShootingArgs,
+    ShootingResult,
+)
+
+
+TIME_TOL = 1e-14
+"""The absolute tolerance of the Newton solve in time of `nearest_cycle_time`: a
+step below it, in the units of the period, counts as converged."""
 
 
 class LimitCycle(eqx.Module):
@@ -128,7 +146,7 @@ class LimitCycle(eqx.Module):
 def settle(
     ode: AbstractODE,
     x0: Float[ArrayLike, " dim"],
-    t_settle: float,
+    t_settle: Float[ArrayLike, ""],
     *,
     config: SolverConfig,
     reverse_time: bool = False,
@@ -194,7 +212,7 @@ def initial_guess(
 def polish(
     ode: AbstractODE,
     x_hat: Float[ArrayLike, " dim"],
-    period_hat: float,
+    period_hat: Float[ArrayLike, ""],
     section: CrossSection,
     *,
     m: int,
@@ -348,7 +366,12 @@ def find_limit_cycle(
         raise ValueError("t_settle must be positive.")
     t_max = 10.0 * t_settle if t_max is None else t_max
 
-    p = _settle(ode, x0, t_settle, config=config, reverse_time=reverse_time)
+    # Floats are static under filter_jit, and a new value is a new program; the times
+    # go in as arrays so that a new t_settle or period estimate does not recompile.
+    p = _settle(
+        ode, x0, jnp.asarray(t_settle, dtype=float), config=config,
+        reverse_time=reverse_time,
+    )  # fmt: skip
     if not bool(jnp.all(jnp.isfinite(p))):
         raise NotConvergedError("settle", "the trajectory left the finite domain.", p)
     section, fp = initial_guess(
@@ -360,7 +383,7 @@ def find_limit_cycle(
         max_returns=max_returns,
         reverse_time=reverse_time,
     )
-    period_hat = float(fp.tau)
+    period_hat = jnp.asarray(fp.tau, dtype=float)
     shot = _polish(
         ode,
         fp.x,
@@ -371,7 +394,7 @@ def find_limit_cycle(
         tol=tol,
         reverse_time=reverse_time,
     )
-    _check_shooting(ode, shot, period_hat)
+    _check_shooting(ode, shot, float(period_hat))
     return LimitCycle(
         ode=ode,
         x0s=shot.points,
@@ -392,45 +415,57 @@ def nearest_cycle_time(
     newton_steps: int = 4,
 ) -> tuple[Float[Array, ""], Float[Array, " dim"], Float[Array, ""]]:
     r"""The time $t^\ast$ from ``cycle.x0s[0]`` of the cycle point nearest `y`, that
-    point, and the last Newton step.
+    point, and the Newton step the solve would take next.
 
-    The nearest of `n_samples` samples starts `newton_steps` Newton steps in time on
-    the stationarity condition $g(t) = (\gamma(t) - y)\cdot f(\gamma(t)) = 0$, with
-    $g'(t) = \Vert f\Vert^2 + (\gamma - y)\cdot Df\thinspace f$ and $\gamma(t)$ reached
-    by flowing from the current point. A step is clipped to half a period, so a point
-    far from the cycle cannot send the flow around it many times. Jit- and
-    vmap-compatible; a caller that needs convergence checks the last step (`reanchor`
-    does).
+    The nearest of `n_samples` samples, $x_j$ at time $t_j$, starts a Newton root solve
+    in the offset $\delta$ on the stationarity condition
+    $g(\delta) = (\gamma - y)\cdot f(\gamma) = 0$, $\gamma = \varphi_\delta(x_j)$. The
+    first step is taken in closed form at $\delta = 0$, where
+    $g' = \Vert f\Vert^2 + (\gamma - y)\cdot Df\thinspace f$, because diffrax's
+    derivative of a flow in its end time, $f(\gamma)$ elsewhere, is identically zero
+    for a solve of zero length; Optimistix's Newton then refines it, differentiating
+    through the flow, for at most `newton_steps` more steps, and never raises. The
+    sample is within one spacing, $T/$`n_samples`, of the answer, so the solve
+    converges quadratically. Jit- and vmap-compatible; a caller that needs
+    convergence checks the returned step (`reanchor` does).
 
     **Arguments:**
 
     - `cycle`: The orbit.
     - `y`: The point, shape ``(dim,)``, on or near the orbit.
     - `n_samples`: The number of samples for the starting guess.
-    - `newton_steps`: The number of Newton steps.
+    - `newton_steps`: The bound on the solver's steps.
 
     **Returns:**
 
-    ``(t, point, step)``: $t^\ast$ in $[0, T)$, $\gamma(t^\ast)$, and the last Newton
-    step in time.
+    ``(t, point, step)``: $t^\ast$ in $[0, T)$, $\gamma(t^\ast)$, and the next Newton
+    step in time, which is at rounding when the solve converged.
     """
     ode, config, period = cycle.ode, cycle.config, cycle.period
     y = jnp.asarray(y, dtype=float)
     times, points = cycle.sample(n_samples)
     j = jnp.argmin(jnp.linalg.norm(points - y, axis=1))
+    t0, x0 = times[j], points[j]
+
     jacobian = jax.jacfwd(ode.rhs, argnums=1)
 
-    def newton_step(carry, _):
-        t, x, _ = carry
+    def newton_step(x):
         f = ode.rhs(0.0, x)
         g = jnp.dot(x - y, f)
-        dg = jnp.dot(f, f) + jnp.dot(x - y, jacobian(0.0, x) @ f)
-        dt = jnp.clip(-g / dg, -period / 2, period / 2)
-        return (t + dt, ode.flow_to(dt, x, config=config), dt), None
+        return -g / (jnp.dot(f, f) + jnp.dot(x - y, jacobian(0.0, x) @ f))
 
-    start = (times[j], points[j], jnp.zeros_like(period))
-    (t, x, dt), _ = jax.lax.scan(newton_step, start, None, length=newton_steps)
-    return jnp.mod(t, period), x, dt
+    def stationarity(delta, args):
+        del args
+        x = ode.flow_to(delta, x0, config=config)
+        return jnp.dot(x - y, ode.rhs(0.0, x))
+
+    solver = optx.Newton(rtol=0.0, atol=TIME_TOL)
+    sol = optx.root_find(
+        stationarity, solver, newton_step(x0), max_steps=newton_steps, throw=False
+    )
+    delta = sol.value
+    x = ode.flow_to(delta, x0, config=config)
+    return jnp.mod(t0 + delta, period), x, newton_step(x)
 
 
 def reanchor(
@@ -439,38 +474,36 @@ def reanchor(
     *,
     n_points: int = 1024,
     newton_steps: int = 8,
-    tol: float = 1e-8,
 ) -> LimitCycle:
     r"""The same orbit with its phase origin ``x0s[0]`` moved to the orbit point nearest
     `point`.
 
-    The nearest orbit point comes from `nearest_cycle_time`, whose last Newton step in
-    time must be below $10^{-12}T$. The orbit is then polished by `polish` on the
-    section through that point, normal to the flow there, which is the section
-    `find_limit_cycle` builds through its own origin. Phase 0 is where the isochron
-    pipeline anchors its junction (`docs/design/isochrons.md` §6).
+    The nearest orbit point comes from `nearest_cycle_time`, whose next Newton step in
+    time must be below $10^{-12}T$. The orbit is already converged, so it is not
+    solved again: the new mesh is the flow from the new origin at times $iT/m$, and the
+    residual is the shooting residual evaluated once at the new mesh (it is the old
+    orbit's, moved). The section is the one through the new origin, normal to the flow
+    there, as `find_limit_cycle` builds through its own origin. Phase 0 is where the
+    isochron pipeline anchors its junction (`docs/design/isochrons.md` §6).
 
     **Arguments:**
 
     - `cycle`: The orbit, from `find_limit_cycle`.
     - `point`: Where phase 0 should be, shape ``(dim,)``; on or near the orbit.
     - `n_points`: The number of samples for the starting guess.
-    - `newton_steps`: The number of Newton steps in time.
-    - `tol`: The Levenberg–Marquardt tolerance of the polish, as in
-        `find_limit_cycle`.
+    - `newton_steps`: The bound on the Newton steps in time.
 
     **Returns:**
 
-    A `LimitCycle` with the same `ode`, `config`, `reverse_time` and `settle`, and new
-    `x0s`, `period`, `residual` and `section`.
+    A `LimitCycle` with the same `ode`, `config`, `reverse_time`, `settle` and
+    `period`, and new `x0s`, `residual` and `section`.
 
     **Raises:**
 
     `ValueError` for a `point` of the wrong shape; `NotConvergedError` when the Newton
-    iteration does not settle within `newton_steps`, the polish fails, or a guard of
-    `find_limit_cycle` rejects it.
+    solve does not settle within `newton_steps`.
     """
-    ode, config = cycle.ode, cycle.config
+    ode = cycle.ode
     p = jnp.asarray(point, dtype=float)
     if p.shape != (cycle.dim,):
         raise ValueError(f"point must have shape ({cycle.dim},), not {p.shape}.")
@@ -484,25 +517,24 @@ def reanchor(
             f"the last step was {float(dt):.3e}.",
             x,
         )
-    period_hat = float(cycle.period)
-    shot = _polish(
-        ode,
-        x,
-        period_hat,
-        CrossSection.normal_to_flow(ode, x),
-        m=cycle.m,
-        config=config,
-        tol=tol,
-        reverse_time=cycle.reverse_time,
-    )
-    _check_shooting(ode, shot, period_hat)
-    return copy.replace(
-        cycle,
-        x0s=shot.points,
-        period=shot.period,
-        residual=shot.residual,
-        section=CrossSection.normal_to_flow(ode, shot.points[0]),
-    )
+    section = CrossSection.normal_to_flow(ode, x)
+    x0s, residual = _moved_mesh(cycle, x, section)
+    return copy.replace(cycle, x0s=x0s, residual=residual, section=section)
+
+
+@eqx.filter_jit
+def _moved_mesh(
+    cycle: LimitCycle, origin: Float[Array, " dim"], section: CrossSection
+) -> tuple[Float[Array, "m dim"], Float[Array, ""]]:
+    """The cycle's mesh from `origin` at times ``i T / m``, and the shooting residual
+    at that mesh with the phase condition on `section`."""
+    sign = -1.0 if cycle.reverse_time else 1.0
+    times = sign * jnp.linspace(0.0, cycle.period, cycle.m, endpoint=False)
+    x0s = cycle.ode.flow(times, origin, config=cycle.config).ys
+    x0s = cast(Array, x0s)
+    args = ShootingArgs(cycle.ode, section, cycle.config, cycle.reverse_time)
+    matching, phase = shooting_residual((x0s, cycle.period), args)
+    return x0s, jnp.sqrt(jnp.sum(matching**2) + phase**2)
 
 
 __all__ = [

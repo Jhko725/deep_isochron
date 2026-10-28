@@ -189,6 +189,16 @@ and `Isochron.resample` for evenly spaced points.
 - `docs/design/isochrons.md`: §6 with a subheading per stage, stage 2 written out.
 - `docs/architecture.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md`:
   the four modules; the ADR links the coworker's scripts at `3af99f2`.
+- `src/deep_isochron/analysis/ode/limit_cycle.py`, `poincare.py`, review round 2:
+  `t_settle`, the period estimate and `PoincareMap.t_max` reach the jitted stages as
+  arrays; `nearest_cycle_time` on `optimistix.Newton`; `reanchor` without the polish.
+- `src/deep_isochron/systems/normal_forms/integration.py`: the `r_squared` field as a
+  module-level function with the normal form in `args`; the closed form jitted.
+- `tests/helpers.py` (`CompileCounter`), `tests/test_analysis_ode.py`,
+  `tests/test_normal_forms.py`: the guard tests that a second call compiles nothing;
+  `docs/coding-standards.md` lists them.
+- `docs/design/analysis.md`: `nearest_cycle_time` and `reanchor` in §2.2; the array
+  rule in §2.4.
 
 ## Design
 
@@ -358,6 +368,28 @@ and `Isochron.resample` for evenly spaced points.
   functions of the runner, not methods of a pipeline class, so the data flow between
   them is on the page. `results.py` stays separate from the driver (300 lines against
   150; a notebook imports from `analysis.ode`, not from these modules).
+
+- **The recompile fixes (Q9).** Three sources, each measured with `jax_log_compiles`:
+  `find_limit_cycle` compiled three programs for every new `t_settle` (the float into
+  `_settle`, `t_max = 10 t_settle` as a static field of `PoincareMap`, the period
+  estimate into `_polish`), one for every new parameter set; the `r_squared`
+  integration compiled `diffeqsolve` on every call, its field being a closure built
+  per call; the closed form compiled its two `fori_loop`s on every call, run op by op.
+  The fixes follow diffrax's own conventions: values are arrays (`PoincareMap.t_max`
+  is a converted array leaf, so a new bound is not a new program), a vector field is a
+  module-level function with its parameters in `args`, and the closed form is jitted
+  as `diffeqsolve` is. A guard test per driver (`CompileCounter` in `tests/helpers.py`)
+  asserts zero compilations on a second call with new values; both fail on the code
+  before the fix. Chex's `assert_max_traces` does the same and was not added, one
+  assertion not being worth a dependency.
+- **`reanchor` on Optimistix, without the polish (Q10).** `nearest_cycle_time` ran a
+  hand-rolled Newton scan; it is now `optimistix.root_find(Newton)` on the
+  stationarity condition, differentiating through the flow, with its first step in
+  closed form at offset zero: diffrax's derivative of a flow in its end time is
+  identically zero for a solve of zero length (measured: `[0, 0]` at $\delta = 0$,
+  $f(\gamma)$ at $10^{-3}$), so a solve started there would not move. `reanchor` no
+  longer re-solves the shooting problem, since the orbit is converged: it flows the
+  new origin for the mesh and evaluates the shooting residual once there.
 
 ## Bugs fixed
 
@@ -666,6 +698,12 @@ tests/test_experiment_isochrons.py tests/test_auto_env.py -m "auto and not slow"
 and 3 now restart from arrays rather than AUTO's objects, and every oracle holds to the
 same tolerances.
 
+**After the recompile fixes**: `find_limit_cycle` with a new `t_settle` and new
+parameters compiles 0 programs (3 and 1 before); each of the four integrations with
+new parameters compiles 0 (1, 0, 1, 2 before). The reanchor and phase tests pass (13
+in 383 s at `-n 2`). The two files that lost workers at the `ci` profile, rerun alone:
+pending at the time of writing.
+
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
 changes little):
@@ -787,3 +825,7 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `tests/test_auto_stages.py`, `tests/test_isochron.py`, `tests/conftest.py`, `tests/helpers.py` — the tests split as the modules; one `auto` fixture; `PLANAR_SYSTEMS`, `anchored_cycle` | | |
 | `docs/design/isochrons.md` — §6 with a subheading per stage; stage 2 written out | | |
 | `docs/architecture.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md` — the four modules; the link to the coworker's scripts; History | | |
+| `src/deep_isochron/analysis/ode/limit_cycle.py`, `poincare.py` — times as arrays into the jitted stages; `nearest_cycle_time` on Optimistix; `reanchor` without the polish | | |
+| `src/deep_isochron/systems/normal_forms/integration.py` — the `r_squared` field through `args`; the closed form jitted | | |
+| `tests/helpers.py`, `tests/test_analysis_ode.py`, `tests/test_normal_forms.py`, `docs/coding-standards.md` — the compile guards | | |
+| `docs/design/analysis.md` — `nearest_cycle_time`, `reanchor`, the array rule | | |
