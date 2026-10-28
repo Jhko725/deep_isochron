@@ -52,7 +52,7 @@ consumer in `experiment/`, registered in Hydra's `ConfigStore` at import of the 
 validates the file and every override against it at composition: an unknown key, a
 wrong type or a missing required field fails there, not in the code that reads the
 config. `OmegaConf.to_object` turns the composed config into the dataclass, whose
-methods derive what is a function of the fields alone (a file path, a hash); the
+methods derive what is a function of the fields alone (a file path, a result digest); the
 functions that do work stay free functions of the config (Decision 2). A `_target_`
 leaf inside a schema is typed `Any` and instantiated as before. The isochron group
 (`IsochronConfig`, with `CycleConfig` for the shared `cycle/` group and the library's

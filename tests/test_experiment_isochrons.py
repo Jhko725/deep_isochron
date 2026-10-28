@@ -50,8 +50,9 @@ def test_shipped_isochron_configs_compose_on_the_schema(name, data):
     assert cfg.cycle == cycle and isinstance(cycle, CycleConfig)
     assert isinstance(cfg.settings, IsochronSettings)
     assert cfg.settings.box_scale == 2.5
-    assert cfg.hash() == SHIPPED_HASHES[name]
-    assert cfg.file() == Path("data/isochrons") / f"{cfg.data['name']}-{cfg.hash()}.nc"
+    assert cfg.result_digest() == SHIPPED_HASHES[name]
+    stem = f"{cfg.data['name']}-{cfg.result_digest()}"
+    assert cfg.file() == Path("data/isochrons") / f"{stem}.nc"
 
 
 @pytest.mark.parametrize(
@@ -90,15 +91,15 @@ def test_phases_from_count_or_values():
 def test_hash_follows_what_decides_the_result():
     """The hash changes with the system's parameters, the anchor, the phases and a
     setting, and not with ``max_workers``, which decides only the speed."""
-    base = _config("fhn").hash()
-    assert _config("fhn", "settings.max_workers=3").hash() == base
+    base = _config("fhn").result_digest()
+    assert _config("fhn", "settings.max_workers=3").result_digest() == base
     for override in (
         "+data.system.c=2.5",
         "cycle.anchor=[-1.7,0.4]",
         "phases.count=50",
         "settings.n_periods=4",
     ):
-        assert _config("fhn", override).hash() != base, override
+        assert _config("fhn", override).result_digest() != base, override
 
 
 def test_reader_never_computes_and_writer_never_overwrites(tmp_path):

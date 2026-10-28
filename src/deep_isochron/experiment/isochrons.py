@@ -6,8 +6,9 @@ composes a ``data`` config, whose ``system`` it traces, and a ``cycle`` config f
 the ``phases`` (`PhasesConfig`: ``count`` or ``values``) and the ``settings``, an
 `IsochronSettings` node. ``isochron_config`` turns the composed `DictConfig` into the
 dataclass, whose methods derive what is a function of the fields alone: the
-`wrapped_phases`, the `hash` and the `file`. The functions that do work take either
-form: ``isochron_cycle`` finds and anchors the cycle, ``compute_isochrons`` traces the
+`wrapped_phases`, the `result_digest` and the `file`. The functions that do work take
+either form: ``isochron_cycle`` finds and anchors the cycle, ``compute_isochrons``
+traces the
 foliation by AUTO-07p (``analysis.ode.auto``, ADR-0017) and saves it at ``file()``,
 ``<out_dir>/<name>-<hash>.nc``, with the resolved config in its provenance, and
 ``load_isochrons`` rebuilds the same cycle and reads the file back, the counterpart of
@@ -122,7 +123,7 @@ class IsochronConfig:
             values = [2 * math.pi * k / count for k in range(count)]
         return wrap_phases(list(values))
 
-    def identity(self) -> dict[str, Any]:
+    def result_identity(self) -> dict[str, Any]:
         """What decides the result, as JSON-able values: the system and its
         parameters, the cycle, the wrapped phases and the settings other than
         `max_workers`."""
@@ -138,15 +139,18 @@ class IsochronConfig:
             "settings": settings,
         }
 
-    def hash(self) -> str:
-        """The 8-character SHA-256 of `identity`, as the datasets' ``config_hash``."""
-        blob = json.dumps(self.identity(), sort_keys=True).encode()
+    def result_digest(self) -> str:
+        """The 8-character SHA-256 of `result_identity`, as the datasets'
+        ``config_hash``: a stable digest across processes and machines, which the
+        dataclass's own ``__hash__``, salted per process and tied to the field-wise
+        ``__eq__``, is not."""
+        blob = json.dumps(self.result_identity(), sort_keys=True).encode()
         return hashlib.sha256(blob).hexdigest()[:8]
 
     def file(self) -> Path:
         """Where the foliation lives, whether or not it exists:
         ``<out_dir>/<name>-<hash>.nc``."""
-        return Path(self.out_dir) / f"{self.name}-{self.hash()}.nc"
+        return Path(self.out_dir) / f"{self.name}-{self.result_digest()}.nc"
 
 
 def isochron_config(cfg: DictConfig | IsochronConfig) -> IsochronConfig:

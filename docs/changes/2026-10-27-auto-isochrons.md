@@ -215,7 +215,7 @@ and `Isochron.resample` for evenly spaced points.
 - `tests/helpers.py`: `CompileCounter` says why not `equinox.debug.assert_max_traces`.
 - `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py`, design round
   of 2026-10-29: the schemas `IsochronConfig`, `CycleConfig`, `PhasesConfig`,
-  registered at import; `wrapped_phases`, `hash`, `file` as methods; `isochron_config`;
+  registered at import; `wrapped_phases`, `result_digest`, `file` as methods; `isochron_config`;
   the free functions `isochron_phases`, `isochron_settings`, `isochron_hash` and
   `isochron_file` are gone.
 - `configs/cycle/fhn.yaml`, `configs/cycle/fhn-easy.yaml` (**new**): the shared cycle
@@ -456,7 +456,12 @@ and `Isochron.resample` for evenly spaced points.
   methods of the schema object, the functions that do work stay free functions
   (ADR-0011 §2); `data` stays a `_target_` mapping typed `Any`. The hash reads the same
   fields as before, and the shipped configs' hashes are pinned in a test, so a
-  foliation on the cluster keeps its name. The `cycle` block became the group
+  foliation on the cluster keeps its name. The digest and its identity are named
+  `result_digest` and `result_identity`, not `hash` and `identity` (Joon's question,
+  2026-10-29): a dataclass's own `__hash__` is salted per process and bound to the
+  field-wise `__eq__`, so it is neither a stable digest nor the "same result" relation,
+  which ignores `max_workers`, `out_dir` and `name` and looks through `data.system` to
+  the instantiated parameters. The `cycle` block became the group
   `configs/cycle/`, composed by the isochron configs and, when O3's script exists, by a
   `phase_field` group of its own; the `phase_field.t_end` key that the O3 work had put
   into the isochron configs (a key the hash ignored) is gone, so the notebook's
