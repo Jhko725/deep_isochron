@@ -297,7 +297,7 @@ and `Isochron.resample` for evenly spaced points.
   fixed point are unchanged. The slow two-way oracle failed with the new default: ours
   covered 1243 of the 7124 points of the coworker's file 100, below the half the test
   requires, though every one of our points lay on his curve. The oracle therefore runs
-  with his box, `box_scale = 5` (`ISOCHRON_SETTINGS["full"]`); its rerun is pending.
+  with his box, `box_scale = 5` (`ISOCHRON_SETTINGS["full"]`), and passes (*Tests*).
 
 - **The isochron script (decisions of 2026-10-28, Q1–Q19).** The configs live in
   `experiment/`, since library code never reads configs (ADR-0011): `compute_isochrons`
@@ -509,6 +509,28 @@ but the tier is still 5.8 minutes, above the 3.5–4 estimated: the foliation te
 trace their phases one after the other, and JAX's own threads in each pytest worker
 still share the two cores.
 
+**Stage-4 settings against cost and reach** (Joon's question 9, 2026-10-28): the
+isochron of the coworker's file 26 on FitzHugh–Nagumo with `box_scale = 2.5`, one
+worker, run alone on the two-core session; the time includes about 50 s of cycle and
+stages 1–3. The fixed point is at $(0.9066, -0.2582)$, and the coworker's curve comes
+within $1.6\times 10^{-4}$ of it.
+
+| `n_periods` | `ntst` (per period) | Time | Points | Closest to the fixed point | Farthest from the coworker's curve |
+|---|---|---|---|---|---|
+| 5 | 300 (60) | 491 s | 7005 | $1.6\times 10^{-4}$ | $8.6\times 10^{-6}$ |
+| 5 | 200 (40) | 331 s | 7005 | $1.6\times 10^{-4}$ | $8.6\times 10^{-6}$ |
+| 5 | 150 (30) | 264 s | 7010 | $1.6\times 10^{-4}$ | $8.0\times 10^{-6}$ |
+| 4 | 240 (60) | 294 s | 4950 | $6.5\times 10^{-4}$ | $8.8\times 10^{-6}$ |
+| 4 | 160 (40) | 221 s | 4948 | $6.5\times 10^{-4}$ | $8.8\times 10^{-6}$ |
+| 3 | 180 (60) | 198 s | 3708 | $2.7\times 10^{-3}$ | $8.8\times 10^{-6}$ |
+
+The number of periods sets how close the inward half reaches: each period fewer
+leaves it about four times farther from the fixed point. The mesh per period does not
+change the curve, its reach or its agreement with the coworker's down to 30 intervals,
+and the time falls with it: five periods at 30 intervals per period take 264 s against
+491 s at 60. The first row ran while other work used the session for a few minutes,
+so its time may be high. Whether to lower the default `ntst` is Joon's decision.
+
 **The isochron script and `resample`**: `tests/test_experiment_isochrons.py` composes
 both configs against their data configs, checks the phases from `count` or `values`,
 that the hash follows the system, anchor, phases and settings and not `max_workers`,
@@ -516,7 +538,96 @@ that `load_isochrons` refuses a missing file and `compute_isochrons` an existing
 and (marker `auto`) that a one-phase foliation computed from a config loads back
 through it. `tests/test_isochron.py` checks `resample` on a circular arc (exact
 spacing, the base point kept, within the traced steps' sag of the circle, $\eta$ signed
-and monotone) and on a line (exact). Their runs are pending at the time of writing.
+and monotone) and on a line (exact). The eight tests pass in 132 s at `-n 2`, the
+`auto` one included.
+
+**The slow oracle with the coworker's box** (`ISOCHRON_SETTINGS["full"]`,
+`box_scale = 5`): passes, in 1026 s alone on the session.
+
+**Per-file timing at the `ci` profile** (decision 8; Joon asked for it on
+2026-10-28): `pytest -n 2 <file> -m "not slow and not auto" --hypothesis-profile=ci`,
+as CI's `checks` job runs the tier, one file at a time and alone on the two-core, 7 GB
+session:
+
+| File | Time | Result |
+|---|---|---|
+| `test_bijections.py` | 1450 s | 271 passed |
+| `test_splines.py` | 1190 s | 20 passed |
+| `test_analysis_ode.py` | 1095 s | 42 passed, 1 failed (worker killed) |
+| `test_normal_forms.py` | 1057 s | 26 passed, 2 failed (workers killed) |
+| `test_experiment.py` | 188 s | 23 passed |
+| `test_analytic.py` | 129 s | 8 passed, 1 xfailed |
+| `test_training.py` | 57 s | 21 passed |
+| `test_baseline.py` | 35 s | 9 passed |
+| `test_constraints.py` | 33 s | 54 passed |
+| `test_systems.py` | 26 s | 8 passed |
+| `test_analysis.py` | 24 s | 12 passed |
+| `test_data.py` | 21 s | 14 passed |
+| `test_isochron.py` | 20 s | 15 passed |
+| `test_linear.py` | 20 s | 13 passed |
+| `test_models.py`, `test_symbolic.py` | 16 s each | 4 and 36 passed |
+| `test_registry.py`, `test_windows.py` | 12 s, 11 s | 5 and 15 passed |
+| `test_auto_codegen.py`, `test_auto_env.py`, `test_experiment_isochrons.py` | 8 s, 7 s, 7 s | 27, 3 and 5 passed |
+
+The tier takes about 90 minutes at `-n 2`; four files hold 4800 s of it. The three
+failures are workers that the kernel killed for memory: `dmesg` records two "Memory
+cgroup out of memory" kills of a pytest worker at 3.8 GB and 3.1 GB resident, so two
+workers at the `ci` profile exceed the session's 7 GB. The failed tests are
+`test_limit_cycle_on_random_hopf_forms`, `test_cartesian_integration_is_finite_at_the_origin`
+and `test_integrations_agree`. Run alone at the `ci` profile:
+
+- `test_integrations_agree` passes, in 714 s at a 4.2 GB peak: alone it fits, beside a
+  second worker it does not.
+- `test_cartesian_integration_is_finite_at_the_origin` passes, in 10 s at 0.6 GB: its
+  worker was killed for what earlier tests had left in it.
+- `test_limit_cycle_on_random_hopf_forms` aborts (SIGABRT, exit 134) after 673 s at a
+  4.0 GB peak, inside XLA's `backend_compile_and_load` under `find_limit_cycle`
+  (`limit_cycle.py:364`). It aborts in Hypothesis's generation phase as well as while
+  shrinking, so whether any example fails is not known.
+
+**Every call of `find_limit_cycle` with a new `t_settle` or new parameters compiles
+again.** Counted with `jax_log_compiles`: the first call compiles 45 programs, a repeat
+0, a new `t_settle` 3 (`settle`, the return map's `filter_custom_jvp`, `polish`), and new
+parameters with the same `t_settle` 1 (`polish`). Python floats such as `t_settle` and
+the return-map period reach `eqx.filter_jit` as static arguments, so each value is a new
+program. Over the 300 examples of the `ci` profile the compiled programs accumulate,
+which fits the memory growth and the abort, and likely much of the time of the four
+slowest files **[deduced]**. Passing them as arrays should remove it; that is O1's code
+and decision 8's question, left for Joon.
+
+**Reassessed 2026-10-28 (Fable 5.1), measured [code]:**
+
+- The abort is the kernel's mapping limit, not memory. With pytest's fd capture off
+  (`-s`) LLVM's message survives: "allocateMappedMemory failed with error: Cannot
+  allocate memory … LLVM ERROR: Unable to allocate section memory!". XLA's CPU backend
+  mmaps each compiled program's sections and keeps them while the program is cached;
+  `vm.max_map_count` is 65530, and a `find_limit_cycle` call with a new `t_settle` adds
+  about 470 mappings, so the limit falls near example 140, about 600 s in: the abort came
+  at 673 s. A larger runner does not help; a count, not a size.
+- The session's shell cgroup limit is 5.84 GiB (`memory.limit_in_bytes`), not 7 GB;
+  the two killed workers, 3.8 and 3.1 GB, exceeded it together.
+- Per call after warm-up: `find_limit_cycle` with a new `t_settle` 3 compiles, 22 MB,
+  about 4 s; with the same `t_settle` 1 compile (`polish`, since `period_hat` always
+  differs), 11 MB, 2 s. `t_max = 10 t_settle` is a static field of `PoincareMap`, the
+  third program.
+- Two more sources, recompiling on every call even for the same instance: the
+  `r_squared` integration's `rhs_s`, a closure built inside `__call__`
+  (`integration.py:117`), so diffrax's `filter_jit` sees a new function each time; and
+  the closed form's `_radius_from_isostable`, whose two `fori_loop`s run op-by-op and
+  compile their closure each call. `test_integrations_agree` makes about 5 compiles per
+  example, 12 MB; 300 examples give its 4.2 GB.
+- `test_splines.py` and `test_bijections.py` have a different profile: about 2500
+  tiny op-by-op compiles per file at the `dev` profile (`jit(add)`, `jit(multiply)`,
+  `jit(searchsorted)`), one per new shape the strategies draw, and heavy per-example
+  work; no program-level recompile. Their cost is eager execution over shape-varying
+  draws, not static floats.
+- Fixes, in order: `t_settle`, `period_hat` and `t_max` as arrays; `rhs_s` as a method
+  (`rhs_r_squared`, as `rhs_polar`); `filter_jit` on the closed form or on
+  `radius_from_isostable`; a test that runs each driver twice with new values and
+  asserts zero compilations the second time (`jax_log_compiles` plus a logging handler),
+  recorded in `docs/coding-standards.md`; for the spline and bijection files, jitted
+  checkers and strategies drawing shapes from a few sizes, or a lower `max_examples` on
+  the heaviest tests. JAX's persistent cache would not lift the mapping limit.
 
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
@@ -532,6 +643,11 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 1.8.
 
 ## Open issues
+
+- **`find_limit_cycle` recompiles for every new `t_settle` and parameter set** (*Tests*,
+  per-file timing): the likely cause of the `ci` tier's memory kills and of much of its
+  90 minutes. The fix, floats passed to the jitted stages as arrays, is O1's and
+  decision 8's.
 
 - **The canceled `checks` job** is fixed on its own branch before this one is reviewed
   (plan decision 8).
