@@ -171,7 +171,7 @@ deep_isochron
 │   │                        validation_t_split
 │   ├── isochrons.py         IsochronConfig / CycleConfig / PhasesConfig, the schemas of
 │   │                        configs/isochrons/ and configs/cycle/ (ADR-0011 §1), with
-│   │                        wrapped_phases / hash / file; compute_isochrons (refuses an
+│   │                        wrapped_phases / result_digest / file; compute_isochrons (refuses an
 │   │                        existing file) / load_isochrons (never computes; rebuilds the
 │   │                        cycle): the reference isochrons (ADR-0017)
 │   ├── model.py             build_model (`_target_` layers + per-layer keys + flip)
