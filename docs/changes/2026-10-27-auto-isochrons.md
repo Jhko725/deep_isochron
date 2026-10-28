@@ -815,19 +815,19 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py` — the isochron configs: phases, settings, cycle, hash, file, compute, load | Looking at functions like `isochron_phases` or `isochron_settings` makes me feel like dataclasses configs may be useful (since these would then be methods of a dataclass). Worth it? Can dataclass configs be used with yaml configs? | To be discussed. |
 | `scripts/compute_isochrons.py`, `scripts/README.md` — the Hydra entry point | Script looks good. For the README, now that there are quite a bit of scripts, would it be better to ditch the table and switch to one script docs per subheading? Also, currently there are two types of scripts - the config related ones that run experiments, and the housekeeping ones for benchmarking or deterministic checks. These are different in nature so makes sense to sepaeate them. | Need discussion and grilling to determine better organization strategy for scripts. |
 | `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — the isochron configs | Confirmed. Is phase_field's t_end an appropriate place for this? | To be discussed. |
-| `configs/hydra/launcher/slurm.yaml`, `pyproject.toml`, `uv.lock` — the SLURM launcher and the `slurm` group | | |
-| `src/deep_isochron/analysis/ode/auto/isochron.py`, `analysis/ode/__init__.py` — `Isochron.resample`; `wrap_phases` public; INFO per phase | | |
+| `configs/hydra/launcher/slurm.yaml`, `pyproject.toml`, `uv.lock` — the SLURM launcher and the `slurm` group | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/isochron.py`, `analysis/ode/__init__.py` — `Isochron.resample`; `wrap_phases` public; INFO per phase | Confirmed. | None |
 | `tests/test_experiment_isochrons.py`, `tests/test_isochron.py` — the configs and the script; `resample` | Confirmed. | None |
 | `docs/auto.md`, `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md` — the script, the launcher, the module map | Confirmed. | None |
 | `CLAUDE.md` — a test outcome only after the test has run | Confirmed. | None |
-| `src/deep_isochron/analysis/ode/auto/{results,runner,stages,foliation}.py` — the pipeline in four modules; `AutoSolution` at every seam; `auto_session`; `trace_isochron` | | |
-| `src/deep_isochron/analysis/ode/auto/__init__.py`, `analysis/ode/__init__.py` — re-exports | | |
-| `src/deep_isochron/utils/numerics.py` — `arclength` | | |
-| `tests/test_auto_stages.py`, `tests/test_isochron.py`, `tests/conftest.py`, `tests/helpers.py` — the tests split as the modules; one `auto` fixture; `PLANAR_SYSTEMS`, `anchored_cycle` | | |
-| `docs/design/isochrons.md` — §6 with a subheading per stage; stage 2 written out | | |
-| `docs/architecture.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md` — the four modules; the link to the coworker's scripts; History | | |
-| `src/deep_isochron/analysis/ode/limit_cycle.py`, `poincare.py` — times as arrays into the jitted stages; `nearest_cycle_time` on Optimistix; `reanchor` without the polish | | |
-| `src/deep_isochron/systems/normal_forms/integration.py` — the `r_squared` field through `args`; the closed form jitted | | |
-| `tests/helpers.py`, `tests/test_analysis_ode.py`, `tests/test_normal_forms.py`, `docs/coding-standards.md` — the compile guards | | |
-| `docs/design/analysis.md` — `nearest_cycle_time`, `reanchor`, the array rule | | |
-| `README.md` — `DEEP_ISOCHRON_AUTO_DIR` and `AUTO_DIR` named; Langfield et al. and Hannam et al. cited in full | | |
+| `src/deep_isochron/analysis/ode/auto/{results,runner,stages,foliation}.py` — the pipeline in four modules; `AutoSolution` at every seam; `auto_session`; `trace_isochron` | Much easier to read, that allowed me to find the following - `wrap_phases` is horrible code. Pretty sure everything can be done in vectoried numpy: `values=np.atleast_1d(np.asarray(phases, dtype=float))`. Cehck for ValueError on `np.any(bad)`; `bad=np.isfinite(values)`. `wrap_phase` works on arrays, and checking for duplicates is easily done bu `np.unique`. Never use python loops/list comps/etc to perform array operations elementwise in python loop. It's probably expressible in numpy/JAX logic. Also we are going to use x64 anyways, so why not set as the global JAX config at package import (instead of contextmanagers)? | Deferred to Claude. |
+| `src/deep_isochron/analysis/ode/auto/__init__.py`, `analysis/ode/__init__.py` — re-exports | Confirmed. | None |
+| `src/deep_isochron/utils/numerics.py` — `arclength` | Minor, but `jnp.cumulative_sum(..., include_initial=True)` should remove the need for a concatenation. | Deferred to Claude. |
+| `tests/test_auto_stages.py`, `tests/test_isochron.py`, `tests/conftest.py`, `tests/helpers.py` — the tests split as the modules; one `auto` fixture; `PLANAR_SYSTEMS`, `anchored_cycle` | Confirmed. | None |
+| `docs/design/isochrons.md` — §6 with a subheading per stage; stage 2 written out | Looks good. | None |
+| `docs/architecture.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md` — the four modules; the link to the coworker's scripts; History | Looks good. | None |
+| `src/deep_isochron/analysis/ode/limit_cycle.py`, `poincare.py` — times as arrays into the jitted stages; `nearest_cycle_time` on Optimistix; `reanchor` without the polish | Does it make more sense for `reanchor` to be a method of `LimitCycle`? Also, not sure why we still retain `newton_step` when using Optimistix's Newton solver. `optx.Newton` has a `.step` method; furthermore, isn't initializing with a manual Newton step same as just running the solver one more time? | To be discussed. |
+| `src/deep_isochron/systems/normal_forms/integration.py` — the `r_squared` field through `args`; the closed form jitted | Makes sense. | None |
+| `tests/helpers.py`, `tests/test_analysis_ode.py`, `tests/test_normal_forms.py`, `docs/coding-standards.md` — the compile guards | Looks good, but take a look at `equinox.debug`. Anything useful there we are reinventing? | To be discussed. |
+| `docs/design/analysis.md` — `nearest_cycle_time`, `reanchor`, the array rule | Looks good. | None |
+| `README.md` — `DEEP_ISOCHRON_AUTO_DIR` and `AUTO_DIR` named; Langfield et al. and Hannam et al. cited in full | Confirmed. | None |
