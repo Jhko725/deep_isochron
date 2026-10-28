@@ -108,16 +108,16 @@ def test_nearest_cycle_time_finds_the_radial_projection(hopf_cycle):
     """Under `vmap`, for points on both sides of the circle and between samples, so
     that the Newton steps in time are traced and of either sign,
     `nearest_cycle_time` returns the radial projection, at the time that is its angle
-    as a fraction of the period, and a last step at rounding."""
+    as a fraction of the period, and reports convergence."""
     angles = np.linspace(-np.pi, np.pi, 13, endpoint=False) + 1e-3
     xs = _points([0.5, 1.0, 1.7], angles)
-    t, point, step = jax.vmap(lambda y: nearest_cycle_time(hopf_cycle, y))(xs)
+    t, point, converged = jax.vmap(lambda y: nearest_cycle_time(hopf_cycle, y))(xs)
     on_circle = np.asarray(xs) / np.linalg.norm(np.asarray(xs), axis=1, keepdims=True)
     assert_close(point, on_circle, atol=TOL["limit_cycle"])
     expected = np.remainder(np.arctan2(on_circle[:, 1], on_circle[:, 0]), 2 * np.pi)
     period = float(hopf_cycle.period)
     assert _gap(2 * np.pi * np.asarray(t) / period, expected).max() < TOL["limit_cycle"]
-    assert np.abs(np.asarray(step)).max() < TOL["limit_cycle"]
+    assert np.all(np.asarray(converged))
 
 
 # -------------------------------------------------------- 3. asymptotic_phase --

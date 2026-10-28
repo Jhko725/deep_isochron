@@ -22,6 +22,7 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import Any, NamedTuple
 
+import jax
 import numpy as np
 from jaxtyping import Float
 
@@ -150,7 +151,9 @@ class Runner:
 @contextlib.contextmanager
 def auto_session(ode, name: str = "isochron") -> Generator[Runner]:
     """A `Runner` on the AUTO problem of `ode`, written into a temporary directory that
-    is the working directory for the duration of the block and deleted afterward.
+    is the working directory for the duration of the block and deleted afterward. JAX
+    runs in float64 inside the block, whatever the calling process's setting, since
+    the stages integrate with O1's solver at its tolerances.
 
     **Raises:**
 
@@ -162,7 +165,8 @@ def auto_session(ode, name: str = "isochron") -> Generator[Runner]:
         problem = write_problem(ode, tmp, name=name)
         os.chdir(tmp)
         try:
-            yield Runner(auto, problem)
+            with jax.enable_x64(True):
+                yield Runner(auto, problem)
         finally:
             os.chdir(previous)
 

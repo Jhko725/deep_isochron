@@ -29,7 +29,6 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Float
@@ -72,9 +71,8 @@ def periodic_orbit(run: Runner, cycle: LimitCycle, n_points: int = 601) -> AutoS
     point and normal in its parameters.
     """
     idx, period = run.idx, float(cycle.period)
-    with jax.enable_x64(True):
-        times = jnp.linspace(0.0, period, 2 * n_points - 1)
-        orbit = np.asarray(cycle.ode.flow(times, cycle.x0s[0], config=cycle.config).ys)
+    times = jnp.linspace(0.0, period, 2 * n_points - 1)
+    orbit = np.asarray(cycle.ode.flow(times, cycle.x0s[0], config=cycle.config).ys)
     seg1, seg2 = orbit[:n_points], orbit[n_points - 1 :]
     p, n = np.asarray(cycle.section.point), np.asarray(cycle.section.normal)
     par = dict(run.problem.pars)
@@ -194,9 +192,8 @@ def rotate_phase(
 # -------------------------------------------------------------- stage 4 ----
 def bounding_box(cycle: LimitCycle, scale: float, n_points: int = 512) -> Box:
     """The cycle's bounding box enlarged `scale` times about its center, which ends an
-    isochron's halves (`IsochronSettings.box_scale`)."""
-    with jax.enable_x64(True):
-        _, points = cycle.sample(n_points)
+    isochron's halves (`IsochronSettings.box_scale`); called inside a session."""
+    _, points = cycle.sample(n_points)
     points = np.asarray(points)
     lo, hi = points.min(axis=0), points.max(axis=0)
     center, half = (lo + hi) / 2, (hi - lo) / 2
@@ -211,11 +208,10 @@ def _isochron_start(
     `n_periods` periods."""
     period = rotated.par[idx.period]
     base = rotated.u[0, 2:4]
-    with jax.enable_x64(True):
-        orbit = cycle.ode.flow(
-            jnp.asarray(rotated.t * n_periods * period), jnp.asarray(base),
-            config=cycle.config,
-        )  # fmt: skip
+    orbit = cycle.ode.flow(
+        jnp.asarray(rotated.t * n_periods * period), jnp.asarray(base),
+        config=cycle.config,
+    )  # fmt: skip
     u = np.column_stack([rotated.u, np.asarray(orbit.ys)])
     par = rotated.par | {idx.copies: n_periods * period, idx.eta: 0.0}
     return AutoSolution(rotated.t, u, par)

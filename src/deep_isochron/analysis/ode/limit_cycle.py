@@ -37,10 +37,9 @@ import copy
 from typing import cast
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 import optimistix as optx
-from jaxtyping import Array, ArrayLike, Float
+from jaxtyping import Array, ArrayLike, Bool, Float
 
 from ...systems import AbstractODE, SolverConfig
 from ..data.cycle import orientation
@@ -57,8 +56,8 @@ from .shooting import (
 
 
 TIME_TOL = 1e-14
-"""The absolute tolerance of the Newton solve in time of `nearest_cycle_time`: a
-step below it, in the units of the period, counts as converged."""
+"""The absolute tolerance of the Newton solve in time of `nearest_cycle_time`, in the
+units of the period: Optimistix declares convergence when a step is below it."""
 
 
 class LimitCycle(eqx.Module):
@@ -412,22 +411,22 @@ def nearest_cycle_time(
     y: Float[ArrayLike, " dim"],
     *,
     n_samples: int = 1024,
-    newton_steps: int = 4,
-) -> tuple[Float[Array, ""], Float[Array, " dim"], Float[Array, ""]]:
+    newton_steps: int = 8,
+) -> tuple[Float[Array, ""], Float[Array, " dim"], Bool[Array, ""]]:
     r"""The time $t^\ast$ from ``cycle.x0s[0]`` of the cycle point nearest `y`, that
-    point, and the Newton step the solve would take next.
+    point, and whether the solve converged.
 
-    The nearest of `n_samples` samples, $x_j$ at time $t_j$, starts a Newton root solve
-    in the offset $\delta$ on the stationarity condition
-    $g(\delta) = (\gamma - y)\cdot f(\gamma) = 0$, $\gamma = \varphi_\delta(x_j)$. The
-    first step is taken in closed form at $\delta = 0$, where
-    $g' = \Vert f\Vert^2 + (\gamma - y)\cdot Df\thinspace f$, because diffrax's
-    derivative of a flow in its end time, $f(\gamma)$ elsewhere, is identically zero
-    for a solve of zero length; Optimistix's Newton then refines it, differentiating
-    through the flow, for at most `newton_steps` more steps, and never raises. The
-    sample is within one spacing, $T/$`n_samples`, of the answer, so the solve
-    converges quadratically. Jit- and vmap-compatible; a caller that needs
-    convergence checks the returned step (`reanchor` does).
+    The nearest of `n_samples` samples is $x_j$ at time $t_j$; an Optimistix Newton
+    root solve finds the offset $\delta$ from the *previous* sample $x_{j-1}$ at which
+    the stationarity condition $g(\delta) = (\gamma - y)\cdot f(\gamma)$ vanishes,
+    $\gamma = \varphi_\delta(x_{j-1})$, differentiating through the flow, from the
+    seed $\delta = T/$`n_samples`, the spacing. The solve starts one spacing back
+    because diffrax's derivative of a flow in its end time, $f(\gamma)$ elsewhere, is
+    identically zero for a solve of zero length, so a Newton seeded at the nearest
+    sample itself would never move. The answer is within one spacing of the seed, so
+    the solve converges quadratically; it runs at most `newton_steps` steps and never
+    raises. Jit- and vmap-compatible; a caller that needs convergence checks the
+    returned flag (`reanchor` does).
 
     **Arguments:**
 
@@ -438,34 +437,29 @@ def nearest_cycle_time(
 
     **Returns:**
 
-    ``(t, point, step)``: $t^\ast$ in $[0, T)$, $\gamma(t^\ast)$, and the next Newton
-    step in time, which is at rounding when the solve converged.
+    ``(t, point, converged)``: $t^\ast$ in $[0, T)$, $\gamma(t^\ast)$, and whether the
+    Newton solve reached `TIME_TOL`.
     """
     ode, config, period = cycle.ode, cycle.config, cycle.period
     y = jnp.asarray(y, dtype=float)
     times, points = cycle.sample(n_samples)
     j = jnp.argmin(jnp.linalg.norm(points - y, axis=1))
-    t0, x0 = times[j], points[j]
-
-    jacobian = jax.jacfwd(ode.rhs, argnums=1)
-
-    def newton_step(x):
-        f = ode.rhs(0.0, x)
-        g = jnp.dot(x - y, f)
-        return -g / (jnp.dot(f, f) + jnp.dot(x - y, jacobian(0.0, x) @ f))
+    spacing = period / n_samples
+    t_prev, x_prev = times[j] - spacing, points[j - 1]  # j - 1 wraps around at 0
 
     def stationarity(delta, args):
         del args
-        x = ode.flow_to(delta, x0, config=config)
+        x = ode.flow_to(delta, x_prev, config=config)
         return jnp.dot(x - y, ode.rhs(0.0, x))
 
-    solver = optx.Newton(rtol=0.0, atol=TIME_TOL)
     sol = optx.root_find(
-        stationarity, solver, newton_step(x0), max_steps=newton_steps, throw=False
-    )
+        stationarity, optx.Newton(rtol=0.0, atol=TIME_TOL), spacing,
+        max_steps=newton_steps, throw=False,
+    )  # fmt: skip
     delta = sol.value
-    x = ode.flow_to(delta, x0, config=config)
-    return jnp.mod(t0 + delta, period), x, newton_step(x)
+    x = ode.flow_to(delta, x_prev, config=config)
+    converged = sol.result == optx.RESULTS.successful
+    return jnp.mod(t_prev + delta, period), x, converged
 
 
 def reanchor(
@@ -478,8 +472,8 @@ def reanchor(
     r"""The same orbit with its phase origin ``x0s[0]`` moved to the orbit point nearest
     `point`.
 
-    The nearest orbit point comes from `nearest_cycle_time`, whose next Newton step in
-    time must be below $10^{-12}T$. The orbit is already converged, so it is not
+    The nearest orbit point comes from `nearest_cycle_time`, which must report
+    convergence. The orbit is already converged, so it is not
     solved again: the new mesh is the flow from the new origin at times $iT/m$, and the
     residual is the shooting residual evaluated once at the new mesh (it is the old
     orbit's, moved). The section is the one through the new origin, normal to the flow
@@ -507,14 +501,13 @@ def reanchor(
     p = jnp.asarray(point, dtype=float)
     if p.shape != (cycle.dim,):
         raise ValueError(f"point must have shape ({cycle.dim},), not {p.shape}.")
-    _, x, dt = nearest_cycle_time(
+    _, x, converged = nearest_cycle_time(
         cycle, p, n_samples=n_points, newton_steps=newton_steps
     )
-    if not abs(float(dt)) < 1e-12 * float(cycle.period):
+    if not bool(converged):
         raise NotConvergedError(
             "reanchor",
-            f"the nearest orbit point did not settle in {newton_steps} Newton steps; "
-            f"the last step was {float(dt):.3e}.",
+            f"the nearest orbit point did not settle in {newton_steps} Newton steps.",
             x,
         )
     section = CrossSection.normal_to_flow(ode, x)

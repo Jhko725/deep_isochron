@@ -170,6 +170,7 @@ def isochron_foliation(
         bundle = adjoint_bundle(run, orbit)
         rotated = rotate_phase(run, bundle, wrapped)
         origin = provenance(run)
+        box = bounding_box(cycle, settings.box_scale)
     logger.info(
         "stages 1-3: %d of %d phases rotated in %.0f s",
         len(rotated), len(wrapped), time.perf_counter() - start,
@@ -179,7 +180,6 @@ def isochron_foliation(
         for theta in wrapped
         if theta not in rotated
     ]
-    box = bounding_box(cycle, settings.box_scale)
     todo = [theta for theta in wrapped if theta in rotated]
     results: dict[float, Isochron | IsochronFailure] = {}
     context = multiprocessing.get_context("spawn")

@@ -220,6 +220,11 @@ class CompileCounter(logging.Handler):
     ``filter_jit`` as a static argument, a closure built per call, an eager loop).
 
     Use as a context manager; `count` is the number of programs compiled inside it.
+    ``equinox.debug.assert_max_traces`` and ``get_num_traces`` count the traces of one
+    function and have to wrap it inside its jit at definition, and they do not see an
+    eager loop or a jit inside diffrax; this counter sees every program the process
+    compiles, and ``jax_explain_cache_misses`` or ``equinox.debug.announce_transform``
+    then names the argument that missed.
     """
 
     def __init__(self):

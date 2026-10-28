@@ -206,6 +206,13 @@ and `Isochron.resample` for evenly spaced points.
   `docs/decisions/0013-normal-form-basins.md` §5 and `docs/design/normal-forms.md`
   say so; `tests/test_normal_forms.py` and `tests/test_symbolic.py` follow.
 - `src/deep_isochron/analysis/ode/auto/foliation.py`: `wrap_phases` vectorized.
+- `src/deep_isochron/analysis/ode/limit_cycle.py`, review round 3: `nearest_cycle_time`
+  solves from the previous sample, seeded at one spacing, and returns a convergence
+  flag; `tests/test_phase.py` and `docs/design/analysis.md` §2.2 follow.
+- `src/deep_isochron/analysis/ode/auto/runner.py`, `stages.py`, `foliation.py`:
+  `auto_session` runs JAX in float64 for its block; the stages' own blocks are gone and
+  `bounding_box` is called inside the session.
+- `tests/helpers.py`: `CompileCounter` says why not `equinox.debug.assert_max_traces`.
 - `src/deep_isochron/utils/numerics.py`: `arclength` by `cumulative_sum`.
 
 ## Design
@@ -410,6 +417,18 @@ and `Isochron.resample` for evenly spaced points.
   of `all_normal_forms`, each class now compiles once and never again. The strategy
   with bounded draws and the nightly tier were the alternatives; both would have kept
   an exception to the rule.
+- **`nearest_cycle_time` without a hand-rolled step (review round 3).** Optimistix
+  owns every Newton step: the solve starts from the sample *before* the nearest one,
+  seeded at one spacing, so it never evaluates the flow's derivative at zero length,
+  where diffrax returns zero; the first version seeded at the nearest sample with one
+  closed-form step. The third return is the solver's convergence flag, which
+  `reanchor` checks, in place of "the next Newton step". `reanchor` stays a function:
+  methods of `LimitCycle` are jittable reads of the object, and drivers that run a
+  solver and raise take the cycle (ADR-0015 §5).
+- **Float64 is the session's, not the package's.** `experiment.run.configure_jax`
+  sets `jax_enable_x64` from the training config, and a float32 run must stay
+  possible, so the package does not set it at import; `auto_session` enters
+  `jax.enable_x64(True)` for its block, one place instead of four.
 - **`wrap_phases` vectorized** (review round 2): `np.isfinite`, `wrap_phase` on the
   array, `np.unique` with counts for the repeats; no Python loop.
 
@@ -721,7 +740,8 @@ and 3 now restart from arrays rather than AUTO's objects, and every oracle holds
 same tolerances.
 
 **With Winfree's parameters as arrays**: `test_normal_forms.py` alone at the `ci`
-profile is running at the time of this commit; the next records it.
+profile is running at the time of this commit; the next records it, with the runs of
+the reanchor, phase and AUTO tests on the round-3 changes, which wait for it.
 
 **After the recompile fixes**: `find_limit_cycle` with a new `t_settle` and new
 parameters compiles 0 programs (3 and 1 before); each of the four integrations with
@@ -875,3 +895,6 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `README.md` — `DEEP_ISOCHRON_AUTO_DIR` and `AUTO_DIR` named; Langfield et al. and Hannam et al. cited in full | Confirmed. | None |
 | `src/deep_isochron/systems/normal_forms/winfree.py`, `base.py`, `docs/decisions/0013-normal-form-basins.md`, `docs/design/normal-forms.md`, `tests/test_normal_forms.py`, `tests/test_symbolic.py` — Winfree's parameters as array leaves | | |
 | `src/deep_isochron/analysis/ode/auto/foliation.py`, `src/deep_isochron/utils/numerics.py` — `wrap_phases` vectorized; `arclength` by `cumulative_sum` | | |
+| `src/deep_isochron/analysis/ode/limit_cycle.py`, `tests/test_phase.py`, `docs/design/analysis.md` — `nearest_cycle_time` from the previous sample; a convergence flag | | |
+| `src/deep_isochron/analysis/ode/auto/runner.py`, `stages.py`, `foliation.py` — float64 entered once, in `auto_session` | | |
+| `tests/helpers.py` — `CompileCounter` against `equinox.debug` | | |
