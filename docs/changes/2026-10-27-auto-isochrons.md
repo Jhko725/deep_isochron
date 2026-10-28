@@ -687,60 +687,60 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `docs/index.md` — the `auto.md` row | Confirmed. | None |
 | `CLAUDE.md` — `-n 2` in the cloud sessions; the AUTO setup line | Confirmed. | None |
 | `docs/roadmap.md` — Done ledger row for Step B | Confirmed. | None |
-| `justfile` — the recipes `setup`, `install-auto`, `check`, `test`, `test-slow`, `test-auto`, `smoke` (R3) | | |
-| `pyproject.toml`, `uv.lock` — `rust-just` and `prek` in the `dev` group | | |
-| `prek.toml` — excludes `src/Isochron2PBVP/` and `tests/golden/` | | |
-| `.github/workflows/ci.yml` — every job runs `just` recipes | | |
-| `src/deep_isochron/analysis/ode/auto/_env.py` — the tree only from the environment (R2) | | |
-| `tests/test_auto_env.py` — resolution tests through the variables | | |
-| `docs/auto.md` — `just setup`, the `uv sync` correction, platforms, "On a cluster" | | |
-| `README.md` — the package, setup, documentation, acknowledgment | | |
-| `docs/design/isochrons.md` — acknowledgment of Andrus Giraldo | | |
-| `CLAUDE.md` — the recipes; `prek` and its exclusions | | |
-| `docs/roadmap.md` — Done ledger row for Step B′; the O7 row names the consumer of the saved foliation | | |
-| `src/deep_isochron/analysis/ode/limit_cycle.py` — `reanchor`; `_check_shooting` shared with `find_limit_cycle` | | |
-| `src/deep_isochron/analysis/ode/__init__.py` — exports `reanchor` | | |
-| `tests/test_analysis_ode.py` — the `reanchor` tests | | |
-| `docs/architecture.md` — `reanchor` in the module map | | |
-| `docs/roadmap.md` — Done ledger row for `reanchor` | | |
-| `src/deep_isochron/analysis/ode/auto/fortran/isochron_multiseg.f90` — phase 0 anchored on the section (decision 3) | | |
-| `src/deep_isochron/analysis/ode/auto/codegen.py` — section slots replace the anchor and stability slots | | |
-| `tests/test_auto_codegen.py` — the slot layout | | |
-| `src/deep_isochron/analysis/ode/auto/isochron.py` — the pipeline (work in progress, untested) | | |
-| `src/deep_isochron/analysis/ode/__init__.py` — exports the pipeline | | |
-| `src/deep_isochron/analysis/ode/auto/isochron.py`, Step D — `IsochronFoliation.dataset`, `save`, `load`; the stages finished | | |
-| `src/deep_isochron/plotting/isochrons.py` — `plot_isochrons` | | |
-| `src/deep_isochron/plotting/__init__.py` — exports `plot_isochrons` | | |
-| `tests/test_isochron.py` — settings, phases, persistence, plot; bundle at multiplier 1; FitzHugh–Nagumo against the coworker | | |
-| `tests/helpers.py` — `TOL["isochron_curve"]`, `TOL["branch_point"]`, `ISOCHRON_SETTINGS` | | |
-| `tests/golden/fncMultiSeg_Iso_{100,26,51}.csv` — three golden isochrons | | |
-| `justfile`, `.github/workflows/ci.yml` — `test-auto` takes `quick` or `full` | | |
-| `docs/architecture.md` — the pipeline and the plot in the module map | | |
-| `src/Isochron2PBVP/` — deleted; the coworker's run sequence and Fortran quoted in *Design* | | |
-| `pyproject.toml`, `prek.toml`, `scripts/check_docstring_headers.py` — the exclusions of `src/Isochron2PBVP` removed | | |
-| `CLAUDE.md`, `docs/coding-standards.md` — the exclusion lines name only `tests/golden/` | | |
-| `docs/decisions/0016-symbolic-systems.md` — links at commit `3af99f2`; History line | | |
-| `docs/design/isochrons.md` — the coworker's files linked at commit `3af99f2` | | |
-| `docs/roadmap.md` — the O7 row; Done ledger row for Steps C–D | | |
-| `docs/decisions/0017-isochrons-by-auto-continuation.md` — ADR-0017: the method, the adjoint bundle, the section anchor, AUTO as a dependency, the pool, the netCDF file | | |
-| `docs/index.md` — the ADR-0017 row | | |
-| `src/deep_isochron/analysis/ode/auto/isochron.py` — a box stop decided by the box edge; stage 1's docstrings | | |
-| `docs/design/isochrons.md` — stage 1 stores the orbit uncorrected; the O1 oracle after stage 2 | | |
-| `tests/test_isochron.py` — the §8 oracles: stages 1–3 vs O1 and O2, the Hopf route, the closed-form phase, forward integration, the stop reason | | |
-| `tests/helpers.py` — five tolerances and `ISOCHRON_SETTINGS["reach"]` | | |
-| `pyproject.toml`, `docs/coding-standards.md` — ruff `W605` and its row | | |
-| `docs/roadmap.md` — O7 step 2 done; Done ledger row for Step E | | |
-| `docs/decisions/0016-symbolic-systems.md` — the History line dated 2026-10-28 | | |
-| `src/deep_isochron/analysis/ode/auto/isochron.py` — one OpenMP thread per AUTO run; phase π; workers' JAX on the CPU | | |
-| `tests/test_isochron.py`, `tests/helpers.py` — phase π in the stage test; one worker in the named settings | | |
-| `docs/decisions/0017-isochrons-by-auto-continuation.md` — the timing; one thread per AUTO run, workers on the CPU | | |
-| `isochron.py`, `docs/design/isochrons.md`, `tests/helpers.py` — `box_scale` defaults to 2.5 | | |
-| `tests/helpers.py` — `ISOCHRON_SETTINGS["full"]` keeps the coworker's box | | |
-| `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py` — the isochron configs: phases, settings, cycle, hash, file, compute, load | | |
-| `scripts/compute_isochrons.py`, `scripts/README.md` — the Hydra entry point | | |
-| `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — the isochron configs | | |
+| `justfile` — the recipes `setup`, `install-auto`, `check`, `test`, `test-slow`, `test-auto`, `smoke` (R3) | `setup` is additional steps around `install-auto`. Remind me the rationale behind keeping both. | None |
+| `pyproject.toml`, `uv.lock` — `rust-just` and `prek` in the `dev` group | Confirmed. | None |
+| `prek.toml` — excludes `src/Isochron2PBVP/` and `tests/golden/` | Confirmed. | None |
+| `.github/workflows/ci.yml` — every job runs `just` recipes | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/_env.py` — the tree only from the environment (R2) | Looks mostly good, but `_env`'s auto installation behavior depends on the environment variables `DEEP_ISOCHRON_AUTO_DIR` and `AUTO_DIR`, but these are not named in the top-level package `README.md`. Instead, they are mentioned in passing in `docs/auto.md`. Shouldn't these be more explicitly named in the top-level readme along with the installation instructions? | To be discussed. |
+| `tests/test_auto_env.py` — resolution tests through the variables | Like the tests but conflicted on its organization. Does the current grouping make more sense, or splitting into installation-related and auto functionality-related test files make more sense? | To be discussed. |
+| `docs/auto.md` — `just setup`, the `uv sync` correction, platforms, "On a cluster" | Good, but couple thoughts. `auto.md` is not immediately relatable, especially to people not familiar with the continuation software. For example installing_auto07p might be clearer. (auto07p_installation.md? etc?) Also, need to decide on the scope of the document. Script instructions were being gathered in `/scripts/README.md`. Move to there? Create a hyperlink from there to here? De we need a `docs/guides/` directory? | To be discussed. |
+| `README.md` — the package, setup, documentation, acknowledgment | The Hannam paper in the acknowledgement is missing proper citation (Its probably J. Hannam, B. Krauskopf, and H. Osinga. Isochron folications and flobal bifurcations: a case study. Transactions of Mathematics and Its Applications, 6, 2 (2022).) Also `index.md` is helpful for humans too, but its opening paragraphs make it clear that it is primarily intended for Claude. Either move the Claude instructions in `index.md` (Start from here and read what's relevant for each task) to CLAUDE.md and/or add a section for scripts - what exist, and how to use the main ones; for details link to `scripts/README.md`. | Docs organization principle to be discussed with Claude. |
+| `docs/design/isochrons.md` — acknowledgment of Andrus Giraldo | Confirmed. | None |
+| `CLAUDE.md` — the recipes; `prek` and its exclusions | Are there potential improvements / trimming do be done on the current `CLAUDE.md`? | To be discussed. |
+| `docs/roadmap.md` — Done ledger row for Step B′; the O7 row names the consumer of the saved foliation | Looks good. | None |
+| `src/deep_isochron/analysis/ode/limit_cycle.py` — `reanchor`; `_check_shooting` shared with `find_limit_cycle` | `nearest_cycle_time` rolls its own newton iterations. Why not optimistix? Also, `reanchor` runs Newton steps, followed by `_polish` which is the multiple shooting for limit cycle detection. Since we started with a converged limit cycle, and is looking to just tare the phase thought the process would be simpler than this. Do we have docs for `reanchor`? `analysis.md` is getting quite long and difficult to find relevant info in one pass. Maybe split into smaller documents per analysis? | To be discussed. |
+| `src/deep_isochron/analysis/ode/__init__.py` — exports `reanchor` | Simple change. | None |
+| `tests/test_analysis_ode.py` — the `reanchor` tests | Confirmed. | None |
+| `docs/architecture.md` — `reanchor` in the module map | Confirmed. | None |
+| `docs/roadmap.md` — Done ledger row for `reanchor` | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/fortran/isochron_multiseg.f90` — phase 0 anchored on the section (decision 3) | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/codegen.py` — section slots replace the anchor and stability slots | Confirmed. | None  |
+| `tests/test_auto_codegen.py` — the slot layout | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/isochron.py` — the pipeline (work in progress, untested) | Reviewing the file after all changes. Skipped.  | None |
+| `src/deep_isochron/analysis/ode/__init__.py` — exports the pipeline | Simple change. | None |
+| `src/deep_isochron/analysis/ode/auto/isochron.py`, Step D — `IsochronFoliation.dataset`, `save`, `load`; the stages finished | The code works well. However the file contains a lot of functions and is hard to grasp at once. Wondering if this could be refactered to enhance readability and make it easier to understand overall. Namings could be improved too. Expect `_isochron` to be called by `isochron_foliation`, but its actually `_trace_phase` that is called. Would be nice if the actual numerics and the housekeeping around them could be decoupled more somehow in the code. | Need discussions and grilling sessions with Claude. |
+| `src/deep_isochron/plotting/isochrons.py` — `plot_isochrons` | Not that happy with the function. The plots in `prototype_analysis.ipynb` are more to my liking. Also the how the functions are used in the notebook may contain hints as to which methods are needed on various parts of the repo for better ergonomics. | To be discussed. |
+| `src/deep_isochron/plotting/__init__.py` — exports `plot_isochrons` | Simple change. | None |
+| `tests/test_isochron.py` — settings, phases, persistence, plot; bundle at multiplier 1; FitzHugh–Nagumo against the coworker | Do we need testing for plotting functions? Does some of the utility function `_arclength_from_base` have use elsewhere as well (for resampling or as plot helpers). If so, move to `utils`. | To be discussed. |
+| `tests/helpers.py` — `TOL["isochron_curve"]`, `TOL["branch_point"]`, `ISOCHRON_SETTINGS` | Okay for now. May revisit later to reassess if these tolerance values are reasonable. | None |
+| `tests/golden/fncMultiSeg_Iso_{100,26,51}.csv` — three golden isochrons | Confirmed. | None. |
+| `justfile`, `.github/workflows/ci.yml` — `test-auto` takes `quick` or `full` | Confirmed. | None |
+| `docs/architecture.md` — the pipeline and the plot in the module map | Confirmed. | None |
+| `src/Isochron2PBVP/` — deleted; the coworker's run sequence and Fortran quoted in *Design* | Confirmed. | None |
+| `pyproject.toml`, `prek.toml`, `scripts/check_docstring_headers.py` — the exclusions of `src/Isochron2PBVP` removed | Confirmed. | None |
+| `CLAUDE.md`, `docs/coding-standards.md` — the exclusion lines name only `tests/golden/` | Makes sense. How much overlap are there between `CLAUDE.md` and other docs? Is this needed duplication? | To be discussed. |
+| `docs/decisions/0016-symbolic-systems.md` — links at commit `3af99f2`; History line | Like the link. | None |
+| `docs/design/isochrons.md` — the coworker's files linked at commit `3af99f2` | Looks good. | None |
+| `docs/roadmap.md` — the O7 row; Done ledger row for Steps C–D | Confirmed. | None |
+| `docs/decisions/0017-isochrons-by-auto-continuation.md` — ADR-0017: the method, the adjoint bundle, the section anchor, AUTO as a dependency, the pool, the netCDF file | Looks good, but the same link to commit containing Andrus' original scripts so that readers can directly inspect Andrus' original script if they want. | To be discussed. |
+| `docs/index.md` — the ADR-0017 row | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/isochron.py` — a box stop decided by the box edge; stage 1's docstrings | Private functions here starting with `_` don't have documentation compliant with our rules. This is a key analysis so its worth providing docs for private functions as well. | To be discussed. |
+| `docs/design/isochrons.md` — stage 1 stores the orbit uncorrected; the O1 oracle after stage 2 | Want the 6. Our algorithm section to explicitly contain subheadings for stage 1-4, so that each stage of the algorithm really pops out and is legible to the reader. Seems that stage 2 is not even bolded currently. | To be discussed. |
+| `tests/test_isochron.py` — the §8 oracles: stages 1–3 vs O1 and O2, the Hopf route, the closed-form phase, forward integration, the stop reason | Confirmed. | None |
+| `tests/helpers.py` — five tolerances and `ISOCHRON_SETTINGS["reach"]` | Confirmed. | None |
+| `pyproject.toml`, `docs/coding-standards.md` — ruff `W605` and its row | Confirmed. | None  |
+| `docs/roadmap.md` — O7 step 2 done; Done ledger row for Step E | Confirmed. | None |
+| `docs/decisions/0016-symbolic-systems.md` — the History line dated 2026-10-28 | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/isochron.py` — one OpenMP thread per AUTO run; phase π; workers' JAX on the CPU | Confirmed. | None |
+| `tests/test_isochron.py`, `tests/helpers.py` — phase π in the stage test; one worker in the named settings | Confirmed. | None |
+| `docs/decisions/0017-isochrons-by-auto-continuation.md` — the timing; one thread per AUTO run, workers on the CPU | Sometimes, docs have a tendency to group unrelated ideas into a conjoined paragraph. As long as a paragraph conveys its one theme clearly, it is okay for it to be short for documentation writing. | Linebreaks and reordered text for better readability. |
+| `isochron.py`, `docs/design/isochrons.md`, `tests/helpers.py` — `box_scale` defaults to 2.5 | Confirmed. | None |
+| `tests/helpers.py` — `ISOCHRON_SETTINGS["full"]` keeps the coworker's box | Confirmed. | None |
+| `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py` — the isochron configs: phases, settings, cycle, hash, file, compute, load | Looking at functions like `isochron_phases` or `isochron_settings` makes me feel like dataclasses configs may be useful (since these would then be methods of a dataclass). Worth it? Can dataclass configs be used with yaml configs? | To be discussed. |
+| `scripts/compute_isochrons.py`, `scripts/README.md` — the Hydra entry point | Script looks good. For the README, now that there are quite a bit of scripts, would it be better to ditch the table and switch to one script docs per subheading? Also, currently there are two types of scripts - the config related ones that run experiments, and the housekeeping ones for benchmarking or deterministic checks. These are different in nature so makes sense to sepaeate them. | Need discussion and grilling to determine better organization strategy for scripts. |
+| `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — the isochron configs | Confirmed. Is phase_field's t_end an appropriate place for this? | To be discussed. |
 | `configs/hydra/launcher/slurm.yaml`, `pyproject.toml`, `uv.lock` — the SLURM launcher and the `slurm` group | | |
 | `src/deep_isochron/analysis/ode/auto/isochron.py`, `analysis/ode/__init__.py` — `Isochron.resample`; `wrap_phases` public; INFO per phase | | |
-| `tests/test_experiment_isochrons.py`, `tests/test_isochron.py` — the configs and the script; `resample` | | |
-| `docs/auto.md`, `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md` — the script, the launcher, the module map | | |
-| `CLAUDE.md` — a test outcome only after the test has run | | |
+| `tests/test_experiment_isochrons.py`, `tests/test_isochron.py` — the configs and the script; `resample` | Confirmed. | None |
+| `docs/auto.md`, `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md` — the script, the launcher, the module map | Confirmed. | None |
+| `CLAUDE.md` — a test outcome only after the test has run | Confirmed. | None |

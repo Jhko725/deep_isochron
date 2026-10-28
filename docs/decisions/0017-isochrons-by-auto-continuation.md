@@ -103,14 +103,18 @@ AUTO compiles each equation file at run time (R1).
 
 Stages 1–3 run once in the calling process; stage 4 runs for each phase in a
 `ProcessPoolExecutor` started with `spawn`, one temporary working directory per worker
-(decisions 17 and G2). Every AUTO run sets `OMP_NUM_THREADS=1`, since AUTO's OpenMP
-build otherwise starts one thread per core, which on a 24-core node kept stages 1–3 of
-one phase busy for 8.5 minutes; and each worker runs JAX on the CPU, since a worker
-that started a GPU backend preallocated most of the GPU's memory. Processes, because AUTO writes
+(decisions 17 and G2). Processes, because AUTO writes
 into the working directory of its process; `spawn`, because JAX runs threads and a
 forked copy of a threaded process can deadlock. The pool has
 `os.process_cpu_count()` workers unless `IsochronSettings.max_workers` says otherwise
-(H3). A phase that fails comes back as an `IsochronFailure` with AUTO's last 50 lines
+(H3).
+
+Every AUTO run sets `OMP_NUM_THREADS=1`, since AUTO's OpenMP
+build otherwise starts one thread per core, which on a 24-core node kept stages 1–3 of
+one phase busy for 8.5 minutes;. Each worker also runs JAX on the CPU, since a worker
+that started a GPU backend preallocated most of the GPU's memory.
+
+A phase that fails comes back as an `IsochronFailure` with AUTO's last 50 lines
 of output and its run constants; the other phases go on (G4).
 
 ### 6. A foliation is one netCDF file, loaded against its cycle
