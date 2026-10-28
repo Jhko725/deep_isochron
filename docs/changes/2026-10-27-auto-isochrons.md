@@ -777,8 +777,10 @@ profile, `-n 2`: 528 s, 29 passed, no worker killed (2577 s with one killed befo
 `diffeqsolve` per example; a test to rewrite.
 
 **The schema**: `tests/test_experiment_isochrons.py` without AUTO, 10 passed in 5 s;
-its `auto` test and the round-3 reanchor, phase and stage tests: pending at the time
-of writing.
+its `auto` test 1 passed in 103 s. **The round-3 changes** (`nearest_cycle_time` from
+the previous sample, float64 in `auto_session`): the reanchor, phase, stage and
+isochron tests, AUTO included, 45 passed in 1357 s at `-n 2` (beside the `ci`
+measurement above for part of the run).
 
 **After the recompile fixes**: `find_limit_cycle` with a new `t_settle` and new
 parameters compiles 0 programs (3 and 1 before); each of the four integrations with
