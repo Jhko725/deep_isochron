@@ -211,13 +211,13 @@ No test changes. The checks that cover this branch, each run on the final tree:
 | `src/deep_isochron/systems/{base,fitzhugh_nagumo,hodgekin_huxley}.py` — the three docstrings the rule flagged | Confirmed. | None |
 | the docstrings of `analysis/` and `training/trainer.py` — paths and section numbers | Confirmed. | None |
 | `.gitignore`, `.DS_Store` — untracked and ignored | Confirmed. | None |
-| `scripts/checks/check_md_math.py`, `docs/document-conventions.md` § Frontmatter, and the seventeen `sources:` lists — round 1: `sources` as a block list of quoted items, checked | | |
-| `docs/document-conventions.md` § Design documents — round 2: the three kinds, the six-section skeleton, Status lines, transient Decisions, the labels | | |
-| `docs/design/isochrons.md` — on the skeleton: §2 the three versions, §3 the stable direction and the four stages, §4 exact/approximated, §5 oracles with the tests, §6 limits; §11 retired | | |
-| `docs/design/{cycle-estimation,limit-cycle,floquet}.md` — on the skeleton; the new §4 of each written from its own §3 | | |
-| `docs/design/phase-field.md` — on the skeleton with O3/O4 subsections; the Status line on §3 | | |
-| `docs/design/normal-forms.md`, `cubic-bspline.md`, `training-step-performance.md` — References stubs gone; `normal-forms.md` §11 retired | | |
-| `docs/decisions/0007`, `0017` — D2, D3, D4, D6 and the manuscript-source decision moved in; History | | |
-| `scripts/checks/check_references.py` — refuses `*cited*`, `*deduced*`, `*secondary*` under `docs/design/` | | |
-| the section numbers in `analysis/`, `auto/`, three test files, ADR-0012, `index.md`, `references.md`, `roadmap.md` | | |
-| the `style:` commit `2453581` — 163 labels converted | | |
+| `scripts/checks/check_md_math.py`, `docs/document-conventions.md` § Frontmatter, and the seventeen `sources:` lists — round 1: `sources` as a block list of quoted items, checked | Looks good. | None |
+| `docs/document-conventions.md` § Design documents — round 2: the three kinds, the six-section skeleton, Status lines, transient Decisions, the labels | Looks good. | None |
+| `docs/design/isochrons.md` — on the skeleton: §2 the three versions, §3 the stable direction and the four stages, §4 exact/approximated, §5 oracles with the tests, §6 limits; §11 retired | Looks good. | None |
+| `docs/design/{cycle-estimation,limit-cycle,floquet}.md` — on the skeleton; the new §4 of each written from its own §3 | Looks good. | None |
+| `docs/design/phase-field.md` — on the skeleton with O3/O4 subsections; the Status line on §3 | Looks good. | None |
+| `docs/design/normal-forms.md`, `cubic-bspline.md`, `training-step-performance.md` — References stubs gone; `normal-forms.md` §11 retired | Confirmed. | None |
+| `docs/decisions/0007`, `0017` — D2, D3, D4, D6 and the manuscript-source decision moved in; History | Looks good. | None |
+| `scripts/checks/check_references.py` — refuses `*cited*`, `*deduced*`, `*secondary*` under `docs/design/` | Confirmed. | None |
+| the section numbers in `analysis/`, `auto/`, three test files, ADR-0012, `index.md`, `references.md`, `roadmap.md` | Confirmed. | None |
+| the `style:` commit `2453581` — 163 labels converted | Confirmed. | None |
