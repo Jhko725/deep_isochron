@@ -6,7 +6,7 @@
     uv run python scripts/compute_isochrons.py --config-name isochrons/fhn \\
         -m hydra/launcher=slurm hydra.launcher.partition=<name>   # one SLURM job
 
-The foliation lands at ``<out_dir>/<name>-<hash>.nc`` (``experiment.isochron_file``);
+The foliation lands at ``<out_dir>/<name>-<hash>.nc`` (``IsochronConfig.file``);
 ``experiment.load_isochrons(cfg)`` reads it back with the same config. When the file
 exists, the script prints its path and exits, since the result would be the same; delete
 it to recompute. When some phases fail, the file is saved with them recorded, they are
@@ -24,7 +24,7 @@ jax.config.update("jax_platforms", "cpu")
 jax.config.update("jax_enable_x64", True)
 
 import hydra
-from deep_isochron.experiment import compute_isochrons, isochron_file
+from deep_isochron.experiment import compute_isochrons, isochron_config
 from omegaconf import DictConfig
 
 
@@ -33,11 +33,12 @@ def main(cfg: DictConfig) -> None:
     """Trace and save the foliation of `cfg`, unless its file exists."""
     for name in ("absl", "jax"):
         logging.getLogger(name).setLevel(logging.WARNING)
-    path = isochron_file(cfg)
+    config = isochron_config(cfg)
+    path = config.file()
     if path.exists():
         print(f"{path} exists; nothing to do (delete it to recompute)")
         return
-    foliation = compute_isochrons(cfg)
+    foliation = compute_isochrons(config)
     print(f"wrote {path}: {len(foliation.isochrons)} isochrons")
     if foliation.failures:
         for failure in foliation.failures:

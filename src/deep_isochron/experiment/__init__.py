@@ -36,12 +36,12 @@ from .data import (
 )
 from .isochrons import (
     compute_isochrons as compute_isochrons,
+    CycleConfig as CycleConfig,
+    isochron_config as isochron_config,
     isochron_cycle as isochron_cycle,
-    isochron_file as isochron_file,
-    isochron_hash as isochron_hash,
-    isochron_phases as isochron_phases,
-    isochron_settings as isochron_settings,
+    IsochronConfig as IsochronConfig,
     load_isochrons as load_isochrons,
+    PhasesConfig as PhasesConfig,
 )
 from .logging import build_logger as build_logger
 from .model import build_inn as build_inn, build_model as build_model
@@ -60,3 +60,22 @@ from .training import (
     build_trainer as build_trainer,
     resolved as resolved,
 )
+
+
+def _register_schemas() -> None:
+    """Register the structured-config schemas in Hydra's `ConfigStore` (ADR-0011 §1),
+    at import so that `compose` and the scripts validate against them: a config of a
+    group with a schema names it first in its ``defaults``."""
+    from hydra.core.config_store import ConfigStore
+    from omegaconf import OmegaConf
+
+    store = ConfigStore.instance()
+    store.store(group="cycle", name="schema", node=CycleConfig)
+    isochrons = OmegaConf.structured(IsochronConfig)
+    # A frozen dataclass makes a read-only node, which a YAML could not fill in; the
+    # settings become an IsochronSettings, and frozen, when the config is converted.
+    OmegaConf.set_readonly(isochrons.settings, False)
+    store.store(group="isochrons", name="schema", node=isochrons, package="_global_")
+
+
+_register_schemas()

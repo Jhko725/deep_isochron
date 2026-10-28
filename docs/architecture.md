@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-28
+updated: 2026-10-29
 sources: [code]
 ---
 
@@ -169,9 +169,11 @@ deep_isochron
 │                            load_or_generate_source (notebooks); build_evaluator;
 │   │                        build_window_source / Loaders.from_config (resume = slice);
 │   │                        validation_t_split
-│   ├── isochrons.py         isochron_file / compute_isochrons (refuses an existing file) /
-│   │                        load_isochrons (never computes; rebuilds the cycle): the
-│   │                        reference isochrons of configs/isochrons/ (ADR-0017)
+│   ├── isochrons.py         IsochronConfig / CycleConfig / PhasesConfig, the schemas of
+│   │                        configs/isochrons/ and configs/cycle/ (ADR-0011 §1), with
+│   │                        wrapped_phases / hash / file; compute_isochrons (refuses an
+│   │                        existing file) / load_isochrons (never computes; rebuilds the
+│   │                        cycle): the reference isochrons (ADR-0017)
 │   ├── model.py             build_model (`_target_` layers + per-layer keys + flip)
 │   ├── training.py          build_loss / build_schedule / build_optimizer / build_trainer
 │   ├── logging.py           build_logger: Print (+ Wandb online/offline) → Epoch → Delayed
@@ -187,7 +189,8 @@ deep_isochron
     └── provenance.py        git_state(), package_version() — for dataset and run metadata
 
 configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment
-configs/isochrons/ (each composes a data config)                   reference isochrons
+configs/cycle/ (schema CycleConfig)                                a system's cycle and phase 0
+configs/isochrons/ (schema IsochronConfig; composes data + cycle)  reference isochrons
 configs/hydra/launcher/slurm.yaml                                  SLURM jobs (submitit)
 scripts/train.py                                Hydra entry point: one training run
 scripts/generate_data.py (+ configs/data/)      Hydra entry point for data generation

@@ -1,0 +1,11 @@
+# The cycle of configs/data/fhn.yaml, as the analyses that share its phase 0 find it
+# (schema: experiment.CycleConfig). Composed by configs/isochrons/fhn.yaml.
+defaults:
+  - schema
+  - _self_
+
+x0: [1.0, 0.5]              # a point in the basin, for find_limit_cycle
+t_settle: 50.0
+m: 8
+anchor: [-1.72170711, 0.5]  # phase 0 and the Poincaré section: the left crossing of
+                            # y = 0.5, the coworker's phase origin

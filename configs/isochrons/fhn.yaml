@@ -1,33 +1,25 @@
 # @package _global_
 # The isochrons of the FitzHugh–Nagumo cycle of configs/data/fhn.yaml, by AUTO-07p
-# (deep_isochron.analysis.ode.auto, ADR-0017). The system comes from the data config, so
-# the reference isochrons are always those of the system the model is trained on.
+# (deep_isochron.analysis.ode.auto, ADR-0017). The schema is experiment.IsochronConfig:
+# the system comes from the data config, so the reference isochrons are always those of
+# the system the model is trained on, and the cycle from configs/cycle/, shared with
+# every analysis that uses the same phase 0.
 # Run: uv run python scripts/compute_isochrons.py --config-name isochrons/fhn [key=value overrides]
 # SLURM: add -m hydra/launcher=slurm hydra.launcher.partition=<name>
 defaults:
+  - schema
   - /data@data: fhn
+  - /cycle@cycle: fhn
   - _self_
 
 name: ${data.name}        # the file is <out_dir>/<name>-<hash>.nc
 out_dir: data/isochrons
 
-cycle:                    # find_limit_cycle, then reanchor at `anchor`
-  x0: [1.0, 0.5]
-  t_settle: 50.0
-  m: 8
-  anchor: [-1.72170711, 0.5]   # phase 0 and the Poincaré section: the left crossing of
-                               # y = 0.5, the coworker's phase origin
-
-phase_field:              # analysis.ode.phase_grid in prototype_analysis.ipynb; not part
-                          # of the file's hash
-  t_end: 80.0             # escape from 1e-3 of the source (Re λ = 0.134) takes ~52;
-                          # the multiplier, 1.7e-12 per period of 11.2, does the rest
-
 phases:                   # exactly one of the two
   count: 100              # θ_k = 2πk/count, wrapped to (−π, π]
   values: null            # or an explicit list of phases, in radians
 
-settings:                 # IsochronSettings; null fields take the code's defaults
+settings:                 # IsochronSettings; a field left out takes the code's default
   n_periods: 5
   eta_stop: 1.0e-6
   box_scale: 2.5

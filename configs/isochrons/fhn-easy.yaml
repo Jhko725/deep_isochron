@@ -1,33 +1,25 @@
 # @package _global_
 # The isochrons of the FitzHugh–Nagumo cycle of configs/data/fhn-easy.yaml, by AUTO-07p
-# (deep_isochron.analysis.ode.auto, ADR-0017). The system comes from the data config, so
-# the reference isochrons are always those of the system the model is trained on.
+# (deep_isochron.analysis.ode.auto, ADR-0017). The schema is experiment.IsochronConfig:
+# the system comes from the data config, so the reference isochrons are always those of
+# the system the model is trained on, and the cycle from configs/cycle/, shared with
+# every analysis that uses the same phase 0.
 # Run: uv run python scripts/compute_isochrons.py --config-name isochrons/fhn-easy [key=value overrides]
 # SLURM: add -m hydra/launcher=slurm hydra.launcher.partition=<name>
 defaults:
+  - schema
   - /data@data: fhn-easy
+  - /cycle@cycle: fhn-easy
   - _self_
 
 name: ${data.name}        # the file is <out_dir>/<name>-<hash>.nc
 out_dir: data/isochrons
 
-cycle:                    # find_limit_cycle, then reanchor at `anchor`
-  x0: [1.0, 0.5]
-  t_settle: 50.0
-  m: 8
-  anchor: [-0.09766992, 0.5]   # phase 0 and the Poincaré section: the left crossing of
-                               # y = 0.5, the rule of the coworker's origin for fhn
-
-phase_field:              # analysis.ode.phase_grid in prototype_analysis.ipynb; not part
-                          # of the file's hash
-  t_end: 300.0            # escape from 1e-2 of the source (Re λ = 0.063) takes ~73; the
-                          # multiplier, 0.23 per period of 10.8, needs ~20 periods more
-
 phases:                   # exactly one of the two
   count: 100              # θ_k = 2πk/count, wrapped to (−π, π]
   values: null            # or an explicit list of phases, in radians
 
-settings:                 # IsochronSettings; null fields take the code's defaults
+settings:                 # IsochronSettings; a field left out takes the code's default
   n_periods: 10      # reach 1.1e-3 of the source, like fhn's 5e-4 at n = 5
   eta_stop: 1.0e-5   # 1e-5 × 0.23⁻¹⁰ ≈ 24 ≫ box: the halves stop at the box or source
   box_scale: 2.5

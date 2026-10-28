@@ -1,7 +1,7 @@
 ---
 type: guide
 status: current
-updated: 2026-10-28
+updated: 2026-10-29
 sources: [the plan "Isochrons from AUTO-07p" (Project document, decisions 4, 7, R1–R3, G1, H1–H4), AUTO-07p at commit 44cc1c4 (configure, Makefile, python/auto/interactiveBindings.py), scripts/install_auto.sh, src/deep_isochron/analysis/ode/auto/_env.py]
 ---
 
@@ -88,9 +88,11 @@ uv run python scripts/compute_isochrons.py --config-name isochrons/fhn-easy phas
 ```
 
 Each config takes its system from the data config of the same name, so the isochrons
-are those of the system a model is trained on. It adds the cycle (`x0`, `t_settle`,
-`m`, and the `anchor` that sets phase 0 and the Poincaré section), the phases (`count`,
-evenly spaced, or a list of `values`) and the `IsochronSettings`. The file is
+are those of the system a model is trained on, and its cycle from `configs/cycle/`
+(`x0`, `t_settle`, `m`, and the `anchor` that sets phase 0 and the Poincaré section),
+shared with every analysis that uses the same phase 0; it adds the phases (`count`,
+evenly spaced, or a list of `values`) and the `IsochronSettings`. The schema
+`experiment.IsochronConfig` validates the file and every override at composition. The file is
 `data/isochrons/<data name>-<hash>.nc`, the hash taken over everything that decides the
 result; when it exists, the script says so and exits, so delete it to recompute. A run
 with failed phases still saves the others, prints the failures and exits with status 1.

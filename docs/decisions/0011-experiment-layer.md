@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0011
 status: accepted; amended 2026-10-07/13 (§6 - Run, Experiment.from_config, explicit resume, one construction style)
-updated: 2026-10-28
+updated: 2026-10-29
 verified_by: pending (Joon; decisions taken in discussion 2026-10-05)
 ---
 
@@ -38,7 +38,7 @@ must not know configs, so the parsing of configs has to live in a layer of its o
 
 ## Decision
 
-### 1. YAML config groups with `_target_` leaves; no dataclass schema (for now)
+### 1. YAML config groups with `_target_` leaves; a structured-config schema where a group has one
 
 [`configs/train.yaml`](../../configs/train.yaml) composes the groups `data/` (the
 generation configs, unchanged), `model/`, `loss/`, `schedule/`, `optimizer/`, `wandb/`,
@@ -46,10 +46,27 @@ plus top-level fields (`seed`, `device`, `x64`, `num_steps`, `windows`, `validat
 `eval_every`, `log_every`, `checkpoint`, `resume`). Leaf objects, such as a normal form,
 a spline or an optimizer, are `_target_` mappings instantiated as written.
 
-- *Rejected for now*: structured configs (dataclasses + `ConfigStore`), the roadmap's
-  original D1. They give stronger typing and validation at the cost of a parallel schema
-  for every class, and are to be revisited if compositions grow or validation becomes a
-  problem (Joon's call: "re-evaluate later").
+A group whose config is consumed as a whole has a schema: a dataclass beside its
+consumer in `experiment/`, registered in Hydra's `ConfigStore` at import of the package
+(`experiment._register_schemas`), and named first in the YAML's `defaults` so that Hydra
+validates the file and every override against it at composition: an unknown key, a
+wrong type or a missing required field fails there, not in the code that reads the
+config. `OmegaConf.to_object` turns the composed config into the dataclass, whose
+methods derive what is a function of the fields alone (a file path, a hash); the
+functions that do work stay free functions of the config (Decision 2). A `_target_`
+leaf inside a schema is typed `Any` and instantiated as before. The isochron group
+(`IsochronConfig`, with `CycleConfig` for the shared `cycle/` group and the library's
+own `IsochronSettings` as the `settings` node) is the first; the training groups keep
+their YAML-only form until a schema pays for them.
+
+- *Rejected at first* (2026-10-05): structured configs everywhere, the roadmap's
+  original D1, for the cost of a parallel schema for every class. The isochron config
+  reopened it on 2026-10-29: its settings already were a dataclass, its `cycle` block
+  was about to be duplicated by a second analysis, and a key the code ignored had
+  crept in unnoticed.
+- A frozen dataclass makes a read-only node that a YAML cannot fill in; the registered
+  schema clears the flag on `settings`, and the frozen `IsochronSettings` is built,
+  and validated by its `__post_init__`, when the config is converted.
 - **Lists become tuples.** Hydra's `instantiate` can only produce lists, while the
   code types fixed-size parameters as tuples and the test suite's beartype hook
   enforces that.
@@ -208,6 +225,8 @@ Alternatives rejected for a single decision are listed under that decision.
   `Experiment.setup` became `Run.from_config` and `Experiment.from_config`.
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md).
+- 2026-10-29 (`auto-isochrons`, review round 3): Decision 1 admits structured-config
+  schemas per group; the isochron group is the first, with the shared `cycle/` group.
 - 2026-10-28 (`auto-isochrons`): Decision 3 covers the isochron configs
   (`configs/isochrons/`, `compute_isochrons`, `load_isochrons`); Hydra's submitit
   launcher joins as the dependency group `slurm`, with

@@ -213,6 +213,18 @@ and `Isochron.resample` for evenly spaced points.
   `auto_session` runs JAX in float64 for its block; the stages' own blocks are gone and
   `bounding_box` is called inside the session.
 - `tests/helpers.py`: `CompileCounter` says why not `equinox.debug.assert_max_traces`.
+- `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py`, design round
+  of 2026-10-29: the schemas `IsochronConfig`, `CycleConfig`, `PhasesConfig`,
+  registered at import; `wrapped_phases`, `hash`, `file` as methods; `isochron_config`;
+  the free functions `isochron_phases`, `isochron_settings`, `isochron_hash` and
+  `isochron_file` are gone.
+- `configs/cycle/fhn.yaml`, `configs/cycle/fhn-easy.yaml` (**new**): the shared cycle
+  group; `configs/isochrons/*.yaml` compose it and name the schema; their
+  `phase_field` block is gone.
+- `scripts/compute_isochrons.py`, `tests/test_experiment_isochrons.py`: on the schema;
+  the shipped hashes pinned; the schema's refusals tested.
+- `docs/decisions/0011-experiment-layer.md`: Decision 1 rewritten; History.
+- `docs/architecture.md`, `docs/auto.md`: the schemas and the `cycle` group.
 - `src/deep_isochron/utils/numerics.py`: `arclength` by `cumulative_sum`.
 
 ## Design
@@ -431,6 +443,25 @@ and `Isochron.resample` for evenly spaced points.
   `jax.enable_x64(True)` for its block, one place instead of four.
 - **`wrap_phases` vectorized** (review round 2): `np.isfinite`, `wrap_phase` on the
   array, `np.unique` with counts for the repeats; no Python loop.
+
+- **Structured configs, the isochron group first (design round of 2026-10-29,
+  Q1–Q8).** The schema is a dataclass beside its consumer, registered in the
+  `ConfigStore` at import and named first in the YAML's `defaults`, so Hydra validates
+  the file and every override at composition (an unknown key in the body or on the
+  command line, a wrong type and a null for the required anchor all fail there; a
+  range violation fails in `IsochronSettings.__post_init__` when the config is
+  converted). `IsochronSettings` is the `settings` node itself, so there is no
+  parallel schema for it; a frozen dataclass makes a read-only node, and the
+  registered schema clears that flag so a YAML can fill it. Pure derivations are
+  methods of the schema object, the functions that do work stay free functions
+  (ADR-0011 §2); `data` stays a `_target_` mapping typed `Any`. The hash reads the same
+  fields as before, and the shipped configs' hashes are pinned in a test, so a
+  foliation on the cluster keeps its name. The `cycle` block became the group
+  `configs/cycle/`, composed by the isochron configs and, when O3's script exists, by a
+  `phase_field` group of its own; the `phase_field.t_end` key that the O3 work had put
+  into the isochron configs (a key the hash ignored) is gone, so the notebook's
+  `cfg.phase_field.t_end` has to come from that group. Every group at once, and no
+  schema, were the alternatives; ADR-0011 §1 records both.
 
 ## Bugs fixed
 
@@ -740,8 +771,14 @@ and 3 now restart from arrays rather than AUTO's objects, and every oracle holds
 same tolerances.
 
 **With Winfree's parameters as arrays**: `test_normal_forms.py` alone at the `ci`
-profile is running at the time of this commit; the next records it, with the runs of
-the reanchor, phase and AUTO tests on the round-3 changes, which wait for it.
+profile, `-n 2`: 528 s, 29 passed, no worker killed (2577 s with one killed before;
+1057 s with two before the earlier fixes). The 404 s left in it are
+`test_hopf_floquet_multiplier_is_the_polar_monodromy`, which builds a lambda for
+`diffeqsolve` per example; a test to rewrite.
+
+**The schema**: `tests/test_experiment_isochrons.py` without AUTO, 10 passed in 5 s;
+its `auto` test and the round-3 reanchor, phase and stage tests: pending at the time
+of writing.
 
 **After the recompile fixes**: `find_limit_cycle` with a new `t_settle` and new
 parameters compiles 0 programs (3 and 1 before); each of the four integrations with
@@ -898,3 +935,7 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `src/deep_isochron/analysis/ode/limit_cycle.py`, `tests/test_phase.py`, `docs/design/analysis.md` — `nearest_cycle_time` from the previous sample; a convergence flag | | |
 | `src/deep_isochron/analysis/ode/auto/runner.py`, `stages.py`, `foliation.py` — float64 entered once, in `auto_session` | | |
 | `tests/helpers.py` — `CompileCounter` against `equinox.debug` | | |
+| `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py` — the schemas, registered at import; derivations as methods | | |
+| `configs/cycle/{fhn,fhn-easy}.yaml`, `configs/isochrons/{fhn,fhn-easy}.yaml` — the shared cycle group; the isochron configs on the schema | | |
+| `scripts/compute_isochrons.py`, `tests/test_experiment_isochrons.py` — on the schema; the hashes pinned; refusals | | |
+| `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md`, `docs/auto.md` — Decision 1 rewritten; the schemas in the map | | |
