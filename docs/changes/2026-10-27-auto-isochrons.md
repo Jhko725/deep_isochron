@@ -702,8 +702,25 @@ same tolerances.
 **After the recompile fixes**: `find_limit_cycle` with a new `t_settle` and new
 parameters compiles 0 programs (3 and 1 before); each of the four integrations with
 new parameters compiles 0 (1, 0, 1, 2 before). The reanchor and phase tests pass (13
-in 383 s at `-n 2`). The two files that lost workers at the `ci` profile, rerun alone:
-pending at the time of writing.
+in 383 s at `-n 2`). The two files that lost workers at the `ci` profile, rerun at
+`-n 2`:
+
+| File | Before | After |
+|---|---|---|
+| `test_analysis_ode.py` | 1095 s, 42 passed, 1 worker killed | 274 s, 44 passed, run alone |
+| `test_normal_forms.py` | 1057 s, 26 passed, 2 workers killed | 2577 s, 28 passed, 1 worker killed (3.0 GB) |
+
+`test_analysis_ode.py` is four times faster and whole; `test_limit_cycle_on_random_hopf_forms`,
+which aborted at 673 s, takes 21 s. `test_normal_forms.py` is not fixed, and its
+earlier figure was short because the two killed tests, `test_integrations_agree`
+among them (714 s alone), had stopped early; its first ten minutes also ran beside
+the reanchor tests. Its remaining source is `WinfreeNormalForm`, whose `a` and `w`
+are Python floats (`eqx.field(static=True)`, by ADR-0013 §5), so every Winfree draw
+of the strategies is a new program for every jitted function it reaches; Hopf and
+Bautin keep theirs as array leaves and compile nothing on a new draw (measured over
+twelve draws of `all_normal_forms`: Winfree 1 `diffeqsolve` program each, the others
+0). A test-side cost beside it: `test_hopf_floquet_multiplier_is_the_polar_monodromy`
+calls `diffeqsolve` with a lambda built per example, 15 programs per 10 examples.
 
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
@@ -719,6 +736,12 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 1.8.
 
 ## Open issues
+
+- **`WinfreeNormalForm`'s parameters are static floats** (ADR-0013 §5), the last
+  per-value recompile in the tree; it keeps `test_normal_forms.py` at 43 minutes and
+  3 GB per worker at the `ci` profile. Joon's decision: array leaves with the
+  $a = 0$ limit selected by `jnp.where`, as Bautin's closed forms handle their poles
+  (recommended); or bounded draws in the Winfree strategy; or the nightly tier.
 
 - **`find_limit_cycle` recompiles for every new `t_settle` and parameter set** (*Tests*,
   per-file timing): the likely cause of the `ci` tier's memory kills and of much of its
