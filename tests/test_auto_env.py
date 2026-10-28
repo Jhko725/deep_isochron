@@ -57,15 +57,6 @@ def test_the_python_layer_is_pinned_by_commit():
 
 
 # ----------------------------------------------------------- 2. AUTO (auto) ----
-@pytest.fixture(scope="module")
-def auto():
-    """The loaded AUTO, or a skip when no tree is built."""
-    try:
-        return _env.load_auto()
-    except _env.AutoNotInstalled as exc:
-        pytest.skip(str(exc))
-
-
 def _fitzhugh_nagumo_hopf_c(a: float, b: float, z: float) -> float:
     """The ``c`` of FitzHugh–Nagumo's Hopf point. The equilibrium solves
     ``x - a + b(x³/3 - x - z) = 0``, independent of ``c``, and the Jacobian's trace

@@ -11,7 +11,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from deep_isochron.analysis.ode.auto import _env
 from deep_isochron.experiment import (
     compose,
     compose_group,
@@ -88,14 +87,10 @@ def test_reader_never_computes_and_writer_never_overwrites(tmp_path):
 
 
 @pytest.mark.auto
-def test_computed_foliation_loads_back_through_its_config(tmp_path):
+def test_computed_foliation_loads_back_through_its_config(auto, tmp_path):
     """A one-phase foliation computed from the FitzHugh–Nagumo config, with test-sized
     settings, is saved at `isochron_file` with the resolved config in its provenance,
     and `load_isochrons` rebuilds the cycle and returns the same isochron."""
-    try:
-        _env.load_auto()
-    except _env.AutoNotInstalled as exc:
-        pytest.skip(str(exc))
     cfg = _config(
         "fhn",
         f"out_dir={tmp_path}",

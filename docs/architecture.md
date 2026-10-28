@@ -111,11 +111,18 @@ deep_isochron
 │       │   ├── _env.py      load_auto() -> AutoHandle: finds the built AUTO tree
 │       │   │                (DEEP_ISOCHRON_AUTO_DIR, AUTO_DIR, ~/.local/opt/auto-07p), sets
 │       │   │                AUTO_DIR, imports `auto`; the only importer of AUTO (docs/auto.md)
-│       │   ├── isochron.py  isochron_foliation(cycle, phases, settings) -> IsochronFoliation:
-│       │   │                stages 1–3 (orbit, adjoint bundle, rotation) in temporary
-│       │   │                directories, stage 4 per phase in a spawn pool; Isochron,
-│       │   │                IsochronFailure, IsochronSettings; IsochronFoliation.save/load
-│       │   │                (netCDF) — docs/design/isochrons.md
+│       │   ├── results.py   IsochronSettings; Isochron (resample); IsochronFailure;
+│       │   │                IsochronFoliation (dataset, save/load as netCDF, loaded against
+│       │   │                its cycle) — docs/design/isochrons.md, ADR-0017
+│       │   ├── runner.py    auto_session(ode) -> Runner: AUTO on the generated problem in a
+│       │   │                temporary directory, one thread, output captured; AutoSolution
+│       │   │                (the one shape the stages exchange); bvp(ndim, nbc)
+│       │   ├── stages.py    periodic_orbit -> adjoint_bundle -> rotate_phase -> isochron:
+│       │   │                the four stages of design §6, each Runner + AutoSolution in,
+│       │   │                AutoSolution (or Isochron) out
+│       │   ├── foliation.py isochron_foliation(cycle, phases, settings) -> IsochronFoliation:
+│       │   │                stages 1–3 once, trace_isochron per phase in a spawn pool
+│       │   │                (JAX on the CPU in the workers); wrap_phases; provenance
 │       │   └── fortran/     isochron_multiseg.f90 — the generic multi-segment BVP (plain
 │       │                    Fortran; INCLUDEs the two generated files; adjoint bundle)
 │       ├── sections.py      CrossSection: a hyperplane (point, unit normal); signed_distance;

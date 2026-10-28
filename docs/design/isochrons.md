@@ -396,6 +396,8 @@ The mapping is:
 | the two isochron runs | stage 4, `_isochron` | stop when the traced point leaves a box relative to the cycle (decision 15) |
 | the loop over phases | `isochron_foliation` | a process pool (decision 17) |
 
+### Stage 1: the orbit as two segments (`periodic_orbit`)
+
 **Stage 1 hands O1's cycle to AUTO.** The cycle is integrated from
 `x0s[0]` with `cycle.config` over one period and split at $T/2$, so
 $\tau_1 = \tau_2 = T/2$. The pieces become segments 1 and 2 on a uniform grid of $[0, 1]$, and one run with
@@ -418,6 +420,23 @@ section is normal to the flow at phase 0, so $n\cdot F = \vert F\vert$, the larg
 a unit normal can give [deduced]. The condition fixes where phase 0 is pinned, not the
 orbit, so after `reanchor` to the coworker's anchor the isochrons are the same.
 
+### Stage 2: the adjoint bundle (`adjoint_bundle`)
+
+**Stage 2 computes the stable direction at the junction by AUTO's own continuation.**
+The orbit gets four components $w$, zero at first, with the adjoint equation
+$\dot w = -\tau A^{\mathsf T}w$ on each segment (§3, D1) and the multiplier $\lambda$
+between them (`NDIM = 8`, `NBC = 11`; free: $\lambda$, `norm`, $\tau_1$, $T$). The
+trivial bundle $w = 0$ is continued in $\lambda$ from 1.2 downward; at $\lambda = 1$ the
+bundle of the trivial Floquet multiplier branches off, and AUTO's branch switching
+(`ISW = -1`) follows it until $\vert w(0)\vert^2 = 1$. The switch restarts from AUTO's
+own labeled point, which carries the null vector that branch switching needs; every
+other handoff between stages passes plain arrays. The first continuation step of this
+stage is also what corrects the orbit of stage 1 (above). At the junction, $Jw$ is the
+stable direction $v_s$ of §3 **[code]**: parallel to O2's Floquet vector to
+$10^{-11}$ on every planar system (`tests/test_auto_stages.py`).
+
+### Stage 3: the rotation to each phase (`rotate_phase`)
+
 **Stage 3 maps a phase to a segment length.** The base point is the junction, the end
 of segment 1, so it lies $\tau_1$ after the anchor: its phase is $2\pi\tau_1/T$. A
 requested $\theta$, wrapped to $[0, 2\pi)$, is therefore reached at
@@ -429,6 +448,8 @@ $$
 and stage 3 places one `UZR` value per requested phase [deduced; consistent with the
 coworker's files, §5]. Phase 0 is $\tau_2 = T$; stage 3 continues to $1.01T$, as the
 coworker does, so that it is an interior `UZ` point.
+
+### Stage 4: the isochron (`isochron`)
 
 **Stage 4 builds its start solution on AUTO's stored grid.** `U(1:8)` is the rotated
 solution as AUTO stored it, and `U(9:10)` is integrated from the base point with O1's
@@ -452,6 +473,8 @@ FitzHugh–Nagumo, whose cycle has $\vert x\vert$ up to about 2, `box_scale = 5`
 reproduce the coworker's bound of 10; the default is 2.5 (Joon, 2026-10-28), which
 shortens the outward halves, the part of each curve far from both the cycle and the
 fixed point, and adds the bound on $y$ that the coworker's runs lacked.
+
+### The settings
 
 **The mesh grows with the number of periods.** `IsochronSettings.ntst` defaults to
 `60 * n_periods`, 300 for the default 5, so that the isochron segment keeps 60 intervals

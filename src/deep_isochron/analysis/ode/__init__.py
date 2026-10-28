@@ -18,7 +18,7 @@ left unjitted, and the host-side drivers ``find_limit_cycle``, ``reanchor``,
 (``auto``, ``docs/design/isochrons.md``), whose results are host-side dataclasses.
 """
 
-from .auto.isochron import (
+from .auto import (
     Isochron as Isochron,
     isochron_foliation as isochron_foliation,
     IsochronFailure as IsochronFailure,

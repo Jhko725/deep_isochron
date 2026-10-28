@@ -17,8 +17,9 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-27, p
   against. Roadmap O7 asks for them on demand, as a result that the comparison with the
   learned isochrons loads instead of recomputing (plan decision H7).
 - Andrus Giraldo had reproduced the FitzHugh–Nagumo isochrons of Langfield et al.
-  (2014) in AUTO-07p, in a script and a hand-written Fortran file for that one system,
-  removed from the tree after commit `3af99f2`. One phase took 140–290 s on two cores,
+  (2014) in AUTO-07p, in a script and a hand-written Fortran file for that one system
+  ([`src/Isochron2PBVP`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP)
+  at commit `3af99f2`, removed from the tree afterward). One phase took 140–290 s on two cores,
   and the 100 phases ran overnight in sequence.
 - His bundle integrated $+\tau A^{\mathsf T}w$, which is not the adjoint equation. On
   the Hopf and Bautin forms it walks the multiplier from 1.2 to $-8.7$ without a branch
@@ -50,8 +51,12 @@ and on WSL2, without `sudo` on the cluster.
 One generic Fortran file,
 [`isochron_multiseg.f90`](../../src/deep_isochron/analysis/ode/auto/fortran/isochron_multiseg.f90),
 states the boundary value problem in four nested sizes, selected by `NDIM`, and
-[`isochron.py`](../../src/deep_isochron/analysis/ode/auto/isochron.py) runs it in four
-stages ([design document](../design/isochrons.md) §6):
+[`stages.py`](../../src/deep_isochron/analysis/ode/auto/stages.py) runs it in four
+stages ([design document](../design/isochrons.md) §6), each a function of a `Runner`
+and the previous stage's `AutoSolution`
+([`runner.py`](../../src/deep_isochron/analysis/ode/auto/runner.py)), which
+[`foliation.py`](../../src/deep_isochron/analysis/ode/auto/foliation.py) strings
+together:
 
 1. **Two segments** (`NDIM = 4`): O1's cycle, cut at half its period.
 2. **The adjoint bundle** (`NDIM = 8`): $\dot w = -\tau A^{\mathsf T}w$ on both
@@ -111,7 +116,7 @@ forked copy of a threaded process can deadlock. The pool has
 
 Every AUTO run sets `OMP_NUM_THREADS=1`, since AUTO's OpenMP
 build otherwise starts one thread per core, which on a 24-core node kept stages 1–3 of
-one phase busy for 8.5 minutes;. Each worker also runs JAX on the CPU, since a worker
+one phase busy for 8.5 minutes. Each worker also runs JAX on the CPU, since a worker
 that started a GPU backend preallocated most of the GPU's memory.
 
 A phase that fails comes back as an `IsochronFailure` with AUTO's last 50 lines
@@ -186,3 +191,7 @@ another phase origin, listing every mismatch (L1).
 - 2026-10-28 (`auto-isochrons`): accepted.
 - 2026-10-28 (`auto-isochrons`): every AUTO run, in the calling process as in the
   workers, sets `OMP_NUM_THREADS=1`; the workers run JAX on the CPU.
+- 2026-10-28 (`auto-isochrons`, review of Steps C–E): `isochron.py` split into
+  `results`, `runner`, `stages` and `foliation`; every stage returns an
+  `AutoSolution`, and only the branch switch of stage 2 restarts from AUTO's own
+  point.

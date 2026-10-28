@@ -1,6 +1,6 @@
 ---
 type: change
-status: Steps A–E done, Steps A–B reviewed; ready for review
+status: Steps A–E reviewed 2026-10-28; the review's changes in progress
 updated: 2026-10-28
 branch: auto-isochrons
 ---
@@ -177,6 +177,18 @@ and `Isochron.resample` for evenly spaced points.
   History line.
 - `docs/architecture.md`: `experiment/isochrons.py`, the script and the configs.
 - `CLAUDE.md`: a test outcome is stated only after the test has run.
+- `src/deep_isochron/analysis/ode/auto/isochron.py` (**deleted**), review round 2:
+  split into `results.py`, `runner.py`, `stages.py` and `foliation.py` (**new**, all
+  four); `auto/__init__.py` and `analysis/ode/__init__.py` re-export from them.
+- `src/deep_isochron/utils/numerics.py`: `arclength(points)`, which the stage, the
+  resample tests and the golden comparison had each written.
+- `tests/test_auto_stages.py` (**new**): the §8 oracles of the stages, out of
+  `tests/test_isochron.py`, which keeps the results, `resample`, persistence, the plot
+  and the foliation against the coworker's curves; `tests/conftest.py` holds the one
+  `auto` fixture; `tests/helpers.py` the planar systems and `anchored_cycle`.
+- `docs/design/isochrons.md`: §6 with a subheading per stage, stage 2 written out.
+- `docs/architecture.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md`:
+  the four modules; the ADR links the coworker's scripts at `3af99f2`.
 
 ## Design
 
@@ -327,6 +339,25 @@ and `Isochron.resample` for evenly spaced points.
   a spline would add a dependency for less than the oracle's tolerance. A fixed number
   of points per half, which would stack into one array, waits for the metric that needs
   it. The script stores the traced points; resampling is the reader's choice.
+
+- **The pipeline in four modules (review round 2, Q1–Q8 of 2026-10-28).** `isochron.py`
+  held four responsibilities in 850 lines, and `isochron_foliation` called a
+  housekeeping function rather than the stage. Now `results.py` holds the settings and
+  the result types, `runner.py` an AUTO session (`auto_session(ode)` yields a `Runner`:
+  AUTO loaded, the problem written into a temporary working directory, one thread,
+  output captured) and `AutoSolution`, `stages.py` the four numerical stages, and
+  `foliation.py` the driver, so that the chain `isochron_foliation → trace_isochron →
+  isochron` is visible. Two files, numerics and housekeeping, were rejected: the
+  housekeeping half would still be 400 lines of three things. The stages are public
+  within the subpackage, since tests and the design document name them, and
+  `analysis.ode` re-exports only the result types, `isochron_foliation` and
+  `wrap_phases`. Every stage returns an `AutoSolution` (mesh, components, parameters
+  by slot, label, step), the one shape at every seam and across the pool; stage 2's
+  branch switch is the one run that restarts from AUTO's own point, since `ISW = -1`
+  needs the null vector stored with it, which an array start loses. The stages are
+  functions of the runner, not methods of a pipeline class, so the data flow between
+  them is on the page. `results.py` stays separate from the driver (300 lines against
+  150; a notebook imports from `analysis.ode`, not from these modules).
 
 ## Bugs fixed
 
@@ -629,6 +660,12 @@ and decision 8's question, left for Joon.
   checkers and strategies drawing shapes from a few sizes, or a lower `max_examples` on
   the heaviest tests. JAX's persistent cache would not lift the mapping limit.
 
+**After the split**: `pytest -n 2 tests/test_isochron.py tests/test_auto_stages.py
+tests/test_experiment_isochrons.py tests/test_auto_env.py -m "auto and not slow"`:
+10 passed in 303 s; the AUTO-free tests of the same files 15 passed in 19 s. Stages 2
+and 3 now restart from arrays rather than AUTO's objects, and every oracle holds to the
+same tolerances.
+
 **Timing of a full foliation** (FitzHugh–Nagumo, the default settings, phases of the
 coworker's files 100, 76, 51 and 26, run alone on the two-core session, before the one-thread fix, which on two cores
 changes little):
@@ -744,3 +781,9 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `tests/test_experiment_isochrons.py`, `tests/test_isochron.py` — the configs and the script; `resample` | Confirmed. | None |
 | `docs/auto.md`, `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md` — the script, the launcher, the module map | Confirmed. | None |
 | `CLAUDE.md` — a test outcome only after the test has run | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/{results,runner,stages,foliation}.py` — the pipeline in four modules; `AutoSolution` at every seam; `auto_session`; `trace_isochron` | | |
+| `src/deep_isochron/analysis/ode/auto/__init__.py`, `analysis/ode/__init__.py` — re-exports | | |
+| `src/deep_isochron/utils/numerics.py` — `arclength` | | |
+| `tests/test_auto_stages.py`, `tests/test_isochron.py`, `tests/conftest.py`, `tests/helpers.py` — the tests split as the modules; one `auto` fixture; `PLANAR_SYSTEMS`, `anchored_cycle` | | |
+| `docs/design/isochrons.md` — §6 with a subheading per stage; stage 2 written out | | |
+| `docs/architecture.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md` — the four modules; the link to the coworker's scripts; History | | |

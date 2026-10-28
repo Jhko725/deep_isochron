@@ -42,6 +42,18 @@ settings.load_profile("default")
 
 
 @pytest.fixture(scope="session")
+def auto():
+    """AUTO-07p's Python layer on the built tree, or a skip when no tree is found; the
+    fixture of every test marked ``auto``."""
+    from deep_isochron.analysis.ode.auto import _env
+
+    try:
+        return _env.load_auto()
+    except _env.AutoNotInstalled as exc:
+        pytest.skip(str(exc))
+
+
+@pytest.fixture(scope="session")
 def key():
     """The session's PRNG key, ``jax.random.key(0)``."""
     return jax.random.key(0)

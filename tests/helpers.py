@@ -12,8 +12,18 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
-from deep_isochron.analysis.ode import IsochronSettings
-from deep_isochron.systems import SolverConfig
+from deep_isochron.analysis.ode import (
+    find_limit_cycle,
+    IsochronSettings,
+    LimitCycle,
+    reanchor,
+)
+from deep_isochron.systems import FitzhughNagumo, SolverConfig
+from deep_isochron.systems.normal_forms import (
+    BautinNormalForm,
+    HopfNormalForm,
+    WinfreeNormalForm,
+)
 from jaxtyping import Float
 
 
@@ -173,6 +183,23 @@ GOLDEN_NEAR_CYCLE = 0.01
 the phase: farther out, near the source, the stored points' position error of about
 1e-5 times the phase gradient reaches a radian (measured gaps: 4.5e-9 within 0.01,
 4.5e-3 within 0.05, 1.8 rad within 0.1)."""
+
+
+PLANAR_SYSTEMS = {
+    "fitzhugh_nagumo": (FitzhughNagumo(), [1.0, 0.5], FHN_ANCHOR),
+    "hopf": (HopfNormalForm(1.3, 1.5, 0.4), [1.2, 0.1], jnp.array([1.0, 0.0])),
+    "bautin": (BautinNormalForm(1.0, 0.3, 1.5, 0.5), [1.1, 0.1], jnp.array([1.0, 0.0])),
+    "winfree": (WinfreeNormalForm(-0.25, -0.5), [1.1, 0.1], jnp.array([1.0, 0.0])),
+}
+"""The planar systems the AUTO tests run on: the system, a point in the basin of its
+cycle, and the anchor of phase 0 (the coworker's for FitzHugh–Nagumo, ``(1, 0)`` for
+the normal forms, decision 14)."""
+
+
+def anchored_cycle(name: str) -> LimitCycle:
+    """The cycle of ``PLANAR_SYSTEMS[name]`` with phase 0 at its anchor."""
+    ode, x0, anchor = PLANAR_SYSTEMS[name]
+    return reanchor(find_limit_cycle(ode, jnp.asarray(x0), t_settle=50.0), anchor)
 
 
 def golden_isochron(k: int) -> tuple[Float[np.ndarray, "2"], Float[np.ndarray, "n 2"]]:

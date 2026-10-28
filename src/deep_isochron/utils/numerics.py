@@ -54,3 +54,11 @@ def wrap_phase(angle: Float[ArrayLike, "*shape"]) -> Float[Array, "*shape"]:
     rem = jax.lax.rem(angle, two_pi)
     rem = jnp.where(rem > jnp.pi, rem - two_pi, rem)
     return jnp.where(rem <= -jnp.pi, rem + two_pi, rem)
+
+
+def arclength(points: Float[ArrayLike, "n dim"]) -> Float[Array, " n"]:
+    """The cumulative arclength along the polyline through `points`, 0 at the first;
+    shape ``(n,)``."""
+    points = jnp.asarray(points, dtype=float)
+    steps = jnp.linalg.norm(jnp.diff(points, axis=0), axis=1)
+    return jnp.concatenate([jnp.zeros((1,), dtype=points.dtype), jnp.cumsum(steps)])
