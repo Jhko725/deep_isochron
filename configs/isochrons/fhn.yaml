@@ -1,0 +1,38 @@
+# @package _global_
+# The isochrons of the FitzHugh–Nagumo cycle of configs/data/fhn.yaml, by AUTO-07p
+# (deep_isochron.analysis.ode.auto, ADR-0017). The system comes from the data config, so
+# the reference isochrons are always those of the system the model is trained on.
+# Run: uv run python scripts/compute_isochrons.py --config-name isochrons/fhn [key=value overrides]
+# SLURM: add -m hydra/launcher=slurm hydra.launcher.partition=<name>
+defaults:
+  - /data@data: fhn
+  - _self_
+
+name: ${data.name}        # the file is <out_dir>/<name>-<hash>.nc
+out_dir: data/isochrons
+
+cycle:                    # find_limit_cycle, then reanchor at `anchor`
+  x0: [1.0, 0.5]
+  t_settle: 50.0
+  m: 8
+  anchor: [-1.72170711, 0.5]   # phase 0 and the Poincaré section: the left crossing of
+                               # y = 0.5, the coworker's phase origin
+
+phases:                   # exactly one of the two
+  count: 100              # θ_k = 2πk/count, wrapped to (−π, π]
+  values: null            # or an explicit list of phases, in radians
+
+settings:                 # IsochronSettings; null fields take the code's defaults
+  n_periods: 5
+  eta_stop: 1.0e-6
+  box_scale: 2.5
+  ntst: null              # 60 * n_periods
+  max_workers: null       # the allocated cores; not part of the file's hash
+  max_steps: 8000
+  ds: 1.0e-5
+
+hydra:
+  run:
+    dir: ${out_dir}/logs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${out_dir}/logs/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}

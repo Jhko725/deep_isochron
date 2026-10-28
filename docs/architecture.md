@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-27
+updated: 2026-10-28
 sources: [code]
 ---
 
@@ -158,6 +158,9 @@ deep_isochron
 │                            load_or_generate_source (notebooks); build_evaluator;
 │   │                        build_window_source / Loaders.from_config (resume = slice);
 │   │                        validation_t_split
+│   ├── isochrons.py         isochron_file / compute_isochrons (refuses an existing file) /
+│   │                        load_isochrons (never computes; rebuilds the cycle): the
+│   │                        reference isochrons of configs/isochrons/ (ADR-0017)
 │   ├── model.py             build_model (`_target_` layers + per-layer keys + flip)
 │   ├── training.py          build_loss / build_schedule / build_optimizer / build_trainer
 │   ├── logging.py           build_logger: Print (+ Wandb online/offline) → Epoch → Delayed
@@ -172,8 +175,11 @@ deep_isochron
     └── provenance.py        git_state(), package_version() — for dataset and run metadata
 
 configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment
+configs/isochrons/ (each composes a data config)                   reference isochrons
+configs/hydra/launcher/slurm.yaml                                  SLURM jobs (submitit)
 scripts/train.py                                Hydra entry point: one training run
 scripts/generate_data.py (+ configs/data/)      Hydra entry point for data generation
+scripts/compute_isochrons.py (+ configs/isochrons/)  Hydra entry point for AUTO isochrons
 scripts/find_nan.py                             first non-finite gradient of a run, with the latent extent
 scripts/check_md_math.py                        GitHub-safe Markdown math check
 scripts/check_spelling.py                       the -ise families (American English)

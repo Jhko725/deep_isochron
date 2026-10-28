@@ -12,8 +12,10 @@ The construction style is one rule: objects the experiment layer owns (``Run``,
 ``Loaders``, ``Experiment``) construct themselves with a ``from_config`` classmethod,
 while library objects (model, loss, schedule, optimizer, evaluator, logger, source) are
 built by the free ``build_*`` functions, since ``model``, ``training`` and ``data``
-must not know configs. The package only parses configs and instantiates objects;
-anything with its own logic lives in the module it belongs to.
+must not know configs. ``compute_isochrons`` and ``load_isochrons`` do for the
+reference isochrons of ``configs/isochrons/`` what ``generate_dataset`` and
+``build_source`` do for datasets. The package only parses configs and instantiates
+objects; anything with its own logic lives in the module it belongs to.
 """
 
 from .compose import (
@@ -31,6 +33,15 @@ from .data import (
     Loaders as Loaders,
     reference_normal_form as reference_normal_form,
     validation_t_split as validation_t_split,
+)
+from .isochrons import (
+    compute_isochrons as compute_isochrons,
+    isochron_cycle as isochron_cycle,
+    isochron_file as isochron_file,
+    isochron_hash as isochron_hash,
+    isochron_phases as isochron_phases,
+    isochron_settings as isochron_settings,
+    load_isochrons as load_isochrons,
 )
 from .logging import build_logger as build_logger
 from .model import build_inn as build_inn, build_model as build_model

@@ -125,9 +125,11 @@ ISOCHRON_SETTINGS = {
     "quick": IsochronSettings(
         n_periods=1, box_scale=2.0, max_steps=1500, max_workers=1
     ),
-    # the full oracle suite (auto and slow): the defaults, the coworker's except for
-    # the box, which is the cycle's own (2.5 times its bounding box, his was |x| = 10)
-    "full": IsochronSettings(max_workers=1),
+    # the full oracle suite (auto and slow): the coworker's settings, his box of
+    # |x| = 10 included (box_scale 5 on FitzHugh–Nagumo), so that the two-way
+    # comparison covers most of each stored curve; the default box of 2.5 covered
+    # 1243 of the 7124 points of his file 100
+    "full": IsochronSettings(box_scale=5.0, max_workers=1),
     # the normal forms against their closed forms: two periods, so that the halves
     # reach from near the phaseless set to the box (one period stays within 0.002 of
     # Winfree's cycle, whose multiplier is about 4e-4)

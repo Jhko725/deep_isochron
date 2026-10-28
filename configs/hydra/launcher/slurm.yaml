@@ -1,0 +1,16 @@
+# Hydra's SLURM launcher (hydra-submitit-launcher, dependency group `slurm`): every run of
+# a multirun becomes one job. Submit with -m and name the partition on the command line,
+# which differs per cluster and stays out of the repository:
+#   uv run python scripts/compute_isochrons.py -m hydra/launcher=slurm hydra.launcher.partition=<name>
+#   uv run python scripts/train.py -m hydra/launcher=slurm hydra.launcher.partition=<name> seed=0,1,2
+defaults:
+  - submitit_slurm
+
+nodes: 1
+tasks_per_node: 1
+cpus_per_task: 24   # the isochron pipeline uses every allocated core (os.process_cpu_count)
+mem_gb: 32
+timeout_min: 240
+# Commands run in the job before the script, such as `module load gcc` for the gfortran
+# that AUTO calls at run time: hydra.launcher.setup='[module load gcc]'
+setup: []

@@ -21,6 +21,7 @@ from .auto.isochron import (
     IsochronFailure as IsochronFailure,
     IsochronFoliation as IsochronFoliation,
     IsochronSettings as IsochronSettings,
+    wrap_phases as wrap_phases,
 )
 from .floquet import (
     divergence_integral as divergence_integral,
