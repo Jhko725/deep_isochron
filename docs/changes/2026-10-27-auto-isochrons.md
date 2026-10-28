@@ -199,6 +199,7 @@ and `Isochron.resample` for evenly spaced points.
   `docs/coding-standards.md` lists them.
 - `docs/design/analysis.md`: `nearest_cycle_time` and `reanchor` in §2.2; the array
   rule in §2.4.
+- `README.md`: the AUTO directory variables; the two citations in full.
 
 ## Design
 
@@ -829,3 +830,4 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `src/deep_isochron/systems/normal_forms/integration.py` — the `r_squared` field through `args`; the closed form jitted | | |
 | `tests/helpers.py`, `tests/test_analysis_ode.py`, `tests/test_normal_forms.py`, `docs/coding-standards.md` — the compile guards | | |
 | `docs/design/analysis.md` — `nearest_cycle_time`, `reanchor`, the array rule | | |
+| `README.md` — `DEEP_ISOCHRON_AUTO_DIR` and `AUTO_DIR` named; Langfield et al. and Hannam et al. cited in full | | |

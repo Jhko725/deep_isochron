@@ -22,7 +22,10 @@ uvx --from rust-just just setup
 
 `just setup` checks for the system tools and says how to install a missing one, syncs
 the environment, builds AUTO's Fortran library at the pinned commit, and installs the
-pre-commit hooks. Afterward the commands are recipes in the `justfile`:
+pre-commit hooks. AUTO's tree goes to `~/.local/opt/auto-07p`; to put it elsewhere, or
+to use a tree you already have, set `DEEP_ISOCHRON_AUTO_DIR` (or AUTO's own `AUTO_DIR`)
+to its path before `just setup` and whenever the package runs. Afterward the commands
+are recipes in the `justfile`:
 
 ```bash
 uv run just --list        # every recipe, with what it does
@@ -40,5 +43,7 @@ the design documents with the mathematics behind the code, and the decision reco
 
 The AUTO-07p computation of isochrons builds on Andrus Giraldo's reproduction of the
 FitzHugh–Nagumo isochrons (Department of Computational Sciences, Korea Institute for
-Advanced Study), following Langfield, Krauskopf and Osinga (Chaos 24, 013131, 2014) and
-Hannam, Krauskopf and Osinga.
+Advanced Study), following P. Langfield, B. Krauskopf and H. M. Osinga, "Solving
+Winfree's puzzle: the isochrons in the FitzHugh–Nagumo model," *Chaos* 24, 013131
+(2014), and J. Hannam, B. Krauskopf and H. M. Osinga, "Isochron foliations and global
+bifurcations: a case study," *Trans. Math. Appl.* 6(2), tnac002 (2022).
