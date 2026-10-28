@@ -138,20 +138,20 @@ No test changes. The checks that cover this branch, each run on the final tree:
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `docs/guides/auto07p.md`, `docs/guides/isochrons.md` — `auto.md` renamed and split into installation and usage | | |
-| `docs/guides/experiments.md` — the notebook guide to `experiment`, out of `scripts/README.md` | | |
-| `docs/document-conventions.md` — what each document kind is for, and the forms, gathered from four files | | |
-| `docs/coding-standards.md` — document sections moved out; tiers as recipes; the new check rows | | |
-| `CLAUDE.md` — protocol and facts only, 50 lines | | |
-| `docs/index.md` — for a human reader; Guides table; four design rows | | |
-| `docs/design/cycle-estimation.md`, `limit-cycle.md`, `floquet.md`, `phase-field.md` — `analysis.md` split per item, renumbered | | |
-| `docs/architecture.md` — the scripts tree; the directories named | | |
-| `docs/roadmap.md` — P9; the O3 row; the ledger | | |
-| `docs/decisions/0012-analysis-layout.md` and the six ADRs with moved links — History lines | | |
-| `scripts/README.md` — three tables for three directories | | |
-| `scripts/checks/check_docstrings.py` — renamed; private docstrings; the 600-line bound | | |
-| `scripts/checks/check_references.py` — root two levels up; `README.md` and `CLAUDE.md` in scope | | |
-| `scripts/checks/`, `scripts/diagnostics/` — the moves; `prek.toml` | | |
-| `src/deep_isochron/systems/{base,fitzhugh_nagumo,hodgekin_huxley}.py` — the three docstrings the rule flagged | | |
-| the docstrings of `analysis/` and `training/trainer.py` — paths and section numbers | | |
-| `.gitignore`, `.DS_Store` — untracked and ignored | | |
+| `docs/guides/auto07p.md`, `docs/guides/isochrons.md` — `auto.md` renamed and split into installation and usage | Good, but the sources frontmatter contains characters , and - that mess up how the the frontmatter is rendered. | TDeferred to Claude. |
+| `docs/guides/experiments.md` — the notebook guide to `experiment`, out of `scripts/README.md` | Looks good. | None |
+| `docs/document-conventions.md` — what each document kind is for, and the forms, gathered from four files | Looks good and agree on the convention. | None |
+| `docs/coding-standards.md` — document sections moved out; tiers as recipes; the new check rows | Looks good. | None |
+| `CLAUDE.md` — protocol and facts only, 50 lines | Looks good. | None |
+| `docs/index.md` — for a human reader; Guides table; four design rows | Looks good. | None |
+| `docs/design/cycle-estimation.md`, `limit-cycle.md`, `floquet.md`, `phase-field.md` — `analysis.md` split per item, renumbered | Looks good. Would it be worth setting down a more concrete format for design docs? (This would then be added to the documents-convention file as well.) | To be discussed. |
+| `docs/architecture.md` — the scripts tree; the directories named | Looks good. | None |
+| `docs/roadmap.md` — P9; the O3 row; the ledger |  Looks good. | None |
+| `docs/decisions/0012-analysis-layout.md` and the six ADRs with moved links — History lines | Looks good. | None |
+| `scripts/README.md` — three tables for three directories | Confirmed. | None |
+| `scripts/checks/check_docstrings.py` — renamed; private docstrings; the 600-line bound | Looks good. | None |
+| `scripts/checks/check_references.py` — root two levels up; `README.md` and `CLAUDE.md` in scope | Confirmed. | None |
+| `scripts/checks/`, `scripts/diagnostics/` — the moves; `prek.toml` | Confirmed. | None |
+| `src/deep_isochron/systems/{base,fitzhugh_nagumo,hodgekin_huxley}.py` — the three docstrings the rule flagged | Confirmed. | None |
+| the docstrings of `analysis/` and `training/trainer.py` — paths and section numbers | Confirmed. | None |
+| `.gitignore`, `.DS_Store` — untracked and ignored | Confirmed. | None |
