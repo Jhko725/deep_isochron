@@ -15,21 +15,18 @@ import os
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from deep_isochron.analysis.ode import (
     find_limit_cycle,
     Isochron,
     isochron_foliation,
-    IsochronFailure,
     IsochronFoliation,
     IsochronSettings,
     LimitCycle,
     reanchor,
 )
 from deep_isochron.analysis.ode.auto import _env, STOP_REASONS, wrap_phases
-from deep_isochron.plotting import plot_isochrons
 from deep_isochron.systems.normal_forms import HopfNormalForm
 from deep_isochron.utils.numerics import arclength
 from jaxtyping import Float
@@ -38,6 +35,7 @@ from .helpers import (
     anchored_cycle,
     golden_isochron,
     golden_phase,
+    hand_foliation,
     ISOCHRON_SETTINGS,
     TOL,
 )
@@ -99,33 +97,8 @@ def test_phases_are_wrapped_and_refused_when_not_finite_or_repeated():
 # ------------------------------------------------ 1b. saving, loading, plotting ----
 @pytest.fixture(scope="module")
 def hopf_foliation() -> IsochronFoliation:
-    """A foliation of Hopf's cycle built by hand, without AUTO: two isochrons on
-    radial lines, one with its halves stopped for different reasons, and a failure."""
-    cycle = find_limit_cycle(
-        HopfNormalForm(1.3, 1.5, 0.4), jnp.array([1.2, 0.1]), t_settle=20.0, m=2
-    )
-    isochrons = []
-    for phase, n in ((0.0, 5), (2.0, 7)):
-        r = np.linspace(0.5, 1.5, n)
-        points = np.column_stack([r * np.cos(phase), r * np.sin(phase)])
-        isochrons.append(
-            Isochron(
-                phase=phase,
-                base_point=np.array([np.cos(phase), np.sin(phase)]),
-                points=points,
-                eta=r - 1.0,
-                arclength=r - 1.0,
-                stop=("eta", "box") if n == 5 else ("max_steps", "box"),
-            )
-        )
-    failure = IsochronFailure(-1.0, "a planted failure", "last line", {"NMX": 10})
-    return IsochronFoliation(
-        cycle,
-        tuple(isochrons),
-        (failure,),
-        IsochronSettings(n_periods=2),
-        {"auto_commit": "abc"},
-    )
+    """`hand_foliation`, once per module."""
+    return hand_foliation()
 
 
 def test_foliation_round_trips_through_netcdf(hopf_foliation, tmp_path):
@@ -157,13 +130,6 @@ def test_load_refuses_another_cycle(hopf_foliation, tmp_path):
     moved = reanchor(hopf_foliation.cycle, jnp.array([0.0, 1.0]))
     with pytest.raises(ValueError, match="phase origin"):
         IsochronFoliation.load(path, moved)
-
-
-def test_plot_draws_every_isochron_and_the_cycle(hopf_foliation):
-    """`plot_isochrons` draws one line per isochron and one for the cycle."""
-    fig = plot_isochrons(hopf_foliation)
-    assert len(fig.axes[0].lines) == len(hopf_foliation.isochrons) + 1
-    plt.close(fig)
 
 
 def _arc_isochron(radius: float, angles: Float[np.ndarray, " n"]) -> Isochron:

@@ -91,3 +91,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `symbolic-systems` | [`2026-10-22-symbolic-systems.md`](changes/2026-10-22-symbolic-systems.md) |
 | `phase-field` | [`2026-10-28-phase-field.md`](changes/2026-10-28-phase-field.md) |
 | `docs-layout` | [`2026-10-29-docs-layout.md`](changes/2026-10-29-docs-layout.md) |
+| `plotting` | [`2026-10-29-plotting.md`](changes/2026-10-29-plotting.md) |

@@ -2,6 +2,7 @@
 
 import equinox as eqx
 import jax
+import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 from ..systems.base import DEFAULT_SOLVER_CONFIG, SolverConfig
@@ -18,7 +19,8 @@ class ConjugateLatentDynamics(AbstractPhaseAmplitudeModel):
     coordinates; chart choices are the normal form's integrations, not this class's.
     Phase and amplitude are the normal form's closed forms transported by ``H``
     (``docs/design/normal-forms.md`` §5.2), ``Θ = Θ_NF ∘ H`` and ``Ψ = Ψ_NF ∘ H``, and
-    the learned cycle is ``H⁻¹`` of the unit circle.
+    the learned cycle is ``H⁻¹`` of the unit circle, a learned isochron ``H⁻¹`` of the
+    normal form's, and the learned equilibrium ``H⁻¹(0)``.
 
     **Attributes:**
 
@@ -57,6 +59,19 @@ class ConjugateLatentDynamics(AbstractPhaseAmplitudeModel):
     def cycle_point(self, theta):
         """``H⁻¹`` of the normal form's cycle point at `theta`."""
         return self.bijection.inverse(self.latent_dynamics.limit_cycle(theta))
+
+    def latent_radius(self, x):
+        """``|H(x)|``, the normal form's radius; 1 on the learned cycle."""
+        return jnp.linalg.norm(self.bijection(x))
+
+    def isochron(self, theta, r):
+        """``H⁻¹`` of the normal form's isochron of phase `theta` at radii `r`."""
+        return jax.vmap(self.bijection.inverse)(self.latent_dynamics.isochron(theta, r))
+
+    def equilibrium(self) -> Float[Array, " obs_dim"]:
+        """``H⁻¹(0)``, the learned equilibrium: the image of the normal form's
+        origin, the center of its phaseless set."""
+        return self.bijection.inverse(jnp.zeros(self.dim))
 
     def __call__(
         self,

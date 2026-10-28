@@ -20,7 +20,7 @@ from typing import Any
 
 import numpy as np
 import xarray as xr
-from jaxtyping import Float
+from jaxtyping import Float, Int
 
 from ....data.dataset import ENGINE
 from ..limit_cycle import LimitCycle
@@ -153,6 +153,54 @@ class Isochron:
                     np.interp(grid[wanted], s[traced], magnitude)
                 )
         return copy.replace(self, points=points, eta=eta, arclength=grid)
+
+    def log_polar(
+        self, center: Float[np.ndarray, "2"]
+    ) -> tuple[Float[np.ndarray, " n"], Float[np.ndarray, " n"]]:
+        r"""The traced points in log-polar coordinates about `center`, along the
+        curve: $\log_{10}$ of the distance, and the polar angle unwrapped along the
+        curve, in turns. An isochron spirals onto the phaseless point, so about the
+        equilibrium the distance falls geometrically and the angle winds; the pair
+        shows both on linear axes.
+
+        **Arguments:**
+
+        - `center`: The point the coordinates are taken about, the equilibrium.
+
+        **Returns:**
+
+        ``(log_radius, turns)``, each of shape ``(n,)``.
+        """
+        d = self.points - center
+        angle = np.unwrap(np.arctan2(d[:, 1], d[:, 0]))
+        return np.log10(np.hypot(d[:, 0], d[:, 1])), angle / (2 * math.pi)
+
+    def hairpins(
+        self, center: Float[np.ndarray, "2"], min_excursion: float = 0.05
+    ) -> Int[np.ndarray, " k"]:
+        r"""The indices of the hairpins of the curve about `center`: the reversals of
+        its unwrapped polar angle, keeping a reversal only when the angle has moved by
+        more than `min_excursion` turns since the last kept one (or the start), so
+        that a wiggle is not a hairpin.
+
+        **Arguments:**
+
+        - `center`: As for `log_polar`.
+        - `min_excursion`: The least angular excursion, in turns, between hairpins.
+
+        **Returns:**
+
+        The indices into `points`, in order along the curve, shape ``(k,)``.
+        """
+        _, turns = self.log_polar(center)
+        extrema = np.flatnonzero(np.diff(np.sign(np.diff(turns)))) + 1
+        kept: list[int] = []
+        last = 0
+        for i in extrema:
+            if abs(turns[i] - turns[last]) > min_excursion:
+                kept.append(int(i))
+                last = i
+        return np.asarray(kept, dtype=int)
 
 
 @dataclass(frozen=True)

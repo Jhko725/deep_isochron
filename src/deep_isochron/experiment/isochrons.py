@@ -68,6 +68,20 @@ class CycleConfig:
 
 
 @dataclass
+class PhaseFieldConfig:
+    """The schema of ``configs/phase_field/``: how a system's asymptotic phase field is
+    read off by `phase_grid` (route (a) of ``docs/design/phase-field.md`` §3.1).
+
+    **Attributes:**
+
+    - `t_end`: The integration time after which the phase is read off the cycle; long
+        enough for the slowest point of the grid to settle.
+    """
+
+    t_end: float = MISSING
+
+
+@dataclass
 class PhasesConfig:
     """The phases of a foliation: exactly one of `count` and `values`.
 

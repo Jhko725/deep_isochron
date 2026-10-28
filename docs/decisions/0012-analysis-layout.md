@@ -151,3 +151,6 @@ Alternatives rejected for a single decision are listed under that decision.
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md).
 - 2026-10-29 (`docs-layout`): `design/analysis.md` split into one document per item.
+- 2026-10-29 (`plotting`): `analysis/model.py` added for analyses of a trained model
+  against a reference (`phase_origin`), the seam between `model/` and `analysis.ode`;
+  `analysis.ode.find_equilibrium` beside `find_limit_cycle`.

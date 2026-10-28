@@ -41,6 +41,7 @@ from .isochrons import (
     isochron_cycle as isochron_cycle,
     IsochronConfig as IsochronConfig,
     load_isochrons as load_isochrons,
+    PhaseFieldConfig as PhaseFieldConfig,
     PhasesConfig as PhasesConfig,
 )
 from .logging import build_logger as build_logger
@@ -71,6 +72,7 @@ def _register_schemas() -> None:
 
     store = ConfigStore.instance()
     store.store(group="cycle", name="schema", node=CycleConfig)
+    store.store(group="phase_field", name="schema", node=PhaseFieldConfig)
     isochrons = OmegaConf.structured(IsochronConfig)
     # A frozen dataclass makes a read-only node, which a YAML could not fill in; the
     # settings become an IsochronSettings, and frozen, when the config is converted.

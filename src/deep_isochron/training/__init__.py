@@ -12,7 +12,12 @@ from .checkpoint import (
     NullCheckpointer as NullCheckpointer,
     OrbaxCheckpointer as OrbaxCheckpointer,
 )
-from .evaluation import collect_batches as collect_batches, Evaluator as Evaluator
+from .evaluation import (
+    align_phases as align_phases,
+    collect_batches as collect_batches,
+    Evaluator as Evaluator,
+    PhaseAlignment as PhaseAlignment,
+)
 from .loggers import (
     DelayedLogger as DelayedLogger,
     EpochLogger as EpochLogger,

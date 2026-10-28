@@ -232,3 +232,6 @@ Alternatives rejected for a single decision are listed under that decision.
   launcher joins as the dependency group `slurm`, with
   `configs/hydra/launcher/slurm.yaml` for training and isochron jobs alike.
 - 2026-10-29 (`docs-layout`): links follow the scripts into `scripts/diagnostics/`.
+- 2026-10-29 (`plotting`): the config group `configs/phase_field/` (schema
+  `PhaseFieldConfig`, `t_end` of `phase_grid` per system), composed on its own by
+  `compose_group`; the isochron configs do not carry it, since it is not theirs.

@@ -59,6 +59,7 @@ from deep_isochron.training import (
     Trainer,
 )
 from deep_isochron.training.evaluation import (
+    align_phases,
     bounding_box_grid,
     circular_std,
     prediction_sums,
@@ -74,6 +75,7 @@ from deep_isochron.training.losses import (
     YAWATA_SWITCH_AT,
 )
 from deep_isochron.training.trainer import check_batch_dtype
+from deep_isochron.utils.numerics import wrap_phase
 
 from tests.helpers import assert_close, TOL
 
@@ -570,6 +572,20 @@ def test_bounding_box_grid_and_circular_std():
     assert_close(circular_std(jnp.full(10, 0.3)), 0.0, atol=1e-7)
     assert_close(circular_std(jnp.full(10, 0.3) + 2 * jnp.pi), 0.0, atol=1e-7)
     assert circular_std(jnp.linspace(-jnp.pi, jnp.pi, 8, endpoint=False)) > 5.0
+
+
+def test_align_phases_recovers_sense_and_offset_and_ignores_nan():
+    """A model phase that is the reference reversed and shifted by 0.7 aligns with
+    sense −1, offset 0.7 and a residual at round-off, with ``nan`` entries ignored; a
+    given offset is kept and only the sense chosen."""
+    reference = jnp.linspace(-3.0, 3.0, 50)
+    model = wrap_phase(-reference + 0.7).at[3].set(jnp.nan)
+    alignment = align_phases(model, reference)
+    assert alignment.sense == -1.0
+    assert abs(alignment.offset - 0.7) < 1e-9 and alignment.rms < 1e-9
+    assert bool(jnp.isnan(alignment.residual[3]))
+    seeded = align_phases(model, reference, offset=0.7)
+    assert seeded.sense == -1.0 and seeded.offset == 0.7
 
 
 # -------------------------------------------------------------------- 6. checkpoint --

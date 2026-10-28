@@ -10,7 +10,9 @@ shooting) are exported for reuse and whose result ``LimitCycle`` samples itself;
 and exponents of a ``LimitCycle`` by the seeded periodic Schur chain, with the
 monodromy and Liouville routes as checks. O3 is ``asymptotic_phase``, the asymptotic
 phase of a point by forward integration and a read-off on the cycle, and
-``phase_grid``, its masked field on a grid. Results are fixed-shape ``eqx.Module``
+``phase_grid``, its masked field on a grid; ``find_equilibrium`` finds the equilibrium
+near a guess by Newton on the field, for the phaseless point of a planar cycle.
+Results are fixed-shape ``eqx.Module``
 pytrees; the functions of them, ``f(cycle, ...)``, are jit- and vmap-compatible and
 left unjitted, and the host-side drivers ``find_limit_cycle``, ``reanchor``,
 ``fixed_point`` and ``phase_grid`` jit the stages they call. O7 is
@@ -25,6 +27,10 @@ from .auto import (
     IsochronFoliation as IsochronFoliation,
     IsochronSettings as IsochronSettings,
     wrap_phases as wrap_phases,
+)
+from .equilibrium import (
+    find_equilibrium as find_equilibrium,
+    RESIDUAL_TOL as RESIDUAL_TOL,
 )
 from .floquet import (
     divergence_integral as divergence_integral,

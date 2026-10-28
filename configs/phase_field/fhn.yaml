@@ -1,0 +1,9 @@
+# The asymptotic phase field of configs/data/fhn.yaml by analysis.ode.phase_grid, route
+# (a) of docs/design/phase-field.md §3.1 (schema: experiment.PhaseFieldConfig). Composed
+# on its own: compose_group("phase_field", "fhn").
+defaults:
+  - schema
+  - _self_
+
+t_end: 80.0               # escape from 1e-3 of the source (Re λ = 0.134) takes ~52;
+                          # the multiplier, 1.7e-12 per period of 11.2, does the rest

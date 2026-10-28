@@ -71,8 +71,9 @@ deep_isochron
 │   │   └── linear.py        BiLipschitzLinear (the linear layer)
 │   ├── fourier.py           TruncatedFourier (conditioner on S¹)
 │   ├── base.py              AbstractPhaseAmplitudeModel: phase · amplitude · cycle_point ·
-│   │                        __call__; phase_sensitivity derived      ── both models
-│   ├── conjugacy.py         ConjugateLatentDynamics = bijection + normal form + SolverConfig
+│   │                        latent_radius · isochron · __call__; phase_sensitivity derived
+│   ├── conjugacy.py         ConjugateLatentDynamics = bijection + normal form + SolverConfig;
+│   │                        equilibrium() = H⁻¹(0)
 │   ├── latent_dynamics.py   PhaseAmplitudeLatentDynamics(omega, kappa): rotation ⊕ decay
 │   ├── autoencoder.py       PhaseAmplitudeAutoencoder — Yawata et al. 2024 baseline;
 │   │                        phase(x), phase_sensitivity(θ)
@@ -102,6 +103,9 @@ deep_isochron
 │   │                        PTP phase → period by regression → Fourier curve → converged;
 │   │                        orientation(points) (signed area of a closed polygon)
 │   ├── errors.py            NotConvergedError (stage, message, last iterate)
+│   ├── model.py             a trained model against a reference: phase_origin(model, cycle)
+│   │                        -> (theta0, sense), phase_sense — the seam between model/ and
+│   │                        analysis.ode (neither knows the other)
 │   └── ode/                 from an AbstractODE (status: roadmap Phase E)     ── ADR-0014/15
 │       │                    results are fixed-shape eqx.Modules; functions of them
 │       │                    (f(cycle, …)) jit/vmap as they stand and are left unjitted;
@@ -113,7 +117,8 @@ deep_isochron
 │       │   ├── _env.py      load_auto() -> AutoHandle: finds the built AUTO tree
 │       │   │                (DEEP_ISOCHRON_AUTO_DIR, AUTO_DIR, ~/.local/opt/auto-07p), sets
 │       │   │                AUTO_DIR, imports `auto`; the only importer of AUTO (docs/guides/auto07p.md)
-│       │   ├── results.py   IsochronSettings; Isochron (resample); IsochronFailure;
+│       │   ├── results.py   IsochronSettings; Isochron (resample, log_polar, hairpins);
+│       │   │                IsochronFailure;
 │       │   │                IsochronFoliation (dataset, save/load as netCDF, loaded against
 │       │   │                its cycle) — docs/design/isochrons.md, ADR-0017
 │       │   ├── runner.py    auto_session(ode) -> Runner: AUTO on the generated problem in a
@@ -141,6 +146,8 @@ deep_isochron
 │       │                    shooting mesh x0s, period, config; sample(n), orientation());
 │       │                    nearest_cycle_time(cycle, y) (Newton in time); reanchor(cycle,
 │       │                    point) moves phase 0 to the nearest orbit point
+│       ├── equilibrium.py   find_equilibrium(ode, guess) -> (point, converged): Newton on
+│       │                    the field (Optimistix), for the phaseless point of a cycle
 │       ├── phase.py         asymptotic_phase(cycle, x, t_end=) → AsymptoticPhase (phase,
 │       │                    distance, discrepancy): flow, read off the cycle twice;
 │       │                    phase_grid (host-side, lax.map chunks) → field, mask, result
@@ -163,7 +170,9 @@ deep_isochron
 │   │                        MultiLogger; EpochLogger
 │   ├── checkpoint.py        Checkpointer base class; OrbaxCheckpointer (whole state)
 │   └── evaluation.py        Evaluator(val_data, reference, t_split) on the model contract;
-│                            val/mse_early | late by window start (design: validation-split)
+│                            val/mse_early | late by window start (design: validation-split);
+│                            align_phases(model, reference, offset=) -> PhaseAlignment
+│                            (sense, offset, residual, rms): the aligned phase error (M)
 ├── experiment/              configs -> a run (config parsing + instantiation only) ── ADR-0011
 │   ├── compose.py           compose(*overrides): the train config as train.py sees it
 │   ├── instantiate.py       `_target_` instantiation with YAML lists as tuples
@@ -183,8 +192,13 @@ deep_isochron
 │                            create refuses an existing run, resume is explicit);
 │                            Experiment.from_config(cfg, run_dir); train = Experiment.from_config().train();
 │                            load_run / load_model (template= for hand-built models)
-├── plotting/                matplotlib style (configure_rcparams); plot_source_trajectories;
-│                            plot_isochrons(foliation)
+├── plotting/                matplotlib style (configure_rcparams), colored_curve;
+│   ├── trajectories.py      plot_source_trajectories
+│   └── isochrons.py         plot_phase_field (a field panel, isochrons as white curves);
+│                            plot_phase_comparison (reference, learned, aligned residual);
+│                            plot_isochron_match (reference colored by phase, learned
+│                            dashed); plot_isochron_hairpins (one isochron into the
+│                            phaseless point, plane and log-polar, matched to the model)
 └── utils/                   shared helpers
     ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian, wrap_phase
     │                        (constraints, normal forms, analysis)
@@ -192,6 +206,7 @@ deep_isochron
 
 configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment
 configs/cycle/ (schema CycleConfig)                                a system's cycle and phase 0
+configs/phase_field/ (schema PhaseFieldConfig)                     t_end of phase_grid, per system
 configs/isochrons/ (schema IsochronConfig; composes data + cycle)  reference isochrons
 configs/hydra/launcher/slurm.yaml                                  SLURM jobs (submitit)
 scripts/                                        the command-line entry points (scripts/README.md)
@@ -313,11 +328,15 @@ converts charts.
 
 `base.py` is the contract both approaches implement, `AbstractPhaseAmplitudeModel`:
 `phase(x)` in `(-π, π]`, `amplitude(x)` (isostable-like, with no fixed normalization),
-`cycle_point(θ)`, and `__call__(ts, x0) -> (xt, yt)`; `phase_gradient` and
+`cycle_point(θ)`, `latent_radius(x)` and `isochron(θ, r)` (the learned isochron sampled
+along the model's own latent radial coordinate, so that a reference isochron can be
+matched point by point), and `__call__(ts, x0) -> (xt, yt)`; `phase_gradient` and
 `phase_sensitivity` are derived once for all. Training and evaluation code takes the
 contract and never asks which model it has. For `ConjugateLatentDynamics` the contract is
 the normal form's closed forms transported by the bijection (`Θ = Θ_NF ∘ H`,
-`cycle_point = H⁻¹ ∘ limit_cycle`).
+`cycle_point = H⁻¹ ∘ limit_cycle`, `isochron = H⁻¹ ∘ isochron_NF`), and it alone has an
+`equilibrium()`, `H⁻¹(0)`: the autoencoder's latent is the unit circle times a
+deviation, with no point for the phaseless set.
 
 `latent_dynamics.py` and `autoencoder.py` are the non-invertible baseline, the phase
 autoencoder of Yawata et al. (Chaos 34, 063111, 2024), as mapped in

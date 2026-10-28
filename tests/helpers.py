@@ -1,7 +1,7 @@
 """Shared test helpers: the named tolerances ``TOL``, solver configurations
 ``SOLVERS`` and isochron settings ``ISOCHRON_SETTINGS``, the coworker's stored
-FitzHugh–Nagumo isochrons, jitted checkers for the bijection laws, and an optimizer
-step along a random direction."""
+FitzHugh–Nagumo isochrons, a foliation of Hopf's cycle built by hand, jitted checkers
+for the bijection laws, and an optimizer step along a random direction."""
 
 import logging
 import math
@@ -15,6 +15,9 @@ import numpy as np
 import optax
 from deep_isochron.analysis.ode import (
     find_limit_cycle,
+    Isochron,
+    IsochronFailure,
+    IsochronFoliation,
     IsochronSettings,
     LimitCycle,
     reanchor,
@@ -308,3 +311,43 @@ def adam_step[M: eqx.Module](module: M, key: jax.Array, lr: float = 1.0) -> M:
     opt = optax.adam(lr)
     updates, _ = opt.update(grads, opt.init(params), params)
     return eqx.combine(eqx.apply_updates(params, updates), static)
+
+
+HAND_FOLIATION_FORM = HopfNormalForm(1.3, 1.5, 1.5)
+"""The normal form of `hand_foliation`: Hopf with ``w0 == w``, whose phase shift
+``h(r) = (w - w0)/a · ln r`` vanishes, so its isochrons are the radial lines the
+foliation is built from, and a model conjugate to it by the identity has the
+foliation's phase exactly."""
+
+
+def hand_foliation() -> IsochronFoliation:
+    """A foliation of Hopf's cycle built by hand, without AUTO: two isochrons on
+    radial lines (this form's isochrons are radial), one with its halves stopped for
+    different reasons, and a failure. The cycle's phase 0 is at ``(1, 0)``, the normal
+    form's own origin, so the isochrons' phases are the form's."""
+    cycle = find_limit_cycle(
+        HAND_FOLIATION_FORM, jnp.array([1.2, 0.1]), t_settle=20.0, m=2
+    )
+    cycle = reanchor(cycle, jnp.array([1.0, 0.0]))  # phase 0 at (1, 0), as the form's
+    isochrons = []
+    for phase, n in ((0.0, 5), (2.0, 7)):
+        r = np.linspace(0.5, 1.5, n)
+        points = np.column_stack([r * np.cos(phase), r * np.sin(phase)])
+        isochrons.append(
+            Isochron(
+                phase=phase,
+                base_point=np.array([np.cos(phase), np.sin(phase)]),
+                points=points,
+                eta=r - 1.0,
+                arclength=r - 1.0,
+                stop=("eta", "box") if n == 5 else ("max_steps", "box"),
+            )
+        )
+    failure = IsochronFailure(-1.0, "a planted failure", "last line", {"NMX": 10})
+    return IsochronFoliation(
+        cycle,
+        tuple(isochrons),
+        (failure,),
+        IsochronSettings(n_periods=2),
+        {"auto_commit": "abc"},
+    )

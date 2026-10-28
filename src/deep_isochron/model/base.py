@@ -10,9 +10,12 @@ along the flow, but with no fixed normalization, since the conjugacy model's is 
 Wilson–Moehlis ``Ψ`` (``docs/design/normal-forms.md`` §5.2) while the autoencoder's
 ``Y₃`` is determined only up to scale (§5.4), so evaluations compare amplitudes up to
 a scale fitted on the data; a point of the learned limit cycle at a given phase; and
-the prediction ``x(t)`` from ``x(t₀)`` through the model's latent dynamics. Derived
-from these once for all models are the phase gradient anywhere and the phase
-sensitivity function ``Z(θ) = ∇ₓΘ`` on the cycle (Yawata et al. 2024, Eq. 20).
+the prediction ``x(t)`` from ``x(t₀)`` through the model's latent dynamics; the
+learned isochron of a phase, sampled along the model's own latent radial coordinate,
+and that coordinate at a point, so that a learned isochron can be matched to a reference
+one point by point. Derived from these once for all models are the phase gradient
+anywhere and the phase sensitivity function ``Z(θ) = ∇ₓΘ`` on the cycle (Yawata et al.
+2024, Eq. 20).
 """
 
 import abc
@@ -40,6 +43,19 @@ class AbstractPhaseAmplitudeModel(eqx.Module):
     def cycle_point(self, theta: Float[Array, ""]) -> Float[Array, " obs_dim"]:
         """The point of the learned limit cycle at phase `theta`, with
         ``Θ(cycle_point(θ)) == θ``."""
+
+    @abc.abstractmethod
+    def latent_radius(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
+        """The model's latent radial coordinate of `x`: the coordinate along which
+        `isochron` is sampled, in the model's own normalization (the normal form's
+        radius for the conjugacy model, the deviation variable for the autoencoder)."""
+
+    @abc.abstractmethod
+    def isochron(
+        self, theta: Float[Array, ""], r: Float[Array, " n"]
+    ) -> Float[Array, "n obs_dim"]:
+        """The points of the learned isochron of phase `theta` at the latent radii `r`,
+        with ``Θ(isochron(θ, r)) == θ`` and ``latent_radius(isochron(θ, r)) == r``."""
 
     @abc.abstractmethod
     def __call__(

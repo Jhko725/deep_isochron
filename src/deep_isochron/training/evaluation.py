@@ -16,7 +16,9 @@ over the data's bounding box, per layer for a ``SequentialINN``. And against a
 reference normal form, when the data were generated from one, ``phase/circ_std`` and
 ``amplitude/corr`` measure the agreement of the learned phase and amplitude with the
 exact chart; ``phase_amplitude_agreement`` says why those two statistics. For
-FitzHugh–Nagumo there is no reference until Phase E.
+FitzHugh–Nagumo the reference is Phase E's phase field, compared through
+``align_phases``, the explicit form of the same comparison: the orientation, the offset
+and the residual field, shared with the plots.
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ from ..model.conjugacy import ConjugateLatentDynamics
 from ..model.invertible import AbstractBijection, SequentialINN
 from ..model.latent_dynamics import PhaseAmplitudeLatentDynamics
 from ..systems.normal_forms import AbstractNormalForm
+from ..utils.numerics import wrap_phase
 from .losses import Batch, final_mse, trajectory_mse
 
 
@@ -55,6 +58,63 @@ def bounding_box_grid(
     per_axis = num if dim <= 2 else 8
     axes = [jnp.linspace(lo[i], hi[i], per_axis) for i in range(dim)]
     return jnp.stack(jnp.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, dim)
+
+
+@dataclass(frozen=True)
+class PhaseAlignment:
+    r"""How a model's phase maps onto a reference phase, ``model ≈ sense · reference +
+    offset``, and the residual after the alignment.
+
+    **Attributes:**
+
+    - `sense`: ``+1`` or ``−1``, the orientation of the model's phase.
+    - `offset`: The model's phase at reference phase 0, in $(-\pi, \pi]$.
+    - `residual`: ``wrap(model − sense · reference − offset)``, the shape of the inputs;
+        ``nan`` where either input is.
+    - `rms`: The root mean square of `residual` over the finite entries: the aligned
+        phase error in radians.
+    """
+
+    sense: float
+    offset: float
+    residual: Float[Array, "..."]
+    rms: float
+
+
+def align_phases(
+    model_phase: Float[Array, "..."],
+    reference: Float[Array, "..."],
+    offset: float | None = None,
+) -> PhaseAlignment:
+    """Align a model's phases with reference phases at the same points.
+
+    The orientation is the one with the smaller residual, and the offset is the
+    circular mean of ``model − sense · reference`` unless `offset` is given, as from
+    ``analysis.phase_origin``, in which case only the sense is chosen (roadmap item M:
+    the aligned phase-field error, shared by the metric and the plot).
+
+    **Arguments:**
+
+    - `model_phase`, `reference`: Phases at the same points, any common shape; ``nan``
+        marks a point outside the basin and is ignored.
+    - `offset`: The model's phase at reference phase 0, when known.
+
+    **Returns:**
+
+    The `PhaseAlignment`.
+    """
+    best: PhaseAlignment | None = None
+    for sense in (1.0, -1.0):
+        shift = model_phase - sense * reference
+        theta0 = (
+            jnp.angle(jnp.nanmean(jnp.exp(1j * shift))) if offset is None else offset
+        )
+        residual = jnp.asarray(wrap_phase(shift - theta0))
+        rms = jnp.sqrt(jnp.nanmean(residual**2))
+        if best is None or float(rms) < best.rms:
+            best = PhaseAlignment(sense, float(theta0), residual, float(rms))
+    assert best is not None
+    return best
 
 
 def circular_std(angles: Float[Array, " n"]) -> Float[Array, ""]:
