@@ -965,4 +965,4 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `configs/cycle/{fhn,fhn-easy}.yaml`, `configs/isochrons/{fhn,fhn-easy}.yaml` — the shared cycle group; the isochron configs on the schema | Confirmed. | None |
 | `scripts/compute_isochrons.py`, `tests/test_experiment_isochrons.py` — on the schema; the hashes pinned; refusals | Looks good. | None |
 | `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md`, `docs/auto.md` — Decision 1 rewritten; the schemas in the map | Confirmed. | None |
-| `src/deep_isochron/utils/numerics.py`, `foliation.py`, `tests/test_phase.py` — `wrap_phase` against the array API; `wrap_phases` inside the session, no x64 context | | |
+| `src/deep_isochron/utils/numerics.py`, `foliation.py`, `tests/test_phase.py` — `wrap_phase` against the array API; `wrap_phases` inside the session, no x64 context | Looks good. | None |
