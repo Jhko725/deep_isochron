@@ -185,14 +185,15 @@ class AbstractNormalForm(AbstractSymbolicODE):
         basin."""
 
     # ---------------------------------------------------------------- basin -------
-    def basin_radii(self) -> tuple[float, float]:
+    def basin_radii(self) -> tuple[Float[ArrayLike, ""], Float[ArrayLike, ""]]:
         r"""The radii $(r_{\rm in}, r_{\rm out})$ bounding the basin of the cycle, the
         open annulus between them.
 
         $r_{\rm in}$ is $0$ when the enclosed fixed point is the only phaseless point
         and the radius of the inner repelling cycle otherwise; $r_{\rm out}$ is
-        $\infty$ or the radius of an outer repelling cycle. Both are Python floats, so
-        they can drive a ``jnp.where`` or a sampler.
+        $\infty$ or the radius of an outer repelling cycle. Scalars, Python floats or
+        0-d arrays when they depend on a parameter, so that they can drive a
+        ``jnp.where`` or a sampler under jit.
         """
         return (0.0, float("inf"))
 

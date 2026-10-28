@@ -1,7 +1,7 @@
 ---
 type: design
 status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative; §9 amendment of 2026-10-22 (ADR-0016) pending review
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
 sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014, Langfield et al. 2025, Nakao 2016, Mauroy et al. 2013, Kato et al. 2021, Guckenheimer 1975, Winfree 2001, Guckenheimer & Holmes 1983, Chicone 2024, Kuznetsov 2004, Kidger 2021]
 ---
@@ -918,8 +918,9 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
 **Amended 2026-10-08 (ADR-0013).** Option B is the contract of the even family; the base
 class takes data in $r$ on a declared basin $(r_{\rm in}, r_{\rm out})$, and uses the
 safe-$\sqrt{}$ form for `rhs`. `eigenvalues_origin` moves to the even family. Winfree's
-model with a hole (§3.3) is the first non-even member; its parameters are plain floats
-(an observed system). Initial conditions outside a basin: `generate(outside_basin=
+model with a hole (§3.3) is the first non-even member; its parameters are unconstrained
+scalar arrays (an observed system, no `raw` leaves; arrays since 2026-10-29, ADR-0013
+§5). Initial conditions outside a basin: `generate(outside_basin=
 "error" | "resample")`. Decided with Joon 2026-10-08; the experiments will mostly use
 $a = 0$ (phaseless set a point), with $a > 0$ to see what the INN does with the disk.
 

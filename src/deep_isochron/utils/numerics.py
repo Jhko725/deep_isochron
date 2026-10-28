@@ -61,4 +61,4 @@ def arclength(points: Float[ArrayLike, "n dim"]) -> Float[Array, " n"]:
     shape ``(n,)``."""
     points = jnp.asarray(points, dtype=float)
     steps = jnp.linalg.norm(jnp.diff(points, axis=0), axis=1)
-    return jnp.concatenate([jnp.zeros((1,), dtype=points.dtype), jnp.cumsum(steps)])
+    return jnp.cumulative_sum(steps, include_initial=True)

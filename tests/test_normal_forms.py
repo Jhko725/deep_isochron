@@ -521,7 +521,9 @@ def test_winfree_structure(a, w):
     outside; nan outside the basin."""
     nf = WinfreeNormalForm(a, w)
     assert not isinstance(nf, AbstractEvenNormalForm)
-    assert nf.basin_radii() == (max(a, 0.0), float("inf"))
+    r_in, r_out = nf.basin_radii()
+    assert_close(r_in, max(a, 0.0), atol=TOL["identity"])
+    assert r_out == float("inf")
     assert_close(nf.period(), -2 * jnp.pi, rtol=TOL["identity"])  # clockwise
     assert_close(nf.floquet_exponent(), a - 1.0, rtol=TOL["closed_form"])
     assert_close(nf.inner_floquet_exponent(), a * (1 - a), atol=TOL["closed_form"])

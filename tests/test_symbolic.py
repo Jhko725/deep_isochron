@@ -75,7 +75,7 @@ def _points(ode: AbstractSymbolicODE, draw: Callable) -> Float[Array, " dim"]:
                 *[draw(st.floats(0.01, 0.99)) for _ in range(3)],
             ]
         )
-    r_in = ode.basin_radii()[0] if isinstance(ode, AbstractNormalForm) else 0.0
+    r_in = float(ode.basin_radii()[0]) if isinstance(ode, AbstractNormalForm) else 0.0
     r = draw(st.floats(r_in + 0.05, 3.0))
     theta = draw(st.floats(-3.1, 3.1))
     return jnp.array([r * np.cos(theta), r * np.sin(theta)])

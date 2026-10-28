@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0013
 status: accepted
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: pending (Joon; the four choices below were taken in discussion 2026-10-08)
 ---
 
@@ -96,13 +96,17 @@ for that regime
 Moving the method rather than generalizing it keeps its meaning exact. Revisit if a
 second holed form appears.
 
-### 5. Winfree's parameters are plain floats; $a < 0$ is the training member
+### 5. Winfree's parameters are unconstrained scalar arrays; $a < 0$ is the training member
 
 It is an observed/target system, not a latent one, so it has no constraints and no
-`raw` leaves (ADR-0001 is about learnable bijection parameters). Any $a < 1$ is
-allowed: $a > 0$ is the paper's hole, $a = 0$ the non-hyperbolic point (the $a \to 0$
-limits of the closed forms are implemented explicitly), $a < 0$ a hyperbolic repelling
-focus. The default and the data config are $a = -0.25$, the member with closed-form
+`raw` leaves (ADR-0001 is about learnable bijection parameters); `a` and `w` are plain
+scalar array leaves, as the other normal forms' parameters are, not Python floats,
+which would be static under `filter_jit` and make every parameter value a new program
+for every jitted function. Any $a < 1$ is allowed: $a > 0$ is the paper's hole, $a = 0$
+the non-hyperbolic point, $a < 0$ a hyperbolic repelling focus. The closed forms
+evaluate both the general formula and its $a \to 0$ limit and select by `jnp.where`,
+with $a$ replaced by 1 inside the formula where it is 0 so that no `nan` reaches a
+derivative; `basin_radii` returns $\max(a, 0)$ as an array. The default and the data config are $a = -0.25$, the member with closed-form
 isochrons *and* an origin that a Bautin latent can match.
 
 ## Consequences
@@ -135,6 +139,9 @@ Alternatives rejected for a single decision are listed under that decision.
   $a < 0$; `basin_radii` became $(\max(a, 0), \infty)$.
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md).
+- 2026-10-29 (`auto-isochrons`): Decision 5's parameters became array leaves; as static
+  floats they compiled every jitted function again for each Hypothesis draw, which kept
+  `tests/test_normal_forms.py` at 43 minutes and a killed worker at the `ci` profile.
 - 2026-10-27 (`symbolic-systems`, ADR-0016 review round 1): Decision 1 restated for the
   polar template; even-family membership is declared by the base class and checked, no
   longer written as a second hook.

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
-import math
 import multiprocessing
 import os
 import subprocess
@@ -52,22 +51,20 @@ def wrap_phases(
     `ValueError` naming any phase that is not finite or that repeats another after
     wrapping.
     """
-    values = [float(p) for p in np.atleast_1d(np.asarray(phases, dtype=float))]
-    bad = [p for p in values if not math.isfinite(p)]
-    if bad:
-        raise ValueError(f"phases must be finite; got {bad}.")
-    with jax.enable_x64(True):
-        wrapped = [float(wrap_phase(p)) for p in values]
-    seen: dict[float, float] = {}
-    repeats = []
-    for original, w in zip(values, wrapped):
-        key = round(w, 12)
-        if key in seen:
-            repeats.append((seen[key], original))
-        seen.setdefault(key, original)
-    if repeats:
-        raise ValueError(f"phases repeat after wrapping to (-π, π]: {repeats}.")
-    return tuple(wrapped)
+    values = np.atleast_1d(np.asarray(phases, dtype=float))
+    if not np.all(np.isfinite(values)):
+        raise ValueError(f"phases must be finite; got {values[~np.isfinite(values)]}.")
+    with jax.enable_x64(True):  # the caller's process may run in float32
+        wrapped = np.asarray(wrap_phase(values), dtype=float)
+    _, first, counts = np.unique(
+        np.round(wrapped, 12), return_index=True, return_counts=True
+    )
+    if np.any(counts > 1):
+        raise ValueError(
+            "phases repeat after wrapping to (-π, π]: "
+            f"{values[first[counts > 1]]} each occur more than once."
+        )
+    return tuple(wrapped.tolist())
 
 
 def trace_isochron(

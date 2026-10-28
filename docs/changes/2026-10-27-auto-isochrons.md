@@ -200,6 +200,13 @@ and `Isochron.resample` for evenly spaced points.
 - `docs/design/analysis.md`: `nearest_cycle_time` and `reanchor` in §2.2; the array
   rule in §2.4.
 - `README.md`: the AUTO directory variables; the two citations in full.
+- `src/deep_isochron/systems/normal_forms/winfree.py`, `base.py`, review round 3:
+  `WinfreeNormalForm.a` and `w` are array leaves; the closed forms select their
+  $a = 0$ limit by `jnp.where`; `basin_radii` may return 0-d arrays.
+  `docs/decisions/0013-normal-form-basins.md` §5 and `docs/design/normal-forms.md`
+  say so; `tests/test_normal_forms.py` and `tests/test_symbolic.py` follow.
+- `src/deep_isochron/analysis/ode/auto/foliation.py`: `wrap_phases` vectorized.
+- `src/deep_isochron/utils/numerics.py`: `arclength` by `cumulative_sum`.
 
 ## Design
 
@@ -391,6 +398,20 @@ and `Isochron.resample` for evenly spaced points.
   $f(\gamma)$ at $10^{-3}$), so a solve started there would not move. `reanchor` no
   longer re-solves the shooting problem, since the orbit is converged: it flows the
   new origin for the mesh and evaluates the shooting residual once there.
+
+- **Winfree's parameters as array leaves (review round 3; Joon, 2026-10-29).** The
+  last per-value recompile: as static floats, `a` and `w` made every Hypothesis draw
+  a new program for every jitted function. They are now unconstrained scalar arrays,
+  as Hopf's and Bautin's parameters are (ADR-0013 §5 rewritten). The $a = 0$ limits of
+  `phase_shift` and `isostable`, which were Python `if` branches, are selected by
+  `jnp.where` with $a$ replaced by 1 inside the general formula where it is 0, the
+  double-`where` form that keeps a `nan` out of the derivative; `basin_radii` returns
+  $\max(a, 0)$ as an array, and the base contract allows 0-d arrays. Over twelve draws
+  of `all_normal_forms`, each class now compiles once and never again. The strategy
+  with bounded draws and the nightly tier were the alternatives; both would have kept
+  an exception to the rule.
+- **`wrap_phases` vectorized** (review round 2): `np.isfinite`, `wrap_phase` on the
+  array, `np.unique` with counts for the repeats; no Python loop.
 
 ## Bugs fixed
 
@@ -699,6 +720,9 @@ tests/test_experiment_isochrons.py tests/test_auto_env.py -m "auto and not slow"
 and 3 now restart from arrays rather than AUTO's objects, and every oracle holds to the
 same tolerances.
 
+**With Winfree's parameters as arrays**: `test_normal_forms.py` alone at the `ci`
+profile is running at the time of this commit; the next records it.
+
 **After the recompile fixes**: `find_limit_cycle` with a new `t_settle` and new
 parameters compiles 0 programs (3 and 1 before); each of the four integrations with
 new parameters compiles 0 (1, 0, 1, 2 before). The reanchor and phase tests pass (13
@@ -737,11 +761,6 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 
 ## Open issues
 
-- **`WinfreeNormalForm`'s parameters are static floats** (ADR-0013 §5), the last
-  per-value recompile in the tree; it keeps `test_normal_forms.py` at 43 minutes and
-  3 GB per worker at the `ci` profile. Joon's decision: array leaves with the
-  $a = 0$ limit selected by `jnp.where`, as Bautin's closed forms handle their poles
-  (recommended); or bounded draws in the Winfree strategy; or the nightly tier.
 
 - **`find_limit_cycle` recompiles for every new `t_settle` and parameter set** (*Tests*,
   per-file timing): the likely cause of the `ci` tier's memory kills and of much of its
@@ -854,3 +873,5 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `tests/helpers.py`, `tests/test_analysis_ode.py`, `tests/test_normal_forms.py`, `docs/coding-standards.md` — the compile guards | Looks good, but take a look at `equinox.debug`. Anything useful there we are reinventing? | To be discussed. |
 | `docs/design/analysis.md` — `nearest_cycle_time`, `reanchor`, the array rule | Looks good. | None |
 | `README.md` — `DEEP_ISOCHRON_AUTO_DIR` and `AUTO_DIR` named; Langfield et al. and Hannam et al. cited in full | Confirmed. | None |
+| `src/deep_isochron/systems/normal_forms/winfree.py`, `base.py`, `docs/decisions/0013-normal-form-basins.md`, `docs/design/normal-forms.md`, `tests/test_normal_forms.py`, `tests/test_symbolic.py` — Winfree's parameters as array leaves | | |
+| `src/deep_isochron/analysis/ode/auto/foliation.py`, `src/deep_isochron/utils/numerics.py` — `wrap_phases` vectorized; `arclength` by `cumulative_sum` | | |
