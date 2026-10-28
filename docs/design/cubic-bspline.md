@@ -3,7 +3,9 @@ type: design
 status: agreed
 updated: 2026-10-27
 verified_by: joon (review 2026-10-02)
-sources: [Hong & Chun 2023, de Boor 2001]
+sources:
+  - "Hong & Chun 2023"
+  - "de Boor 2001"
 ---
 
 # `CubicBSpline` — the mathematics behind the code

@@ -2,7 +2,11 @@
 type: guide
 status: current
 updated: 2026-10-29
-sources: [the plan "Isochrons from AUTO-07p" (Project document, decisions 4, 7, R1–R3, G1, H1–H4), AUTO-07p at commit 44cc1c4 (configure, Makefile, python/auto/interactiveBindings.py), scripts/install_auto.sh, src/deep_isochron/analysis/ode/auto/_env.py]
+sources:
+  - "the plan 'Isochrons from AUTO-07p' (Project document, decisions 4, 7, R1–R3, G1, H1–H4)"
+  - "AUTO-07p at commit 44cc1c4 (configure, Makefile, python/auto/interactiveBindings.py)"
+  - "scripts/install_auto.sh"
+  - "src/deep_isochron/analysis/ode/auto/_env.py"
 ---
 
 # Installing AUTO-07p

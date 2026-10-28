@@ -1,6 +1,6 @@
 ---
 type: change
-status: implemented 2026-10-29; review pending
+status: reviewed 2026-10-29; the review's change in
 updated: 2026-10-29
 ---
 
@@ -53,7 +53,11 @@ script.
 - `scripts/checks/check_docstrings.py` — `check_docstring_headers.py` renamed, plus a
   docstring required on every `_`-prefixed function and class under `src/` (dunders
   exempt) and a 600-line bound on a module under `src/`.
-- `scripts/checks/check_md_math.py`, `check_spelling.py`, `check_references.py` — moved;
+- `scripts/checks/check_md_math.py` — moved, plus the frontmatter check (round 1): the
+  block parses, carries `type`, `status`, `updated`, and writes `sources` in block form.
+- the seventeen documents with a `sources:` line — the flow lists rewritten as block
+  lists of quoted items (round 1).
+- `scripts/checks/check_spelling.py`, `check_references.py` — moved;
   `check_references.py` resolves the root two levels up and reads `README.md` and
   `CLAUDE.md` by default.
 - `scripts/diagnostics/bench_dataloader.py`, `find_nan.py` — moved.
@@ -98,6 +102,11 @@ script.
   where a user and CI look; `diagnostics/` for instruments a person runs on a run;
   `checks/` for what `prek` runs. Alternative rejected: a flat directory with a README
   partitioned by subheading, since `ls scripts/` is what a newcomer sees first.
+- **Frontmatter `sources` as a block list of quoted items** (round 1). A YAML flow list
+  splits at every comma, so `ADR-0012 (analysis layout, amendment)` rendered as two
+  sources on GitHub. Quoting every item is uniform and needs no judgment about which
+  items contain a comma, colon or quote; the check in `check_md_math.py` refuses the
+  flow form so the rule holds without a reviewer.
 - No ADR: the layout is reversible and not surprising; this section and
   `document-conventions.md` § What goes where record it.
 
@@ -120,9 +129,12 @@ No test changes. The checks that cover this branch, each run on the final tree:
 - `uv run python scripts/checks/check_references.py`: all 88 cited keys resolve, no
   broken relative links; a planted `(Nobody 1999)` in `README.md` flagged (then
   removed).
-- `uv run python scripts/checks/check_md_math.py`: 52 files, 0 problems.
+- `uv run python scripts/checks/check_md_math.py`: 53 files, 0 problems; a planted flow
+  `sources` list, a missing `updated` and a block with an unquoted quote each flagged
+  (then removed).
 - `uv run just check`: every hook passed, `ty` clean (after ten docstring lines that the
-  longer paths pushed past 88 characters were reflowed).
+  longer paths pushed past 88 characters were reflowed); after round 1: every hook
+  passed, `ty` clean.
 - `uv run just test dev tests/test_analysis.py tests/test_analysis_ode.py tests/test_symbolic.py`
   (the modules whose docstrings changed): 92 passed in 300 s on two cores.
 
@@ -155,3 +167,4 @@ No test changes. The checks that cover this branch, each run on the final tree:
 | `src/deep_isochron/systems/{base,fitzhugh_nagumo,hodgekin_huxley}.py` — the three docstrings the rule flagged | Confirmed. | None |
 | the docstrings of `analysis/` and `training/trainer.py` — paths and section numbers | Confirmed. | None |
 | `.gitignore`, `.DS_Store` — untracked and ignored | Confirmed. | None |
+| `scripts/checks/check_md_math.py`, `docs/document-conventions.md` § Frontmatter, and the seventeen `sources:` lists — round 1: `sources` as a block list of quoted items, checked | | |

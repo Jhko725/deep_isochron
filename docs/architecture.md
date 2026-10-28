@@ -2,7 +2,8 @@
 type: architecture
 status: current
 updated: 2026-10-29
-sources: [code]
+sources:
+  - "code"
 ---
 
 # Architecture

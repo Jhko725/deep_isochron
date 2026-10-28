@@ -2,7 +2,10 @@
 type: guide
 status: current
 updated: 2026-10-29
-sources: [ADR-0011, src/deep_isochron/experiment/, scripts/README.md (the block this guide grew from)]
+sources:
+  - "ADR-0011"
+  - "src/deep_isochron/experiment/"
+  - "scripts/README.md (the block this guide grew from)"
 ---
 
 # Running experiments from Python

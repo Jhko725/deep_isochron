@@ -3,7 +3,18 @@ type: design
 status: draft for review; the decisions of §11 settled 2026-10-27
 updated: 2026-10-28
 verified_by: pending (Joon); the measurements in §3, §5 and §7 were made on 2026-10-27 with AUTO-07p at commit 44cc1c4 and are recorded in the branch's change document
-sources: [Langfield et al. 2014, Osinga & Moehlis 2010, Hannam et al. 2022, Krauskopf & Rieß 2008, Guckenheimer 1975, Nakao 2016, AUTO-07p (manual doc/auto.tex and source at 44cc1c4), the coworker's src/Isochron2PBVP, ADR-0014, ADR-0015, ADR-0016]
+sources:
+  - "Langfield et al. 2014"
+  - "Osinga & Moehlis 2010"
+  - "Hannam et al. 2022"
+  - "Krauskopf & Rieß 2008"
+  - "Guckenheimer 1975"
+  - "Nakao 2016"
+  - "AUTO-07p (manual doc/auto.tex and source at 44cc1c4)"
+  - "the coworker's src/Isochron2PBVP"
+  - "ADR-0014"
+  - "ADR-0015"
+  - "ADR-0016"
 ---
 
 # Isochrons by continuation in AUTO-07p: the method, the coworker's version and ours

@@ -42,6 +42,22 @@ on) and `id`. The block is the useful part of Google's Open Knowledge Format, ad
 Joon), `accepted` (a decision in force; `amended` when later changed in place),
 `tentative` (written by Claude, not yet checked by Joon), `draft for review`.
 
+The block has to be valid YAML, since GitHub renders it as a table only then, and
+`sources` is a block list with every item quoted:
+
+```yaml
+sources:
+  - "ADR-0012 (analysis layout)"
+  - "Wilson & Moehlis 2016"
+```
+
+A flow list `[ADR-0012 (analysis layout), Wilson & Moehlis 2016]` parses, but YAML splits
+it at every comma, so a parenthesized remark becomes two sources; the review of
+`docs-layout` found the guides' lists rendered that way. `scripts/checks/check_md_math.py`
+fails on a block that does not parse, lacks `type`, `status` or `updated`, or writes
+`sources` as a flow list. The change documents that predate the block carry none and are
+not checked for one.
+
 ## Change documents
 
 Every branch has a companion document `changes/<YYYY-MM-DD>-<branch>.md`, committed with
@@ -148,7 +164,7 @@ previews agree.
 
 | Rule | Check | Runs in |
 |---|---|---|
-| both Markdown previews | `scripts/checks/check_md_math.py` | `prek`, CI |
+| both Markdown previews; the frontmatter parses, carries `type`, `status`, `updated`, and lists `sources` in block form | `scripts/checks/check_md_math.py` | `prek`, CI |
 | every citation resolves to `references.md`; every relative Markdown link resolves | `scripts/checks/check_references.py` | `prek`, CI |
 | American English | `codespell` and `scripts/checks/check_spelling.py`, described in [`coding-standards.md`](coding-standards.md) § Deterministic checks | `prek`, CI |
 | `index.md` lists every document; `architecture.md` follows every module move; the Done ledger is append-only | review | — |

@@ -2,7 +2,9 @@
 type: reference
 status: current
 updated: 2026-10-29
-sources: [web search 2026-10-26 and 2026-10-27; the reference lists the design documents carried before this file]
+sources:
+  - "web search 2026-10-26 and 2026-10-27"
+  - "the reference lists the design documents carried before this file"
 ---
 
 # References

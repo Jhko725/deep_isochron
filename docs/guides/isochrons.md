@@ -2,7 +2,13 @@
 type: guide
 status: current
 updated: 2026-10-29
-sources: [ADR-0017, ADR-0011 §1, src/deep_isochron/experiment/isochrons.py, scripts/compute_isochrons.py, configs/isochrons/, configs/hydra/launcher/slurm.yaml]
+sources:
+  - "ADR-0017"
+  - "ADR-0011 §1"
+  - "src/deep_isochron/experiment/isochrons.py"
+  - "scripts/compute_isochrons.py"
+  - "configs/isochrons/"
+  - "configs/hydra/launcher/slurm.yaml"
 ---
 
 # Computing and reading the reference isochrons

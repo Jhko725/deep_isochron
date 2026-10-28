@@ -3,7 +3,20 @@ type: design
 status: tentative
 updated: 2026-10-29
 verified_by: pending (Joon); the O2 tests in tests/test_analysis_ode.py pass
-sources: [ADR-0012 (analysis layout), ADR-0015 (Floquet by seeded periodic Schur), roadmap Phase E; the survey: Lust 2001, Fairgrieve & Jepson 1991, Mauroy & Mezić 2018, Wilson & Moehlis 2016, Kvalheim & Revzen 2021, Giacomini & Grau 2005, Bojanczyk et al. 1992, Dieci et al. 1997, Geist et al. 1990, BifurcationKit documentation]
+sources:
+  - "ADR-0012 (analysis layout)"
+  - "ADR-0015 (Floquet by seeded periodic Schur)"
+  - "roadmap Phase E"
+  - "Lust 2001"
+  - "Fairgrieve & Jepson 1991"
+  - "Mauroy & Mezić 2018"
+  - "Wilson & Moehlis 2016"
+  - "Kvalheim & Revzen 2021"
+  - "Giacomini & Grau 2005"
+  - "Bojanczyk et al. 1992"
+  - "Dieci et al. 1997"
+  - "Geist et al. 1990"
+  - "BifurcationKit documentation"
 ---
 
 # `analysis.ode.floquet` — the Floquet exponent of the orbit (O2)

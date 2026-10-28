@@ -33,7 +33,7 @@ hooks = [
 repo = "local"
 hooks = [
   { id = "check-spelling", name = "check-spelling (-ise families)", entry = "uv run python scripts/checks/check_spelling.py", language = "system", types_or = ["python", "markdown", "toml", "yaml"] },
-  { id = "check-md-math", name = "check-md-math (GitHub and VS Code previews)", entry = "uv run python scripts/checks/check_md_math.py", language = "system", pass_filenames = false, files = "\\.md$" },
+  { id = "check-md-math", name = "check-md-math (GitHub and VS Code previews; frontmatter)", entry = "uv run python scripts/checks/check_md_math.py", language = "system", pass_filenames = false, files = "\\.md$" },
   { id = "check-references", name = "check-references (citations and relative links resolve)", entry = "uv run python scripts/checks/check_references.py", language = "system", pass_filenames = false, types_or = ["python", "markdown"] },
   { id = "check-docstrings", name = "check-docstrings (headers on their own line; private functions documented; modules under 600 lines)", entry = "uv run python scripts/checks/check_docstrings.py", language = "system", types = ["python"] },
 ]

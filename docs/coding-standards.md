@@ -76,7 +76,7 @@ This section says what each check is for; the file has the current values.
 | American English, irregulars and typos | `codespell` 2.4.3 | `prek`, CI |
 | American English, the productive families | `scripts/checks/check_spelling.py` | `prek`, CI |
 | `copy.replace` (this project's floor is Python 3.13); Cayley rotations | ruff `TID251` banned-api | `prek`, CI |
-| the documents: both Markdown previews, every citation and relative link resolves | `scripts/checks/check_md_math.py`, `scripts/checks/check_references.py`; [`document-conventions.md`](document-conventions.md) | `prek`, CI |
+| the documents: both Markdown previews, the frontmatter, every citation and relative link resolves | `scripts/checks/check_md_math.py`, `scripts/checks/check_references.py`; [`document-conventions.md`](document-conventions.md) | `prek`, CI |
 | a docstring on every public module, class, method and function | ruff `D100`–`D103` (notebooks exempt) | `prek`, CI |
 | `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after; a docstring on every `_`-prefixed function and class under `src/` (dunders exempt), since ruff's `D103` skips them; no module under `src/` over 600 lines | `scripts/checks/check_docstrings.py` | `prek`, CI |
 | no invalid escape such as `\Phi` in a docstring that is not raw (Python only warns) | ruff `W605` | `prek`, CI |

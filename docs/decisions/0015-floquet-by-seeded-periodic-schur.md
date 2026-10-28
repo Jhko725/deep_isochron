@@ -4,7 +4,16 @@ id: ADR-0015
 status: accepted; amended 2026-10-20 (review round 5 - jit rule, light FixedPoint)
 updated: 2026-10-29
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-19/20 after the O2 survey and his notebook prototype)
-sources: [Bojanczyk et al. 1992, Lust 2001, Dieci et al. 1997, Guckenheimer & Meloon 2000, Fairgrieve & Jepson 1991, Mauroy & Mezić 2018 (Remark 4), Wilson & Moehlis 2016, Kvalheim & Revzen 2021 (Prop. 5), BifurcationKit source (`PeriodicSchurBifurcationKit.jl`)]
+sources:
+  - "Bojanczyk et al. 1992"
+  - "Lust 2001"
+  - "Dieci et al. 1997"
+  - "Guckenheimer & Meloon 2000"
+  - "Fairgrieve & Jepson 1991"
+  - "Mauroy & Mezić 2018 (Remark 4)"
+  - "Wilson & Moehlis 2016"
+  - "Kvalheim & Revzen 2021 (Prop. 5)"
+  - "BifurcationKit source (`PeriodicSchurBifurcationKit.jl`)"
 ---
 
 # ADR-0015 — Floquet multipliers by a seeded periodic Schur chain on the shooting mesh; `LimitCycle` as a module

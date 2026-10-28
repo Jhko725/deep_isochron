@@ -3,7 +3,22 @@ type: design
 status: tentative
 updated: 2026-10-29
 verified_by: joon (2026-10-05; §6.3 C9 update pending)
-sources: ["JAX docs: async dispatch", "JAX docs: data placement", "JAX docs: jax.default_device", "JAX docs: profiling", "JAX docs: training cookbook", "JAX source: scipy linalg", "XLA source: conditional_thunk", "XLA source: while_thunk", "grain docs", "grain source: options.py", "Python docs: GIL", "Python docs: sys.setswitchinterval", "Python docs: multiprocessing", "NVIDIA blog: CUDA Graphs", Serino et al. 2025]
+sources:
+  - "JAX docs: async dispatch"
+  - "JAX docs: data placement"
+  - "JAX docs: jax.default_device"
+  - "JAX docs: profiling"
+  - "JAX docs: training cookbook"
+  - "JAX source: scipy linalg"
+  - "XLA source: conditional_thunk"
+  - "XLA source: while_thunk"
+  - "grain docs"
+  - "grain source: options.py"
+  - "Python docs: GIL"
+  - "Python docs: sys.setswitchinterval"
+  - "Python docs: multiprocessing"
+  - "NVIDIA blog: CUDA Graphs"
+  - "Serino et al. 2025"
 ---
 
 # Where a JAX training step spends its time — and where ours did

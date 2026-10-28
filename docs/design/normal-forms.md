@@ -3,7 +3,21 @@ type: design
 status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative; §9 amendment of 2026-10-22 (ADR-0016) pending review
 updated: 2026-10-29
 verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
-sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014, Langfield et al. 2025, Nakao 2016, Mauroy et al. 2013, Kato et al. 2021, Guckenheimer 1975, Winfree 2001, Guckenheimer & Holmes 1983, Chicone 2024, Kuznetsov 2004, Kidger 2021]
+sources:
+  - "Wilson & Moehlis 2016"
+  - "Yawata et al. 2024"
+  - "Kvalheim & Revzen 2021"
+  - "Langfield et al. 2014"
+  - "Langfield et al. 2025"
+  - "Nakao 2016"
+  - "Mauroy et al. 2013"
+  - "Kato et al. 2021"
+  - "Guckenheimer 1975"
+  - "Winfree 2001"
+  - "Guckenheimer & Holmes 1983"
+  - "Chicone 2024"
+  - "Kuznetsov 2004"
+  - "Kidger 2021"
 ---
 
 # Normal forms — conventions, derivations, and the API they imply

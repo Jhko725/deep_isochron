@@ -3,7 +3,19 @@ type: design
 status: tentative
 updated: 2026-10-29
 verified_by: pending (Joon); the O1 tests in tests/test_analysis_ode.py pass
-sources: [ADR-0012 (analysis layout), ADR-0014 (limit cycle by shooting), roadmap Phase E; the survey: Guckenheimer & Meloon 2000, Parker & Chua 1989, Aprille & Trick 1972, Morrison et al. 1962, Urabe 1965, Hénon 1982, Tucker 2002, Shampine & Thompson 2000, BifurcationKit and diffrax documentation]
+sources:
+  - "ADR-0012 (analysis layout)"
+  - "ADR-0014 (limit cycle by shooting)"
+  - "roadmap Phase E"
+  - "Guckenheimer & Meloon 2000"
+  - "Parker & Chua 1989"
+  - "Aprille & Trick 1972"
+  - "Morrison et al. 1962"
+  - "Urabe 1965"
+  - "Hénon 1982"
+  - "Tucker 2002"
+  - "Shampine & Thompson 2000"
+  - "BifurcationKit and diffrax documentation"
 ---
 
 # `analysis.ode.limit_cycle` — the periodic orbit and its period from the vector field (O1)

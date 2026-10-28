@@ -3,7 +3,15 @@ type: design
 status: tentative
 updated: 2026-10-29
 verified_by: pending (Joon); the E1 oracle tests in tests/test_analysis.py pass
-sources: [ADR-0012 (analysis layout), roadmap Phase E, docs/design/normal-forms.md (phase conventions); the survey: Revzen & Guckenheimer 2008, Revzen & Guckenheimer 2012, Gengel & Pikovsky 2021, Gengel & Pikovsky 2022, Kralemann et al. 2008]
+sources:
+  - "ADR-0012 (analysis layout)"
+  - "roadmap Phase E"
+  - "docs/design/normal-forms.md (phase conventions)"
+  - "Revzen & Guckenheimer 2008"
+  - "Revzen & Guckenheimer 2012"
+  - "Gengel & Pikovsky 2021"
+  - "Gengel & Pikovsky 2022"
+  - "Kralemann et al. 2008"
 ---
 
 # `analysis.data.estimate_cycle` — the cycle from trajectory tails (E1)

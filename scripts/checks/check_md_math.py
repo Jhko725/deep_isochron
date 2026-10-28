@@ -18,8 +18,15 @@ blocks, ``|_{..}`` -> ``\\vert_{..}``, ``\\mathbf{e}_r`` -> ``\\mathbf e_r``,
 ``C^{k}_{\\rm loc}`` -> ``C_{\\rm loc}^{k}`` (an ``_`` preceded by a letter cannot
 open emphasis), spaces around ``<`` and ``>``.
 
+The frontmatter block is checked too, since GitHub renders it as a table only when it
+is valid YAML: it has to parse, carry ``type``, ``status`` and ``updated``, and write
+``sources`` as a block list of quoted items. A flow list ``[a (b, c), d]`` parses, but
+splits at every comma, so ``a (b`` and ``c)`` become two sources
+(``docs/document-conventions.md`` § Frontmatter). A file with no block is not checked
+for one: the change documents that predate the block are history.
+
 Usage: ``uv run python scripts/checks/check_md_math.py docs/**/*.md`` (exit code 1 on
-problems). Requires ``markdown-it-py`` (a dev dependency).
+problems). Requires ``markdown-it-py`` and ``PyYAML`` (dev dependencies).
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ import re
 import sys
 from pathlib import Path
 
+import yaml
 from markdown_it import MarkdownIt
 
 
@@ -62,13 +70,38 @@ def _split_blocks(text: str) -> list[tuple[str, str]]:
     return out
 
 
+REQUIRED_KEYS = ("type", "status", "updated")
+
+
+def frontmatter_problems(block: str) -> list[str]:
+    """The problems of a frontmatter `block` (the text between the ``---`` lines)."""
+    try:
+        data = yaml.safe_load(block)
+    except yaml.YAMLError as exc:
+        return [f"frontmatter is not valid YAML: {str(exc).splitlines()[0]}"]
+    if not isinstance(data, dict):
+        return ["frontmatter is not a mapping"]
+    problems = [f"frontmatter lacks `{k}`" for k in REQUIRED_KEYS if k not in data]
+    if "sources" in data:
+        if not isinstance(data["sources"], list):
+            problems.append("frontmatter `sources` is not a list")
+        elif re.search(r"^sources: *\[", block, flags=re.M):
+            problems.append(
+                "frontmatter `sources` is a flow list; write a block list of quoted"
+                " items"
+            )
+    return problems
+
+
 def check(path: Path) -> list[str]:
-    """The math problems of the Markdown file at `path`, frontmatter excluded."""
+    """The math problems of the Markdown file at `path`, and its frontmatter's."""
     text = path.read_text()
-    if text.startswith("---"):
-        text = text[text.index("\n---", 3) + 4 :]
-    md = MarkdownIt("commonmark", {"html": True})
     problems: list[str] = []
+    if text.startswith("---"):
+        end = text.index("\n---", 3)
+        problems += frontmatter_problems(text[4:end])
+        text = text[end + 4 :]
+    md = MarkdownIt("commonmark", {"html": True})
     for kind, chunk in _split_blocks(text):
         if kind != "text":
             continue

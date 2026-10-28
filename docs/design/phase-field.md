@@ -3,7 +3,24 @@ type: design
 status: tentative (survey; §1.2 route (a) landed)
 updated: 2026-10-29
 verified_by: pending (Joon)
-sources: [ADR-0012 (analysis layout, amendment), roadmap Phase E; the survey: Guckenheimer 1975, Brown et al. 2004, Langfield et al. 2014, Osinga & Moehlis 2010, Mauroy & Mezić 2012, Monga et al. 2019, Pérez-Cervera et al. 2020, Yawata et al. 2024, Kvalheim & Revzen 2021, Nakao 2016, Guillamon & Huguet 2009, Detrixhe et al. 2016, Demir & Roychowdhury 2003, Schwabedal & Pikovsky 2013, Namura et al. 2022]
+sources:
+  - "ADR-0012 (analysis layout, amendment)"
+  - "roadmap Phase E"
+  - "Guckenheimer 1975"
+  - "Brown et al. 2004"
+  - "Langfield et al. 2014"
+  - "Osinga & Moehlis 2010"
+  - "Mauroy & Mezić 2012"
+  - "Monga et al. 2019"
+  - "Pérez-Cervera et al. 2020"
+  - "Yawata et al. 2024"
+  - "Kvalheim & Revzen 2021"
+  - "Nakao 2016"
+  - "Guillamon & Huguet 2009"
+  - "Detrixhe et al. 2016"
+  - "Demir & Roychowdhury 2003"
+  - "Schwabedal & Pikovsky 2013"
+  - "Namura et al. 2022"
 ---
 
 # `analysis.ode.asymptotic_phase` and the phase response — the phase field of the basin (O3, O4)

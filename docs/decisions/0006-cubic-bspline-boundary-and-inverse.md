@@ -4,7 +4,11 @@ id: ADR-0006
 status: accepted
 updated: 2026-10-27
 verified_by: joon
-sources: [Hong & Chun 2023, de Boor 2001, Peters 2016, Blinn 2007]
+sources:
+  - "Hong & Chun 2023"
+  - "de Boor 2001"
+  - "Peters 2016"
+  - "Blinn 2007"
 ---
 
 # ADR-0006 — `CubicBSpline`: Greville-pinned boundary and a bracketed Newton inverse

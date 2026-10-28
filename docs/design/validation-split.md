@@ -3,7 +3,9 @@ type: design
 status: tentative
 updated: 2026-10-27
 verified_by: pending (Joon; the remedy chosen in discussion 2026-10-06)
-sources: [ADR-0008 (window sampling), ADR-0009 §5 (evaluation)]
+sources:
+  - "ADR-0008 (window sampling)"
+  - "ADR-0009 §5 (evaluation)"
 ---
 
 # Validation error split by window start: `val/mse_early` and `val/mse_late`

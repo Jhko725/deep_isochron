@@ -2,7 +2,9 @@
 type: roadmap
 status: current
 updated: 2026-10-29
-sources: [joon, claude]
+sources:
+  - "joon"
+  - "claude"
 ---
 
 # Roadmap
