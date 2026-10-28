@@ -20,7 +20,7 @@ One section per part of the method, as every design document under `design/`: **
 exists** (the literature survey, with what we take from it and what we do differently
 and why), **the method** as implemented, **oracles** (what the tests pin down and against
 which exact answers) and **limits** (what the function does not do, and which later item
-does). Claims are marked *cited* (read in the source) or *deduced* (our inference from
+does). Claims are marked [cited] (read in the source) or [deduced] (our inference from
 the source or from the mathematics). The analysis package as a whole is laid out by
 [ADR-0012](../decisions/0012-analysis-layout.md); the other analyses are
 this document (E1), [`limit-cycle.md`](limit-cycle.md)
@@ -42,7 +42,7 @@ the asymptotic phase up to an additive constant (the asymptotic phase is defined
 uniform advance along the orbit; design document `normal-forms.md` §2, §4), so a point
 of the cycle and its phase are interchangeable and a learned phase can be compared
 against `Cycle.nearest_phase`. The same representation is Revzen & Guckenheimer's
-"order 11 Fourier series model of the orbit" (2012; *cited*, see §2.1). `Cycle` is a
+"order 11 Fourier series model of the orbit" (2012; [cited], see §2.1). `Cycle` is a
 frozen dataclass holding NumPy arrays, because the analysis functions are host-side,
 non-differentiable post-processing and JAX adds nothing here (ADR-0012).
 
@@ -67,7 +67,7 @@ settling time *from* a cycle, so E1 cannot assume one).
 - **Revzen & Guckenheimer 2008**, *Estimating the phase of synchronized oscillators*,
   Phys. Rev. E **78**, 051907 ("Phaser"). From the survey (the abstract page could not
   be re-fetched when this document was written, so the method description is from the
-  earlier reading, *cited* at that level): a protophase is obtained from each scalar
+  earlier reading, [cited] at that level): a protophase is obtained from each scalar
   measurement by the Hilbert transform; a correction expressed as a Fourier series makes
   the phase advance at a constant rate; several measurements are combined; the method is
   designed for data that already lie near the limit cycle (rhythmic locomotion data).
@@ -119,7 +119,7 @@ $$
 **What we do differently, and why.** The phase-reconstruction literature starts from a
 *scalar* observable, so its first and hardest step is the protophase (Hilbert transform,
 embedding, iterated transforms). Here the **full planar state is observed**, so the polar
-angle about any interior point of the loop is a protophase at no cost (*deduced*: the
+angle about any interior point of the loop is a protophase at no cost ([deduced]: the
 angle about an interior point winds once per revolution, which is all a protophase
 needs), and the PTP transformation of Kralemann et al., a density correction rather than
 a signal-processing step, carries over unchanged. Second, the literature assumes the data lie on or near the

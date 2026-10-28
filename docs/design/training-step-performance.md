@@ -379,7 +379,3 @@ launches, ≈ 17 µs per launch) and nearly flat in batch size.
   device are set before anything is built, the loader is `to_device(window_batches)`, the
   final step is always checkpointed, and `bench_dataloader.py --config …` measures the
   very pipeline and model a config will train.
-
-## References
-
-Every work cited above has its entry in [`references.md`](../references.md).

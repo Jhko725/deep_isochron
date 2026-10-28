@@ -161,7 +161,3 @@ the price of slower typical convergence; it has not been needed.
 rule `du = (dy − Σ_i dc_i u^i) / p'(u)` (differentiating `p(u; c) = y`). The rule evaluates
 `u` by calling the root function itself, so higher-order derivatives apply the same rule
 recursively; nothing differentiates through the `fori_loop`.
-
-## References
-
-Every work cited above has its entry in [`references.md`](../references.md).

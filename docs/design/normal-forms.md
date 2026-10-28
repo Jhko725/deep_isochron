@@ -229,7 +229,7 @@ $$
 \qquad\text{(their Eq. 12).}
 $$
 
-In our symbols (*deduced* from §5.1–5.2; every identity checked by autodiff and the
+In our symbols ([deduced] from §5.1–5.2; every identity checked by autodiff and the
 isochron against Eq. 12 numerically, `tests/test_normal_forms.py` §4), with the model's
 $\omega$ written `w` to keep $\omega(r)$ for the angular rate:
 
@@ -941,7 +941,3 @@ $a = 0$ (phaseless set a point), with $a > 0$ to see what the INN does with the 
 Nothing else remains open. Changes to any of the above go through this document first.
 
 ---
-
-## References
-
-Every work cited above has its entry in [`references.md`](../references.md).
