@@ -28,8 +28,8 @@ phases:                   # exactly one of the two
   values: null            # or an explicit list of phases, in radians
 
 settings:                 # IsochronSettings; null fields take the code's defaults
-  n_periods: 5
-  eta_stop: 1.0e-6
+  n_periods: 10      # reach 1.1e-3 of the source, like fhn's 5e-4 at n = 5
+  eta_stop: 1.0e-5   # 1e-5 × 0.23⁻¹⁰ ≈ 24 ≫ box: the halves stop at the box or source
   box_scale: 2.5
   ntst: null              # 60 * n_periods
   max_workers: null       # the allocated cores; not part of the file's hash
