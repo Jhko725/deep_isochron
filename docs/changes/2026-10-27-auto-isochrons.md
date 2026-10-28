@@ -930,12 +930,12 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `tests/helpers.py`, `tests/test_analysis_ode.py`, `tests/test_normal_forms.py`, `docs/coding-standards.md` — the compile guards | Looks good, but take a look at `equinox.debug`. Anything useful there we are reinventing? | To be discussed. |
 | `docs/design/analysis.md` — `nearest_cycle_time`, `reanchor`, the array rule | Looks good. | None |
 | `README.md` — `DEEP_ISOCHRON_AUTO_DIR` and `AUTO_DIR` named; Langfield et al. and Hannam et al. cited in full | Confirmed. | None |
-| `src/deep_isochron/systems/normal_forms/winfree.py`, `base.py`, `docs/decisions/0013-normal-form-basins.md`, `docs/design/normal-forms.md`, `tests/test_normal_forms.py`, `tests/test_symbolic.py` — Winfree's parameters as array leaves | | |
-| `src/deep_isochron/analysis/ode/auto/foliation.py`, `src/deep_isochron/utils/numerics.py` — `wrap_phases` vectorized; `arclength` by `cumulative_sum` | | |
-| `src/deep_isochron/analysis/ode/limit_cycle.py`, `tests/test_phase.py`, `docs/design/analysis.md` — `nearest_cycle_time` from the previous sample; a convergence flag | | |
-| `src/deep_isochron/analysis/ode/auto/runner.py`, `stages.py`, `foliation.py` — float64 entered once, in `auto_session` | | |
-| `tests/helpers.py` — `CompileCounter` against `equinox.debug` | | |
-| `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py` — the schemas, registered at import; derivations as methods | | |
-| `configs/cycle/{fhn,fhn-easy}.yaml`, `configs/isochrons/{fhn,fhn-easy}.yaml` — the shared cycle group; the isochron configs on the schema | | |
-| `scripts/compute_isochrons.py`, `tests/test_experiment_isochrons.py` — on the schema; the hashes pinned; refusals | | |
-| `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md`, `docs/auto.md` — Decision 1 rewritten; the schemas in the map | | |
+| `src/deep_isochron/systems/normal_forms/winfree.py`, `base.py`, `docs/decisions/0013-normal-form-basins.md`, `docs/design/normal-forms.md`, `tests/test_normal_forms.py`, `tests/test_symbolic.py` — Winfree's parameters as array leaves | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/foliation.py`, `src/deep_isochron/utils/numerics.py` — `wrap_phases` vectorized; `arclength` by `cumulative_sum` | Looks good. | None |
+| `src/deep_isochron/analysis/ode/limit_cycle.py`, `tests/test_phase.py`, `docs/design/analysis.md` — `nearest_cycle_time` from the previous sample; a convergence flag | Looks much better. | None |
+| `src/deep_isochron/analysis/ode/auto/runner.py`, `stages.py`, `foliation.py` — float64 entered once, in `auto_session` | Good. Related is the x64 enforcing in `foliations/wrap_phases.py`. This x64 check can be removed if we move the function into the `auto_session` context manager in `isochron_foliation`, no? | To be discussed. |
+| `tests/helpers.py` — `CompileCounter` against `equinox.debug` | Confirmed. | None |
+| `src/deep_isochron/experiment/isochrons.py`, `experiment/__init__.py` — the schemas, registered at import; derivations as methods | Confirmed. | None |
+| `configs/cycle/{fhn,fhn-easy}.yaml`, `configs/isochrons/{fhn,fhn-easy}.yaml` — the shared cycle group; the isochron configs on the schema | Confirmed. | None |
+| `scripts/compute_isochrons.py`, `tests/test_experiment_isochrons.py` — on the schema; the hashes pinned; refusals | Looks good. | None |
+| `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md`, `docs/auto.md` — Decision 1 rewritten; the schemas in the map | Confirmed. | None |
