@@ -1,9 +1,9 @@
 """The stages of the isochron pipeline (``analysis.ode.auto.stages``) against the
-oracles of ``docs/design/isochrons.md`` §8; every test but the stop reason runs AUTO
+oracles of ``docs/design/isochrons.md`` §5; every test but the stop reason runs AUTO
 (marker ``auto``).
 
 - Stages 1–3 against O1 and O2, for every planar system: the bundle's branch point at
-  multiplier 1, which the coworker's ``+Aᵀ`` bundle did not have (§3); the orbit and
+  multiplier 1, which the coworker's ``+Aᵀ`` bundle did not have (§3.1); the orbit and
   period against O1's flow; ``Jw`` along O2's Floquet vector; ``w·F`` constant; each
   rotated base point at its phase on O1's cycle, phase π included; and, for the normal
   forms, ``w`` along the closed-form gradient of the phase.

@@ -21,24 +21,26 @@ sources:
 
 # `analysis.ode.floquet` — the Floquet exponent of the orbit (O2)
 
-One section per part of the method, as every design document under `design/`: **what
-exists** (the literature survey, with what we take from it and what we do differently
-and why), **the method** as implemented, **oracles** (what the tests pin down and against
-which exact answers) and **limits** (what the function does not do, and which later item
-does). Claims are marked [cited] (read in the source) or [deduced] (our inference from
-the source or from the mathematics). The analysis package as a whole is laid out by
+A method document in the form of [`document-conventions.md`](../document-conventions.md)
+§ Design documents: the problem, what exists (the literature survey, with what we take
+from it and what we do differently and why), the method as implemented, what is exact
+and what approximated, the oracles (what the tests pin down and against which exact
+answers) and the limits (what the function does not do, and which later item does).
+Claims are labeled [cited] (read in the source), [cited via X] (read in X, which cites
+it) or [deduced] (our inference from the source or from the mathematics). The analysis package as a whole is laid out by
 [ADR-0012](../decisions/0012-analysis-layout.md); the other analyses are
 [`cycle-estimation.md`](cycle-estimation.md) (E1), [`limit-cycle.md`](limit-cycle.md)
 (O1), this document (O2), [`phase-field.md`](phase-field.md) (O3–O4) and
 [`isochrons.md`](isochrons.md) (O7).
 
-## 1. O2 — `analysis.ode.floquet`: the Floquet exponent of the orbit
+## 1. The problem
 
-**Status: survey delivered 2026-10-19; implemented 2026-10-20 after Joon's prototype (ADR-0015). §1.1 keeps the survey, with the two corrections the implementation forced marked ⟂.**
+**The problem.** Given a `LimitCycle` of a planar `AbstractODE` (O1: the shooting mesh $x_1, \dots, x_m \in \gamma$, $T$), compute the nontrivial Floquet multiplier $\mu$ and exponent $\kappa = T^{-1}\ln\mu$ of $\gamma$ to the accuracy of the orbit itself, with its own error estimate; $\kappa$ is the rate at which the amplitude (isostable) coordinate decays, $\dot\psi = \kappa\psi$, and the quantity a learned conjugacy must reproduce: the normal forms carry it in closed form ($\kappa = \rho'(1)$, `floquet_exponent`), so $\kappa$ of FitzHugh–Nagumo pins the normal form's amplitude parameters (§6).
 
-**The problem.** Given a `LimitCycle` of a planar `AbstractODE` (O1: the shooting mesh $x_1, \dots, x_m \in \gamma$, $T$), compute the nontrivial Floquet multiplier $\mu$ and exponent $\kappa = T^{-1}\ln\mu$ of $\gamma$ to the accuracy of the orbit itself, with its own error estimate; $\kappa$ is the rate at which the amplitude (isostable) coordinate decays, $\dot\psi = \kappa\psi$, and the quantity a learned conjugacy must reproduce: the normal forms carry it in closed form ($\kappa = \rho'(1)$, `floquet_exponent`), so $\kappa$ of FitzHugh–Nagumo pins the normal form's amplitude parameters (§1.4). Claims are [cited], [cited via X] or [deduced] as in [`limit-cycle.md`](limit-cycle.md).
+## 2. What exists
 
-### 1.1 What exists
+The survey was delivered on 2026-10-19 and the method implemented on 2026-10-20 after
+Joon's prototype (ADR-0015); the two corrections the implementation forced are marked ⟂.
 
 **The object.** The monodromy $M = \partial_x\Phi_T(x^\ast)$, the fundamental solution of the variational equation $\dot Y = Df(\gamma(t))\thinspace Y$, $Y(0) = I$, at $t = T$. Its eigenvalues are the Floquet multipliers; they do not depend on the point $x^\ast \in \gamma$ or on the coordinates; one of them is $1$ with eigenvector $f(x^\ast)$ (the trivial multiplier), and the orbit is elementary (hyperbolic) when $1$ is simple (Guckenheimer & Meloon 2000, §1, [cited]; classical Floquet theory, Hale 1980, §III.7 [cited via Kvalheim & Revzen 2021, §3.1]). The Jacobian of a return map $P$ on a section $\Sigma$ at its fixed point is the quotient of $M$ by the flow direction ("the Jacobian of the return map can be obtained as a quotient of the monodromy matrix by projecting out the flow direction", Guckenheimer & Meloon §1, [cited]), so $DP$ has the eigenvalues of $M$ except the trivial one, which $DP$ replaces by $0$ when written on the ambient space (O1's `jacfwd(P)`, eigenvalues $\lbrace 0, \mu\rbrace$, [deduced] in §2.2 and tested). Wilson & Moehlis 2016 define the isostable coordinates from exactly this $DP$ and its eigenvectors (their Eqs. 3–5, [cited]) and set $\kappa_i = \log(\lambda_i)/T$ (Eq. 7).
 
@@ -66,11 +68,11 @@ $$
 \kappa T = -s\int_0^T\Vert\nabla g(\gamma(t))\Vert^2\thinspace dt = -\oint_{\gamma}\Vert\nabla g\Vert\thinspace d\ell, \qquad T = \oint_{\gamma}\frac{d\ell}{s\thinspace\Vert\nabla g\Vert}
 $$
 
-([deduced]; consistent with the transverse equation $\dot g = -s\thinspace g\thinspace\Vert\nabla g\Vert^2$ of [`limit-cycle.md`](limit-cycle.md) §1.3, whose linearization along $\gamma$ is the same rate). Both are line integrals over the curve $\lbrace g = 0\rbrace$ that need **no ODE solve**: for the Cassini oval the curve has the polar parametrization $r(\theta)^2 = a^2\cos 2\theta + \sqrt{a^4\cos^2 2\theta - a^4 + b^4}$, and the trapezoidal rule on a periodic analytic integrand converges exponentially, so $\kappa$ and $T$ are available to roundoff as oracles independent of diffrax. (Guckenheimer & Meloon's cubic has no such parametrization; its oracle stays $\max\vert g\vert$ and the Cassini-derived checks.)
+([deduced]; consistent with the transverse equation $\dot g = -s\thinspace g\thinspace\Vert\nabla g\Vert^2$ of [`limit-cycle.md`](limit-cycle.md) §5, whose linearization along $\gamma$ is the same rate). Both are line integrals over the curve $\lbrace g = 0\rbrace$ that need **no ODE solve**: for the Cassini oval the curve has the polar parametrization $r(\theta)^2 = a^2\cos 2\theta + \sqrt{a^4\cos^2 2\theta - a^4 + b^4}$, and the trapezoidal rule on a periodic analytic integrand converges exponentially, so $\kappa$ and $T$ are available to roundoff as oracles independent of diffrax. (Guckenheimer & Meloon's cubic has no such parametrization; its oracle stays $\max\vert g\vert$ and the Cassini-derived checks.)
 
 **What the packages do** ([cited] from documentation): BifurcationKit uses `FloquetQaD` on the product of shooting Jacobians by default, `FloquetPQZ` (periodic Schur) for accuracy, and the return-map eigenvalues for Poincaré shooting; AUTO takes the multipliers from the collocation Jacobian (Fairgrieve & Jepson), improved from AUTO86 to AUTO97 (G&M §5.4); `multiflap` takes the product of segment Jacobians through `numpy.linalg.eig`. None of them exploits the planar Liouville identity, because none is planar-specific.
 
-### 1.2 The method (`analysis/ode/floquet.py`, ADR-0015)
+## 3. The method (`analysis/ode/floquet.py`, ADR-0015)
 
 Functions over a `LimitCycle` (which, as of O2, is a fixed-shape `eqx.Module` carrying its `ode`, the shooting mesh `x0s`, `period`, `config`, `reverse_time` and a light `FixedPoint`; analysis functions take the cycle — ADR-0015 §5):
 
@@ -82,7 +84,19 @@ Functions over a `LimitCycle` (which, as of O2, is a fixed-shape `eqx.Module` ca
 
 `LimitCycle.sample(n_points)` re-integrates the orbit from `x0s[0]` (the sampled orbit is derived, not stored); `orientation()` from the sampled polygon (`analysis.data.cycle.orientation`).
 
-### 1.3 Oracles (`tests/test_analysis_ode.py`, O2 block)
+## 4. Exact and approximated
+
+The periodic Schur chain is exact arithmetic on the segment Jacobians, and the Liouville
+identity is exact for a planar field; what is approximated is each Jacobian and the
+divergence integral, both by the solver at `cycle.config`, so $\kappa$ carries the
+solver's global error over a period, about $10^{-9}$ (§3), and §5 pins all three routes
+at $10^{-8}$. The monodromy and return-map routes are diagnostics whose floor is the
+resolution of $1$ in double precision, $\mu - 1 \approx 10^{-16}$, which is why a strongly
+attracting cycle gets its multiplier from the chain and not from $M$ (§2). The trivial
+multiplier's distance from $1$ and the chain's closure are reported as the error
+estimate.
+
+## 5. Oracles (`tests/test_analysis_ode.py`, O2 block)
 
 | System | Exact | Pinned |
 |---|---|---|
@@ -95,7 +109,7 @@ Functions over a `LimitCycle` (which, as of O2, is a fixed-shape `eqx.Module` ca
 | The chain | — | $Q_{i+1}R_i = M_iQ_i$ exactly, $R_i$ upper triangular with positive diagonal, the seed is $Q_1$'s first column, $D = I$, `monodromy` is the ordered product; `periodic_schur` under `vmap` |
 | Refusals | — | `periodic_schur` on $3\times3$ factors: `NotImplementedError`; Liouville and `orientation` on a 3-D cycle: `ValueError` |
 
-### 1.4 Limits and consequences
+## 6. Limits and consequences
 
 - **Planar only, by construction**: the seed fixes one Schur vector, which in the plane is all there is; `dim \geq 3` needs the periodic QR iteration on the transverse block (`slycot`) or BifurcationKit-style section-reduced products — open.
 - **The orbit's error is the floor**: $\kappa$ inherits O1's $10^{-8}$; the trivial multiplier and the closure report it (Lust 2001, Figs. 5, 9: the trivial multiplier's error is the same with and without the periodic Schur decomposition — it is set by the discretization).

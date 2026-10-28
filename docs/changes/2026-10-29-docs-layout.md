@@ -1,6 +1,6 @@
 ---
 type: change
-status: reviewed 2026-10-29; the review's change in
+status: reviewed 2026-10-29; the design-document format round in
 updated: 2026-10-29
 ---
 
@@ -57,6 +57,24 @@ script.
   block parses, carries `type`, `status`, `updated`, and writes `sources` in block form.
 - the seventeen documents with a `sources:` line — the flow lists rewritten as block
   lists of quoted items (round 1).
+- `docs/document-conventions.md` § Design documents (round 2) — the three kinds; the
+  six-section skeleton of a method document; the Status line; transient Decisions
+  sections; the labels in square brackets.
+- `docs/design/{cycle-estimation,limit-cycle,floquet,phase-field,isochrons}.md` (round
+  2) — on the skeleton, renumbered; `*cited*`/`*deduced*`/`*secondary*` to `[cited]`,
+  `[deduced]`, `[cited via X]` (the `style:` commit); `isochrons.md` §11 retired, its
+  D2, D3, D4, D6 moved to ADR-0017; `phase-field.md` carries O3 and O4 as subsections
+  of each section.
+- `docs/design/normal-forms.md`, `cubic-bspline.md`, `training-step-performance.md`
+  (round 2) — the `## References` stubs removed; `normal-forms.md` §11 retired, its
+  one unrecorded decision moved to ADR-0007.
+- `docs/decisions/0007`, `0017` (round 2) — the moved decisions; History lines.
+- `scripts/checks/check_references.py` (round 2) — refuses the italic labels under
+  `docs/design/`.
+- `src/deep_isochron/analysis/ode/{limit_cycle,phase}.py`, `ode/auto/{codegen,results,stages}.py`,
+  `tests/{helpers,test_auto_codegen,test_auto_stages}.py`, `docs/decisions/0012`,
+  `docs/index.md`, `docs/references.md`, `docs/roadmap.md` (round 2) — section numbers
+  follow the renumbering.
 - `scripts/checks/check_spelling.py`, `check_references.py` — moved;
   `check_references.py` resolves the root two levels up and reads `README.md` and
   `CLAUDE.md` by default.
@@ -107,6 +125,26 @@ script.
   sources on GitHub. Quoting every item is uniform and needs no judgment about which
   items contain a comma, colon or quote; the check in `check_md_math.py` refuses the
   flow form so the rule holds without a reviewer.
+- **One skeleton for method documents, with fixed section numbers** (round 2, Q1–Q8 of
+  2026-10-29). Six sections in a fixed order, so §5 is the oracles in every method
+  document; a section with nothing to say is one sentence rather than absent, which is
+  what keeps the numbers fixed. Derivations and notes are named as kinds and not forced
+  into it: `cubic-bspline.md` would have had empty survey and oracle sections.
+  `phase-field.md` covers O3 and O4, two items that share a survey and an engine, as
+  O3/O4 subsections of each section rather than two documents. The five documents were
+  renumbered now rather than when next touched, since a convention no document follows
+  is advisory; every citation of a section number in code, tests, ADRs, the roadmap and
+  `references.md` was followed, and the change documents keep the old numbers as
+  history.
+- **Decisions sections are transient.** Each decision of `isochrons.md` §11 and
+  `normal-forms.md` §11 was checked against the ADRs before deletion; the four not yet
+  recorded (D2, D3, D4, D6) went into ADR-0017's *Alternatives rejected*, and
+  `normal-forms.md`'s manuscript-source decision into ADR-0007's *Consequences*. D9
+  (the note to the coworker) is Joon's and is listed under *Open issues*.
+- **Labels in one form, checked.** `[cited via X]` replaces `*secondary*` and names what
+  was read; where the survey did not record it, the label says `[cited via citing
+  papers]` rather than inventing a source. The 163 italic labels were converted in a
+  `style:` commit before the check was turned on.
 - No ADR: the layout is reversible and not surprising; this section and
   `document-conventions.md` § What goes where record it.
 
@@ -128,18 +166,24 @@ No test changes. The checks that cover this branch, each run on the final tree:
   module each flagged (then removed).
 - `uv run python scripts/checks/check_references.py`: all 88 cited keys resolve, no
   broken relative links; a planted `(Nobody 1999)` in `README.md` flagged (then
-  removed).
+  removed). The label rule fired on the 163 italic labels before the `style:` commit
+  and on none after.
 - `uv run python scripts/checks/check_md_math.py`: 53 files, 0 problems; a planted flow
   `sources` list, a missing `updated` and a block with an unquoted quote each flagged
   (then removed).
 - `uv run just check`: every hook passed, `ty` clean (after ten docstring lines that the
   longer paths pushed past 88 characters were reflowed); after round 1: every hook
-  passed, `ty` clean.
+  passed, `ty` clean; after round 2: every hook passed, `ty` clean.
+- `uv run just test dev tests/test_auto_codegen.py tests/test_auto_stages.py tests/test_analysis_ode.py`
+  (the test files whose docstrings changed in round 2): 79 passed in 411 s; the `auto`
+  tests skipped, no tree in this session.
 - `uv run just test dev tests/test_analysis.py tests/test_analysis_ode.py tests/test_symbolic.py`
   (the modules whose docstrings changed): 92 passed in 300 s on two cores.
 
 ## Open issues
 
+- D9 of the isochron design (a note to the coworker on the bundle's sign slip): Claude
+  drafts it when Joon asks; Joon decides whether to send it.
 - `docs/changes/2026-10-28-phase-field.md` (review pending) cites `analysis.md §4–5`;
   change documents are history and keep the old names.
 - The `configs/phase_field/` group for O3's `t_end`, deferred from `auto-isochrons`.
@@ -168,3 +212,12 @@ No test changes. The checks that cover this branch, each run on the final tree:
 | the docstrings of `analysis/` and `training/trainer.py` — paths and section numbers | Confirmed. | None |
 | `.gitignore`, `.DS_Store` — untracked and ignored | Confirmed. | None |
 | `scripts/checks/check_md_math.py`, `docs/document-conventions.md` § Frontmatter, and the seventeen `sources:` lists — round 1: `sources` as a block list of quoted items, checked | | |
+| `docs/document-conventions.md` § Design documents — round 2: the three kinds, the six-section skeleton, Status lines, transient Decisions, the labels | | |
+| `docs/design/isochrons.md` — on the skeleton: §2 the three versions, §3 the stable direction and the four stages, §4 exact/approximated, §5 oracles with the tests, §6 limits; §11 retired | | |
+| `docs/design/{cycle-estimation,limit-cycle,floquet}.md` — on the skeleton; the new §4 of each written from its own §3 | | |
+| `docs/design/phase-field.md` — on the skeleton with O3/O4 subsections; the Status line on §3 | | |
+| `docs/design/normal-forms.md`, `cubic-bspline.md`, `training-step-performance.md` — References stubs gone; `normal-forms.md` §11 retired | | |
+| `docs/decisions/0007`, `0017` — D2, D3, D4, D6 and the manuscript-source decision moved in; History | | |
+| `scripts/checks/check_references.py` — refuses `*cited*`, `*deduced*`, `*secondary*` under `docs/design/` | | |
+| the section numbers in `analysis/`, `auto/`, three test files, ADR-0012, `index.md`, `references.md`, `roadmap.md` | | |
+| the `style:` commit `2453581` — 163 labels converted | | |

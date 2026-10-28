@@ -20,22 +20,23 @@ sources:
 
 # `analysis.ode.limit_cycle` — the periodic orbit and its period from the vector field (O1)
 
-One section per part of the method, as every design document under `design/`: **what
-exists** (the literature survey, with what we take from it and what we do differently
-and why), **the method** as implemented, **oracles** (what the tests pin down and against
-which exact answers) and **limits** (what the function does not do, and which later item
-does). Claims are marked [cited] (read in the source) or [deduced] (our inference from
-the source or from the mathematics). The analysis package as a whole is laid out by
+A method document in the form of [`document-conventions.md`](../document-conventions.md)
+§ Design documents: the problem, what exists (the literature survey, with what we take
+from it and what we do differently and why), the method as implemented, what is exact
+and what approximated, the oracles (what the tests pin down and against which exact
+answers) and the limits (what the function does not do, and which later item does).
+Claims are labeled [cited] (read in the source), [cited via X] (read in X, which cites
+it) or [deduced] (our inference from the source or from the mathematics). The analysis package as a whole is laid out by
 [ADR-0012](../decisions/0012-analysis-layout.md); the other analyses are
 [`cycle-estimation.md`](cycle-estimation.md) (E1), this document
 (O1), [`floquet.md`](floquet.md) (O2), [`phase-field.md`](phase-field.md) (O3–O4) and
 [`isochrons.md`](isochrons.md) (O7).
 
-## 1. O1 — `analysis.ode.limit_cycle`: the periodic orbit and its period from the vector field
+## 1. The problem
 
-**The problem.** Given a planar `AbstractODE` with a hyperbolic attracting periodic orbit $\gamma$, find a point $x^\ast \in \gamma$, the period $T$, and the orbit sampled uniformly in time — the reference every later item (asymptotic phase, PRC, isostables) is built on, to an accuracy far beyond what a learned model's comparison can use (target $10^{-10}$ on $T$). Claims are [cited] (read in the source), [cited via X] (read in X, which cites it) or [deduced].
+Given a planar `AbstractODE` with a hyperbolic attracting periodic orbit $\gamma$, find a point $x^\ast \in \gamma$, the period $T$, and the orbit sampled uniformly in time — the reference every later item (asymptotic phase, PRC, isostables) is built on, to an accuracy far beyond what a learned model's comparison can use (target $10^{-10}$ on $T$). Claims are [cited] (read in the source), [cited via X] (read in X, which cites it) or [deduced].
 
-### 1.1 What exists
+## 2. What exists
 
 Every method solves the same boundary value problem: $\dot x = T f(x)$ on $[0, 1]$, $x(0) = x(1)$, plus one phase condition. The methods differ in how the trajectory between mesh points is represented.
 
@@ -57,7 +58,7 @@ What the two modern papers add, and do not [cited]. Guckenheimer & Meloon's accu
 
 **The initial guess** is not packaged anywhere (BifurcationKit, BoundaryValueDiffEq, MatCont, CoCo, AUTO take an orbit guess from the user or start from a Hopf point; [cited] from their documentation, or [cited via citing papers]). The recipe is Parker & Chua's brute force on a section: settle, place $\Sigma$ normal to the flow at the settled point ("let the program automatically set $h = f(x^{(0)})$ and $x_\Sigma = x^{(0)}$", §5.5), count positive crossings (footnote 4), measure the return time. Crossings are located by event detection with a root finder (Shampine & Thompson 2000, Comput. Math. Appl. 39:43–54 — *verify*; the classical remedy for the final-step error is Hénon 1982, via Tucker 2002, [cited]). Peak-to-peak timing is inferior: a smooth extremum localizes time to $\sqrt{2\varepsilon/\vert\ddot x\vert}$, a transversal crossing to $\varepsilon/\vert\dot x\vert$ [deduced].
 
-### 1.2 The method (`analysis/ode/`)
+## 3. The method (`analysis/ode/`)
 
 `CrossSection` (`sections.py`): $\Sigma = (p, n)$ with unit normal, `signed_distance(x)`, `normal_to_flow(ode, p)` the flow-normal section.
 
@@ -69,9 +70,21 @@ What the two modern papers add, and do not [cited]. Guckenheimer & Meloon's accu
 
 `nearest_cycle_time(cycle, y)` and `reanchor(cycle, point)` (`limit_cycle.py`, added for O7, which anchors its isochrons at phase 0, and used by O3's route (a) to read a phase off the cycle). The first finds the time $t^\ast$ from `x0s[0]` of the cycle point nearest $y$: from the sample before the nearest of $n$ samples, `optimistix.Newton` solves for the time offset at which the stationarity condition $g = (\gamma - y)\cdot f(\gamma)$ vanishes, differentiating through the flow and seeded at one sample spacing; it starts one sample back because diffrax's derivative of a flow in its end time is identically zero for a zero-length solve (and $f(\gamma)$ elsewhere), so a solve seeded at the nearest sample itself would never move. It returns the solver's convergence flag, stays jit- and vmap-compatible and never raises. `reanchor` moves the phase origin to that point without solving the orbit again: the new mesh is the flow from the new origin at times $iT/m$, the residual is the shooting residual evaluated once there, and the section is the flow-normal one through the new origin, as `find_limit_cycle` builds through its own. (Review of 2026-10-28: the first version hand-rolled the Newton steps and re-ran the shooting solve from the moved mesh; both were replaced.)
 
-`AbstractODE.flow_to(t, u0)` (the state at a signed time, `flow(ts=[0, t]).ys[-1]`, differentiable in both) and `LevelSetCycle` (`systems/level_set.py`, the designed-cycle family of §1.3) were added to `systems` for this item. `analysis` works through the `flow` contract alone; which integration a system's `flow` performs is the system's choice. For the normal forms it defaults to the closed-form chart, which as an *input* would make the oracle tests circular and, at a basin edge ($r \to a$ for Winfree), loses precision — so the tests construct them with `integration="cartesian"` (a constructor argument) and the closed forms stay the oracles, the solver the input (ADR-0014, round 2).
+`AbstractODE.flow_to(t, u0)` (the state at a signed time, `flow(ts=[0, t]).ys[-1]`, differentiable in both) and `LevelSetCycle` (`systems/level_set.py`, the designed-cycle family of §5) were added to `systems` for this item. `analysis` works through the `flow` contract alone; which integration a system's `flow` performs is the system's choice. For the normal forms it defaults to the closed-form chart, which as an *input* would make the oracle tests circular and, at a basin edge ($r \to a$ for Winfree), loses precision — so the tests construct them with `integration="cartesian"` (a constructor argument) and the closed forms stay the oracles, the solver the input (ADR-0014, round 2).
 
-### 1.3 Oracles (`tests/test_analysis_ode.py`)
+## 4. Exact and approximated
+
+The section, the phase condition and the shooting residual are exact in form; what is
+approximated is each segment's flow, so the residual floor and the error of every
+output are the solver's: `SHOOTING_SOLVER_CONFIG` (`Dopri8`, rtol $10^{-10}$, atol
+$10^{-12}$) gives a global error of about $10^{-9}$ over a period (§3), which is the
+bound §5 pins at $10^{-8}$ on the period, the radius and the sampled orbit. The
+brute-force estimate $\hat T$ of the initial guess is a measurement over $k$ returns and
+is replaced by the polished $T$; the two agree to $10^{-6}$ on FitzHugh–Nagumo (§5).
+`nearest_cycle_time` is a Newton solve on the stationarity condition and reports whether
+it converged, so a point it returns is exact to that solve's tolerance.
+
+## 5. Oracles (`tests/test_analysis_ode.py`)
 
 | System | Exact | Pinned |
 |---|---|---|
@@ -83,7 +96,7 @@ What the two modern papers add, and do not [cited]. Guckenheimer & Meloon's accu
 
 The suite also covers a near-Hopf Bautin cycle ($\kappa \to 0$) where the fixed-point stage alone cannot reach a tight tolerance and the polish finishes from a loose settle; tolerance monotonicity (tighter solver, smaller period error); the output consumed by `Cycle.from_points` (phase-uniform points) with negligible residual; Hypothesis over Hopf parameters and starting points.
 
-### 1.4 Limits
+## 6. Limits
 
 - **Attracting orbits only** (repelling ones through `reverse_time`); a saddle cycle in higher dimension would need shooting proper (error growth $e^{\kappa_u T/m}$ per segment is the lever) — not planar, not planned.
 - **No canard safety.** Forward segments; a cycle hugging a repelling slow manifold needs symmetric shooting (Guckenheimer & Meloon §5.3). FitzHugh–Nagumo at $\varepsilon = 0.08$ follows the attracting branches; Langfield et al.'s sensitivity near the repelling slow manifold concerns the *isochrons*, not the orbit.

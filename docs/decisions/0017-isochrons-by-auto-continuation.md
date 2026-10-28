@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0017
 status: accepted (review pending)
-updated: 2026-10-28
+updated: 2026-10-29
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-27, plan `claude/isochron-auto-plan-2026-10-22`)
 ---
 
@@ -24,7 +24,7 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-27, p
 - His bundle integrated $+\tau A^{\mathsf T}w$, which is not the adjoint equation. On
   the Hopf and Bautin forms it walks the multiplier from 1.2 to $-8.7$ without a branch
   point, and on FitzHugh–Nagumo its end direction is $58°$ from the stable direction
-  ([`docs/design/isochrons.md`](../design/isochrons.md) §3).
+  ([`docs/design/isochrons.md`](../design/isochrons.md) §3.1).
 - His phase origin was the crossing of the cycle with the line $y = 0.5$, a condition
   written for FitzHugh–Nagumo. The package's cycles carry their own phase origin,
   `LimitCycle.x0s[0]`, and their own section through it
@@ -52,7 +52,7 @@ One generic Fortran file,
 [`isochron_multiseg.f90`](../../src/deep_isochron/analysis/ode/auto/fortran/isochron_multiseg.f90),
 states the boundary value problem in four nested sizes, selected by `NDIM`, and
 [`stages.py`](../../src/deep_isochron/analysis/ode/auto/stages.py) runs it in four
-stages ([design document](../design/isochrons.md) §6), each a function of a `Runner`
+stages ([design document](../design/isochrons.md) §3), each a function of a `Runner`
 and the previous stage's `AutoSolution`
 ([`runner.py`](../../src/deep_isochron/analysis/ode/auto/runner.py)), which
 [`foliation.py`](../../src/deep_isochron/analysis/ode/auto/foliation.py) strings
@@ -185,6 +185,19 @@ another phase origin, listing every mismatch (L1).
   threads into the child (G2).
 - **A cache of stages 1–3 on disk.** They take about a minute, against minutes per
   phase in stage 4 (decision 10).
+- **Interpolating the stage-3 solution for the stage-4 start**, by Lagrange evaluation
+  within AUTO's mesh intervals or by the coworker's SciPy splines. Stage 4 starts on
+  AUTO's own grid, with no interpolation and no SciPy (D2).
+- **A point-to-point tolerance for the regression oracle**, the plan's $2\times 10^{-3}$.
+  It measured the spacing of the points, not the distance between the curves; the
+  oracle compares each file's points with the other curve's polyline in both directions,
+  at $2\times 10^{-5}$ (D3).
+- **Langfield's staged extension of an isochron** beyond one segment. Stage 4 keeps the
+  coworker's single segment of `n_periods` periods; the extension is deferred until an
+  isochron needs it (D4).
+- **A mesh independent of the number of periods.** `ntst` defaults to `60 * n_periods`,
+  so a longer segment keeps its resolution per period (D6); the sweep of 2026-10-27
+  found 30 per period as good at half the time, and the default is Joon's to settle.
 
 ## History
 
@@ -195,3 +208,5 @@ another phase origin, listing every mismatch (L1).
   `results`, `runner`, `stages` and `foliation`; every stage returns an
   `AutoSolution`, and only the branch switch of stage 2 restarts from AUTO's own
   point.
+- 2026-10-29 (`docs-layout`): D2, D3, D4 and D6 moved here from the design document's
+  retired *Decisions* section.

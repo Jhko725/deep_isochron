@@ -16,18 +16,28 @@ sources:
 
 # `analysis.data.estimate_cycle` — the cycle from trajectory tails (E1)
 
-One section per part of the method, as every design document under `design/`: **what
-exists** (the literature survey, with what we take from it and what we do differently
-and why), **the method** as implemented, **oracles** (what the tests pin down and against
-which exact answers) and **limits** (what the function does not do, and which later item
-does). Claims are marked [cited] (read in the source) or [deduced] (our inference from
-the source or from the mathematics). The analysis package as a whole is laid out by
+A method document in the form of [`document-conventions.md`](../document-conventions.md)
+§ Design documents: the problem, what exists (the literature survey, with what we take
+from it and what we do differently and why), the method as implemented, what is exact
+and what approximated, the oracles (what the tests pin down and against which exact
+answers) and the limits (what the function does not do, and which later item does).
+Claims are labeled [cited] (read in the source), [cited via X] (read in X, which cites
+it) or [deduced] (our inference from the source or from the mathematics). The analysis package as a whole is laid out by
 [ADR-0012](../decisions/0012-analysis-layout.md); the other analyses are
 this document (E1), [`limit-cycle.md`](limit-cycle.md)
 (O1), [`floquet.md`](floquet.md) (O2), [`phase-field.md`](phase-field.md) (O3–O4) and
 [`isochrons.md`](isochrons.md) (O7).
 
-## 1. The shared object: `Cycle`
+## 1. The problem
+
+From one or several trajectories of a planar oscillator sampled on a
+common time grid, converging to the cycle from initial conditions anywhere and possibly
+with measurement noise, find the limit cycle as a `Cycle` (curve, period, phase
+parameterization), **without a prior notion of when the transient ends** (E2 defines the
+settling time *from* a cycle, so E1 cannot assume one).
+
+### 1.1 The shared object: `Cycle`
+
 
 A planar limit cycle is represented by a closed curve as a truncated Fourier series in a
 phase $\varphi \in [0, 2\pi)$,
@@ -42,7 +52,7 @@ the asymptotic phase up to an additive constant (the asymptotic phase is defined
 uniform advance along the orbit; design document `normal-forms.md` §2, §4), so a point
 of the cycle and its phase are interchangeable and a learned phase can be compared
 against `Cycle.nearest_phase`. The same representation is Revzen & Guckenheimer's
-"order 11 Fourier series model of the orbit" (2012; [cited], see §2.1). `Cycle` is a
+"order 11 Fourier series model of the orbit" (2012; [cited], see §2). `Cycle` is a
 frozen dataclass holding NumPy arrays, because the analysis functions are host-side,
 non-differentiable post-processing and JAX adds nothing here (ADR-0012).
 
@@ -54,15 +64,8 @@ squares in the $1 + 2K$ coefficients — any order, any spacing, repeated phases
 what pooled trajectories produce) and `circle` (the normal forms' cycle in their own
 coordinates). E3 adds `winding` and `contains`.
 
-## 2. E1 — `analysis.data.estimate_cycle`: the cycle from trajectory tails
+## 2. What exists
 
-**The problem.** From one or several trajectories of a planar oscillator sampled on a
-common time grid, converging to the cycle from initial conditions anywhere and possibly
-with measurement noise, find the limit cycle as a `Cycle` (curve, period, phase
-parameterization), **without a prior notion of when the transient ends** (E2 defines the
-settling time *from* a cycle, so E1 cannot assume one).
-
-### 2.1 What exists
 
 - **Revzen & Guckenheimer 2008**, *Estimating the phase of synchronized oscillators*,
   Phys. Rev. E **78**, 051907 ("Phaser"). From the survey (the abstract page could not
@@ -96,14 +99,14 @@ $$
 - **Gengel & Pikovsky 2022**, *Phase reconstruction from oscillatory data with
   iterated Hilbert transform embeddings* (arXiv:2111.10300; the Springer chapter
   Gengel & Pikovsky 2021 is the earlier paper). *Cited*: the state of the art for protophases from a *scalar* signal;
-  the PTP step is unchanged. Not needed here (§2.2).
+  the PTP step is unchanged. Not needed here (§3).
 - **Zielinski et al. 2014**, *Strengths and limitations of
   period estimation methods for circadian data*, PLoS ONE **9**(5), e96462. *Cited* from
   the survey: among period estimators (Fourier/periodogram, autocorrelation, peak-to-peak
   timing, curve fitting), the curve-fitting family that uses every sample is the most
   robust to noise, and timing-based estimators (two samples per cycle) degrade fastest.
   *Deduced*: this is the reason our period comes from a regression over all tail samples
-  rather than from crossing intervals (§2.2, step 5).
+  rather than from crossing intervals (§3, step 5).
 - **Namura et al. 2022**, *Estimating asymptotic phase and
   amplitude functions of limit-cycle oscillators from time series data*, Phys. Rev. E
   **106**, 014204. *Cited*: phase and amplitude functions are fitted *off* the cycle by
@@ -127,7 +130,8 @@ cycle; our trajectories start anywhere and converge, so the estimate must pick i
 window (the **tail**) and *check* that the window is on the cycle. Third, the period
 estimate exploits the phase: once $\varphi$ is uniform in time, the period is a slope.
 
-### 2.2 The method
+## 3. The method
+
 
 The input is trajectories `ys (N, T, 2)` (or one, `(T, 2)`) on a common grid `ts (T,)`;
 `tail_periods` (default 3), `harmonics` $K$ (11), `density_harmonics` ($2K + 2$),
@@ -177,7 +181,19 @@ The returned `cycle` is always the whole-tail fit (the most averaging). When
 `converged` is `False` it is biased toward the transient and the caller shortens
 `tail_periods` or supplies longer trajectories; E2 turns this into an iteration.
 
-### 2.3 Oracles (`tests/test_analysis.py`)
+## 4. Exact and approximated
+
+Everything here is estimated from samples, so nothing is exact; §3 says where each
+approximation enters and §5 pins its size. The density $F_k$ is a trapezoid-rule integral
+over an integer number of revolutions, exact for a periodic integrand up to the grid
+(step 4); the period is a least-squares slope over every tail sample, so measurement
+noise averages as $\sigma/(\sqrt n\thinspace\mathrm{std}(t))$ (step 5); the curve is a
+Fourier series truncated at order $K$ and fitted by least squares, whose residual is the
+noise floor (steps 6–7). A tail still in the transient biases all three toward the
+transient, which `converged` reports (step 7) and §6 leaves to E2.
+
+## 5. Oracles (`tests/test_analysis.py`)
+
 
 | Test | Pins down |
 |---|---|
@@ -194,7 +210,8 @@ The returned `cycle` is always the whole-tail fit (the most averaging). When
 Tolerances are entries of `tests/helpers.TOL` (`cycle_query`, `cycle_period`,
 `cycle_curve`, `cycle_phase`) with their reasons.
 
-### 2.4 Limits
+## 6. Limits
+
 
 - **Noise model.** Measurement noise, i.i.d. per sample, is what the averaging handles.
   Dynamical noise (a stochastic oscillator) spreads the tail around the cycle; the fit

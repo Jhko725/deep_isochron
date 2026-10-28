@@ -80,7 +80,7 @@ TOL = {
     # O7: an AUTO isochron against the coworker's stored curve, as the distance from
     # points to the other curve's polyline; AUTO's own rerun reproduces the stored
     # curves to 3.6e-6, and the corrected bundle moves them by 8.1e-6
-    # (docs/design/isochrons.md §7, decision D3)
+    # (docs/design/isochrons.md §4, decision D3)
     "isochron_curve": 2e-5,
     # O7: the adjoint bundle's branch point, where AUTO locates the multiplier 1 to
     # about 1e-11 (0.99999999998 on Hopf and Bautin)

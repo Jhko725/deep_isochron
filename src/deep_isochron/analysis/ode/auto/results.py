@@ -38,7 +38,7 @@ class IsochronSettings:
     **Attributes:**
 
     - `n_periods`: The number of periods of the isochron segment; more periods reach
-        further toward the phaseless set (``docs/design/isochrons.md`` §7).
+        further toward the phaseless set (``docs/design/isochrons.md`` §4).
     - `eta_stop`: The distance along the stable direction at which a half stops.
     - `box_scale`: A half also stops when the traced point leaves the cycle's
         bounding box enlarged `box_scale` times about its center.

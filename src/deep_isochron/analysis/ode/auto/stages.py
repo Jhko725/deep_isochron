@@ -1,4 +1,4 @@
-r"""The four stages of the isochron pipeline (``docs/design/isochrons.md`` §6).
+r"""The four stages of the isochron pipeline (``docs/design/isochrons.md`` §3).
 
 Each stage is a function of a `Runner` and the previous stage's `AutoSolution`, and
 returns an `AutoSolution`; the driver in ``foliation`` strings them together. The
@@ -93,7 +93,7 @@ def adjoint_bundle(run: Runner, orbit: AutoSolution) -> AutoSolution:
     ``period``). The trivial bundle $w = 0$ is walked in ``mult`` from 1.2 down to the
     branch point at 1, where the bundle with multiplier 1 branches off; AUTO's branch
     switching (``ISW = -1``) follows it until ``norm`` $= \vert w(0)\vert^2$ reaches 1.
-    Its rotation $Jw$ at the junction is the stable direction there (§3, D1).
+    Its rotation $Jw$ at the junction is the stable direction there (§3.1, D1).
 
     **Arguments:**
 
@@ -149,7 +149,7 @@ def rotate_phase(
     $[0, 1.01T]$ with ``mult``, ``seg1`` and ``period`` free, and a user point at
     $\tau_2 = (1 - \theta/2\pi)T$ for every requested phase $\theta$; at each user
     point the junction, and with it the base point ``U(3:4)`` and its bundle
-    ``U(7:8)``, sits at that phase (§6). AUTO reports a user point where its function
+    ``U(7:8)``, sits at that phase (§3.4). AUTO reports a user point where its function
     changes sign between two steps, never at the starting value, so the phase whose
     target is the bundle's own ``seg2`` (θ = π, for stage 1's split at $T/2$) takes
     the bundle itself.

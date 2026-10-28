@@ -41,7 +41,7 @@ document opens with and what its `status` means are in
 | [`cycle-estimation.md`](design/cycle-estimation.md) | tentative | the `Cycle` representation; E1 `estimate_cycle`: literature survey with cited/deduced claims, method, oracles, limits |
 | [`limit-cycle.md`](design/limit-cycle.md) | tentative | O1 `find_limit_cycle`: the shooting survey, the method (`PoincareMap`, multiple shooting, `reanchor`), oracles, limits |
 | [`floquet.md`](design/floquet.md) | tentative | O2 the Floquet exponent: the routes and their accuracy floors, the seeded periodic Schur method, oracles, limits |
-| [`phase-field.md`](design/phase-field.md) | tentative (survey; §1.2 route (a) landed) | O3 the asymptotic phase field and O4 the PRC: surveys, the parametrization method as the shared engine, the prototyping ledger, proposed methods |
+| [`phase-field.md`](design/phase-field.md) | tentative (survey; route (a) of §3.1 landed) | O3 the asymptotic phase field and O4 the PRC: surveys, the parametrization method as the shared engine, the prototyping ledger, proposed methods |
 | [`isochrons.md`](design/isochrons.md) | draft for review (decisions D1–D9 settled 2026-10-27) | isochrons by AUTO-07p continuation: the method of Langfield et al. 2014, the coworker's run-by-run algorithm, ours; AUTO from the ground up; the stable direction (variational, adjoint, and the coworker's $+A^{\mathsf T}$ defect); accuracy, oracles, limits, tests (roadmap O7) |
 | [`training-step-performance.md`](design/training-step-performance.md) | tentative | where a JAX training step spends its time: asynchronous dispatch, committed/uncommitted placement, the GIL and grain's threads, what `bench_dataloader.py` measures, the bottleneck taxonomy, and the Phase C case history |
 

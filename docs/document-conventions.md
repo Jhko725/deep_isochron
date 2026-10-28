@@ -109,14 +109,45 @@ fails on a link whose target does not exist.
 
 ## Design documents
 
-A design document follows the `numerical-method` skill: the survey with the routes and
-where each fails, the derivation in one convention stated once, one subheading per stage
-of the algorithm in the order the code runs them, the oracles with the tolerance each
-justifies, and the limits. Every claim carries a provenance label: **[cited]** from a
-named source, **[code]** verified in the tree at the moment of writing, **[deduced]**
-Claude's inference. The labels stay when the text is edited, and a `[code]` claim is
-re-read rather than recalled: ADR-0004's *Consequences* once described a `# ty: ignore`
-three branches after it was removed.
+A design document under `design/` is one of three kinds. A **method** document takes a numerical method from
+the literature to tested code and follows the `numerical-method` skill; a **derivation**
+(`normal-forms.md`, `cubic-bspline.md`) fixes conventions, derives the quantities in one
+convention stated once, and ends with the API and the tests it implies; a **note**
+(`validation-split.md`, `training-step-performance.md`) states a problem, what was
+measured, and the rule adopted. One document covers one method, one roadmap item.
+
+A method document has six sections, in this order and with these numbers, so that a
+section number means the same thing in every one; a section with nothing to say is one
+sentence, never left out:
+
+```markdown
+## 1. The problem        what is computed, from what, to what accuracy; the conventions fixed up front
+## 2. What exists        the survey: the routes, what each costs and assumes, where each fails
+## 3. The method         the derivation in one convention; one subheading per stage, in the order the code runs them
+## 4. Exact and approximated   what is exact, what is approximated, and the bound on each approximation
+## 5. Oracles            the independent routes to the same number, each with the tolerance it justifies, its entry in `tests/helpers.py` and the test that uses it
+## 6. Limits             what the method does not do, and which later item does
+```
+
+The subsections of §2 and §3 follow the method; a tutorial the reader needs (AUTO from
+the ground up) or an algorithm the method was built on (the coworker's run sequence) is a
+subsection of §2. The module docstring of the implementation names the stages of §3 in
+the same order, so the two can be read side by side. A **Status:** line opens a section
+only while that section's state differs from the document's `status` (the survey
+delivered but the method not yet implemented, say); it is removed when they agree.
+
+A *Decisions* section exists while the document is a draft for Joon, each decision
+phrased so that "yes" accepts the recommendation. Once taken, a decision lives in the
+ADR or the change document, and the section is deleted: the ADR's History is the
+record, and a reader of the current design does not meet questions that are closed.
+
+Every claim carries a provenance label, in square brackets: **[cited]** from a named
+source, **[cited via X]** read in X rather than in the source it credits, **[code]**
+verified in the tree at the moment of writing, **[deduced]** Claude's inference. The
+labels stay when the text is edited, and a `[code]` claim is re-read rather than
+recalled: ADR-0004's *Consequences* once described a `# ty: ignore` three branches
+after it was removed. The italic forms `*cited*`, `*deduced*` and `*secondary*` were
+the older spelling; `scripts/checks/check_references.py` refuses them under `design/`.
 
 ## Paragraphs
 
@@ -165,6 +196,6 @@ previews agree.
 | Rule | Check | Runs in |
 |---|---|---|
 | both Markdown previews; the frontmatter parses, carries `type`, `status`, `updated`, and lists `sources` in block form | `scripts/checks/check_md_math.py` | `prek`, CI |
-| every citation resolves to `references.md`; every relative Markdown link resolves | `scripts/checks/check_references.py` | `prek`, CI |
+| every citation resolves to `references.md`; every relative Markdown link resolves; no italic provenance label under `design/` | `scripts/checks/check_references.py` | `prek`, CI |
 | American English | `codespell` and `scripts/checks/check_spelling.py`, described in [`coding-standards.md`](coding-standards.md) § Deterministic checks | `prek`, CI |
 | `index.md` lists every document; `architecture.md` follows every module move; the Done ledger is append-only | review | — |

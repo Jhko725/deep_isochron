@@ -24,6 +24,10 @@ name fails here rather than leaving a dead pointer.
 A line carrying ``references:ignore`` is skipped. ``docs/changes/`` is skipped as a
 whole: landed change documents are records of what was said.
 
+Under ``docs/design/`` the provenance labels are ``[cited]``, ``[cited via X]``,
+``[code]`` and ``[deduced]``; the italic forms ``*cited*``, ``*deduced*`` and
+``*secondary*`` that the older documents used are refused.
+
 Usage: ``uv run python scripts/checks/check_references.py [path ...]`` (default:
 ``docs``, ``src/deep_isochron``, ``tests``, ``scripts``, ``README.md``, ``CLAUDE.md``).
 Exits 1 on an unresolved key or a broken link.
@@ -50,6 +54,8 @@ DEFAULT_PATHS = (
 )
 SKIPPED_DIRS = ("docs/changes",)
 IGNORE_MARKER = "references:ignore"
+LABEL_SCOPE = "docs/design"
+OLD_LABEL = re.compile(r"\*(cited|deduced|secondary)\*")
 TEXT_SUFFIXES = frozenset({".py", ".md"})
 
 # A surname: a capitalized word (accented letters included), with an optional lowercase
@@ -126,6 +132,17 @@ def broken_links(file: Path) -> Iterator[tuple[int, str]]:
                 yield number, target
 
 
+def old_labels(file: Path) -> Iterator[tuple[int, str]]:
+    """The italic provenance labels of `file`, ``(line number, label)`` each, which
+    ``docs/document-conventions.md`` § Design documents replaced with ``[cited]``,
+    ``[cited via X]`` and ``[deduced]``."""
+    for number, line in enumerate(file.read_text(encoding="utf-8").splitlines(), 1):
+        if IGNORE_MARKER in line:
+            continue
+        for match in OLD_LABEL.finditer(line):
+            yield number, match.group(0)
+
+
 def main(argv: list[str] | None = None) -> int:
     """Check the citations under `argv`; return 1 if any key does not resolve."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -137,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     unresolved: list[str] = []
     cited: set[str] = set()
     broken: list[str] = []
+    labels: list[str] = []
     for file in iter_files(paths):
         relative = file.resolve().relative_to(ROOT).as_posix()
         for number, key in citations(file):
@@ -145,8 +163,11 @@ def main(argv: list[str] | None = None) -> int:
                 unresolved.append(f"{relative}:{number}: {key}")
         for number, target in broken_links(file):
             broken.append(f"{relative}:{number}: broken link {target}")
+        if relative.startswith(LABEL_SCOPE):
+            for number, label in old_labels(file):
+                labels.append(f"{relative}:{number}: italic label {label}")
 
-    for line in unresolved + broken:
+    for line in unresolved + broken + labels:
         print(line)
     uncited = sorted(known - cited)
     if uncited:
@@ -157,7 +178,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(unresolved)} citation(s) not in the bibliography")
     if broken:
         print(f"{len(broken)} broken relative link(s)")
-    if unresolved or broken:
+    if labels:
+        print(f"{len(labels)} italic provenance label(s) under {LABEL_SCOPE}")
+    if unresolved or broken or labels:
         return 1
     print(f"all {len(cited)} cited keys resolve; no broken relative links")
     return 0

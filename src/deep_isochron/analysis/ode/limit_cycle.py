@@ -478,7 +478,7 @@ def reanchor(
     residual is the shooting residual evaluated once at the new mesh (it is the old
     orbit's, moved). The section is the one through the new origin, normal to the flow
     there, as `find_limit_cycle` builds through its own origin. Phase 0 is where the
-    isochron pipeline anchors its junction (`docs/design/isochrons.md` §6).
+    isochron pipeline anchors its junction (`docs/design/isochrons.md` §3).
 
     **Arguments:**
 

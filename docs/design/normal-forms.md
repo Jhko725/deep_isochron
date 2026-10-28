@@ -26,8 +26,9 @@ sources:
 B10 design note with Joon's earlier derivation notes (LaTeX, "Tractable periodic
 dynamics") and resolves the conflicts between them. It is the single reference for the
 mathematics of the analytic base systems; `systems/normal_forms/` is implemented against
-it (B11), and ADR-0007 points here. All design decisions are settled
-and listed in §11; §9 is the implementation contract.
+it (B11), and ADR-0007 points here. The design decisions are settled and
+marked **[decided]** where they are made; ADR-0007 and ADR-0013 record the structural
+ones, and §9 is the implementation contract.
 
 Companion files: `systems/normal_forms/{base,hopf,bautin,winfree,integration}.py`;
 `tests/test_normal_forms.py`. Related: ADR-0007 (hierarchy, `SolverConfig`, integrations
@@ -548,7 +549,7 @@ $\Psi\sim -\tfrac12 r^{-2} = -\tfrac12 r^{\kappa/a}$). Consequences for this pro
   $\omega_1$, $\omega_0$) and the smallest possible nonlinearity in the base.
 
 It is admissible as a *third* subclass (`LogPolarNormalForm`) provided the base class
-does not assume finite `eigenvalues_origin()`; it is **deferred** (§11). The row for the §3 table would be: $\rho = \kappa\ln r$; $\kappa$ free;
+does not assume finite `eigenvalues_origin()`; it is **deferred**. The row for the §3 table would be: $\rho = \kappa\ln r$; $\kappa$ free;
 $\mu = e^{\kappa T}$; $\Psi = \ln r$; eigenvalues at $0$: none; basin
 $\mathbb{R}^2\setminus\lbrace0\rbrace$; $\Psi\to\pm\infty$ as $r\to\infty, 0$. The angular rate
 should *not* be the standard $\omega_0 + (\omega_1-\omega_0)r^2$ here: the $(1-r^2)$ no
@@ -903,41 +904,3 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
   formulas are the $a \to 0$ limits; `r_squared` refuses it. `data.generate`: initial
   conditions in the hole raise, or are resampled with a warning, the count recorded and
   the mode hashed (`test_data.py`).
-
----
-
-## 11. Decisions
-
-**Decided 2026-10-03.**
-
-- Notation: $\Theta$ phase, $\Psi$ isostable (uppercase coordinate functions), $\theta$
-  polar angle, $\kappa$ exponent, $\mu$ multiplier, $\omega_1$ (`w`) / $\omega_0$ (`w0`).
-- $\kappa = \rho'(1)$ with $\rho(r)$; no factor 2.
-- $\Psi$ normalized à la Wilson & Moehlis: $\partial_r\Psi(1) = 1$, negative inside.
-  Bautin's expression is divided by $2(1+b)^b$ and sign-flipped relative to the B10 draft.
-- This document lives in the repo as Markdown with LaTeX math; the LaTeX manuscript
-  section is to be regenerated from it, not maintained separately.
-- `ClosedFormIntegration` and the $(\Theta,\Psi)$ chart go into B11 (§6.1, §7); the Hopf
-  trajectories were already computed from the analytical formula before, so this
-  restores that and extends it to Bautin via the root solve.
-- The log-polar member of §5.3 is **deferred**: it cannot match the fixed-point invariant
-  the project relies on, and has no concrete use until a Yawata-style baseline (roadmap
-  B12) needs it. If added later it is a third subclass with non-finite
-  `eigenvalues_origin()` and a non-standard `angular_rate`.
-- Names: `log_growth_rate` for $\rho$, `angular_rate` for $\omega$, with `_sq` suffix for
-  the $s$-chart hooks (§9).
-- Defining data in $s$ with the public API in $r$ (**Option B**, §9); Option A and its
-  safe-$\sqrt{}$ device are rejected.
-
-**Amended 2026-10-08 (ADR-0013).** Option B is the contract of the even family; the base
-class takes data in $r$ on a declared basin $(r_{\rm in}, r_{\rm out})$, and uses the
-safe-$\sqrt{}$ form for `rhs`. `eigenvalues_origin` moves to the even family. Winfree's
-model with a hole (§3.3) is the first non-even member; its parameters are unconstrained
-scalar arrays (an observed system, no `raw` leaves; arrays since 2026-10-29, ADR-0013
-§5). Initial conditions outside a basin: `generate(outside_basin=
-"error" | "resample")`. Decided with Joon 2026-10-08; the experiments will mostly use
-$a = 0$ (phaseless set a point), with $a > 0$ to see what the INN does with the disk.
-
-Nothing else remains open. Changes to any of the above go through this document first.
-
----

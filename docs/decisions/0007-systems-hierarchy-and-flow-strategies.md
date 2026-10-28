@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0007
 status: accepted; amended (ADR-0013 - basins, even subfamily; ADR-0016 - symbolic defining data)
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: joon
 ---
 
@@ -134,6 +134,11 @@ made `θ̇ = w` but reported zero imaginary part at the origin.
 
 ## Consequences
 
+- [`docs/design/normal-forms.md`](../design/normal-forms.md) is the single source of the
+  normal-form conventions (the symbols, $\kappa = \rho'(1)$ with no factor 2, $\Psi$
+  normalized to $\partial_r\Psi(1) = 1$ and negative inside); the LaTeX manuscript
+  section is regenerated from it, never maintained separately (decided 2026-10-03). Its
+  log-polar member stays deferred until a Yawata-style baseline needs it.
 - `BautinNormalForm.solve` (the `r²` trick) is now `RadiusSquaredIntegration`, usable
   for any even normal form; the former code was Bautin-specific.
 - Closed forms are tested exactly, by autodiff of the defining identities
@@ -200,3 +205,5 @@ made `θ̇ = w` but reported zero imaginary part at the origin.
 - 2026-10-27 (`symbolic-systems`, ADR-0016 review round 1): the defining data read off
   a polar template, `_symbolic_template_polar`; the even family declared by its base
   class and checked, with no hook of its own.
+- 2026-10-29 (`docs-layout`): the design document's *Decisions* section retired; the
+  conventions it listed are marked in the document's body, and the rest is here.

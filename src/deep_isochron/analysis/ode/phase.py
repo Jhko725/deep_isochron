@@ -1,5 +1,5 @@
 r"""The asymptotic phase on the basin of an attracting cycle, by forward integration and
-a read-off on the cycle (roadmap O3; route (a) of ``docs/design/phase-field.md`` §1.2).
+a read-off on the cycle (roadmap O3; route (a) of ``docs/design/phase-field.md`` §3.1).
 
 The asymptotic phase $\Theta(x)$ of a point $x$ in the basin of an attracting cycle
 $\gamma$ of period $T$ is the phase of the cycle point whose orbit the orbit of $x$

@@ -206,8 +206,8 @@ def test_generic_file_uses_only_named_slots_that_indices_inc_declares():
 
 def test_bundle_integrates_the_adjoint_equation():
     """Both bundle segments are ``w' = -τ Aᵀ w``, the adjoint equation, whose
-    multiplier-1 solution is the phase sensitivity (`docs/design/isochrons.md` §3); the
-    coworker's file had the sign ``+``."""
+    multiplier-1 solution is the phase sensitivity (`docs/design/isochrons.md` §3.1);
+    the coworker's file had the sign ``+``."""
     src = generic_source()
     assert "F(5:6)  = -PAR(IP_SEG1)*(MATMUL(TRANSPOSE(A),U(5:6)))" in src
     assert "F(7:8)  = -PAR(IP_SEG2)*(MATMUL(TRANSPOSE(B),U(7:8)))" in src

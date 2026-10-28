@@ -50,7 +50,7 @@ about the vector field); `deep_isochron.analysis.ode` works from an `AbstractODE
 
 **`analysis.Cycle`** is a planar closed curve as a Fourier series in a phase that
 advances uniformly in time, with its period (design document
-[`cycle-estimation.md`](../design/cycle-estimation.md) §1). E1's `Cycle` stays as implemented (tested,
+[`cycle-estimation.md`](../design/cycle-estimation.md) §1.1). E1's `Cycle` stays as implemented (tested,
 used by `estimate_cycle`). The shared objects of the module are chosen *after* several
 `analysis.ode` functions exist, from what they actually share (Parked in the roadmap).
 

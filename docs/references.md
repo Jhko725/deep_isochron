@@ -143,7 +143,7 @@ for software and documentation pages carry a URL instead of a DOI.
 Inconsistencies in the repository's citations found while compiling this file, for Joon
 to settle; each entry above reflects the reading named here.
 
-- Gengel & Pikovsky: `design/cycle-estimation.md` §2.1 cites one work as "chapter in *Physics of Biological Oscillators*, Springer 2021; arXiv 2111.10300", which are two papers. The Springer chapter (arXiv:2004.13461) and the arXiv paper (arXiv:2111.10300, where the §7.1 and Eqs. 23–24 locators are) are both listed; the document's citation now points at the arXiv paper, `Gengel & Pikovsky 2022`.
+- Gengel & Pikovsky: `design/cycle-estimation.md` §2 cites one work as "chapter in *Physics of Biological Oscillators*, Springer 2021; arXiv 2111.10300", which are two papers. The Springer chapter (arXiv:2004.13461) and the arXiv paper (arXiv:2111.10300, where the §7.1 and Eqs. 23–24 locators are) are both listed; the document's citation now points at the arXiv paper, `Gengel & Pikovsky 2022`.
 - Namura et al. 2022: the repository named the fourth author as Kato; the paper's is Ryota Kobayashi (arXiv:2203.01663). Confirmed by Joon 2026-10-26; the entry has the paper's list and the citing text now uses the key.
 - Zielinski et al. 2014: the author list could not be confirmed from a fetched page; the entry's list is flagged.
 - Langfield et al. 2025, the model with a hole: §4.1, confirmed by Joon 2026-10-26 (the "§3.3" the compilation flagged in `design/normal-forms.md` is that document's own section).
