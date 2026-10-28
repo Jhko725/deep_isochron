@@ -1,28 +1,32 @@
 ---
 type: reference
 status: current
-updated: 2026-10-28
+updated: 2026-10-29
 ---
 
 # Coding standards
 
-This document says where this repository enforces the conventions, and which checks stand
-in for prose. The conventions themselves, with the reasoning behind them, are in the
-`code-conventions` skill, and the pervasive ones are in the global `CLAUDE.md`. Read this
-document when a task touches tiers, tolerances, contracts or checks.
+This document says where this repository enforces the conventions for code, tests and
+docstrings, and which checks stand in for prose. The conventions themselves, with the
+reasoning behind them, are in the `code-conventions` skill, and the pervasive ones are in
+the global `CLAUDE.md`; the conventions for the documents under `docs/` are in
+[`document-conventions.md`](document-conventions.md). Read this document when a task
+touches tiers, tolerances, contracts or checks.
 
 ## Tiers and commands
 
-| Purpose | Command |
+The commands are the recipes of the `justfile` (`uv run just --list`), and CI runs the
+same recipes. `just test [profile] [paths]` runs pytest at `-n auto`, the machine's core
+count; the Hypothesis profiles are `dev` (10 examples), `default` (50) and `ci` (300,
+derandomized).
+
+| Purpose | Recipe |
 |---|---|
-| Fast, while editing | `uv run pytest <files touched> -m "not slow" --hypothesis-profile=dev` |
-| Full, once at the end | `uv run pytest -n 4` (default profile, 50 examples) |
-| Derandomized | `uv run pytest -n 4 --hypothesis-profile=ci` (300 examples) |
-| Slow tier | add `-m slow`: FitzHugh–Nagumo's limit cycle, the autoencoder training test |
-| Types | `uv run ty check src/deep_isochron/model/invertible`, clean, with no `# ty: ignore` |
-| Markdown | `uv run python scripts/check_md_math.py`, 0 problems |
-| Citations | `uv run python scripts/check_references.py`, every key and relative link resolves |
-| Docstrings | `uv run ruff check`, with `D100`–`D103` selected for the modules the prose pass has reached; `uv run python scripts/check_docstring_headers.py`, 0 problems |
+| Fast, while editing | `just test dev <test files of the touched modules>` (`slow` tests excluded; `dev` is the default profile) |
+| Full, once at the end | `just test default`, then `just test ci` when the branch is about to merge |
+| Slow tier | `just test-slow [profile]`: FitzHugh–Nagumo's limit cycle, the autoencoder training test |
+| AUTO | `just test-auto quick` or `full`: the tests marked `auto`, which skip without a built tree |
+| Every hook, then types | `just check`: the `prek` hooks on every file, then `ty check src`, clean, with no `# ty: ignore` |
 
 Read the baseline before editing rather than running the full suite to discover what is
 already red: the branch change document's *Tests* and *Open issues*, the pinned
@@ -61,26 +65,6 @@ already red: the branch change document's *Tests* and *Open issues*, the pinned
 `periodic_schur` raises `NotImplementedError` above two dimensions on purpose, naming
 `slycot.math.mb03wd` as the route if a three-dimensional system appears.
 
-## Markdown that renders in both previews
-
-GitHub runs Markdown before MathJax, and VS Code's preview parses `$…$` first. These are
-the rules `scripts/check_md_math.py` enforces, with the reason each exists:
-
-- There is no line-length limit, since ruff formats Python only, but an inline formula
-  `$…$` never crosses a line.
-- Display math only as a standalone block: `$$` alone on a line, the formula, `$$` alone
-  on a line. Never `$$…$$` inside a paragraph.
-- Inside inline math, no backslash followed by ASCII punctuation: `\,` `\;` `\{` `\|`
-  `\\` become `\thinspace` `\medspace` `\lbrace` `\Vert`, and matrices move into blocks.
-- No `*` inside inline math: use `\ast`, since `x^*` loses its star and italicizes the
-  rest of the paragraph.
-- Spaces around `<` and `>`.
-- No `_` immediately after `}` `)` `|`: write `\mathbf e_r`, `C_{\rm loc}^{k}`,
-  `\vert_{E}`, because such an `_` opens Markdown emphasis.
-
-Every span has also been checked against KaTeX as VS Code configures it, so the two
-previews agree.
-
 ## Deterministic checks
 
 The configuration lives in `pyproject.toml`, in `[tool.codespell]` and in the `banned-api`
@@ -90,17 +74,16 @@ This section says what each check is for; the file has the current values.
 | Rule | Check | Runs in |
 |---|---|---|
 | American English, irregulars and typos | `codespell` 2.4.3 | `prek`, CI |
-| American English, the productive families | `scripts/check_spelling.py` | `prek`, CI |
+| American English, the productive families | `scripts/checks/check_spelling.py` | `prek`, CI |
 | `copy.replace` (this project's floor is Python 3.13); Cayley rotations | ruff `TID251` banned-api | `prek`, CI |
-| both Markdown previews | `scripts/check_md_math.py` | `prek`, CI |
-| every citation resolves to `docs/references.md`; every relative Markdown link resolves | `scripts/check_references.py` | `prek`, CI |
-| a docstring on every public module, class, method and function | ruff `D100`–`D103`, `per-file-ignores` naming the modules not yet reached | `prek`, CI |
-| `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after | `scripts/check_docstring_headers.py` | `prek`, CI |
+| the documents: both Markdown previews, every citation and relative link resolves | `scripts/checks/check_md_math.py`, `scripts/checks/check_references.py`; [`document-conventions.md`](document-conventions.md) | `prek`, CI |
+| a docstring on every public module, class, method and function | ruff `D100`–`D103` (notebooks exempt) | `prek`, CI |
+| `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after; a docstring on every `_`-prefixed function and class under `src/` (dunders exempt), since ruff's `D103` skips them; no module under `src/` over 600 lines | `scripts/checks/check_docstrings.py` | `prek`, CI |
 | no invalid escape such as `\Phi` in a docstring that is not raw (Python only warns) | ruff `W605` | `prek`, CI |
 | a driver called again with new values compiles nothing: times and parameters reach `filter_jit` as arrays, a vector field is a module-level function or a bound method, loops run under a jit | `tests/helpers.py` `CompileCounter` in `test_find_limit_cycle_compiles_nothing_for_new_values` and `test_integrations_compile_nothing_for_new_parameters` | `prek`, CI (the tests) |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
 
-The one deliberate exemption is in `scripts/bench_dataloader.py`, which times
+The one deliberate exemption is in `scripts/diagnostics/bench_dataloader.py`, which times
 `jax.scipy.linalg.expm` against the closed-form rotation. That timing is the measurement
 ADR-0010 rests on, so that one line carries `# noqa: TID251` with the reason. The ban is
 for code that *uses* `expm`, not for the benchmark that justified banning it.
@@ -112,7 +95,7 @@ for code that *uses* `expm`, not for the benchmark that justified banning it.
 repository's vocabulary, because `-ise` is productive morphology and no list ships
 `discretise`, `parametrise`, `orthogonalise`, `diagonalise`, `linearise` or <!-- codespell:ignore -->
 `denormalise` [code: measured against codespell 2.4 and `breame`, 2026-10-25; both miss <!-- codespell:ignore -->
-all six]. `scripts/check_spelling.py` inverts the problem. It applies the rule
+all six]. `scripts/checks/check_spelling.py` inverts the problem. It applies the rule
 (`-ise`/`-isation`/`-isable`/`-yse` take a `z`) and keeps the exception list, which is
 the part that *is* closed: the sixty-odd words where `-ise` is also correct in American
 English, from `advertise` to `otherwise`. `-isation` and `-isable` have no exceptions at
@@ -128,7 +111,7 @@ history they exist to carry. The current documents are in scope: `design/`,
 `decisions/`, `roadmap.md`, `architecture.md` and `index.md`.
 
 A quotation keeps its source's spelling even when that spelling is British. Where one
-appears, the line carries `<!-- codespell:ignore: cited quotation -->`; `design/analysis.md`
+appears, the line carries `<!-- codespell:ignore: cited quotation -->`; `design/floquet.md`
 quotes diffrax's phrase for forward-mode differentiation and is the current instance.
 Both checks honor that marker, and `spelling:ignore` as well.
 
@@ -158,7 +141,7 @@ function computes or does, in the active voice with the function as the actor, a
 carries everything the caller needs for that call, in the equinox form: `**Arguments:**`,
 one bullet per argument; `**Returns:**`; `**Raises:**` when the function raises on its
 own. Each header stands on its own line, followed by a blank line and then the bullets
-or the paragraph, as diffrax writes them (`scripts/check_docstring_headers.py`); a
+or the paragraph, as diffrax writes them (`scripts/checks/check_docstrings.py`); a
 one-argument function whose opening sentence names its argument needs no
 `**Arguments:**` list. The precision or validity limits of that function, and the
 citation for a formula it implements (author, year and locator), belong here, not in
@@ -180,52 +163,17 @@ A test's docstring is one sentence: the property it pins down, and the oracle or
 it is checked against. Math in a docstring is written as `$…$`, the same form as the
 documents; nothing renders docstrings, and the form reads in a hover.
 
-Every public module, class, function and method has a docstring (ruff `D100`–`D103`); a
-private helper gets one when its name does not say what it does. The rule is switched
-on module group by module group as the prose pass of 2026-10-26 reaches them, through
-`per-file-ignores` in `pyproject.toml`; the list there is the current frontier.
-
-## References
-
-The repository has one bibliography, `docs/references.md`, and one in-text form. The key
-is `Author Year` for one author (`Lust 2001`), `Author & Author Year` for two
-(`Wilson & Moehlis 2016`), `Author et al. Year` for three or more (`Dieci et al. 1997`),
-with a letter suffix on a collision (`Langfield et al. 2025a`). <!-- references:ignore: the example --> A locator follows the key after a comma, in one of
-the forms `Eq. 7`, `Eqs. 9–14`, `§3`, `Prop. 5`, `Theorem 2`, `Table 5`, `Fig. 9`,
-`pp. 210–214`, `Ch. 8`, `App. D`, `Remark 4`, and several citations are separated by
-semicolons inside one pair of parentheses. Every key resolves to an entry in
-`docs/references.md`, which `scripts/check_references.py` enforces, and the entry carries
-the full reference, a DOI or arXiv identifier, and the locators the repository uses.
-Design documents and ADRs carry no reference list of their own; their frontmatter
-`sources:` lists keys.
-
-## Decision records
-
-An ADR describes the current design, and its history follows it
-([ADR-0019](decisions/0019-adrs-describe-the-current-design.md)). Its sections, in
-order:
-
-```markdown
-## Context
-### Motivation    one bullet per point, each with its evidence, or *[not recorded]*
-### Forces        prose: what any solution had to respect
-## Decision       the current design
-## Consequences
-## Alternatives rejected   superseded designs too, marked *Superseded* with date and reason
-## History        one dated line per change, with its branch
-```
-
-A change to a decision rewrites Decision and Consequences in the same commit; a change
-that reverses the decision is a new ADR. The first mention of an ADR, design document or
-code file in each section is a relative link, and `scripts/check_references.py` fails on
-a link whose target does not exist.
+Every module, class, function and method has a docstring: the public ones by ruff
+`D100`–`D103`, the `_`-prefixed ones under `src/` by `scripts/checks/check_docstrings.py`,
+since ruff skips them and the review of the isochron pipeline asked for the private
+stages to be documented like the public ones. The same script bounds a module under
+`src/` at 600 lines: the one that reached 850 was "hard to grasp at once", and the
+signal to split comes before that.
 
 ## Deliberate exceptions
 
-- `uv.lock` is not regenerated here: the container's `uv` rewrites the lock format and
-  produces thousands of noise lines for a handful of real version changes. Joon runs
-  `uv lock` after pulling.
-- `prototype.ipynb` and `prototype_analysis.ipynb` are Joon's own records. Claude updates
-  them to follow an API change and does not restructure them.
 - `tests/golden/` holds reference data byte for byte; `prek.toml` excludes it from every
   hook.
+- `uv.lock` is not regenerated in a cloud session: the container's `uv` rewrites the lock
+  format and produces thousands of noise lines for a handful of real version changes
+  (`CLAUDE.md` carries the rule).

@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0012
 status: accepted; amended 2026-10-15; amended 2026-10-20 (ADR-0015)
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: pending (Joon; the split and the ordering were decided in discussion 2026-10-06)
 ---
 
@@ -50,7 +50,7 @@ about the vector field); `deep_isochron.analysis.ode` works from an `AbstractODE
 
 **`analysis.Cycle`** is a planar closed curve as a Fourier series in a phase that
 advances uniformly in time, with its period (design document
-[`analysis.md`](../design/analysis.md) §0). E1's `Cycle` stays as implemented (tested,
+[`cycle-estimation.md`](../design/cycle-estimation.md) §1). E1's `Cycle` stays as implemented (tested,
 used by `estimate_cycle`). The shared objects of the module are chosen *after* several
 `analysis.ode` functions exist, from what they actually share (Parked in the roadmap).
 
@@ -96,12 +96,13 @@ here would need `jax.lax` control flow for no gain.
 
 ### 4. One commit per analysis function, after a literature survey delivered first
 
-Each of E1–E5 lands in its own commit, preceded by a survey recorded in
-`docs/design/analysis.md`: what exists, what we credit, what we do differently and why,
+Each of E1–E5 lands in its own commit, preceded by a survey recorded in its own design
+document under `docs/design/` (`cycle-estimation.md`, `limit-cycle.md`, `floquet.md`,
+`phase-field.md`, `isochrons.md`): what exists, what we credit, what we do differently and why,
 with claims marked *cited* or *deduced* (the Project's standing instruction). Each
 survey (what exists, what to credit, candidate schemes, oracles) is *delivered to Joon
 first*, for reading, further search and possibly his own prototype; the implementation
-commit follows, with the survey recorded in `docs/design/analysis.md`. The survey is
+commit follows, with the survey recorded in that document. The survey is
 not optional: E1 took its phase convention and Fourier representation from Revzen &
 Guckenheimer and its protophase-to-phase step from Kralemann et al. rather than
 reinventing either.
@@ -110,7 +111,7 @@ reinventing either.
 
 - `src/deep_isochron/analysis/{__init__,cycle}.py`, `analysis/data/`, later
   `analysis/ode/`; [`tests/test_analysis.py`](../../tests/test_analysis.py);
-  `docs/design/analysis.md` grows one section per item.
+  one design document per item under `docs/design/`.
 - `Cycle`'s phase is the asymptotic phase on the cycle up to a constant; comparisons
   against a learned phase or a normal form's `phase` are up to that constant (circular
   offset), never absolute.
@@ -149,3 +150,4 @@ Alternatives rejected for a single decision are listed under that decision.
   `eqx.Module`s.
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md).
+- 2026-10-29 (`docs-layout`): `design/analysis.md` split into one document per item.

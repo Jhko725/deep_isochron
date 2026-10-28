@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0019
 status: accepted
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: joon
 ---
 
@@ -66,7 +66,7 @@ becomes "superseded by ADR-NNNN".
 
 The first mention of an ADR, a design document or a code file in each section is a
 relative Markdown link.
-[`scripts/check_references.py`](../../scripts/check_references.py) fails on a relative
+[`scripts/checks/check_references.py`](../../scripts/checks/check_references.py) fails on a relative
 link whose target does not exist.
 
 An ADR describes its own decision and links to another ADR for a mechanism that ADR
@@ -104,3 +104,4 @@ decides, instead of restating it.
 
 - 2026-10-27 (`prose`): accepted; ADRs 0001–0018 restructured to this format in the
   same branch.
+- 2026-10-29 (`docs-layout`): the link follows `check_references.py` into `scripts/checks/`.

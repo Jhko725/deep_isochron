@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0018
 status: accepted
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: joon
 ---
 
@@ -69,7 +69,7 @@ lists each move.
 reference, a DOI or arXiv identifier, and the locators the repository uses. The in-text
 form is `(Key, locator)` with the key grammar of `docs/coding-standards.md`
 § References. Per-document reference lists are removed; frontmatter `sources:` lists
-keys. [`scripts/check_references.py`](../../scripts/check_references.py) fails on a key
+keys. [`scripts/checks/check_references.py`](../../scripts/checks/check_references.py) fails on a key
 that does not resolve and lists uncited entries.
 
 ### 4. Presence is checked, content is reviewed
@@ -94,7 +94,7 @@ a module that needs more lines gets them with the reason in its review row.
   drift apart. This ADR first claimed that the return-map trace remark and the quoted
   Dieci et al. claim of `floquet.py` were in the docstring and not in ADR-0015; the P2
   reading found both in the ADR (§3) and in
-  [`analysis.md`](../design/analysis.md) §3, so the copies had not yet diverged, but
+  [`floquet.md`](../design/floquet.md), so the copies had not yet diverged, but
   nothing kept them from doing so.
 - *Decision 1*: per-field attribute docstrings (the PEP 257 form that `PeriodicSchur`
   used). Pylance renders them on hover over the attribute, which is the better hover,
@@ -116,3 +116,5 @@ a module that needs more lines gets them with the reason in its review row.
   corrected to what the round-2 reading found in ADR-0015 and `analysis.md`.
 - 2026-10-27 (`prose`): restructured to the format of ADR-0019; Decision 2 rewritten
   for it.
+- 2026-10-29 (`docs-layout`): links follow `check_references.py` into `scripts/checks/` and
+  `design/analysis.md` §3 into `design/floquet.md`.

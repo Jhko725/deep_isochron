@@ -4,8 +4,8 @@ AUTO has two halves at the same commit: the Python layer, which ``uv.lock`` pins
 dependency group ``auto``, and the compiled Fortran tree, which
 ``scripts/install_auto.sh`` builds. The Python layer cannot be imported until the
 environment variable ``AUTO_DIR`` names the tree, so `load_auto` resolves the tree,
-sets the variable and imports ``auto`` only then. ``docs/auto.md`` describes the
-installation; the plan's decision 4 and ADR-0017 (pending) give the reasoning.
+sets the variable and imports ``auto`` only then. ``docs/guides/auto07p.md`` describes
+the installation; the plan's decision 4 and ADR-0017 (pending) give the reasoning.
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ class AutoHandle(NamedTuple):
 def auto_dir() -> Path:
     """The built AUTO-07p tree: the first of the variables in `ENV_VARS` that is set,
     otherwise `DEFAULT_DIR`. The tree is a property of the machine, so it is chosen by
-    the environment and never by an argument (``docs/auto.md``).
+    the environment and never by an argument (``docs/guides/auto07p.md``).
 
     **Raises:**
 
@@ -69,7 +69,8 @@ def auto_dir() -> Path:
     if not built:
         raise AutoNotInstalled(
             f"no built AUTO-07p tree at {directory}; run scripts/install_auto.sh, or "
-            f"set {' or '.join(ENV_VARS)} to an existing build (docs/auto.md)."
+            f"set {' or '.join(ENV_VARS)} to an existing build "
+            "(docs/guides/auto07p.md)."
         )
     return directory
 

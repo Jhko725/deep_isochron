@@ -5,13 +5,14 @@ updated: 2026-10-29
 sources: [the plan "Isochrons from AUTO-07p" (Project document, decisions 4, 7, R1–R3, G1, H1–H4), AUTO-07p at commit 44cc1c4 (configure, Makefile, python/auto/interactiveBindings.py), scripts/install_auto.sh, src/deep_isochron/analysis/ode/auto/_env.py]
 ---
 
-# Installing AUTO-07p for the isochron pipeline
+# Installing AUTO-07p
 
 The isochron pipeline of roadmap O7 runs AUTO-07p, which has two halves that must come
 from the same commit. Its Python layer is an ordinary dependency, locked in `uv.lock`;
 its Fortran library is a source tree that you build once with
 `scripts/install_auto.sh`. Nothing else in `deep_isochron` needs AUTO, so the rest of
-the package and its tests work without it.
+the package and its tests work without it. Computing isochrons once it is installed is
+[`isochrons.md`](isochrons.md).
 
 The supported platforms are Linux, including a cluster, and Windows through WSL2. macOS
 should work with Homebrew's `gfortran` but is untested, and CI runs Linux only.
@@ -76,45 +77,6 @@ compute nodes as well as on the login node where AUTO is installed.
   defaults to `os.process_cpu_count()`, which counts only the cores a SLURM allocation
   grants the process. Every AUTO run is single-threaded (`OMP_NUM_THREADS=1`), so a
   job of 24 cores traces 24 phases at once.
-
-## Computing and saving a foliation
-
-`scripts/compute_isochrons.py` traces the isochrons that a config in
-`configs/isochrons/` describes and saves them as one netCDF file:
-
-```bash
-uv run python scripts/compute_isochrons.py --config-name isochrons/fhn
-uv run python scripts/compute_isochrons.py --config-name isochrons/fhn-easy phases.count=20
-```
-
-Each config takes its system from the data config of the same name, so the isochrons
-are those of the system a model is trained on, and its cycle from `configs/cycle/`
-(`x0`, `t_settle`, `m`, and the `anchor` that sets phase 0 and the Poincaré section),
-shared with every analysis that uses the same phase 0; it adds the phases (`count`,
-evenly spaced, or a list of `values`) and the `IsochronSettings`. The schema
-`experiment.IsochronConfig` validates the file and every override at composition. The file is
-`data/isochrons/<data name>-<hash>.nc`, the hash taken over everything that decides the
-result; when it exists, the script says so and exits, so delete it to recompute. A run
-with failed phases still saves the others, prints the failures and exits with status 1.
-`experiment.load_isochrons(cfg)` reads a file back with the cycle rebuilt from the same
-config, and `Isochron.resample(spacing)` gives evenly spaced points when a reader wants
-them; the file holds the points as AUTO traced them.
-
-**As a SLURM job**, through Hydra's submitit launcher (the `slurm` dependency group,
-part of `dev`) and `configs/hydra/launcher/slurm.yaml`, with the partition on the
-command line and `-m`, since the launcher submits multiruns only:
-
-```bash
-uv run python scripts/compute_isochrons.py --config-name isochrons/fhn -m \
-    hydra/launcher=slurm hydra.launcher.partition=<name> \
-    'hydra.launcher.setup=[module load gcc]'
-```
-
-`setup` runs in the job before Python starts; the `module load` line makes `gfortran`
-available to AUTO's run-time compiles. The launcher config asks for 24 cores, 32 GB and
-four hours; override `hydra.launcher.cpus_per_task` and the others as the cluster
-needs. The job's log, with one line per finished phase, is under
-`data/isochrons/logs/multirun/`.
 
 ## Tests
 

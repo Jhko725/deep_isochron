@@ -1,87 +1,50 @@
 # Working conventions for Claude in this repository
 
-Joon's personal rules are in his global `CLAUDE.md`; the conventions they rest on —
-design, naming, typing, the JAX ecosystem — are in the `code-conventions` skill. This
-file carries what is particular to this repository: how work is recorded, and the facts
-Claude cannot infer from the code. [`docs/coding-standards.md`](docs/coding-standards.md)
-says where each convention is enforced here, and which checks stand in for prose.
+Joon's personal rules are in his global `CLAUDE.md`; the conventions they rest on are in
+the `code-conventions` skill. This file carries the session protocol and the facts Claude
+cannot infer from the code. Where each convention is enforced here is
+[`docs/coding-standards.md`](docs/coding-standards.md) for code and
+[`docs/document-conventions.md`](docs/document-conventions.md) for documents; both name
+the checks that stand in for prose.
 
 ## Start of a session
 
-1. Read `docs/index.md`, then `docs/architecture.md` (the module map and the data flow),
-   then the current phase of `docs/roadmap.md`.
+1. Read `docs/index.md`, then `docs/architecture.md`, then the current phase of
+   `docs/roadmap.md`.
 2. Find the branch's change document `docs/changes/<YYYY-MM-DD>-<branch>.md`. Its
    **Review notes** table is the current state of the review: rows with *Thoughts* or
-   *Modifications* filled in are instructions for this session.
+   *Modifications* filled in are instructions for this session, and those two columns
+   are never edited except when asked.
 3. Read the ADRs in `docs/decisions/` that cover the area being touched.
 
-## Change documents
+## During and at the end of a session
 
-Every branch Claude works on has a companion document
-`docs/changes/<YYYY-MM-DD>-<branch>.md`, committed together with the code. It is the
-reviewer's map of the change, not a changelog. Sections: **Summary**, what the branch
-does and why; **Files**, every file touched, one line each, confirmable against `git diff
---stat`; **Design**, decisions not obvious from the code, each with the alternative that
-was rejected, linking an ADR when the decision is structural; **Bugs fixed**, with the
-symptom; **Tests**, what they pin down and how to run them; **Open issues**, with the
-reason; **Review notes**.
-
-*Review notes* is a table *Change* | *Thoughts* | *Modifications*. Claude pre-populates
-one row per file touched — *Change* is the file name plus a one-line summary — and leaves
-the other two columns blank. Joon fills them in while vetting; Claude reads them at the
-start of the next session on that branch and never edits them except when asked.
-
-A test's outcome is stated in a change document only after that test has run on the
-code the document describes; until then the document says the run is pending.
-
-Claude updates the change document in the same commit as any later change on the branch.
-A new review row is appended after the table's last line, never inserted by matching
-the text of an existing row: Joon's edits change that text, and an edit anchored on it
-fails silently.
-
-## End of a session
-
-- The change document is updated: Files, Design, Tests, and a review row per new file.
-- `docs/roadmap.md` is the single current plan. Finished items are appended to its
-  **Done** ledger, never inserted and never deleted; the phase tables are kept correct
-  now. It is updated in the same commit as the work that changes it, never on its own,
-  and `git log -p docs/roadmap.md` is the project diary.
-- `docs/architecture.md` is updated when a module moves, is renamed, added or removed.
-- `docs/index.md` lists every document under `docs/`, with its status.
-- `uv run python scripts/check_md_math.py` reports 0 problems when Markdown changed.
-- `uv run ty check src/deep_isochron/model/invertible` stays clean.
+- The change document follows `docs/document-conventions.md` § Change documents and is
+  updated in the same commit as the code; a test's outcome is stated only after that
+  test has run on the code the document describes.
+- `docs/roadmap.md` is the single current plan: finished items are appended to its
+  **Done** ledger, never inserted or deleted, in the same commit as the work.
+  `git log -p docs/roadmap.md` is the project diary.
+- `docs/architecture.md` follows every module move, rename, addition or removal;
+  `docs/index.md` lists every document under `docs/` with its status.
+- `just check` is clean, and the test files of the touched modules pass at the `dev`
+  profile; the full tier runs once at the end (`docs/coding-standards.md` § Tiers).
 
 ## Repository facts
 
-- Python 3.13; `uv sync` (the `dev` group is uv's default). The commands are recipes
-  in the `justfile`; `uv run just --list` prints them: `setup`, `check`, `test`,
-  `test-slow`, `test-auto`, `install-auto`, `smoke`. CI runs the same recipes.
-- `just test [profile] [paths]` runs pytest at `-n auto`, the machine's core count: 2 in
-  the cloud sessions, which have two cores and 7 GB, and 4 in CI. During a change run
-  `uv run just test dev <test files of the touched modules>`; the full tier once at the
-  end. Hypothesis profiles: `dev` (10 examples), `default` (50), `ci` (300,
-  derandomized).
-- AUTO-07p for the isochron pipeline (`docs/auto.md`): in a cloud session, run
-  `apt-get update && apt-get install -y gfortran make`, then `uv run just install-auto`
-  (about 40 s). Tests that need AUTO carry the marker `auto` and skip without a tree;
-  the gfortran tests of `tests/test_auto_codegen.py` are `slow` and skip without
-  gfortran.
+- Python 3.13; `uv sync` (the `dev` group is uv's default). Every command is a recipe in
+  the `justfile`, and CI runs the same recipes. `just test` runs at `-n auto`: 2 cores in
+  the cloud sessions, which have 7 GB, and 4 in CI.
+- AUTO-07p (`docs/guides/auto07p.md`): in a cloud session, `apt-get update && apt-get
+  install -y gfortran make`, then `uv run just install-auto` (about 40 s). Tests marked
+  `auto` skip without a tree; the gfortran tests of `tests/test_auto_codegen.py` are
+  `slow` and skip without gfortran.
 - float64 throughout: library drivers raise when `jax_enable_x64` is off; notebooks and
   scripts enable it at the top.
 - The jaxtyping/beartype import hook runs in the tests, so shape annotations are checked
   at runtime: the first occurrence of an axis name is a plain name (`" K"`, not
   `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a
   string forward reference.
-- Pre-commit runs through `prek`, a dev dependency; the hooks are listed in `prek.toml`,
-  which excludes `tests/golden/`, and what each check is for is in
-  `docs/coding-standards.md`. `just check` runs them on every file, then `ty`.
-- Design decisions are numbered ADRs in `docs/decisions/`, and a change document's
-  *Design* section links to them. The contracts those ADRs fix, together with this
-  repository's tiers, tolerances and checks, are in `docs/coding-standards.md`.
-- Documents under `docs/` open with a frontmatter block (`type`, `status`, `updated`,
-  plus `verified_by` / `sources` / `id` where relevant), updated in the same commit as
-  the document. Markdown has to render on GitHub as well as in VS Code's preview;
-  `scripts/check_md_math.py` is the arbiter, and the rules it enforces are recorded in
-  `docs/coding-standards.md`.
-- Provenance labels in design documents: **[cited]** from a named source, **[code]**
-  verified in the tree, **[deduced]** Claude's inference. Keep them.
+- `uv.lock` is not regenerated here; Joon runs `uv lock` after pulling. The notebooks are
+  Joon's own records: Claude updates them to follow an API change and does not
+  restructure them.

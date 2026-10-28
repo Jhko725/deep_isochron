@@ -24,7 +24,7 @@ multipliers and exponents are always forward-time (ADR-0014 §4). And only
 ``dim == 2`` is implemented for the periodic Schur route.
 
 ADR-0015 has the choice of method, the direction rule and the rejected routes;
-``docs/design/analysis.md`` §3 has the survey, the accuracy floors and the citations.
+``docs/design/floquet.md`` has the survey, the accuracy floors and the citations.
 """
 
 from __future__ import annotations

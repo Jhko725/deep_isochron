@@ -247,8 +247,8 @@ class Trainer(Generic[M]):
         - `stop_on_nonfinite`: Whether a non-finite validation metric stops the run
             with `FloatingPointError` before that state is checkpointed, so that the
             last checkpoint on disk is a finite one, the starting point for
-            ``scripts/find_nan.py``. The check lives at the evaluations because the
-            loop itself never reads device values.
+            ``scripts/diagnostics/find_nan.py``. The check lives at the evaluations
+            because the loop itself never reads device values.
 
         **Returns:**
 
@@ -283,7 +283,7 @@ class Trainer(Generic[M]):
                 raise FloatingPointError(
                     f"non-finite validation metrics at step {step}: {bad}; the state "
                     f"was not checkpointed (last checkpoint: step {saved_step}). "
-                    "Hunt it with scripts/find_nan.py from that checkpoint."
+                    "Hunt it with scripts/diagnostics/find_nan.py from that checkpoint."
                 )
             if ckpt.save(step, state, val_metrics, force=force):
                 saved_step = step

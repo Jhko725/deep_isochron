@@ -24,9 +24,9 @@ name fails here rather than leaving a dead pointer.
 A line carrying ``references:ignore`` is skipped. ``docs/changes/`` is skipped as a
 whole: landed change documents are records of what was said.
 
-Usage: ``uv run python scripts/check_references.py [path ...]`` (default: ``docs``,
-``src/deep_isochron``, ``tests``, ``scripts``). Exits 1 on an unresolved key or a
-broken link.
+Usage: ``uv run python scripts/checks/check_references.py [path ...]`` (default:
+``docs``, ``src/deep_isochron``, ``tests``, ``scripts``, ``README.md``, ``CLAUDE.md``).
+Exits 1 on an unresolved key or a broken link.
 """
 
 from __future__ import annotations
@@ -38,9 +38,16 @@ from collections.abc import Iterator
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 BIBLIOGRAPHY = ROOT / "docs" / "references.md"
-DEFAULT_PATHS = ("docs", "src/deep_isochron", "tests", "scripts")
+DEFAULT_PATHS = (
+    "docs",
+    "src/deep_isochron",
+    "tests",
+    "scripts",
+    "README.md",
+    "CLAUDE.md",
+)
 SKIPPED_DIRS = ("docs/changes",)
 IGNORE_MARKER = "references:ignore"
 TEXT_SUFFIXES = frozenset({".py", ".md"})

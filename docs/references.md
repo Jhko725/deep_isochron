@@ -1,7 +1,7 @@
 ---
 type: reference
 status: current
-updated: 2026-10-28
+updated: 2026-10-29
 sources: [web search 2026-10-26 and 2026-10-27; the reference lists the design documents carried before this file]
 ---
 
@@ -10,7 +10,7 @@ sources: [web search 2026-10-26 and 2026-10-27; the reference lists the design d
 The one bibliography of `deep_isochron`: every work that the documents, docstrings and
 tests cite, one entry per key, sorted by key. The in-text form is `(Key, locator)`, with
 the key grammar of [`coding-standards.md`](coding-standards.md) § References;
-`scripts/check_references.py` fails on a key that has no entry here. Each entry gives the
+`scripts/checks/check_references.py` fails on a key that has no entry here. Each entry gives the
 full reference, a DOI or arXiv identifier, and the locators the repository uses. "doi:
 not verified" means no search result confirmed a DOI on 2026-10-26 (CrossRef and most
 publisher pages were unreachable from the session), and "[details unverified]" flags
@@ -141,7 +141,7 @@ for software and documentation pages carry a URL instead of a DOI.
 Inconsistencies in the repository's citations found while compiling this file, for Joon
 to settle; each entry above reflects the reading named here.
 
-- Gengel & Pikovsky: `design/analysis.md` §1.1 cites one work as "chapter in *Physics of Biological Oscillators*, Springer 2021; arXiv 2111.10300", which are two papers. The Springer chapter (arXiv:2004.13461) and the arXiv paper (arXiv:2111.10300, where the §7.1 and Eqs. 23–24 locators are) are both listed; the document's citation now points at the arXiv paper, `Gengel & Pikovsky 2022`.
+- Gengel & Pikovsky: `design/cycle-estimation.md` §2.1 cites one work as "chapter in *Physics of Biological Oscillators*, Springer 2021; arXiv 2111.10300", which are two papers. The Springer chapter (arXiv:2004.13461) and the arXiv paper (arXiv:2111.10300, where the §7.1 and Eqs. 23–24 locators are) are both listed; the document's citation now points at the arXiv paper, `Gengel & Pikovsky 2022`.
 - Namura et al. 2022: the repository named the fourth author as Kato; the paper's is Ryota Kobayashi (arXiv:2203.01663). Confirmed by Joon 2026-10-26; the entry has the paper's list and the citing text now uses the key.
 - Zielinski et al. 2014: the author list could not be confirmed from a fetched page; the entry's list is flagged.
 - Langfield et al. 2025, the model with a hole: §4.1, confirmed by Joon 2026-10-26 (the "§3.3" the compilation flagged in `design/normal-forms.md` is that document's own section).

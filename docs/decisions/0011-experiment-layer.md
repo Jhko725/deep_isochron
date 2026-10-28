@@ -188,7 +188,7 @@ evaluator), and `train(cfg, run_dir)` is `Experiment.from_config(...).train()`.
 ## Consequences
 
 - [`scripts/train.py`](../../scripts/train.py) is new, `scripts/generate_data.py` is a
-  thin wrapper, and `scripts/bench_dataloader.py --config …` benchmarks a training
+  thin wrapper, and `scripts/diagnostics/bench_dataloader.py --config …` benchmarks a training
   config's own pipeline and model.
 - `deep_isochron.experiment` holds `instantiate`, `data`, `model`, `training`, `logging`
   and `run`; [`tests/test_experiment.py`](../../tests/test_experiment.py) composes every
@@ -231,3 +231,4 @@ Alternatives rejected for a single decision are listed under that decision.
   (`configs/isochrons/`, `compute_isochrons`, `load_isochrons`); Hydra's submitit
   launcher joins as the dependency group `slurm`, with
   `configs/hydra/launcher/slurm.yaml` for training and isochron jobs alike.
+- 2026-10-29 (`docs-layout`): links follow the scripts into `scripts/diagnostics/`.

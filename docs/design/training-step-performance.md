@@ -1,14 +1,14 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: joon (2026-10-05; §6.3 C9 update pending)
 sources: ["JAX docs: async dispatch", "JAX docs: data placement", "JAX docs: jax.default_device", "JAX docs: profiling", "JAX docs: training cookbook", "JAX source: scipy linalg", "XLA source: conditional_thunk", "XLA source: while_thunk", "grain docs", "grain source: options.py", "Python docs: GIL", "Python docs: sys.setswitchinterval", "Python docs: multiprocessing", "NVIDIA blog: CUDA Graphs", Serino et al. 2025]
 ---
 
 # Where a JAX training step spends its time — and where ours did
 
-This document records what the Phase C benchmarking (`scripts/bench_dataloader.py`, change
+This document records what the Phase C benchmarking (`scripts/diagnostics/bench_dataloader.py`, change
 document `2026-10-04-trainer.md` round 2, ADR-0009 §1, ADR-0010) taught us about the
 machinery under a JAX training loop, written for a reader who has not worked with JAX's
 asynchronous dispatch, XLA's GPU runtime, or Python's threading model. Each section states
@@ -118,7 +118,7 @@ have to cross back into the main process, where a Python thread receives them, s
 `mp_prefetch` removes the slicing from the main process but not the GIL traffic of the
 hand-over.
 
-## 4. The instrument: what `scripts/bench_dataloader.py` measures
+## 4. The instrument: what `scripts/diagnostics/bench_dataloader.py` measures
 
 The script times one `Trainer.train_step` under controlled conditions and prints a table.
 Every number is milliseconds per batch or per step, reported as **min / median** over
@@ -300,7 +300,7 @@ Signature: `to_device` ≈ *fetch only* while the same batches served from a cac
 
 ## 6. Case history: three bottlenecks, found in the wrong order
 
-The V100 numbers are from Joon's runs of `scripts/bench_dataloader.py --device 0` on
+The V100 numbers are from Joon's runs of `scripts/diagnostics/bench_dataloader.py --device 0` on
 2026-10-04/05 (batch 512 × window 50, conjugacy model, 8 blocks); the CPU numbers from the
 dev container.
 
@@ -359,7 +359,7 @@ launches, ≈ 17 µs per launch) and nearly flat in batch size.
 - Importing the package must not initialize a JAX backend (worker processes re-import it);
   `tests/test_data.py` pins it. ADR-0005 amended.
 - Before believing a table: interleaved repeats, min and median, dispatch and total, the
-  floor, and the loop census — `scripts/bench_dataloader.py` is the instrument.
+  floor, and the loop census — `scripts/diagnostics/bench_dataloader.py` is the instrument.
 - A training run is `scripts/train.py` over `configs/train.yaml` (ADR-0011): `x64` and the
   device are set before anything is built, the loader is `to_device(window_batches)`, the
   final step is always checkpointed, and `bench_dataloader.py --config …` measures the

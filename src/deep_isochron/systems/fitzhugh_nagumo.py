@@ -36,6 +36,7 @@ class FitzhughNagumo(AbstractSymbolicODE):
 
     @classmethod
     def _symbolic_template(cls) -> SymbolicODE:
+        """The FitzHugh–Nagumo vector field as SymPy (`SymbolicODE`)."""
         x, y = sp.symbols("x y", real=True)
         a, b, c, z = sp.symbols("a b c z", real=True)
         return SymbolicODE(

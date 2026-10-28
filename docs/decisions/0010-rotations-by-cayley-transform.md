@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0010
 status: accepted
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: pending (Joon); V100 confirmation 2026-10-05 — step 88 → 33 ms
 ---
 
@@ -15,7 +15,7 @@ verified_by: pending (Joon); V100 confirmation 2026-10-05 — step 88 → 33 ms
 `BiLipschitzLinear` parametrized `U, V ∈ SO(d)` from unconstrained leaves as
 `expm(raw − rawᵀ)` (`fef302e:src/deep_isochron/model/invertible/linear.py:106-107`).
 Benchmarking the training step on a V100
-([`bench_dataloader.py`](../../scripts/bench_dataloader.py) `--hlo-stats`, change
+([`bench_dataloader.py`](../../scripts/diagnostics/bench_dataloader.py) `--hlo-stats`, change
 document 2026-10-04 round 2) found the step host-bound at ≈ 90 ms with the data already
 on the device, and the compiled step's loop census explained it:
 
@@ -102,3 +102,4 @@ singular values in `(1/L, L)`) cover the rest.
 
 - 2026-10-05 (`trainer`): accepted (Joon: "let's resolve this now"); confirmed on the
   V100 the same day, step 88 → 33 ms.
+- 2026-10-29 (`docs-layout`): links follow the scripts into `scripts/diagnostics/`.

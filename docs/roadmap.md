@@ -1,7 +1,7 @@
 ---
 type: roadmap
 status: current
-updated: 2026-10-28
+updated: 2026-10-29
 sources: [joon, claude]
 ---
 
@@ -93,8 +93,8 @@ two halves, but their roles and priority are now:
 
 Method, per item: **a literature survey first, delivered to Joon** (what exists, what to
 credit, candidate numerical schemes, the oracles), who reads it, extends it and may
-prototype; implementation follows in its own commit, with the survey recorded in
-`docs/design/analysis.md`. Abstractions come *last*: functions first, shared objects
+prototype; implementation follows in its own commit, with the survey recorded in the
+item's design document under `docs/design/`. Abstractions come *last*: functions first, shared objects
 once several functions exist (the `Cycle` object of E1 is kept as it is and reassessed
 then — Parked).
 
@@ -102,7 +102,7 @@ then — Parked).
 |---|---|---|---|
 | E1 | `analysis.Cycle` + `analysis.data.estimate_cycle` — the cycle from trajectory tails (data half) | Revzen & Guckenheimer; Kralemann et al. 2008 protophase-to-phase | *done 2026-10-06*: normal forms to 1e-8; FHN period 11.2279 (Langfield et al. 2014) |
 | O1 | `analysis.ode`: `find_limit_cycle(ode, x0)` — points on $\gamma$ and the period $T$ | settle → first-return map on a flow-normal section (`PoincareMap`, differentiable in the point, with the minimum-period test as period-$k$ detection) → multiple shooting on the time-$T$ flow with AD Jacobians and Levenberg–Marquardt; `reverse_time` for repelling cycles; ADR-0014 | *done 2026-10-18*, review round 1 applied: normal forms to 1e-8 (T, radius; $e^{\kappa T}$ from `jacfwd` of the map), integrating the vector field numerically against the closed forms; Guckenheimer & Meloon's algebraic orbit $\max\vert g\vert < 10^{-8}$; FHN $T = 11.22789$ (Langfield et al.); Winfree's repelling inner cycle in reverse time |
-| O3 | `analysis.ode`: `asymptotic_phase(ode, cycle, x)` — the phase field on a grid | direct method: integrate $x$ for $n$ periods, read the phase of the cycle point it lands beside (Guckenheimer 1975's definition made numerical; Yawata et al. 2024, Fig. 8); error controlled by $\kappa$ and $n$; survey in [`design/analysis.md`](design/analysis.md) §4, ledger P1–P12 in §4.7 | normal forms' exact `phase` (Hopf, Bautin, Winfree); the learned-phase comparison plot. Route (a) *landed 2026-10-28* (branch `phase-field`, review pending) for the fhn and fhn-easy fields: `asymptotic_phase`, `phase_grid`, the comparison cells of `prototype_analysis.ipynb`; the method of §4.2 remains O3 proper |
+| O3 | `analysis.ode`: `asymptotic_phase(ode, cycle, x)` — the phase field on a grid | direct method: integrate $x$ for $n$ periods, read the phase of the cycle point it lands beside (Guckenheimer 1975's definition made numerical; Yawata et al. 2024, Fig. 8); error controlled by $\kappa$ and $n$; survey in [`design/phase-field.md`](design/phase-field.md) §1, ledger P1–P12 in §1.7 | normal forms' exact `phase` (Hopf, Bautin, Winfree); the learned-phase comparison plot. Route (a) *landed 2026-10-28* (branch `phase-field`, review pending) for the fhn and fhn-easy fields: `asymptotic_phase`, `phase_grid`, the comparison cells of `prototype_analysis.ipynb`; the method of `phase-field.md` §1.2 remains O3 proper |
 | O4 | `analysis.ode`: `phase_sensitivity(ode, cycle, θ)` — PRC/PSF $Z(\theta) = \nabla\Theta$ on $\gamma$ | adjoint equation, backward integration, normalization $Z \cdot F = \omega$ (Ermentrout & Kopell 1991; Brown et al. 2004, App. A; the "true PSF" of Yawata et al. 2024, Figs. 9/12/15); direct finite-perturbation cross-check | normal forms: $\nabla\Theta$ of the closed-form chart by autodiff; FHN: direct vs adjoint |
 | O2 | `analysis.ode`: `floquet(cycle)` — $\mu$, $\kappa$, the Floquet vectors | the periodic Schur chain on the shooting-segment Jacobians, seeded with the flow direction and run in the attracting direction (the method; Bojanczyk et al. 1992, Lust 2001, Dieci et al. 1997); the explicit monodromy and Liouville's $\int\mathrm{div} f$ as checks; the trace of $DP$ rejected (leaks the trivial multiplier's error); ADR-0015 | *done 2026-10-20*: normal forms $\kappa = \rho'(1)$ to 1e-8 by all routes; Winfree's repeller forward-time; the Cassini oval's $\kappa T = -\oint\Vert\nabla g\Vert d\ell$ and $T = \oint d\ell/(s\Vert\nabla g\Vert)$ by solver-free line integrals ($\mu \approx 10^{-16}$, beyond the monodromy's reach); FHN $\mu = 1.69\cdot10^{-12}$ with the $\varepsilon/\mu$ floor of the monodromy made visible |
 | O5 | `analysis.ode`: `isostable(ode, cycle, x)` — the amplitude coordinate $\Psi$ | direct: fit $d(t) \approx C e^{\kappa t}$ along the settling trajectory, normalized $\partial_r\Psi(1) = 1$; alternatively Laplace averages (Mauroy et al. 2013) | normal forms' exact `amplitude` |
@@ -112,7 +112,7 @@ then — Parked).
 | D2 | `analysis.data`: winding sense → `build_model` sets the signs of `w`, `w0` (E1's `winding`) | — | no manual sign intervention on FHN/Winfree |
 | D3 | `analysis.data`: transient detection (`settling_time` against a cycle; shared `log d(t)` fit with O5) → `t_settle` in dataset metadata, default `validation.t_split`; the far-from-cycle validation set (`UniformAnnulus`, design document `validation-split.md`) | O1 or E1 | `t_settle = ln(d_0/\epsilon)/\vert\kappa\vert` on the normal forms |
 | E7 | Experiments (running on the side throughout, feeding the plots and analysis wants): Bautin identity sanity; Winfree $a < 0$ against its invariants ($T$, $\kappa$, phase, PRC); FHN; the Yawata baseline on both; Winfree $a > 0$ — what a planar diffeomorphism does with a phaseless disk (`outside_basin=resample`). Losses/diagnostics (pushforward near the slow manifold, Hessian matching, Jacobian anisotropy, INN depth, periodic spline endpoints) only as the runs demand | M | figures and tables |
-| E8 | Docs: `analysis.md` one section per function; ADR-0012 amendments; architecture; `docs/figures/` from `scripts/figures.py` once the plots module exists (Joon moves plot code from notebooks as it stabilizes) | — | — |
+| E8 | Docs: one design document per analysis; ADR-0012 amendments; architecture; `docs/figures/` from `scripts/figures.py` once the plots module exists (Joon moves plot code from notebooks as it stabilizes) | — | — |
 
 Order: O1 → O2 (done 2026-10-20) → O3 → O4 (one survey, shared references), then O5 → O6, with M alongside
 each; D2/D3 when a run asks for them; E7 continuously.
@@ -136,8 +136,9 @@ lives in the ADRs. Each round is one commit, reviewed before the next starts; th
 | P6 | Documents: ADRs, `architecture.md`, `coding-standards.md` in full; `analysis.md`, `cubic-bspline.md`, `training-step-performance.md`, `validation-split.md` paragraph and word passes | *done 2026-10-27*: 23 files, invariants compared mechanically; ADR-0018's example and claim corrected |
 | P7 | `docs/design/normal-forms.md`, alone (966 lines; manuscript source) | *done 2026-10-27*: invariants unchanged by the comparison |
 | P8 | ADR format (ADR-0019): Motivation and Forces, current design in the main text, History; relative links checked; all 17 ADRs restructured | *done 2026-10-27* |
+| P9 | Documentation layout: `docs/guides/` (AUTO, isochrons, experiments), `docs/document-conventions.md`, `design/analysis.md` split per item, `scripts/{checks,diagnostics}/`, `CLAUDE.md` down to the protocol and the facts; `check_docstrings.py` covers private functions and module length, `check_references.py` covers `README.md` | *done 2026-10-29* (branch `docs-layout`) |
 
-The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when `phase` is reviewed, not here.
+The `phase` branch's `design/phase-field.md` is a live survey and is revised when `phase` is reviewed, not here.
 
 ## Parked (with reason)
 
@@ -221,3 +222,4 @@ The `phase` branch's `analysis.md` §4–5 is a live survey and is revised when 
 | 2026-10-27 | `auto-isochrons` | O7 step 2, Steps C–D: `isochron_foliation` runs the four AUTO stages per phase in a spawn pool and returns an `IsochronFoliation` (netCDF `save`/`load`, the load checked against the cycle); `plot_isochrons`; the adjoint bundle branches at multiplier 1 on FitzHugh–Nagumo, Hopf, Bautin and Winfree; FitzHugh–Nagumo isochrons 26, 51 and 100 reproduce the coworker's within `TOL["isochron_curve"]` both ways; `src/Isochron2PBVP` deleted |
 | 2026-10-28 | `auto-isochrons` | O7 step 2, Step E: the oracles of `design/isochrons.md` §8 (stages 1–3 vs O1's flow and O2's Floquet vectors on four systems; the Hopf route; Bautin and Winfree vs their closed-form phase; forward integration), [ADR-0017](decisions/0017-isochrons-by-auto-continuation.md), ruff `W605`; after Joon's cluster runs, AUTO on one thread, phase π, pool workers on the CPU; a four-phase FitzHugh–Nagumo foliation in 1208 s on one worker, 700 s on two |
 | 2026-10-28 | `auto-isochrons` | O7: `scripts/compute_isochrons.py` with `configs/isochrons/{fhn,fhn-easy}` composing their data configs, `experiment.compute_isochrons` / `load_isochrons`, Hydra's submitit launcher (`slurm` group, `configs/hydra/launcher/slurm.yaml`), `Isochron.resample`; `box_scale` default 2.5; a stage-4 sweep (five periods for the reach, 30 mesh intervals per period as good as 60) |
+| 2026-10-29 | `docs-layout` | P9: `docs/guides/{auto07p,isochrons,experiments}.md` (from `docs/auto.md` and the notebook block of `scripts/README.md`); `docs/document-conventions.md` holds what each document kind is for, frontmatter and status, the change-document and ADR forms, references and the Markdown rules; `design/analysis.md` split into `cycle-estimation.md`, `limit-cycle.md`, `floquet.md`, `phase-field.md`; `scripts/checks/` and `scripts/diagnostics/`; `CLAUDE.md` cut to 50 lines; `check_docstrings.py` requires a docstring on every private function under `src/` and bounds a module at 600 lines; `check_references.py` reads `README.md`; `.DS_Store` untracked and ignored |

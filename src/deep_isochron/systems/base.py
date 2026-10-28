@@ -128,6 +128,7 @@ def diffeqsolve(
 
 
 def _jsonable(v):
+    """`v` as a Python scalar or nested list, for `json.dumps`."""
     v = np.asarray(v)
     return v.item() if v.ndim == 0 else v.tolist()
 

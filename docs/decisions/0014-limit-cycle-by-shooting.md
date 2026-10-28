@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0014
 status: accepted; amended 2026-10-18 (review rounds 1–2); amended 2026-10-20 (ADR-0015)
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-17/18 after the O1 survey and his notebook prototype)
 ---
 
@@ -29,7 +29,7 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-17/18
 
 ### Forces
 
-Design document [`analysis.md`](../design/analysis.md) §2 has the survey and the method;
+Design document [`limit-cycle.md`](../design/limit-cycle.md) has the survey and the method;
 this records the choices. The literature offers brute force, single and multiple
 shooting (Newton on the time-$T$ flow), orthogonal collocation (AUTO), Taylor-series
 shooting with automatic differentiation (Guckenheimer & Meloon 2000) and least-squares
@@ -189,3 +189,5 @@ Alternatives rejected for a single decision are listed under that decision.
   `jax.jacfwd(P)` became a diagnostic.
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md).
+- 2026-10-29 (`docs-layout`): the design document is now the item's own, split out of
+  `design/analysis.md`.

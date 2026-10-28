@@ -28,3 +28,6 @@ runs/
 data/**/*.nc
 ci-data/
 ci-run/
+
+# macOS
+.DS_Store

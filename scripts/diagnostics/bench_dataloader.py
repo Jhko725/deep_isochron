@@ -28,12 +28,16 @@ when the scheduler has scoped the process to one card — one device visible, or
 ``CUDA_VISIBLE_DEVICES`` set, as in an ``srun`` shell with a GPU — and refuses on a
 machine where several accelerators are visible and unassigned)::
 
-    uv run python scripts/bench_dataloader.py --device 0
-    uv run python scripts/bench_dataloader.py --device 0 --model ae --batch 2048
-    uv run python scripts/bench_dataloader.py --device 0 --data data/fhn-<hash>.nc
-    uv run python scripts/bench_dataloader.py --device 0 --hlo-stats --no-mp
-    uv run python scripts/bench_dataloader.py --config data=fhn windows.batch=4096
-    uv run python scripts/bench_dataloader.py --device 0 --profile /tmp/trace --no-mp
+    uv run python scripts/diagnostics/bench_dataloader.py --device 0
+    uv run python scripts/diagnostics/bench_dataloader.py --device 0 --model ae \
+        --batch 2048
+    uv run python scripts/diagnostics/bench_dataloader.py --device 0 \
+        --data data/fhn-<hash>.nc
+    uv run python scripts/diagnostics/bench_dataloader.py --device 0 --hlo-stats --no-mp
+    uv run python scripts/diagnostics/bench_dataloader.py --config data=fhn \
+        windows.batch=4096
+    uv run python scripts/diagnostics/bench_dataloader.py --device 0 \
+        --profile /tmp/trace --no-mp
 
 Reading the table: ``dispatch ≈ total`` means the host is the bottleneck — Python
 dispatch and GIL contention if the dispatch floor is of the order of the step, otherwise

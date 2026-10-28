@@ -12,7 +12,7 @@ with the limit cycle and its Floquet multipliers.
 
 The package needs Python 3.13 and [uv](https://docs.astral.sh/uv/). The isochron
 computation also needs AUTO-07p, which in turn needs `gfortran`, `make` and `git` on the
-machine; `docs/auto.md` covers Linux, clusters and WSL2.
+machine; `docs/guides/auto07p.md` covers Linux, clusters and WSL2.
 
 ```bash
 git clone https://github.com/Jhko725/deep_isochron

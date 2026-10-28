@@ -18,7 +18,7 @@ blocks, ``|_{..}`` -> ``\\vert_{..}``, ``\\mathbf{e}_r`` -> ``\\mathbf e_r``,
 ``C^{k}_{\\rm loc}`` -> ``C_{\\rm loc}^{k}`` (an ``_`` preceded by a letter cannot
 open emphasis), spaces around ``<`` and ``>``.
 
-Usage: ``uv run python scripts/check_md_math.py docs/**/*.md`` (exit code 1 on
+Usage: ``uv run python scripts/checks/check_md_math.py docs/**/*.md`` (exit code 1 on
 problems). Requires ``markdown-it-py`` (a dev dependency).
 """
 

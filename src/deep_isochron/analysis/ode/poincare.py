@@ -25,7 +25,7 @@ through $x$ (their §5.3). ``__call__`` and ``iterate`` are jit- and vmap-compat
 left unjitted; ``fixed_point`` is a host-side driver over the jitted return solve.
 
 ADR-0014 has the decisions, including why the departure guard is a separate solve;
-``docs/design/analysis.md`` §2 has the survey and the crossing-location literature.
+``docs/design/limit-cycle.md`` has the survey and the crossing-location literature.
 """
 
 from __future__ import annotations

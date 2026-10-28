@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0009
 status: accepted; amended
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: joon (review round 1, 2026-10-04); round 2 pending
 ---
 
@@ -60,7 +60,7 @@ and a refusal otherwise. The trainer accepts whatever the loader yields; NumPy b
 still work, since `jit` transfers them synchronously, which is fine for tests.
 
 **Loaders must not start grain's default reader pool** (measured on CPU in
-[`bench_dataloader.py`](../../scripts/bench_dataloader.py); the mechanics of
+[`bench_dataloader.py`](../../scripts/diagnostics/bench_dataloader.py); the mechanics of
 asynchronous dispatch, the GIL and the benchmark's rows are explained in
 [`training-step-performance.md`](../design/training-step-performance.md)). The training
 loop is host-sensitive: its cost per step is the Python dispatch of one jitted call, ≈15
@@ -75,7 +75,7 @@ single-thread prefetch stages the step returned to ≈22 ms. `to_device` and the
 the measurement and grain's `ReadOptions` defaults, not from a documented grain
 recommendation.
 
-**GPU outcome (V100, 2026-10-05; C7 closed).** `scripts/bench_dataloader.py --device 0`,
+**GPU outcome (V100, 2026-10-05; C7 closed).** `scripts/diagnostics/bench_dataloader.py --device 0`,
 batch 512 × window 50, conjugacy model, 30 steps × 3 interleaved repeats: the dispatch
 floor is 0.8 ms for committed, uncommitted and NumPy batches alike, so handing the
 pytrees to JAX costs nothing and the earlier "committed inputs are slow" pattern was the
@@ -172,7 +172,7 @@ grid's bounding box comes from a first pass.
 `Trainer.train(stop_on_nonfinite=True)` raises `FloatingPointError` at the first
 evaluation with a non-finite metric, before that state reaches the checkpointer, so that
 the last checkpoint on disk is finite, which is what
-[`find_nan.py`](../../scripts/find_nan.py) needs; an empty validation bucket's `nan` (§5
+[`find_nan.py`](../../scripts/diagnostics/find_nan.py) needs; an empty validation bucket's `nan` (§5
 split) is exempt.
 
 `Evaluator` also reports the **latent extent** over every validation sample:
@@ -246,3 +246,4 @@ rebuilds the state via a `ShapeDtypeStruct` tree (with sharding) and `eqx.combin
   `val/mse_late`.
 - 2026-10-14 (`normal-forms-basin`): `Trainer.train(stop_on_nonfinite=True)`;
   `Evaluator` reports the latent extent.
+- 2026-10-29 (`docs-layout`): links follow the scripts into `scripts/diagnostics/`.

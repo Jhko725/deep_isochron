@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0015
 status: accepted; amended 2026-10-20 (review round 5 - jit rule, light FixedPoint)
-updated: 2026-10-27
+updated: 2026-10-29
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-19/20 after the O2 survey and his notebook prototype)
 sources: [Bojanczyk et al. 1992, Lust 2001, Dieci et al. 1997, Guckenheimer & Meloon 2000, Fairgrieve & Jepson 1991, Mauroy & Mezić 2018 (Remark 4), Wilson & Moehlis 2016, Kvalheim & Revzen 2021 (Prop. 5), BifurcationKit source (`PeriodicSchurBifurcationKit.jl`)]
 ---
@@ -36,7 +36,7 @@ $1\times1$; a method for `dim > 2` is not needed yet.
 
 ## Decision
 
-[`analysis.md`](../design/analysis.md) §3 has the survey and the method; this ADR
+[`floquet.md`](../design/floquet.md) has the survey and the method; this ADR
 records the choices.
 
 ### 1. The method: the periodic Schur chain, seeded with the flow direction, run forward
@@ -177,3 +177,5 @@ rule from review round 5.
 - 2026-10-27 (`prose`): restructured to the format of
   [ADR-0019](0019-adrs-describe-the-current-design.md); the Sources section folded into
   the frontmatter `sources:` line.
+- 2026-10-29 (`docs-layout`): the design document is now the item's own, split out of
+  `design/analysis.md`.

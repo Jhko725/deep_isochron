@@ -40,6 +40,7 @@ class HodgekinHuxley(AbstractSymbolicODE):
 
     @classmethod
     def _symbolic_template(cls) -> SymbolicODE:
+        """The Hodgkin–Huxley vector field as SymPy (`SymbolicODE`)."""
         V, m, h, n = sp.symbols("V m h n", real=True)
         I, C, G_Na, G_K, G_L, E_Na, E_K, E_L = sp.symbols(  # noqa: E741
             "I C G_Na G_K G_L E_Na E_K E_L", real=True

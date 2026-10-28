@@ -1,18 +1,17 @@
 ---
 type: index
 status: current
-updated: 2026-10-28
+updated: 2026-10-29
 ---
 
 # `deep_isochron` documentation — index
 
-Progressive disclosure: start here, then read only what the task needs. Every document
-carries a frontmatter block (`type`, `status`, `updated`, and where relevant
-`verified_by`, `sources`, `id`) — the useful part of Google's Open Knowledge Format,
-adopted 2026-10-04 so that a document's standing is machine-readable without reading it.
-`status` values: `current` (kept true at all times), `agreed` (design settled with Joon),
-`accepted` (a decision in force; `amended` when later changed in place), `tentative`
-(written by Claude, not yet checked by Joon).
+Start here and read only what the task needs. `architecture.md` and `roadmap.md` say what
+the code is and where it is going; `design/` holds the mathematics behind each method,
+`decisions/` the reasons for the structure, `guides/` the how-tos, and `changes/` one
+document per branch for its reviewer. The form of each kind, the frontmatter every
+document opens with and what its `status` means are in
+[`document-conventions.md`](document-conventions.md).
 
 ## Read first
 
@@ -20,10 +19,17 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 |---|---|---|
 | [`architecture.md`](architecture.md) | architecture | module map, data flow of one training step, where each decision is recorded |
 | [`roadmap.md`](roadmap.md) | roadmap | the single current plan, phase by phase, with the Done ledger |
-| [`../CLAUDE.md`](../CLAUDE.md) | conventions | how Claude works in this repository (change documents, review notes, tooling) |
-| [`coding-standards.md`](coding-standards.md) | reference | where each convention is enforced here: tiers, named tolerances, the contracts the ADRs fix, the Markdown rules, the docstring and citation forms, the checks that replace prose |
-| [`auto.md`](auto.md) | guide | installing AUTO-07p for the isochron pipeline: the `auto` dependency group, `scripts/install_auto.sh`, the variables, the pinned commit, the `auto` test tier, troubleshooting |
+| [`coding-standards.md`](coding-standards.md) | reference | where each convention is enforced here: tiers, named tolerances, the contracts the ADRs fix, the docstring form, the checks that replace prose |
+| [`document-conventions.md`](document-conventions.md) | reference | what each kind of document is for and the form it takes: frontmatter and status, change documents, ADRs, references, the Markdown rules, the checks |
 | [`references.md`](references.md) | reference | the one bibliography: every work the documents, docstrings and tests cite, by key, with DOI and the locators used |
+
+## Guides (`guides/`) — how to do something
+
+| Document | Covers |
+|---|---|
+| [`auto07p.md`](guides/auto07p.md) | installing AUTO-07p: the `auto` dependency group, `scripts/install_auto.sh`, the variables, the pinned commit, clusters, the `auto` test tier, troubleshooting |
+| [`isochrons.md`](guides/isochrons.md) | computing the reference isochrons of a system with `scripts/compute_isochrons.py`, reading the file back, running it as a SLURM job |
+| [`experiments.md`](guides/experiments.md) | running an experiment from a notebook: composing configs, datasets, training with your own loop, reading a run back |
 
 ## Design documents (`design/`) — the mathematics behind the code
 
@@ -32,7 +38,10 @@ adopted 2026-10-04 so that a document's standing is machine-readable without rea
 | [`normal-forms.md`](design/normal-forms.md) | agreed; §5.3–5.4 and the 2026-10-08 amendment (§3.3 Winfree, basins) tentative | Θ/Ψ conventions, Hopf and Bautin closed forms, the (Θ, Ψ) chart, the implementation contract (§9) and the tests it implies (§10); relation to Yawata et al. and Kvalheim & Revzen |
 | [`cubic-bspline.md`](design/cubic-bspline.md) | agreed | the `CubicBSpline` boundary treatment and inverse error bound |
 | [`validation-split.md`](design/validation-split.md) | tentative | why `val/mse` is a near-cycle metric and the early/late split by window start (`t_split`); how to choose the threshold; what it does not do |
-| [`analysis.md`](design/analysis.md) | tentative (§1 E1, §2 O1, §3 O2, §4–5 O3/O4 survey; §4.2 route (a) landed) | the `Cycle` representation; per analysis function (E1, O1–O4): literature survey with cited/deduced claims, method, oracles, limits |
+| [`cycle-estimation.md`](design/cycle-estimation.md) | tentative | the `Cycle` representation; E1 `estimate_cycle`: literature survey with cited/deduced claims, method, oracles, limits |
+| [`limit-cycle.md`](design/limit-cycle.md) | tentative | O1 `find_limit_cycle`: the shooting survey, the method (`PoincareMap`, multiple shooting, `reanchor`), oracles, limits |
+| [`floquet.md`](design/floquet.md) | tentative | O2 the Floquet exponent: the routes and their accuracy floors, the seeded periodic Schur method, oracles, limits |
+| [`phase-field.md`](design/phase-field.md) | tentative (survey; §1.2 route (a) landed) | O3 the asymptotic phase field and O4 the PRC: surveys, the parametrization method as the shared engine, the prototyping ledger, proposed methods |
 | [`isochrons.md`](design/isochrons.md) | draft for review (decisions D1–D9 settled 2026-10-27) | isochrons by AUTO-07p continuation: the method of Langfield et al. 2014, the coworker's run-by-run algorithm, ours; AUTO from the ground up; the stable direction (variational, adjoint, and the coworker's $+A^{\mathsf T}$ defect); accuracy, oracles, limits, tests (roadmap O7) |
 | [`training-step-performance.md`](design/training-step-performance.md) | tentative | where a JAX training step spends its time: asynchronous dispatch, committed/uncommitted placement, the GIL and grain's threads, what `bench_dataloader.py` measures, the bottleneck taxonomy, and the Phase C case history |
 
@@ -81,3 +90,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `auto-isochrons` | [`2026-10-27-auto-isochrons.md`](changes/2026-10-27-auto-isochrons.md) |
 | `symbolic-systems` | [`2026-10-22-symbolic-systems.md`](changes/2026-10-22-symbolic-systems.md) |
 | `phase-field` | [`2026-10-28-phase-field.md`](changes/2026-10-28-phase-field.md) |
+| `docs-layout` | [`2026-10-29-docs-layout.md`](changes/2026-10-29-docs-layout.md) |

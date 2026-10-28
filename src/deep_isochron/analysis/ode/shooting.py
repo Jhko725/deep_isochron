@@ -12,7 +12,7 @@ independent initial value problems and are ``vmap``ped. ``SHOOTING_SOLVER_CONFIG
 the shooting-grade solver configuration, whose tolerances are the floor of the
 residual.
 
-``docs/design/analysis.md`` §2 has the survey: why multiple shooting (the error
+``docs/design/limit-cycle.md`` has the survey: why multiple shooting (the error
 amplification over one segment is $e^{\kappa_u T/m}$ rather than $e^{\kappa_u T}$,
 so the Newton problem stays well conditioned on long or weakly attracting orbits),
 why the exact Jacobian, and why Levenberg–Marquardt rather than Newton. ADR-0014

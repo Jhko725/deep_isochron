@@ -18,7 +18,7 @@ slope of the unwrapped phase against time by least squares over every tail sampl
 the curve, ``Cycle.from_points``; and the self-consistency check, that the earlier
 revolutions fit the curve of the last revolution as well as the last one does.
 
-``docs/design/analysis.md`` §1 has the literature and the reason for each step;
+``docs/design/cycle-estimation.md`` has the literature and the reason for each step;
 ADR-0012 the layout.
 """
 

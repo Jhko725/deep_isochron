@@ -1,5 +1,5 @@
 # The project's commands, one recipe each; `uv run just --list` prints them. CI calls
-# these recipes too, so each command list is written once (README, docs/auto.md).
+# these recipes too, so each command list is written once (README, docs/guides/auto07p.md).
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
@@ -26,7 +26,7 @@ setup:
     {{just_executable()}} install-auto
     uv run prek install
 
-# Build AUTO-07p's Fortran tree at the commit pinned in uv.lock (docs/auto.md)
+# Build AUTO-07p's Fortran tree at the commit pinned in uv.lock (docs/guides/auto07p.md)
 install-auto:
     scripts/install_auto.sh
 

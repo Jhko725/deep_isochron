@@ -1,8 +1,9 @@
 """Hunt the first non-finite gradient of a run, from its last (or a given) checkpoint.
 
-    uv run python scripts/find_nan.py runs/notebook/winfree-1
-    uv run python scripts/find_nan.py runs/winfree-1 --step 2500 --max-steps 300
-    uv run python scripts/find_nan.py runs/notebook/winfree-1 --debug-nans
+    uv run python scripts/diagnostics/find_nan.py runs/notebook/winfree-1
+    uv run python scripts/diagnostics/find_nan.py runs/winfree-1 --step 2500 \
+        --max-steps 300
+    uv run python scripts/diagnostics/find_nan.py runs/notebook/winfree-1 --debug-nans
 
 Reopens the run (``load_run``), rebuilds the same data stream from that step
 (``Loaders.from_config(..., start_step=step)``, so the batches are the ones the run

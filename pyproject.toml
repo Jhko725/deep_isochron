@@ -114,7 +114,7 @@ xfail_strict = true
 [tool.hypothesis]
 
 [tool.codespell]
-# The irregular British spellings and typos; scripts/check_spelling.py covers the
+# The irregular British spellings and typos; scripts/checks/check_spelling.py covers the
 # productive -ise/-isation/-yse families. "./docs/changes" skips the directory when
 # codespell walks from the root (CI); "docs/changes/*" skips the paths a git hook
 # passes. docs/coding-standards.md says why that directory is out of scope.

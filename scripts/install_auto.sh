@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build AUTO-07p's Fortran tree at the commit that uv.lock pins for its Python layer
-# (the `auto` dependency group; docs/auto.md). The tree goes to
+# (the `auto` dependency group; docs/guides/auto07p.md). The tree goes to
 # ${DEEP_ISOCHRON_AUTO_DIR:-$HOME/.local/opt/auto-07p}; a stamp file records the commit,
 # and a tree already built at that commit is left alone.
 #

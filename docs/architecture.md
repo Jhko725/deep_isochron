@@ -9,7 +9,8 @@ sources: [code]
 
 This page is the shape of the `deep_isochron` package: what each module is for, how data
 flows through a training step, and where the design decision behind each part is
-recorded. Decisions live in `docs/decisions/` (ADRs), the current plan in
+recorded. Decisions live in `docs/decisions/` (ADRs), the mathematics in `docs/design/`, the
+how-tos in `docs/guides/`, the current plan in
 `docs/roadmap.md`, and branch-level detail in `docs/changes/`; `docs/index.md` lists
 every document. The page is kept current with the code: when a phase of the roadmap
 lands, the relevant section here changes in the same commit.
@@ -94,7 +95,7 @@ deep_isochron
 ├── analysis/                the limit cycle and its neighborhood, numerically  ── ADR-0012
 │   ├── cycle.py             Cycle: planar closed curve as a Fourier series in a phase
 │   │                        uniform in time, + period; from_points, circle, distance,
-│   │                        nearest_phase (shared by both halves; design: analysis.md)
+│   │                        nearest_phase (shared by both halves; design: cycle-estimation.md)
 │   ├── data/                from sampled, possibly noisy trajectories (host-side NumPy)
 │   │   └── cycle.py         estimate_cycle (E1): tails → polar protophase → Kralemann
 │   │                        PTP phase → period by regression → Fourier curve → converged;
@@ -110,7 +111,7 @@ deep_isochron
 │       │   │                internal_indices -> Idx; auto_pars; never imports AUTO
 │       │   ├── _env.py      load_auto() -> AutoHandle: finds the built AUTO tree
 │       │   │                (DEEP_ISOCHRON_AUTO_DIR, AUTO_DIR, ~/.local/opt/auto-07p), sets
-│       │   │                AUTO_DIR, imports `auto`; the only importer of AUTO (docs/auto.md)
+│       │   │                AUTO_DIR, imports `auto`; the only importer of AUTO (docs/guides/auto07p.md)
 │       │   ├── results.py   IsochronSettings; Isochron (resample); IsochronFailure;
 │       │   │                IsochronFoliation (dataset, save/load as netCDF, loaded against
 │       │   │                its cycle) — docs/design/isochrons.md, ADR-0017
@@ -192,17 +193,20 @@ configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed 
 configs/cycle/ (schema CycleConfig)                                a system's cycle and phase 0
 configs/isochrons/ (schema IsochronConfig; composes data + cycle)  reference isochrons
 configs/hydra/launcher/slurm.yaml                                  SLURM jobs (submitit)
-scripts/train.py                                Hydra entry point: one training run
-scripts/generate_data.py (+ configs/data/)      Hydra entry point for data generation
-scripts/compute_isochrons.py (+ configs/isochrons/)  Hydra entry point for AUTO isochrons
-scripts/find_nan.py                             first non-finite gradient of a run, with the latent extent
-scripts/check_md_math.py                        GitHub-safe Markdown math check
-scripts/check_spelling.py                       the -ise families (American English)
-scripts/check_references.py                     every citation resolves to docs/references.md
-scripts/check_docstring_headers.py              **Arguments:** and the like on their own line
-scripts/README.md                               what each script does and how to call it
-scripts/bench_dataloader.py                     data-pipeline vs training-step benchmark
-                                                (also --config <overrides>: a config's own run)
+scripts/                                        the command-line entry points (scripts/README.md)
+├── train.py                                    Hydra entry point: one training run
+├── generate_data.py (+ configs/data/)          Hydra entry point for data generation
+├── compute_isochrons.py (+ configs/isochrons/) Hydra entry point for AUTO isochrons
+├── install_auto.sh                             AUTO-07p's Fortran tree at the pinned commit
+├── diagnostics/                                instruments for a run
+│   ├── bench_dataloader.py                     data-pipeline vs training-step benchmark
+│   │                                           (also --config <overrides>: a config's own run)
+│   └── find_nan.py                             first non-finite gradient of a run, with the latent extent
+└── checks/                                     the deterministic checks (prek.toml; docs/coding-standards.md)
+    ├── check_md_math.py                        GitHub-safe Markdown math check
+    ├── check_spelling.py                       the -ise families (American English)
+    ├── check_references.py                     every citation and relative link resolves
+    └── check_docstrings.py                     docstring headers; private functions documented; modules under 600 lines
 .github/workflows/ci.yml                        lint · ty · math · spelling · citations · tests; slow + end-to-end run
 ```
 

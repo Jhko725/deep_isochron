@@ -27,7 +27,7 @@ driver ``find_limit_cycle`` jits the stages it calls and raises informative erro
 Times reach the jitted stages as arrays, never as Python floats, which would be static
 and compile a new program for every value. A
 ``LimitCycle`` is a fixed-shape pytree, so functions of a cycle can be jitted and
-vmapped as they stand. ADR-0014 has the decisions; ``docs/design/analysis.md`` §2 the
+vmapped as they stand. ADR-0014 has the decisions; ``docs/design/limit-cycle.md`` the
 survey of shooting methods.
 """
 
