@@ -16,8 +16,8 @@ name: ${data.name}        # the file is <out_dir>/<name>-<hash>.nc
 out_dir: data/isochrons
 
 phases:                   # exactly one of the two
-  count: 100              # θ_k = 2πk/count, wrapped to (−π, π]
-  values: null            # or an explicit list of phases, in radians
+  count: 100              # θ_k = k/count, in turns, wrapped to [0, 1)
+  values: null            # or an explicit list of phases, in turns
 
 settings:                 # IsochronSettings; a field left out takes the code's default
   n_periods: 5

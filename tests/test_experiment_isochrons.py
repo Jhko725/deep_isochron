@@ -9,7 +9,6 @@ AUTO (marker ``auto``), a one-phase foliation computed from a config loads back 
 the same config.
 """
 
-import math
 from pathlib import Path
 
 import numpy as np
@@ -33,9 +32,10 @@ def _config(name: str, *overrides: str) -> IsochronConfig:
     return isochron_config(compose(*overrides, config_name=f"isochrons/{name}"))
 
 
-SHIPPED_HASHES = {"fhn": "d9ded7af", "fhn-easy": "b688cbfe"}
-"""The hashes of the shipped configs as of 2026-10-28: a change renames every saved
-foliation, so one here is deliberate."""
+SHIPPED_HASHES = {"fhn": "11305875", "fhn-easy": "fb823a3f"}
+"""The hashes of the shipped configs as of 2026-10-30: a change renames every saved
+foliation, so one here is deliberate. Repinned under ADR-0020: the phases are turns and
+every saved foliation is recomputed."""
 
 
 @pytest.mark.parametrize("name, data", [("fhn", "fhn"), ("fhn-easy", "fhn-easy")])
@@ -74,12 +74,12 @@ def test_settings_are_validated_on_conversion():
 
 
 def test_phases_from_count_or_values():
-    """``count`` gives ``2πk/count`` wrapped to (−π, π]; ``values`` are wrapped; setting
+    """``count`` gives ``k/count`` in turns; ``values`` are wrapped to [0, 1); setting
     both or neither, or a count below 1, raises `ValueError`."""
     phases = _config("fhn", "phases.count=4").wrapped_phases()
-    assert phases == pytest.approx((0.0, math.pi / 2, math.pi, -math.pi / 2))
-    listed = _config("fhn", "phases.count=null", "phases.values=[0.5,7.0]")
-    assert listed.wrapped_phases() == pytest.approx((0.5, 7.0 - 2 * math.pi))
+    assert phases == pytest.approx((0.0, 0.25, 0.5, 0.75))
+    listed = _config("fhn", "phases.count=null", "phases.values=[0.5,7.75]")
+    assert listed.wrapped_phases() == pytest.approx((0.5, 0.75))
     with pytest.raises(ValueError, match="exactly one"):
         _config("fhn", "phases.values=[0.5]").wrapped_phases()
     with pytest.raises(ValueError, match="exactly one"):

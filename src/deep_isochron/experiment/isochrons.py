@@ -27,7 +27,6 @@ import copy
 import dataclasses
 import hashlib
 import json
-import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -87,8 +86,8 @@ class PhasesConfig:
 
     **Attributes:**
 
-    - `count`: Evenly spaced phases $2\\pi k/$`count`, wrapped to $(-\\pi, \\pi]$.
-    - `values`: An explicit list of phases, in radians.
+    - `count`: The phases $k/$`count` for $k = 0, \\dots,$ `count`$- 1$, in turns.
+    - `values`: An explicit list of phases, in turns, wrapped to $[0, 1)$.
     """
 
     count: int | None = None
@@ -117,7 +116,7 @@ class IsochronConfig:
     out_dir: str = "data/isochrons"
 
     def wrapped_phases(self) -> tuple[float, ...]:
-        r"""The phases, wrapped to $(-\pi, \pi]$.
+        """The phases in turns, wrapped to $[0, 1)$.
 
         **Raises:**
 
@@ -134,7 +133,7 @@ class IsochronConfig:
             assert count is not None  # exactly one is set, checked above
             if count < 1:
                 raise ValueError(f"phases.count must be positive; got {count}.")
-            values = [2 * math.pi * k / count for k in range(count)]
+            values = [k / count for k in range(count)]
         return wrap_phases(list(values))
 
     def result_identity(self) -> dict[str, Any]:

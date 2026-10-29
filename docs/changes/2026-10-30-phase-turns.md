@@ -132,6 +132,17 @@ recomputed (ADR-0020, Consequences).
 - `tests/test_analysis.py` — the warped-protophase law takes the angle offset by the
   complex exponential, as before `wrap_angle`.
 - `docs/decisions/0020-phase-in-turns.md` — decision 3 amended: `wrap_angle` deleted.
+- `src/deep_isochron/experiment/isochrons.py` — `phases.count` gives the fractions
+  $k/$`count` and `phases.values` is read in turns, wrapped to $[0, 1)$; the
+  `PhasesConfig` and `wrapped_phases` docstrings say turns, and the unused `math`
+  import goes.
+- `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — the comments on
+  `phases` read turns.
+- `tests/test_experiment_isochrons.py` — the config test expects the fractions
+  $(0, \tfrac14, \tfrac12, \tfrac34)$ and `[0.5, 7.75]` wrapped to $(0.5, 0.75)$;
+  `SHIPPED_HASHES` is repinned to `11305875` (`fhn`, was `d9ded7af`) and `fb823a3f`
+  (`fhn-easy`, was `b688cbfe`). The repin is irreversible: every foliation saved under
+  the old hashes is orphaned and recomputed on the cluster after the merge.
 
 ## Design
 
@@ -158,7 +169,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 7. `analysis/ode/auto/`: `rotate_phase`'s $\tau_2 = (1 - \Theta)T$; `wrap_phases`;
    `Isochron.phase`; the netCDF `units` attribute and the refusal in `load`. — done.
 8. `experiment/isochrons.py`, `configs/isochrons/`: `phases.count` → $k/$`count`;
-   the hashes repinned.
+   the hashes repinned. — done.
 9. `training/evaluation.py`: `circular_std` and the sums with $e^{2\pi i\Delta}$;
    `align_phases` in turns.
 10. `plotting/isochrons.py`: `PHASE_NORM = Normalize(0, 1)`, the sample grids, the
@@ -216,3 +227,5 @@ None yet.
 | `tests/test_phase.py` — the `wrap_angle` test deleted; the type law for a float and a mixed call | | |
 | `tests/test_analysis.py` — the angle offset by the complex exponential | | |
 | `docs/decisions/0020-phase-in-turns.md` — the `wrap_angle` amendment | | |
+| `src/deep_isochron/experiment/isochrons.py`, `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — `phases.count` and `phases.values` in turns | | |
+| `tests/test_experiment_isochrons.py` — the config test in turns; the two shipped hashes repinned | | |
