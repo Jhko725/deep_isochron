@@ -50,17 +50,22 @@ already red: the branch change document's *Tests* and *Open issues*, the pinned
 
 ## Containers
 
-A value that any JAX transform will see (returned by, carried through or passed into
-jitted or vmapped code, or holding a model or an ODE) is an `eqx.Module`, and a value
-that must stay out of tracing is a frozen `@dataclass` of NumPy or Python values. A
-`NamedTuple` is allowed only where the tuple structure is the interface (the `*Params`
-bundles of the scalar bijections, a type that mirrors an external API), a mutable
-`@dataclass` only for Hydra schemas and stateful services such as `Evaluator`, and a
-static field (`eqx.field(static=True)`) never holds a `jax.Array`. The axis is the
-equinox ecosystem's (every pytree in diffrax, optimistix and lineax is an `eqx.Module`;
+Python and the JAX ecosystem support multiple ways to create struct-like data types. Primarily, we use the following two:
+
+- `eqx.Module`: A value that any JAX transform will see: returned by, carried through or passed into jitted or vmapped code, or holding a model or an ODE. By `equinox` recommendations, static field (`eqx.field(static=True)`) never holds a `jax.Array`.
+- `@dataclass(frozen=True)`: Any value that must stay out of JAX tracing. Its leaves should be NumPy or Python values.
+
+The next two are used for special purposes:
+- `NamedTuple`: allowed only where the tuple structure is the interface (the `*Params`
+bundles of the scalar bijections, a type that mirrors an external API)
+- Mutable `@dataclass`: Only for Hydra schemas and stateful services such as `Evaluator`.
+
+This rule mirrors the equinox ecosystem's (every pytree in diffrax, optimistix and lineax is an `eqx.Module`;
 a frozen dataclass appears only for data that must not be a pytree node) and restates
 [ADR-0012](decisions/0012-analysis-layout.md) Decision 3 in a form that
-`scripts/checks/check_containers.py` can check. Outcome codes stay as `bool` flags
+`scripts/checks/check_containers.py` can check.
+
+Outcome codes stay as `bool` flags
 (`converged`); the ecosystem's `Enum` outcomes become the convention if a third kind of
 outcome appears.
 
