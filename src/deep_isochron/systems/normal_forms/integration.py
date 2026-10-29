@@ -141,11 +141,13 @@ def _rhs_r_squared(t, state, args):
 
 class ClosedFormIntegration(AbstractFlowIntegration):
     r"""No ODE solve: $(\Theta, \Psi)$ evolve linearly,
-    $\Theta(t) = \Theta_0 + \omega_1 t$ and $\Psi(t) = \Psi_0 e^{\kappa t}$, and
+    $\Theta(t) = \Theta_0 + t/|T|$ and $\Psi(t) = \Psi_0 e^{\kappa t}$, and
     ``from_phase_amplitude`` recovers the point, with one monotone root solve per
     output time (explicit for Hopf). Exact up to the root solve, so the reference for
-    the three numerical integrations
-    (design document §6.1). `config` is ignored.
+    the three numerical integrations (design document §6.1). `config` is ignored.
+
+    The phase is in turns and increases with time for either sign of $\omega_1$
+    (ADR-0020), while `period` is signed, hence $|T|$.
     """
 
     @eqx.filter_jit
@@ -158,7 +160,7 @@ class ClosedFormIntegration(AbstractFlowIntegration):
         del args, config
         Theta0, Psi0 = normal_form.to_phase_amplitude(u0)
         dt = ts - ts[0]
-        Theta = Theta0 + normal_form.omega() * dt
+        Theta = Theta0 + dt / jnp.abs(normal_form.period())
         Psi = Psi0 * jnp.exp(normal_form.floquet_exponent() * dt)
         ys = jax.vmap(normal_form.from_phase_amplitude)(jnp.stack((Theta, Psi), -1))
         return dfx.Solution(

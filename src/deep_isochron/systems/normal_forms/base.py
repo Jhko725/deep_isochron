@@ -6,7 +6,8 @@ at $r = 1$. A concrete class writes its field in polar coordinates as a SymPy
 template (`_symbolic_template_polar`), from which the log growth rate
 $\rho = \dot r / r$ and the angular rate $\omega = \dot\theta$ are read. It also
 supplies two closed forms in $r$: the phase shift $h(r)$, with the asymptotic phase
-$\Theta = \theta + h(r)$, and the isostable coordinate $\Psi(r)$, with
+$\Theta = \sigma(\theta + h(r)) / 2\pi$ in turns ($\sigma$ the sign of
+$\omega_1$, ADR-0020), and the isostable coordinate $\Psi(r)$, with
 $\dot\Psi = \kappa\Psi$. The base class derives everything else: the cartesian
 template and ``rhs``, the JAX rates, the Floquet exponent $\kappa = \rho'(1)$ by
 autodiff, the vector fields in both charts, ``phase``, ``amplitude``,
@@ -173,8 +174,9 @@ class AbstractNormalForm(AbstractSymbolicODE):
 
     @abc.abstractmethod
     def phase_shift(self, r: Float[Array, ""]) -> Float[Array, ""]:
-        r"""The phase shift $h(r)$ at radius `r`, with the asymptotic phase
-        $\Theta = \theta + h(r)$ and $h(1) = 0$ (design document §5.1). ``nan`` or
+        r"""The phase shift $h(r)$ at radius `r`, an angle in radians, with the
+        asymptotic phase $\Theta = \sigma(\theta + h(r)) / 2\pi$ ($\sigma$ the sign
+        of $\omega_1$) and $h(1) = 0$ (design document §5.1). ``nan`` or
         diverging outside the basin."""
 
     @abc.abstractmethod
@@ -235,28 +237,35 @@ class AbstractNormalForm(AbstractSymbolicODE):
 
     def to_phase_amplitude(self, u: Float[Array, " 2"]) -> Float[Array, " 2"]:
         r"""The phase–amplitude coordinates $(\Theta, \Psi)$ of cartesian `u`: the
-        chart in which the flow is linear, $\dot\Theta = \omega_1$ and
+        chart in which the flow is linear, $\dot\Theta = 1/|T|$ and
         $\dot\Psi = \kappa\Psi$ (design document §7).
+
+        The phase is $\Theta = \sigma(\theta + h(r)) / 2\pi$ wrapped to $[0, 1)$,
+        with $\sigma$ the sign of $\omega_1$: a fraction of the period that increases
+        with time, since a clockwise form negates the polar angle (ADR-0020).
 
         **Returns:**
 
-        ``(Θ, Ψ)`` with $\Theta \in (-\pi, \pi]$; both ``nan`` outside the basin.
+        ``(Θ, Ψ)`` with $\Theta \in [0, 1)$; both ``nan`` outside the basin.
         """
         r, theta = self.to_polar(u)
         r_in, r_out = self.basin_radii()
         inside = (r > r_in) & (r < r_out)
         r_safe = jnp.where(inside, r, 1.0)  # keep the closed forms off their poles
-        Theta = wrap_phase(theta + self.phase_shift(r_safe))
+        sign = jnp.sign(self.omega())
+        Theta = wrap_phase(sign * (theta + self.phase_shift(r_safe)) / (2 * jnp.pi))
         Psi = self.isostable(r_safe)
         nan = jnp.asarray(jnp.nan, dtype=r.dtype)
         return jnp.stack((jnp.where(inside, Theta, nan), jnp.where(inside, Psi, nan)))
 
     def from_phase_amplitude(self, z: Float[Array, " 2"]) -> Float[Array, " 2"]:
-        r"""The cartesian point of `z` $= (\Theta, \Psi)$: $r$ by
-        `radius_from_isostable` and $\theta = \Theta - h(r)$."""
+        r"""The cartesian point of `z` $= (\Theta, \Psi)$, the inverse of
+        `to_phase_amplitude`: $r$ by `radius_from_isostable` and
+        $\theta = \pm 2\pi\Theta - h(r)$, the sign that of $\omega_1$. Any real
+        $\Theta$ is accepted, since it enters through $\cos$ and $\sin$."""
         Theta, Psi = z
         r = self.radius_from_isostable(Psi)
-        theta = Theta - self.phase_shift(r)
+        theta = jnp.sign(self.omega()) * 2 * jnp.pi * Theta - self.phase_shift(r)
         return jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)))
 
     def radius_from_isostable(self, psi: Float[Array, ""]) -> Float[Array, ""]:
@@ -301,9 +310,10 @@ class AbstractNormalForm(AbstractSymbolicODE):
 
     # ---------------------------------------------------------- phase/amplitude ----
     def phase(self, u: Float[Array, " 2"]) -> Float[Array, ""]:
-        r"""The asymptotic phase $\Theta(u) \in (-\pi, \pi]$ of cartesian `u`: the
-        isochron through `u`, labeled by the polar angle of the point on the cycle
-        that it converges to. ``nan`` outside the basin."""
+        r"""The asymptotic phase $\Theta(u) \in [0, 1)$ of cartesian `u`: the
+        fraction of the period elapsed since the cycle's phase origin (the polar angle
+        $\theta = 0$ on the cycle), on the isochron through `u`. ``nan`` outside the
+        basin."""
         return self.to_phase_amplitude(u)[0]
 
     def amplitude(self, u: Float[Array, " 2"]) -> Float[Array, ""]:
@@ -313,9 +323,14 @@ class AbstractNormalForm(AbstractSymbolicODE):
         return self.to_phase_amplitude(u)[1]
 
     def limit_cycle(self, Theta: Float[Array, " *n"]) -> Float[Array, " *n 2"]:
-        r"""The points of the limit cycle at phases `Theta`, where $r = 1$ and
-        $h = 0$; the output has one trailing axis of length 2."""
-        return jnp.stack((jnp.cos(Theta), jnp.sin(Theta)), axis=-1)
+        r"""The points of the limit cycle at phases `Theta`, in turns, where $r = 1$,
+        $h = 0$ and $\theta = \pm 2\pi\Theta$, the sign that of $\omega_1$; the
+        output has one trailing axis of length 2.
+
+        For a clockwise form too, the point at $\Theta = 0.25$ is the one reached a
+        quarter period after the point at $\Theta = 0$."""
+        theta = jnp.sign(self.omega()) * 2 * jnp.pi * Theta
+        return jnp.stack((jnp.cos(theta), jnp.sin(theta)), axis=-1)
 
     def isochron(
         self, Theta: Float[ArrayLike, ""], r: Float[Array, " n"]
@@ -324,17 +339,19 @@ class AbstractNormalForm(AbstractSymbolicODE):
 
         **Arguments:**
 
-        - `Theta`: The phase, a scalar.
+        - `Theta`: The phase in turns, a scalar.
         - `r`: The radii, shape ``(n,)``.
 
         **Returns:**
 
-        The cartesian points on $\theta = \Theta - h(r)$ (design document §5.1), shape
-        ``(n, 2)``; ``nan`` at radii outside the basin.
+        The cartesian points on $\theta = \pm 2\pi\Theta - h(r)$, the sign that of
+        $\omega_1$ (design document §5.1), shape ``(n, 2)``; ``nan`` at radii outside
+        the basin.
         """
         r_in, r_out = self.basin_radii()
         inside = (r > r_in) & (r < r_out)
-        theta = Theta - self.phase_shift(jnp.where(inside, r, 1.0))
+        sign = jnp.sign(self.omega())
+        theta = sign * 2 * jnp.pi * Theta - self.phase_shift(jnp.where(inside, r, 1.0))
         pts = jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)), axis=-1)
         return jnp.where(inside[..., None], pts, jnp.nan)
 

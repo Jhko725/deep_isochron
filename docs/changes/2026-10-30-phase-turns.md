@@ -33,6 +33,17 @@ recomputed (ADR-0020, Consequences).
 - `tests/test_phase.py` — the wrap test split in two: `wrap_angle` against
   `math.remainder`, and `wrap_phase` and `phase_difference` against floor-based
   oracles across the five input forms, the tie and the gradient.
+- `src/deep_isochron/systems/normal_forms/base.py` — `to_phase_amplitude` returns
+  $\Theta = \mathrm{wrap}(\sigma(\theta + h(r))/2\pi) \in [0, 1)$, with $\sigma$
+  the sign of $\omega_1$; `from_phase_amplitude`, `limit_cycle` and `isochron` invert
+  the same sign and $2\pi$; the docstrings of `phase`, `phase_shift` and the module
+  state the phase in turns.
+- `src/deep_isochron/systems/normal_forms/integration.py` — `ClosedFormIntegration`
+  advances the phase by $t/|T|$, since `period` is signed.
+- `tests/test_normal_forms.py` — phases compared through `phase_difference`; a
+  `phases` strategy in $[0, 1)$; the flow law states that the phase advances by the
+  elapsed fraction of the period on every form, clockwise ones included; Langfield's
+  Eq. 12 identity reads $\Theta = \vartheta$.
 
 ## Design
 
@@ -42,7 +53,8 @@ The ledger of the change, in the order the commits will follow. Each item become
 1. `utils/numerics.py`: `wrap_phase` to $[0, 1)$, `wrap_angle` for radians,
    `phase_difference` in $(-\tfrac12, \tfrac12]$, all against the array API. — done.
 2. `systems/normal_forms/base.py`: `phase`, `to_phase_amplitude`, `limit_cycle`,
-   `isochron` at the seam; the polar angle negated for $\omega_1 < 0$.
+   `isochron` at the seam; the polar angle negated for $\omega_1 < 0$;
+   `from_phase_amplitude` and the closed-form integration follow. — done.
 3. `model/base.py`, `conjugacy.py`, `autoencoder.py`: the contract in turns;
    `cycle_point` and `isochron` take $2\pi\Theta$; `phase_sensitivity` in turns.
 4. `analysis/cycle.py`, `analysis/data/cycle.py`: `Cycle`'s phase in turns, the
@@ -84,3 +96,6 @@ None yet.
 | `.claude/agents/implementer.md` — the implementer subagent's rules | | |
 | `src/deep_isochron/utils/numerics.py` — `wrap_phase` to $[0, 1)$, `wrap_angle`, `phase_difference` | | |
 | `tests/test_phase.py` — the wrap tests of both wraps and the difference | | |
+| `src/deep_isochron/systems/normal_forms/base.py` — the phase in turns at the chart, cycle and isochron seams | | |
+| `src/deep_isochron/systems/normal_forms/integration.py` — the closed form advances the phase by $t/\lvert T\rvert$ | | |
+| `tests/test_normal_forms.py` — phase comparisons in turns; the orientation law | | |

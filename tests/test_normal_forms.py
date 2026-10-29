@@ -2,11 +2,12 @@
 the parameters, which Hypothesis draws for every form; the tests implement §10 of
 ``docs/design/normal-forms.md``.
 
-Section 1 pins the structure: ``Θ`` advances at rate ``ω₁`` and ``Ψ`` decays at rate
-``κ``, exactly by autodiff of the defining identities and again along the integrated
-flow; ``κ = ρ'(1)``; the Wilson–Moehlis normalization ``Ψ'(1) = 1``; the cartesian
-field against the polar one pushed through the chart; the Jacobians of §2; Hopf as
-Bautin with ``b = 0``; Bautin's unstable outer cycle for ``-1 < b < 0``. Section 2
+Section 1 pins the structure: ``θ + h(r)`` advances at rate ``ω₁``, so the phase ``Θ``
+advances by the elapsed fraction of the period, and ``Ψ`` decays at rate ``κ``, exactly
+by autodiff of the defining identities and again along the integrated flow;
+``κ = ρ'(1)``; the Wilson–Moehlis normalization ``Ψ'(1) = 1``; the cartesian field
+against the polar one pushed through the chart; the Jacobians of §2; Hopf as Bautin
+with ``b = 0``; Bautin's unstable outer cycle for ``-1 < b < 0``. Section 2
 tests the phase–amplitude chart and its differentiable root solve. Section 3 checks
 that the four integrations agree and are static under `filter_jit`. Section 4 covers
 Winfree's model with a hole (Langfield et al. 2025, §4.1) and the basin logic.
@@ -28,6 +29,7 @@ from deep_isochron.systems import (
     INTEGRATIONS,
     WinfreeNormalForm,
 )
+from deep_isochron.utils.numerics import phase_difference
 from hypothesis import given, settings, strategies as st
 
 from tests.helpers import assert_close, CompileCounter, SOLVERS, TOL
@@ -63,6 +65,9 @@ all_normal_forms = st.one_of(normal_forms, winfree_forms)
 
 radii = st.floats(0.15, 2.5)
 angles = st.floats(-3.1, 3.1)
+"""A polar angle in radians."""
+phases = st.floats(0.0, 1.0, exclude_max=True)
+"""A phase in turns, ``[0, 1)``."""
 
 
 def _point(r, theta):
@@ -79,7 +84,8 @@ def _in_basin(nf, r):
 # ------------------------------------------------------- 1. normal-form structure --
 @given(nf=all_normal_forms, r=radii)
 def test_phase_and_isostable_identities(nf, r):
-    """The exact (autodiff) form of ``dΘ/dt = ω₁`` and ``dΨ/dt = κΨ`` along the flow,
+    """The exact (autodiff) form of ``d(θ + h)/dt = ω₁`` and ``dΨ/dt = κΨ`` along the
+    flow,
     ``ω(r) + h'(r) r ρ(r) == ω₁`` and ``Ψ'(r) r ρ(r) == κ Ψ(r)`` (design document §4,
     §5)."""
     r = _in_basin(nf, r)
@@ -271,8 +277,10 @@ def test_cartesian_rhs_is_polar_rhs_in_the_chart(nf, r, theta):
 
 @given(nf=all_normal_forms, r=radii, theta=angles)
 def test_phase_and_amplitude_along_the_flow(nf, r, theta):
-    """Integrated version: phase(u(t)) - phase(u0) == w t (mod 2pi) and
-    amplitude(u(t)) == amplitude(u0) exp(kappa t)."""
+    """Integrated version: the phase advances by the elapsed fraction of the period,
+    ``phase(u(t)) == phase(u0) + t/|T| (mod 1)``, on every form, clockwise ones
+    included (ADR-0020, decision 1); and
+    ``amplitude(u(t)) == amplitude(u0) exp(kappa t)``."""
     ts = jnp.linspace(0.0, 1.5, 7)
     ys = nf.flow(
         ts,
@@ -280,23 +288,30 @@ def test_phase_and_amplitude_along_the_flow(nf, r, theta):
         config=SOLVERS["tight"],
         integration="cartesian",
     ).ys
-    dphi = jax.vmap(nf.phase)(ys) - nf.phase(ys[0]) - nf.omega() * ts
-    dphi = jnp.arctan2(jnp.sin(dphi), jnp.cos(dphi))  # mod 2pi
+    elapsed = ts / jnp.abs(nf.period())  # `period` is signed
+    dphi = phase_difference(jax.vmap(nf.phase)(ys), nf.phase(ys[0]) + elapsed)
     assert_close(dphi, jnp.zeros_like(ts), atol=TOL["flow"])
     amp = jax.vmap(nf.amplitude)(ys)
     expected = nf.amplitude(ys[0]) * jnp.exp(nf.floquet_exponent() * ts)
     assert_close(amp, expected, rtol=TOL["flow"], atol=TOL["flow"])
 
 
-@given(nf=all_normal_forms, phi=angles, r=radii)
+@given(nf=all_normal_forms, phi=phases, r=radii)
 def test_isochron_and_limit_cycle(nf, phi, r):
     """`isochron` points have phase ``phi``, the one at radius 1 is `limit_cycle(phi)`,
-    and `phase` of a cycle point is its phase."""
+    and `phase` of a cycle point is its phase; phases are compared through
+    `phase_difference`, so a phase near 1 that wraps to near 0 still agrees."""
     pts = nf.isochron(phi, jnp.array([_in_basin(nf, r), 1.0]))
-    assert_close(jax.vmap(nf.phase)(pts), jnp.full(2, phi), atol=TOL["closed_form"])
+    assert_close(
+        phase_difference(jax.vmap(nf.phase)(pts), jnp.full(2, phi)),
+        jnp.zeros(2),
+        atol=TOL["closed_form"],
+    )
     assert_close(pts[1], nf.limit_cycle(jnp.asarray(phi)), atol=TOL["closed_form"])
     assert_close(
-        nf.phase(nf.limit_cycle(jnp.asarray(phi))), phi, atol=TOL["closed_form"]
+        phase_difference(nf.phase(nf.limit_cycle(jnp.asarray(phi))), phi),
+        0.0,
+        atol=TOL["closed_form"],
     )
 
 
@@ -348,12 +363,12 @@ def test_bautin_rejects_unstable_cycle():
 # ------------------------------------------------------------------- 2. charts -----
 @given(nf=all_normal_forms, r=radii, theta=angles)
 def test_phase_amplitude_chart_round_trip(nf, r, theta):
-    """`to_phase_amplitude` gives a phase in ``[-π, π]``, `from_phase_amplitude`
+    """`to_phase_amplitude` gives a phase in ``[0, 1)``, `from_phase_amplitude`
     inverts it on the basin, and `radius_from_isostable` inverts `isostable`."""
     r = _in_basin(nf, r)
     u = _point(r, theta)
     z = nf.to_phase_amplitude(u)
-    assert bool(jnp.abs(z[0]) <= jnp.pi)
+    assert bool((z[0] >= 0) & (z[0] < 1))
     assert_close(
         nf.from_phase_amplitude(z), u, rtol=TOL["closed_form"], atol=TOL["closed_form"]
     )
@@ -555,8 +570,9 @@ def test_winfree_structure(a, w):
 def test_winfree_isochrons_are_langfield_eq_12(theta, r):
     """Eq. 12, a = 0.25, ω = −0.5:
     ψ(r) = 2π( ω/(2πa) [ln(r/(r−a)) − ln(1/(1−a))] − ϑ ) is the polar angle of the
-    isochron of phase ϑ ∈ [0, 1) at radius r > a; our phase of that point is Θ = −2πϑ
-    (Θ = θ on the cycle, Θ̇ = ω₁ = −1)."""
+    isochron of phase ϑ ∈ [0, 1) at radius r > a; our phase of that point is Θ = ϑ.
+    Langfield's ϑ increases with time and so does ours, since the clockwise form
+    negates the polar angle (ADR-0020, decision 1)."""
     a, w = 0.25, -0.5
     nf = WinfreeNormalForm(a, w)
     psi = (
@@ -565,9 +581,8 @@ def test_winfree_isochrons_are_langfield_eq_12(theta, r):
         * (w / (2 * jnp.pi * a) * (jnp.log(r / (r - a)) - jnp.log(1 / (1 - a))) - theta)
     )
     point = jnp.array([r * jnp.cos(psi), r * jnp.sin(psi)])
-    Theta = -2 * jnp.pi * theta
-    d = nf.phase(point) - Theta
-    assert_close(jnp.arctan2(jnp.sin(d), jnp.cos(d)), 0.0, atol=TOL["closed_form"])
+    Theta = theta
+    assert_close(phase_difference(nf.phase(point), Theta), 0.0, atol=TOL["closed_form"])
     ours = nf.isochron(Theta, jnp.array([r]))[0]
     assert_close(ours, point, rtol=TOL["closed_form"], atol=TOL["closed_form"])
 
