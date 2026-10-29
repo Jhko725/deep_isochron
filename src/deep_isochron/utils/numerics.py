@@ -92,32 +92,33 @@ def wrap_phase(
 
 @overload
 def phase_difference(
-    a: Float[Array, "*shape"], b: Float[ArrayLike, "*shape"]
+    a: Float[Array, "*#shape"], b: Float[ArrayLike, "*#shape"]
 ) -> Float[Array, "*shape"]: ...
 
 
 @overload
 def phase_difference(
-    a: Float[ArrayLike, "*shape"], b: Float[Array, "*shape"]
+    a: Float[ArrayLike, "*#shape"], b: Float[Array, "*#shape"]
 ) -> Float[Array, "*shape"]: ...
 
 
 @overload
 def phase_difference(
-    a: Float[np.ndarray, "*shape"] | float,
-    b: Float[np.ndarray, "*shape"] | float,
+    a: Float[np.ndarray, "*#shape"] | float,
+    b: Float[np.ndarray, "*#shape"] | float,
 ) -> Float[np.ndarray, "*shape"]: ...
 
 
 def phase_difference(
-    a: Float[ArrayLike, "*shape"],
-    b: Float[ArrayLike, "*shape"],
+    a: Float[ArrayLike, "*#shape"],
+    b: Float[ArrayLike, "*#shape"],
 ) -> Float[Array, "*shape"] | Float[np.ndarray, "*shape"]:
     r"""The signed shortest arc from phase `b` to phase `a`, in $(-\tfrac12, \tfrac12]$.
 
     The result is positive when `a` is ahead of `b`, and a difference of exactly half a
     turn maps to $+\tfrac12$. This helper is the one way to compare two phases
-    (ADR-0020, decision 3). The derivative with respect to `a` is 1 away from the seam
+    (ADR-0020, decision 3). The arguments `a` and `b` broadcast, as a phase against an
+    offset. The derivative with respect to `a` is 1 away from the seam
     at half a turn.
 
     Each argument goes through `_array_and_namespace` before the difference ``a - b``

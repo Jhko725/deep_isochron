@@ -566,8 +566,8 @@ def test_evaluator_splits_the_prediction_error_by_window_start():
 
 def test_bounding_box_grid_and_circular_std():
     """`bounding_box_grid` with ``num=3`` spans the points' box with 9 grid points;
-    `circular_std` is zero on a constant angle, invariant to ``2π``, and large on
-    angles spread around the circle."""
+    `circular_std` is zero on a constant phase, invariant to a shift by one turn, and
+    large on phases spread around the cycle."""
     pts = jnp.array([[0.0, 0.0], [2.0, 4.0]])  # (lo, hi)
     grid = bounding_box_grid(pts, num=3, margin=0.0)
     assert grid.shape == (9, 2)
@@ -575,15 +575,15 @@ def test_bounding_box_grid_and_circular_std():
         jnp.max(grid, 0), pts[1]
     )
     assert_close(circular_std(jnp.full(10, 0.3)), 0.0, atol=1e-7)
-    assert_close(circular_std(jnp.full(10, 0.3) + 2 * jnp.pi), 0.0, atol=1e-7)
-    assert circular_std(jnp.linspace(-jnp.pi, jnp.pi, 8, endpoint=False)) > 5.0
+    assert_close(circular_std(jnp.full(10, 0.3) + 1.0), 0.0, atol=1e-7)
+    assert circular_std(jnp.linspace(0, 1, 8, endpoint=False)) > 0.3
 
 
 def test_align_phases_recovers_sense_and_offset_and_ignores_nan():
     """A model phase that is the reference reversed and shifted by 0.7 aligns with
     sense −1, offset 0.7 and a residual at round-off, held as NumPy, with ``nan``
     entries ignored; a given offset is kept and only the sense chosen."""
-    reference = jnp.linspace(-3.0, 3.0, 50)
+    reference = jnp.linspace(0.0, 1.0, 50, endpoint=False)
     model = wrap_phase(-reference + 0.7).at[3].set(jnp.nan)
     alignment = align_phases(model, reference)
     assert alignment.sense == -1.0

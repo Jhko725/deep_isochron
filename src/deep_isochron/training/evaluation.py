@@ -41,7 +41,7 @@ from ..model.conjugacy import ConjugateLatentDynamics
 from ..model.invertible import AbstractBijection, SequentialINN
 from ..model.latent_dynamics import PhaseAmplitudeLatentDynamics
 from ..systems.normal_forms import AbstractNormalForm
-from ..utils.numerics import wrap_phase
+from ..utils.numerics import phase_difference, wrap_phase
 from .losses import Batch, final_mse, trajectory_mse
 
 
@@ -68,11 +68,12 @@ class PhaseAlignment:
     **Attributes:**
 
     - `sense`: ``+1`` or ``−1``, the orientation of the model's phase.
-    - `offset`: The model's phase at reference phase 0, in $(-\pi, \pi]$.
-    - `residual`: ``wrap(model − sense · reference − offset)``, the shape of the inputs;
-        ``nan`` where either input is.
+    - `offset`: The model's phase at reference phase 0, in turns, in $[0, 1)$.
+    - `residual`: The signed shortest arc `phase_difference(model − sense · reference,
+        offset)` in $(-\tfrac12, \tfrac12]$ turns, the shape of the inputs; ``nan``
+        where either input is.
     - `rms`: The root mean square of `residual` over the finite entries: the aligned
-        phase error in radians.
+        phase error in turns.
     """
 
     sense: float
@@ -89,15 +90,15 @@ def align_phases(
     """Align a model's phases with reference phases at the same points.
 
     The orientation is the one with the smaller residual, and the offset is the
-    circular mean of ``model − sense · reference`` unless `offset` is given, as from
-    ``analysis.phase_offset``, in which case only the sense is chosen (roadmap item M:
-    the aligned phase-field error, shared by the metric and the plot).
+    circular mean, in turns, of ``model − sense · reference`` unless `offset` is given,
+    as from ``analysis.phase_offset``, in which case only the sense is chosen (roadmap
+    item M: the aligned phase-field error, shared by the metric and the plot).
 
     **Arguments:**
 
-    - `model_phase`, `reference`: Phases at the same points, any common shape; ``nan``
-        marks a point outside the basin and is ignored.
-    - `offset`: The model's phase at reference phase 0, when known.
+    - `model_phase`, `reference`: Phases in turns at the same points, any common
+        shape; ``nan`` marks a point outside the basin and is ignored.
+    - `offset`: The model's phase at reference phase 0, in turns, when known.
 
     **Returns:**
 
@@ -107,23 +108,27 @@ def align_phases(
     for sense in (1.0, -1.0):
         shift = model_phase - sense * reference
         theta0 = (
-            jnp.angle(jnp.nanmean(jnp.exp(1j * shift))) if offset is None else offset
+            jnp.angle(jnp.nanmean(jnp.exp(2j * jnp.pi * shift))) / (2 * jnp.pi)
+            if offset is None
+            else offset
         )
-        residual = wrap_phase(shift - theta0)
+        residual = phase_difference(shift, theta0)
         rms = jnp.sqrt(jnp.nanmean(residual**2))
         if best is None or float(rms) < best.rms:
             best = PhaseAlignment(
-                sense, float(theta0), np.asarray(residual), float(rms)
+                sense, float(wrap_phase(theta0)), np.asarray(residual), float(rms)
             )
     assert best is not None
     return best
 
 
-def circular_std(angles: Float[Array, " n"]) -> Float[Array, ""]:
-    """The circular standard deviation ``sqrt(-2 ln R̄)`` of `angles`, with ``R̄`` the
-    mean resultant length; `phase_amplitude_agreement` says why this is the right
-    spread of angles."""
-    return circular_std_from_resultant(jnp.abs(jnp.mean(jnp.exp(1j * angles))))
+def circular_std(phases: Float[Array, " n"]) -> Float[Array, ""]:
+    """The circular standard deviation, in turns, of `phases` given in turns: the
+    ``sqrt(-2 ln R̄)`` of the angle ``2πΔ``, divided by ``2π``, with
+    ``R̄ = |mean exp(2πiΔ)|`` the mean resultant length; `phase_amplitude_agreement`
+    says why this is the right spread of phase differences."""
+    resultant = jnp.abs(jnp.mean(jnp.exp(2j * jnp.pi * phases)))
+    return circular_std_from_resultant(resultant) / (2 * jnp.pi)
 
 
 @eqx.filter_jit
@@ -211,7 +216,7 @@ def phase_amplitude_sums(
     points: Float[Array, "n dim"],
 ) -> dict[str, Array]:
     """The sufficient statistics of one batch of `points` for the phase and amplitude
-    agreement of `model` with `reference`: ``Σ exp(i(±Θ_model − Θ_ref))`` for both
+    agreement of `model` with `reference`: ``Σ exp(2πi(±Θ_model − Θ_ref))`` for both
     orientations and the moments of ``(A_model, Ψ_ref)``. `Evaluator` sums them over
     batches."""
     theta = jax.vmap(model.phase)(points)
@@ -220,8 +225,8 @@ def phase_amplitude_sums(
     psi = exact[:, 1]
     return {
         "n": jnp.asarray(points.shape[0], dtype=theta.dtype),
-        "z_plus": jnp.sum(jnp.exp(1j * (theta - exact[:, 0]))),
-        "z_minus": jnp.sum(jnp.exp(1j * (-theta - exact[:, 0]))),
+        "z_plus": jnp.sum(jnp.exp(2j * jnp.pi * (theta - exact[:, 0]))),
+        "z_minus": jnp.sum(jnp.exp(2j * jnp.pi * (-theta - exact[:, 0]))),
         "a": jnp.sum(amp),
         "p": jnp.sum(psi),
         "aa": jnp.sum(amp * amp),
@@ -231,17 +236,19 @@ def phase_amplitude_sums(
 
 
 def phase_amplitude_agreement(sums: dict[str, Array]) -> tuple[Array, Array]:
-    """``(circ_std, |corr|)`` from the summed `phase_amplitude_sums`.
+    """``(circ_std, |corr|)`` from the summed `phase_amplitude_sums`, with ``circ_std``
+    in turns.
 
-    The circular standard deviation rather than an MSE of the angle difference,
+    The circular standard deviation rather than an MSE of the phase difference,
     because the learned phase is determined only up to a constant (design document
     §5.4), so the difference ``Δ = Θ_model − Θ_ref`` has an unknown mean, and ``Δ``
-    lives on the circle, so a model right to 0.01 rad can show ``|Δ| ≈ 2π`` near
-    ``±π``. The circular standard deviation ``sqrt(−2 ln R̄)`` with
-    ``R̄ = |mean exp(iΔ)|`` (Mardia & Jupp 1999; SciPy's ``circstd``) is invariant to
+    lives on the circle, so a model right to 0.002 turns can show ``|Δ| ≈ 1`` near
+    the seam at 0 and 1. The circular standard deviation ``sqrt(−2 ln R̄) / 2π`` with
+    ``R̄ = |mean exp(2πiΔ)|`` (Mardia & Jupp 1999; SciPy's ``circstd``) is invariant to
     the offset and to wrapping, and for small spread equals the ordinary standard
-    deviation of ``Δ`` after removing its mean: the RMS phase error in radians. The
-    better of the two orientations is kept, since a phase is learned up to a sign too.
+    deviation of ``Δ`` after removing its mean: the RMS phase error in turns. Both
+    orientations are compared and the better kept, because the model may learn either
+    way round while the reference has one (ADR-0020).
     The amplitude is learned up to scale, so ``|corr(A_model, Ψ_ref)|`` is its
     scale-free comparison.
     """
@@ -249,7 +256,7 @@ def phase_amplitude_agreement(sums: dict[str, Array]) -> tuple[Array, Array]:
     spread = jnp.minimum(
         circular_std_from_resultant(jnp.abs(sums["z_plus"]) / n),
         circular_std_from_resultant(jnp.abs(sums["z_minus"]) / n),
-    )
+    ) / (2 * jnp.pi)
     cov = sums["ap"] / n - (sums["a"] / n) * (sums["p"] / n)
     var_a = sums["aa"] / n - (sums["a"] / n) ** 2
     var_p = sums["pp"] / n - (sums["p"] / n) ** 2

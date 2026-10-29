@@ -143,6 +143,17 @@ recomputed (ADR-0020, Consequences).
   `SHIPPED_HASHES` is repinned to `11305875` (`fhn`, was `d9ded7af`) and `fb823a3f`
   (`fhn-easy`, was `b688cbfe`). The repin is irreversible: every foliation saved under
   the old hashes is orphaned and recomputed on the cluster after the merge.
+- `src/deep_isochron/training/evaluation.py` — `circular_std` and the phase-amplitude
+  sums take phase differences in turns and form their resultants from
+  $e^{2\pi i\Delta}$; the spread is the circular standard deviation of $2\pi\Delta$
+  divided by $2\pi$, so `phase/circ_std` reads in turns under its old name;
+  `align_phases` finds the offset as the circular mean in turns and the residual by
+  `phase_difference`, and `PhaseAlignment.offset` is stored in $[0, 1)$. Both
+  orientations are still tried (ADR-0020).
+- `src/deep_isochron/utils/numerics.py` — `phase_difference` annotates its arguments
+  `*#shape`, so `a` and `b` broadcast, as a phase against an offset.
+- `tests/test_training.py` — the `circular_std` and `align_phases` laws in turns.
+- `tests/test_phase.py` — the wrap test adds a scalar offset against a phase array.
 
 ## Design
 
@@ -171,7 +182,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 8. `experiment/isochrons.py`, `configs/isochrons/`: `phases.count` → $k/$`count`;
    the hashes repinned. — done.
 9. `training/evaluation.py`: `circular_std` and the sums with $e^{2\pi i\Delta}$;
-   `align_phases` in turns.
+   `align_phases` in turns. — done.
 10. `plotting/isochrons.py`: `PHASE_NORM = Normalize(0, 1)`, the sample grids, the
     gaps by `phase_difference`.
 11. `tests/`: every phase assertion and the golden isochrons' phase labels
@@ -229,3 +240,7 @@ None yet.
 | `docs/decisions/0020-phase-in-turns.md` — the `wrap_angle` amendment | | |
 | `src/deep_isochron/experiment/isochrons.py`, `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — `phases.count` and `phases.values` in turns | | |
 | `tests/test_experiment_isochrons.py` — the config test in turns; the two shipped hashes repinned | | |
+| `src/deep_isochron/training/evaluation.py` — `circular_std`, the sums and `align_phases` in turns | | |
+| `src/deep_isochron/utils/numerics.py` — `phase_difference` broadcasts its arguments | | |
+| `tests/test_training.py` — the spread and alignment laws in turns | | |
+| `tests/test_phase.py` — the scalar-offset case of the difference | | |

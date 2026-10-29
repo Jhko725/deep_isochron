@@ -106,7 +106,7 @@ def test_wrap_phase_and_phase_difference_equal_the_floor_wrap():
     ``vmap``; a negative phase within half an ulp of 0 wraps to 0, half a turn maps to
     $+\\tfrac12$, and the derivative of the difference is 1 away from the seam. A JAX
     array in either argument gives a JAX array, and NumPy arrays or Python floats give
-    a NumPy array."""
+    a NumPy array; a phase array and a scalar offset broadcast."""
     rng = np.random.default_rng(0)
     phases = [k / n for n in (7, 64, 100) for k in range(-3 * n, 3 * n)]
     phases += rng.uniform(-1e3, 1e3, 1000).tolist()
@@ -145,6 +145,7 @@ def test_wrap_phase_and_phase_difference_equal_the_floor_wrap():
     for value in (wrap_phase(0.3), phase_difference(0.3, 0.1)):
         assert isinstance(value, np.ndarray) and value.shape == ()
     assert isinstance(phase_difference(jnp.asarray(0.3), 0.1), jax.Array)
+    assert phase_difference(jnp.linspace(0, 1, 5, endpoint=False), 0.7).shape == (5,)
     assert float(wrap_phase(-1e-20)) == 0.0
     assert float(wrap_phase(jnp.asarray(-1e-20))) == 0.0
     assert float(phase_difference(0.5, 0.0)) == 0.5
