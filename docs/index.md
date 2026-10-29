@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # `deep_isochron` documentation — index
@@ -70,6 +70,7 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | [0017](decisions/0017-isochrons-by-auto-continuation.md) | accepted (review pending) | isochrons by AUTO-07p: the rotating multi-segment boundary value problem (Hannam et al. 2022), the adjoint bundle $-\tau A^{\mathsf T}w$, phase 0 on the cycle's section, AUTO as a locked git dependency with a build script, a `spawn` pool per phase, one netCDF file per foliation loaded against its cycle |
 | [0018](decisions/0018-docstrings-map-and-contract.md) | accepted | docstrings: the module docstring is the map, a function docstring the contract, reasoning in the ADRs; `**Attributes:**` lists; one bibliography `references.md` with `(Key, locator)` citations and `check_references.py`; ruff `D100`–`D103` switched on round by round |
 | [0019](decisions/0019-adrs-describe-the-current-design.md) | accepted | ADRs: Context with Motivation and Forces; Decision and Consequences always the current design; superseded designs in Alternatives rejected; a dated History; relative links checked by `check_references.py` |
+| [0020](decisions/0020-phase-in-turns.md) | accepted (review pending) | the phase is a fraction of the period in $[0, 1)$, increasing with time; angles only for geometry; `phase_difference` in $(-\tfrac12, \tfrac12]$; $Z \cdot F = 1/T$ |
 
 ## Change documents (`changes/`) — one per branch, the reviewer's map
 
@@ -94,3 +95,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `plotting` | [`2026-10-29-plotting.md`](changes/2026-10-29-plotting.md) |
 | `isochron2pbvp` | [`2026-10-29-isochron2pbvp.md`](changes/2026-10-29-isochron2pbvp.md) |
 | `merge-conflict-check` | [`2026-10-29-merge-conflict-check.md`](changes/2026-10-29-merge-conflict-check.md) |
+| `phase-turns` | [`2026-10-30-phase-turns.md`](changes/2026-10-30-phase-turns.md) |
