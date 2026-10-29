@@ -162,6 +162,9 @@ recomputed (ADR-0020, Consequences).
 - `prototype_analysis.ipynb` — cells 7, 9, 13, 15 and 16 follow the API (the learned
   isochron at 0.875 turns, the gap through `phase_difference`, labels in turns) and
   cell 8 reads "a sixth of a turn"; the outputs of the edited code cells are cleared.
+- `.github/workflows/ci.yml`, `tests/conftest.py` — JAX's persistent compilation cache
+  kept across CI runs by `actions/cache` in each job, and the `ci` hypothesis profile at
+  100 examples: the `checks` job had reached its 45-minute limit at 300.
 
 ## Design
 
@@ -255,3 +258,4 @@ None yet.
 | `tests/test_phase.py` — the scalar-offset case of the difference | Confirmed. | None |
 | `src/deep_isochron/plotting/isochrons.py` — `PHASE_NORM` over $[0, 1)$, `norm` in place of `limit`, the gaps by `phase_difference`, colorbars in turns | Confirmed. | None |
 | `prototype_analysis.ipynb` — cells 7, 8, 9, 13, 15, 16 follow the API; outputs of the edited code cells cleared | Confirmed. | None |
+| `.github/workflows/ci.yml`, `tests/conftest.py` — the JAX cache in CI; `ci` at 100 examples | | |

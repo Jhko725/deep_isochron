@@ -37,7 +37,9 @@ _common = dict(
 )
 settings.register_profile("default", max_examples=50, **_common)
 settings.register_profile("dev", max_examples=10, **_common)
-settings.register_profile("ci", max_examples=300, derandomize=True, **_common)
+# ci: 100 examples, derandomized. 300 took the `checks` job to its 45-minute limit on
+# 2026-10-29 (38, 43 and two canceled runs) once the ODE-integrating laws grew.
+settings.register_profile("ci", max_examples=100, derandomize=True, **_common)
 settings.load_profile("default")
 
 
