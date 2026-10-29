@@ -49,7 +49,7 @@ class ConjugateLatentDynamics(AbstractPhaseAmplitudeModel):
         return self.latent_dynamics.dim
 
     def phase(self, x):
-        """``Θ_NF(H(x))``."""
+        """``Θ_NF(H(x))``, in turns in ``[0, 1)`` as the normal form's phase is."""
         return self.latent_dynamics.phase(self.bijection(x))
 
     def amplitude(self, x):
@@ -57,7 +57,7 @@ class ConjugateLatentDynamics(AbstractPhaseAmplitudeModel):
         return self.latent_dynamics.amplitude(self.bijection(x))
 
     def cycle_point(self, theta):
-        """``H⁻¹`` of the normal form's cycle point at `theta`."""
+        """``H⁻¹`` of the normal form's cycle point at phase `theta`, in turns."""
         return self.bijection.inverse(self.latent_dynamics.limit_cycle(theta))
 
     def isochron_coordinate(self, x):
@@ -65,7 +65,8 @@ class ConjugateLatentDynamics(AbstractPhaseAmplitudeModel):
         return jnp.linalg.norm(self.bijection(x))
 
     def isochron(self, theta, r):
-        """``H⁻¹`` of the normal form's isochron of phase `theta` at radii `r`."""
+        """``H⁻¹`` of the normal form's isochron of phase `theta`, in turns, at radii
+        `r`."""
         return jax.vmap(self.bijection.inverse)(self.latent_dynamics.isochron(theta, r))
 
     def equilibrium(self) -> Float[Array, " obs_dim"]:

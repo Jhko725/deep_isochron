@@ -44,6 +44,23 @@ recomputed (ADR-0020, Consequences).
   `phases` strategy in $[0, 1)$; the flow law states that the phase advances by the
   elapsed fraction of the period on every form, clockwise ones included; Langfield's
   Eq. 12 identity reads $\Theta = \vartheta$.
+- `src/deep_isochron/model/base.py` — `AbstractPhaseAmplitudeModel.phase` promises a
+  fraction of the period in $[0, 1)$, up to the model's origin (and orientation, for
+  the autoencoder); `cycle_point`, `isochron` and `phase_sensitivity` take that phase,
+  the last normalized by $Z \cdot F = 1/T$. Docstrings only.
+- `src/deep_isochron/model/conjugacy.py` — docstrings say turns; the phase is the
+  normal form's, so no body changes.
+- `src/deep_isochron/model/autoencoder.py` — `phase` returns
+  $\mathrm{wrap}(\mathrm{atan2}(Y_2, Y_1)/2\pi)$; `cycle_point` and `isochron`
+  encode the angle $2\pi\Theta$; the latent plane's angle stays an angle.
+- `tests/test_models.py` — the range law is $0 \le \Theta < 1$; the conjugacy laws
+  take phases in turns and compare them through `phase_difference`.
+- `tests/test_baseline.py` — the range law is $0 \le \Theta < 1$; the exact chart
+  encodes $(\cos 2\pi\Theta, \sin 2\pi\Theta, \Psi)$ and decodes through
+  $\mathrm{atan2}/2\pi$; `_exact_dynamics` rotates at $|\omega_1|$, the rate of the
+  encoded angle.
+- `tests/test_training.py` — `_exact_autoencoder` encodes and decodes the same chart,
+  with the latent rotation at $|\omega_1|$.
 
 ## Design
 
@@ -57,6 +74,7 @@ The ledger of the change, in the order the commits will follow. Each item become
    `from_phase_amplitude` and the closed-form integration follow. — done.
 3. `model/base.py`, `conjugacy.py`, `autoencoder.py`: the contract in turns;
    `cycle_point` and `isochron` take $2\pi\Theta$; `phase_sensitivity` in turns.
+   — done.
 4. `analysis/cycle.py`, `analysis/data/cycle.py`: `Cycle`'s phase in turns, the
    Fourier series in $2\pi\varphi$ inside.
 5. `analysis/ode/phase.py`: `phase = wrap(t/T)`, the discrepancy by
@@ -99,3 +117,6 @@ None yet.
 | `src/deep_isochron/systems/normal_forms/base.py` — the phase in turns at the chart, cycle and isochron seams | | |
 | `src/deep_isochron/systems/normal_forms/integration.py` — the closed form advances the phase by $t/\lvert T\rvert$ | | |
 | `tests/test_normal_forms.py` — phase comparisons in turns; the orientation law | | |
+| `src/deep_isochron/model/base.py`, `src/deep_isochron/model/conjugacy.py` — the model contract in turns | | |
+| `src/deep_isochron/model/autoencoder.py` — the phase seams $\mathrm{atan2}/2\pi$ and $2\pi\Theta$ | | |
+| `tests/test_models.py`, `tests/test_baseline.py`, `tests/test_training.py` — the range law, phase comparisons and the exact chart in turns | | |

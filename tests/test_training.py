@@ -128,17 +128,22 @@ def linear_model(key=jax.random.key(0)):
 
 def _exact_autoencoder(nf):
     """A `PhaseAmplitudeAutoencoder` whose encoder and decoder are `nf`'s exact
-    phase–amplitude chart and whose latent dynamics carry `nf`'s frequency and
-    Floquet exponent."""
+    phase–amplitude chart ``(cos 2πΘ, sin 2πΘ, Ψ)``, with the phase ``Θ`` in turns,
+    and whose latent dynamics carry `nf`'s Floquet exponent and the rate of the encoded
+    angle ``2πΘ``, which is ``2π/|T| = |ω₁|`` whichever way the form turns."""
 
     def encode(u):
-        theta, psi = nf.to_phase_amplitude(u)
-        return jnp.stack((jnp.cos(theta), jnp.sin(theta), psi))
+        phase, psi = nf.to_phase_amplitude(u)
+        angle = 2 * jnp.pi * phase
+        return jnp.stack((jnp.cos(angle), jnp.sin(angle), psi))
 
     def decode(y):
-        return nf.from_phase_amplitude(jnp.stack((jnp.arctan2(y[1], y[0]), y[2])))
+        phase = jnp.arctan2(y[1], y[0]) / (2 * jnp.pi)
+        return nf.from_phase_amplitude(jnp.stack((phase, y[2])))
 
-    dyn = PhaseAmplitudeLatentDynamics(float(nf.omega()), float(nf.floquet_exponent()))
+    dyn = PhaseAmplitudeLatentDynamics(
+        float(jnp.abs(nf.omega())), float(nf.floquet_exponent())
+    )
     model = PhaseAmplitudeAutoencoder(2, dyn, mlp_width=2, key=jax.random.key(0))
     return eqx.tree_at(lambda m: (m.encoder, m.decoder), model, (encode, decode))
 

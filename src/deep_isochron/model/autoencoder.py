@@ -5,12 +5,14 @@ An encoder $f_{\rm enc}: \mathbb R^{d} \to \mathbb R^3$ whose first two outputs 
 normalized to the unit circle (Eqs. 15–16), a decoder
 $f_{\rm dec}: \mathbb R^3 \to \mathbb R^d$ (Eq. 17), and the latent flow
 ``PhaseAmplitudeLatentDynamics``. The learned phase is
-$\Theta(X) = \mathrm{atan2}(Y_2, Y_1)$ (Eq. 19); the phase sensitivity function at
-$X = f_{\rm dec}(\cos\theta, \sin\theta, 0)$ (Eq. 20) comes from
-``AbstractPhaseAmplitudeModel`` by autodiff. Three differences from the paper are
-deliberate: no batch normalization in the MLPs, whose encoder is 2×100 ReLU with BN and
-decoder 3×100; a latent flow continuous in $t$; and input standardization left to the
-data pipeline.
+$\Theta(X) = \mathrm{atan2}(Y_2, Y_1) / 2\pi$ wrapped to $[0, 1)$, in turns (Eq. 19 in
+the angle form; ADR-0020); the phase sensitivity function at
+$X = f_{\rm dec}(\cos 2\pi\Theta, \sin 2\pi\Theta, 0)$ (Eq. 20) comes from
+``AbstractPhaseAmplitudeModel`` by autodiff. The latent plane's angle stays an angle:
+the factor $2\pi$ is written in `phase`, `cycle_point` and `isochron` only. Three
+differences from the paper are deliberate: no batch normalization in the MLPs, whose
+encoder is 2×100 ReLU with BN and decoder 3×100; a latent flow continuous in $t$; and
+input standardization left to the data pipeline.
 """
 
 from collections.abc import Callable
@@ -20,6 +22,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, PRNGKeyArray
 
+from ..utils.numerics import wrap_phase
 from .base import AbstractPhaseAmplitudeModel
 from .latent_dynamics import AbstractLatentDynamics, PhaseAmplitudeLatentDynamics
 
@@ -105,18 +108,20 @@ class PhaseAmplitudeAutoencoder(AbstractPhaseAmplitudeModel):
         return self.decoder(y)
 
     def phase(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
-        """The learned asymptotic phase ``Θ(X) = atan2(Y2, Y1)`` in ``(-π, π]``
-        (Eq. 19)."""
+        """The learned asymptotic phase ``Θ(X) = atan2(Y2, Y1) / 2π`` wrapped to
+        ``[0, 1)``, in turns (Eq. 19 in the angle form)."""
         y = self.encode(x)
-        return jnp.arctan2(y[1], y[0])
+        return jnp.asarray(wrap_phase(jnp.arctan2(y[1], y[0]) / (2 * jnp.pi)))
 
     def amplitude(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
         """The learned amplitude-like latent ``Y3``, the paper's deviation variable."""
         return self.encode(x)[2]
 
     def cycle_point(self, theta: Float[Array, ""]) -> Float[Array, " obs_dim"]:
-        """``f_dec(cos θ, sin θ, 0)``: the learned limit cycle at phase `theta`."""
-        return self.decode(jnp.stack((jnp.cos(theta), jnp.sin(theta), 0.0)))
+        """``f_dec(cos 2πθ, sin 2πθ, 0)``: the learned limit cycle at phase `theta`, in
+        turns."""
+        angle = 2 * jnp.pi * theta
+        return self.decode(jnp.stack((jnp.cos(angle), jnp.sin(angle), 0.0)))
 
     def isochron_coordinate(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
         """The deviation variable ``Y3``, the same as `amplitude`; 0 on the cycle."""
@@ -125,9 +130,11 @@ class PhaseAmplitudeAutoencoder(AbstractPhaseAmplitudeModel):
     def isochron(
         self, theta: Float[Array, ""], r: Float[Array, " n"]
     ) -> Float[Array, "n obs_dim"]:
-        """``f_dec(cos θ, sin θ, Y3)`` at each ``Y3`` in `r`."""
+        """``f_dec(cos 2πθ, sin 2πθ, Y3)`` at each ``Y3`` in `r`, for the phase `theta`
+        in turns."""
+        angle = 2 * jnp.pi * theta
         latent = jnp.stack(
-            (jnp.full_like(r, jnp.cos(theta)), jnp.full_like(r, jnp.sin(theta)), r),
+            (jnp.full_like(r, jnp.cos(angle)), jnp.full_like(r, jnp.sin(angle)), r),
             axis=-1,
         )
         return eqx.filter_vmap(self.decode)(latent)

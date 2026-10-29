@@ -1,11 +1,12 @@
 """The phase-autoencoder baseline of Yawata et al. (Chaos 34, 063111, 2024), roadmap
 B12, ``docs/design/normal-forms.md`` §5.3.
 
-The exact phase–amplitude chart of a normal form, ``(cos Θ, sin Θ, Ψ)``, is a perfect
-encoder for the latent flow with ``omega = ω₁``, ``kappa = κ`` — that is the
-correspondence of §5.3 — so most laws here are checked against it exactly. The one
-training test (marked ``slow``) learns the chart of a Hopf form from near-cycle data and
-compares the learned phase with ``to_phase_amplitude`` up to a constant; ``Ψ`` (up to
+The exact phase–amplitude chart of a normal form, ``(cos 2πΘ, sin 2πΘ, Ψ)`` with the
+phase ``Θ`` in turns, is a perfect encoder for the latent flow with ``omega = |ω₁|``,
+``kappa = κ`` — that is the correspondence of §5.3 — so most laws here are checked
+against it exactly. The one training test (marked ``slow``) learns the chart of a Hopf
+form from near-cycle data and compares the learned phase with ``to_phase_amplitude``
+up to a constant; ``Ψ`` (up to
 scale) and ``κ`` are reported, not asserted, since the paper itself finds the decay
 variable "closely related, though not equivalent" to the isostable coordinate.
 """
@@ -40,18 +41,23 @@ from tests.helpers import assert_close, TOL
 
 
 def _chart(nf):
-    """The exact encoder ``u ↦ (cos Θ, sin Θ, Ψ)`` of a normal form."""
+    """The exact encoder ``u ↦ (cos 2πΘ, sin 2πΘ, Ψ)`` of a normal form, with the phase
+    ``Θ`` in turns."""
 
     def encode(u):
-        theta, psi = nf.to_phase_amplitude(u)
-        return jnp.stack((jnp.cos(theta), jnp.sin(theta), psi))
+        phase, psi = nf.to_phase_amplitude(u)
+        angle = 2 * jnp.pi * phase
+        return jnp.stack((jnp.cos(angle), jnp.sin(angle), psi))
 
     return encode
 
 
 def _exact_dynamics(nf):
+    """The latent flow that `_chart` conjugates `nf` to: the encoded angle ``2πΘ``
+    advances at ``2π/|T| = |ω₁|`` whichever way the form turns, since ``Θ`` increases
+    with time, and ``Ψ`` decays at ``κ``."""
     return PhaseAmplitudeLatentDynamics(
-        omega=float(nf.omega()), kappa=float(nf.floquet_exponent())
+        omega=float(jnp.abs(nf.omega())), kappa=float(nf.floquet_exponent())
     )
 
 
@@ -61,7 +67,8 @@ def _exact_autoencoder(nf, dynamics=None):
     and its inverse (``eqx.tree_at`` on the MLP fields)."""
 
     def decode(y):
-        return nf.from_phase_amplitude(jnp.stack((jnp.arctan2(y[1], y[0]), y[2])))
+        phase = jnp.arctan2(y[1], y[0]) / (2 * jnp.pi)
+        return nf.from_phase_amplitude(jnp.stack((phase, y[2])))
 
     model = PhaseAmplitudeAutoencoder(
         2, dynamics or _exact_dynamics(nf), mlp_width=2, key=jax.random.key(0)
@@ -127,8 +134,9 @@ def test_latent_dynamics_requires_a_stable_cycle():
 @given(nf=normal_forms, r=st.floats(0.5, 1.8), theta=st.floats(-3.1, 3.1))
 @settings(max_examples=20)
 def test_exact_chart_conjugates_the_normal_form_to_the_latent_flow(nf, r, theta):
-    """§5.3: with ``omega = ω₁``, ``kappa = κ`` the latent flow applied to the chart of
-    ``u₀`` equals the chart of the flow of ``u₀`` — the latent space *is* ``(Θ, Ψ)``."""
+    """§5.3: with ``omega = |ω₁|``, ``kappa = κ`` the latent flow applied to the chart
+    of ``u₀`` equals the chart of the flow of ``u₀`` — the latent space *is*
+    ``(Θ, Ψ)``."""
     u0 = jnp.array([r * jnp.cos(theta), r * jnp.sin(theta)])
     ts = jnp.linspace(0.0, 1.5, 7)
     ys = nf.flow(ts, u0, integration="closed_form").ys
@@ -157,13 +165,14 @@ def test_encoder_normalization(y):
 
 def test_autoencoder_shapes_and_derived_quantities():
     """`encode` gives three latents with the first two on the unit circle, `phase` is
-    in ``[-π, π]``, `amplitude` is the third latent, and `cycle_point` is planar."""
+    in ``[0, 1)``, `amplitude` is the third latent, and `cycle_point` is planar."""
     model = PhaseAmplitudeAutoencoder(2, mlp_width=8, key=jax.random.key(0))
     x = jnp.array([0.3, -1.2])
     y = model.encode(x)
     assert y.shape == (3,)
     assert_close(y[0] ** 2 + y[1] ** 2, 1.0, rtol=TOL["closed_form"])
-    assert bool(jnp.abs(model.phase(x)) <= jnp.pi)
+    phase = model.phase(x)
+    assert bool((0 <= phase) & (phase < 1))
     assert model.amplitude(x) == y[2]
     assert model.cycle_point(jnp.asarray(0.7)).shape == (2,)
     z = model.phase_sensitivity(jnp.asarray(0.7))  # Eq. 20, by autodiff

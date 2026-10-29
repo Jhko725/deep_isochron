@@ -4,18 +4,19 @@ phase autoencoder ``PhaseAmplitudeAutoencoder``, so that training and evaluation
 them on one footing.
 
 The contract is minimal on purpose and will grow as the science finds its rough edges.
-It promises a phase ``Θ(x)`` in ``(-π, π]``; an amplitude ``A(x)`` that is
-isostable-like, zero on the limit cycle, with the sign of the deviation and decaying
-along the flow, but with no fixed normalization, since the conjugacy model's is the
-Wilson–Moehlis ``Ψ`` (``docs/design/normal-forms.md`` §5.2) while the autoencoder's
-``Y₃`` is determined only up to scale (§5.4), so evaluations compare amplitudes up to
-a scale fitted on the data; a point of the learned limit cycle at a given phase; and
-the prediction ``x(t)`` from ``x(t₀)`` through the model's latent dynamics; the
-learned isochron of a phase, sampled along the model's own latent radial coordinate,
-and that coordinate at a point, so that a learned isochron can be matched to a reference
-one point by point. Derived from these once for all models are the phase gradient
-anywhere and the phase sensitivity function ``Z(θ) = ∇ₓΘ`` on the cycle (Yawata et al.
-2024, Eq. 20).
+It promises a phase ``Θ(x)`` in ``[0, 1)``, a fraction of the period (ADR-0020); an
+amplitude ``A(x)`` that is isostable-like, zero on the limit cycle, with the sign of
+the deviation and decaying along the flow, but with no fixed normalization, since the
+conjugacy model's is the Wilson–Moehlis ``Ψ`` (``docs/design/normal-forms.md`` §5.2)
+while the autoencoder's ``Y₃`` is determined only up to scale (§5.4), so evaluations
+compare amplitudes up to a scale fitted on the data; a point of the learned limit
+cycle at a given phase; and the prediction ``x(t)`` from ``x(t₀)`` through the model's
+latent dynamics; the learned isochron of a phase, sampled along the model's own latent
+radial coordinate, and that coordinate at a point, so that a learned isochron can be
+matched to a reference one point by point. Derived from these once for all models are
+the phase gradient anywhere and the phase sensitivity function ``Z(Θ) = ∇ₓΘ`` on the
+cycle, normalized by ``Z · F = 1/T`` since the phase is in turns (ADR-0020 decision 4;
+Yawata et al. 2024, Eq. 20, carry the angle form).
 """
 
 import abc
@@ -31,8 +32,8 @@ class AbstractPhaseAmplitudeModel(eqx.Module):
 
     @abc.abstractmethod
     def phase(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
-        """The asymptotic phase ``Θ(x)`` in ``(-π, π]``, up to the model's phase
-        origin."""
+        """The asymptotic phase ``Θ(x)`` in ``[0, 1)``, a fraction of the period, up to
+        the model's phase origin (and orientation, for the autoencoder)."""
 
     @abc.abstractmethod
     def amplitude(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
@@ -41,7 +42,7 @@ class AbstractPhaseAmplitudeModel(eqx.Module):
 
     @abc.abstractmethod
     def cycle_point(self, theta: Float[Array, ""]) -> Float[Array, " obs_dim"]:
-        """The point of the learned limit cycle at phase `theta`, with
+        """The point of the learned limit cycle at phase `theta`, in turns, with
         ``Θ(cycle_point(θ)) == θ``."""
 
     @abc.abstractmethod
@@ -58,8 +59,8 @@ class AbstractPhaseAmplitudeModel(eqx.Module):
     def isochron(
         self, theta: Float[Array, ""], r: Float[Array, " n"]
     ) -> Float[Array, "n obs_dim"]:
-        """The points of the learned isochron of phase `theta` at the isochron
-        coordinates `r`, with ``Θ(isochron(θ, r)) == θ`` and
+        """The points of the learned isochron of phase `theta`, in turns, at the
+        isochron coordinates `r`, with ``Θ(isochron(θ, r)) == θ`` and
         ``isochron_coordinate(isochron(θ, r)) == r``."""
 
     @abc.abstractmethod
@@ -75,6 +76,7 @@ class AbstractPhaseAmplitudeModel(eqx.Module):
         return jax.grad(self.phase)(x)
 
     def phase_sensitivity(self, theta: Float[Array, ""]) -> Float[Array, " obs_dim"]:
-        """The phase sensitivity function ``Z(θ) = ∇ₓΘ`` at the cycle point of phase
-        `theta` (Yawata et al. 2024, Eq. 20)."""
+        """The phase sensitivity function ``Z(Θ) = ∇ₓΘ`` at the cycle point of phase
+        `theta`, in turns, normalized by ``Z · F = 1/T`` (ADR-0020 decision 4; Yawata
+        et al. 2024, Eq. 20, carry the angle form)."""
         return self.phase_gradient(self.cycle_point(theta))
