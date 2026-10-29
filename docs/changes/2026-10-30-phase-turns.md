@@ -23,6 +23,10 @@ recomputed (ADR-0020, Consequences).
   rationale (the angle reading misleads on a cycle that is not star-shaped), the
   coworker's existing fractions, and the orientation rule.
 - `docs/index.md` — the ADR's row; this document's row.
+- `.claude/agents/implementer.md` (**new**) — the implementer subagent that
+  `orchestrate-implementation` starts once per commit: its boundary (code, tests,
+  docstrings, and this document's *Files* bullets and review rows), stop rule and
+  report format, versioned here so that a brief points instead of restating them.
 
 ## Design
 
@@ -71,3 +75,4 @@ None yet.
 | Change | Thoughts | Modifications |
 |---|---|---|
 | `docs/decisions/0020-phase-in-turns.md`, `docs/index.md` — ADR-0020 and its rows | | |
+| `.claude/agents/implementer.md` — the implementer subagent's rules | | |
