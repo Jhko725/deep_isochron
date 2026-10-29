@@ -40,9 +40,12 @@ check ty="uv run ty":
     {{ty}} check src
     ! grep -rn 'ty: ignore' src
 
-# The quick tier: `just test` (dev profile), `just test ci`, `just test dev tests/test_x.py`
+# The quick tier: `just test` (dev profile), `just test ci`, `just test dev tests/test_x.py`,
+# `just test dev tests/test_x.py -k "a or b"`. Positional arguments, so that a quoted
+# `-k` expression reaches pytest as one argument.
+[positional-arguments]
 test profile="dev" *paths="tests":
-    uv run pytest {{paths}} -n auto -m "not slow" --hypothesis-profile={{profile}}
+    uv run pytest "${@:2}" -n auto -m "not slow" --hypothesis-profile="$1"
 
 # The slow tier
 test-slow profile="dev":

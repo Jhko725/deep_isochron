@@ -61,6 +61,9 @@ recomputed (ADR-0020, Consequences).
   encoded angle.
 - `tests/test_training.py` — `_exact_autoencoder` encodes and decodes the same chart,
   with the latent rotation at $|\omega_1|$.
+- `justfile` — the `test` recipe takes positional arguments, so that a quoted `-k`
+  expression reaches pytest as one argument (`just test dev tests/test_x.py -k "a or b"`
+  used to split it into three).
 
 ## Design
 
@@ -120,3 +123,4 @@ None yet.
 | `src/deep_isochron/model/base.py`, `src/deep_isochron/model/conjugacy.py` — the model contract in turns | | |
 | `src/deep_isochron/model/autoencoder.py` — the phase seams $\mathrm{atan2}/2\pi$ and $2\pi\Theta$ | | |
 | `tests/test_models.py`, `tests/test_baseline.py`, `tests/test_training.py` — the range law, phase comparisons and the exact chart in turns | | |
+| `justfile` — `test` recipe with positional arguments for `-k` | | |
