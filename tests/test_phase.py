@@ -6,8 +6,8 @@ The oracles: ``math.remainder`` for ``wrap_angle``; ``x - math.floor(x)`` for
 exact nearest point of Hopf's
 unit circle for `nearest_cycle_time`; the closed-form phase of the Bautin and Winfree
 normal forms, integrated with ``integration="cartesian"`` so that the solver is what is
-tested; the phase along the cycle, $\\omega t$; the flow law
-$\\Theta(\\Phi_s x) = \\Theta(x) + \\omega s$; and (``slow``) the coworker's stored
+tested; the phase along the cycle, $t/T$; the flow law
+$\\Theta(\\Phi_s x) = \\Theta(x) + s/T$; and (``slow``) the coworker's stored
 FitzHugh–Nagumo isochrons near the cycle.
 """
 
@@ -83,8 +83,8 @@ def _phase(cycle: LimitCycle, xs: Float[Array, "n 2"], t_end: float):
 
 
 def _gap(a, b) -> np.ndarray:
-    """The absolute wrapped difference of two phases."""
-    return np.abs(np.asarray(wrap_phase(jnp.asarray(a) - jnp.asarray(b))))
+    """The unsigned shortest arc in turns."""
+    return np.abs(np.asarray(phase_difference(a, b)))
 
 
 # ---------------------------------------------------------------------- 1. wraps --
@@ -188,9 +188,9 @@ def test_nearest_cycle_time_finds_the_radial_projection(hopf_cycle):
     t, point, converged = jax.vmap(lambda y: nearest_cycle_time(hopf_cycle, y))(xs)
     on_circle = np.asarray(xs) / np.linalg.norm(np.asarray(xs), axis=1, keepdims=True)
     assert_close(point, on_circle, atol=TOL["limit_cycle"])
-    expected = np.remainder(np.arctan2(on_circle[:, 1], on_circle[:, 0]), 2 * np.pi)
+    expected = wrap_phase(np.arctan2(on_circle[:, 1], on_circle[:, 0]) / (2 * np.pi))
     period = float(hopf_cycle.period)
-    assert _gap(2 * np.pi * np.asarray(t) / period, expected).max() < TOL["limit_cycle"]
+    assert _gap(np.asarray(t) / period, expected).max() < TOL["limit_cycle"]
     assert np.all(np.asarray(converged))
 
 
@@ -207,8 +207,10 @@ def test_find_equilibrium_finds_the_normal_forms_origin(normal_form_cycle):
 def test_phase_offset_is_the_reference_origins_angle_in_the_models_phase():
     """For a model conjugate to the cycle's own normal form by the identity, with the
     phase origin moved off ``(1, 0)``, `phase_offset` returns the polar angle of
-    ``x0s[0]`` (the normal form's phase there) and the sense of the angular rate, for a
-    counterclockwise and a clockwise form."""
+    ``x0s[0]``, which is the normal form's own phase there: the polar angle over $2\\pi$
+    for the counterclockwise form and its negative, wrapped, for the clockwise one. The
+    sense is $+1$ for both, since a conjugacy model's phase increases with time whatever
+    the orientation of its form (ADR-0020 decision 1)."""
     for form in (HopfNormalForm(a=1.0, w=2.0), HopfNormalForm(a=1.0, w=-2.0)):
         cycle = _cycle(form, [0.3, 0.1])
         cycle = reanchor(cycle, jnp.array([0.2, 0.9]))
@@ -217,32 +219,33 @@ def test_phase_offset_is_the_reference_origins_angle_in_the_models_phase():
         )
         offset, sense = phase_offset(model, cycle)
         x0 = np.asarray(cycle.x0s[0])
-        assert _gap(offset, np.arctan2(x0[1], x0[0])).max() < TOL["limit_cycle"]
-        assert float(sense) == np.sign(float(form.w))
+        angle = np.arctan2(x0[1], x0[0])
+        expected = wrap_phase(np.sign(float(form.w)) * angle / (2 * np.pi))
+        assert _gap(offset, expected).max() < TOL["limit_cycle"]
+        assert float(sense) == 1.0
 
 
 # -------------------------------------------------------- 3. asymptotic_phase --
 def test_asymptotic_phase_is_the_closed_form_phase(normal_form_cycle):
     """On an annulus from 0.3 to 2.5 times the cycle radius, the asymptotic phase
-    differs from the normal form's closed-form phase, signed by the sense of rotation,
-    by one constant: phase 0 is at ``(1, 0)``, where the closed form is 0 too."""
+    differs from the normal form's closed-form phase by one constant: phase 0 is at
+    ``(1, 0)``, where the closed form is 0 too."""
     ode = normal_form_cycle.ode
     xs = _points([0.3, 0.7, 1.0, 1.6, 2.5], np.linspace(-np.pi, np.pi, 16))
     result = _phase(normal_form_cycle, xs, PHASE_T_END["normal_forms"])
-    sense = math.copysign(1.0, float(ode.omega()))
-    closed_form = sense * jax.vmap(ode.phase)(xs)
+    closed_form = jax.vmap(ode.phase)(xs)
     offset = float(ode.phase(jnp.array([1.0, 0.0])))
-    assert _gap(result.phase, closed_form - sense * offset).max() < TOL["phase"]
+    assert _gap(result.phase, closed_form - offset).max() < TOL["phase"]
     assert np.asarray(result.discrepancy).max() < TOL["phase"]
     assert np.asarray(result.distance).max() < TOL["phase"]
 
 
-def test_asymptotic_phase_on_the_cycle_is_omega_t(normal_form_cycle):
+def test_asymptotic_phase_on_the_cycle_is_t_over_T(normal_form_cycle):
     """At the cycle point reached a time $t$ after phase 0, the phase is
-    $2\\pi t/T$."""
+    $t/T$."""
     times, points = normal_form_cycle.sample(16)
     result = _phase(normal_form_cycle, points, PHASE_T_END["normal_forms"])
-    expected = 2 * np.pi * np.asarray(times) / float(normal_form_cycle.period)
+    expected = np.asarray(times) / float(normal_form_cycle.period)
     assert _gap(result.phase, expected).max() < TOL["phase"]
 
 
@@ -253,12 +256,12 @@ def test_asymptotic_phase_on_the_cycle_is_omega_t(normal_form_cycle):
     s=st.floats(0.0, 10.0),
 )
 def test_asymptotic_phase_advances_with_the_flow(hopf_cycle, radius, angle, s):
-    """$\\Theta(\\Phi_s x) = \\Theta(x) + 2\\pi s/T$ on Hopf's basin."""
+    """$\\Theta(\\Phi_s x) = \\Theta(x) + s/T$ on Hopf's basin."""
     x = jnp.array([radius * np.cos(angle), radius * np.sin(angle)])
     y = hopf_cycle.ode.flow_to(s, x, config=hopf_cycle.config)
     t_end = PHASE_T_END["normal_forms"]
     a, b = _phase(hopf_cycle, jnp.stack([x, y]), t_end).phase
-    advance = 2 * np.pi * s / float(hopf_cycle.period)
+    advance = s / float(hopf_cycle.period)
     assert _gap(b - a, advance).max() < TOL["phase"]
 
 

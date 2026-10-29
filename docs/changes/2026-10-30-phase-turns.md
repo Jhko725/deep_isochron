@@ -89,6 +89,17 @@ recomputed (ADR-0020, Consequences).
   the circle test and the Fourier fit take phases in turns.
 - `tests/test_analysis_ode.py` — the phases handed to `Cycle.from_points` are
   `times / period`.
+- `src/deep_isochron/analysis/ode/phase.py` — `asymptotic_phase` reads the phase as
+  $\mathrm{wrap}((t - t_{\rm read})/T) \in [0, 1)$, and its discrepancy is the
+  unsigned `phase_difference` of the two readings; the module and `AsymptoticPhase`
+  docstrings state turns.
+- `src/deep_isochron/analysis/model.py` — `phase_sense` is the sign of the
+  `phase_difference` of the model's phases; `phase_offset` samples the learned cycle at
+  phases in $[0, 1)$ and returns the offset in turns.
+- `tests/test_phase.py` — `_gap` is the unsigned `phase_difference`; the radial
+  projection, offset, closed-form, on-the-cycle ($t/T$) and flow laws are stated in
+  turns; the sense of a conjugacy model is $+1$ for both orientations, and the
+  closed-form comparison drops the orientation factor.
 
 ## Design
 
@@ -107,8 +118,9 @@ The ledger of the change, in the order the commits will follow. Each item become
 4. `analysis/cycle.py`, `analysis/data/cycle.py`: `Cycle`'s phase in turns, the
    Fourier series in $2\pi\varphi$ inside. — done.
 5. `analysis/ode/phase.py`: `phase = wrap(t/T)`, the discrepancy by
-   `phase_difference`.
+   `phase_difference`. — done.
 6. `analysis/model.py`: `phase_offset` in turns; `phase_sense` by `phase_difference`.
+   — done.
 7. `analysis/ode/auto/`: `rotate_phase`'s $\tau_2 = (1 - \Theta)T$; `wrap_phases`;
    `Isochron.phase`; the netCDF `units` attribute and the refusal in `load`.
 8. `experiment/isochrons.py`, `configs/isochrons/`: `phases.count` → $k/$`count`;
@@ -156,3 +168,6 @@ None yet.
 | `tests/test_analysis.py` — the trajectory helper's period without `abs` | | |
 | `src/deep_isochron/analysis/cycle.py`, `src/deep_isochron/analysis/data/cycle.py` — `Cycle`'s phase in turns, the series in $2\pi\varphi$; $\varphi/2\pi$ handed to the fit | | |
 | `tests/test_analysis.py`, `tests/test_analysis_ode.py` — `Cycle` phases in turns; `phase_difference` and `wrap_angle` replace `circular_offset` | | |
+| `src/deep_isochron/analysis/ode/phase.py` — `asymptotic_phase` and its discrepancy in turns | | |
+| `src/deep_isochron/analysis/model.py` — `phase_sense` and `phase_offset` in turns | | |
+| `tests/test_phase.py` — the asymptotic-phase and offset laws in turns; `_gap` by `phase_difference` | | |

@@ -22,7 +22,7 @@ import optimistix as optx
 from jaxtyping import Array, Float
 
 from ..model.base import AbstractPhaseAmplitudeModel
-from ..utils.numerics import wrap_phase
+from ..utils.numerics import phase_difference, wrap_phase
 from .ode.limit_cycle import LimitCycle, TIME_TOL
 
 
@@ -30,11 +30,11 @@ def phase_sense(
     model: AbstractPhaseAmplitudeModel, cycle: LimitCycle
 ) -> Float[Array, ""]:
     """``+1`` when the model's phase increases along its own prediction, ``−1`` when it
-    decreases: the sign of the wrapped phase change over a thousandth of the reference
-    period from the reference cycle's phase origin."""
+    decreases: the sign of the shortest-arc phase change over a thousandth of the
+    reference period from the reference cycle's phase origin."""
     ts = jnp.array([0.0, 1e-3]) * cycle.period
     xt, _ = model(ts, cycle.x0s[0])
-    return jnp.sign(wrap_phase(model.phase(xt[1]) - model.phase(xt[0])))
+    return jnp.sign(phase_difference(model.phase(xt[1]), model.phase(xt[0])))
 
 
 def phase_offset(
@@ -60,8 +60,8 @@ def phase_offset(
 
     **Returns:**
 
-    ``(offset, sense)``: the model phase of the crossing, wrapped to $(-\pi, \pi]$, and
-    `phase_sense`. A reference phase $\vartheta$ is the model phase
+    ``(offset, sense)``: the model phase of the crossing, in turns, wrapped to
+    $[0, 1)$, and `phase_sense`. A reference phase $\vartheta$ is the model phase
     $\mathrm{sense}\cdot\vartheta + \mathrm{offset}$.
 
     **Raises:**
@@ -74,7 +74,7 @@ def phase_offset(
         del args
         return cycle.section.signed_distance(model.cycle_point(theta))
 
-    thetas = jnp.linspace(-jnp.pi, jnp.pi, n_samples, endpoint=False)
+    thetas = jnp.linspace(0.0, 1.0, n_samples, endpoint=False)
     values = jax.vmap(lambda t: distance(t, None))(thetas)
     following = jnp.roll(values, -1)
     forward = (values * following <= 0) & (sense * (following - values) > 0)

@@ -4,23 +4,23 @@ a read-off on the cycle (roadmap O3; route (a) of ``docs/design/phase-field.md``
 The asymptotic phase $\Theta(x)$ of a point $x$ in the basin of an attracting cycle
 $\gamma$ of period $T$ is the phase of the cycle point whose orbit the orbit of $x$
 converges to (Guckenheimer 1975; Langfield et al. 2014, §I.B). It satisfies
-$\Theta(\Phi_t x) = \Theta(x) + \omega t$ with $\omega = 2\pi/T$ (their Eq. 2), so
-$\Theta(x) = \Theta(\Phi_{t_{\rm end}} x) - \omega t_{\rm end}$ for every
-$t_{\rm end}$. After a long enough $t_{\rm end}$ the end point $y$ lies within about
-$\mu^n d_0$ of the cycle, with $\mu$ the nontrivial Floquet multiplier and $n$ the
-number of periods, and its phase is read off the cycle as $\omega t^\ast$, where
-$\gamma(t^\ast)$ is the cycle point nearest $y$ (`nearest_cycle_time`). The read-off
-errs at first order in the distance from the cycle, because an isochron crosses the
-cycle along the stable Floquet direction and not along the normal (Langfield et al.
-2014, §I.B); the error is negligible once that distance is near rounding, which is
-what $t_{\rm end}$ has to buy.
+$\Theta(\Phi_t x) = \Theta(x) + t/T \pmod 1$ (their Eq. 2, with the phase in turns), so
+$\Theta(x) = \Theta(\Phi_{t_{\rm end}} x) - t_{\rm end}/T$ for every $t_{\rm end}$.
+After a long enough $t_{\rm end}$ the end point $y$ lies within about $\mu^n d_0$ of
+the cycle, with $\mu$ the nontrivial Floquet multiplier and $n$ the number of periods,
+and its phase is read off the cycle as $t^\ast/T$, where $\gamma(t^\ast)$ is the cycle
+point nearest $y$ (`nearest_cycle_time`). The read-off errs at first order in the
+distance from the cycle, because an isochron crosses the cycle along the stable
+Floquet direction and not along the normal (Langfield et al. 2014, §I.B); the error is
+negligible once that distance is near rounding, which is what $t_{\rm end}$ has to buy.
 
-Phase 0 is at ``cycle.x0s[0]``, where `reanchor` puts it; the phase is in
-$(-\pi, \pi]$ and increases along the flow, as in ``model/base.py``.
-`asymptotic_phase` reads the phase off at $t_{\rm end}$ and again one period later and
-reports the gap between the two readings and the distance from the cycle, so that a
-point whose orbit has not converged is flagged rather than given a wrong phase.
-`phase_grid` evaluates it on a grid in chunks and masks the flagged points.
+Phase 0 is at ``cycle.x0s[0]``, where `reanchor` puts it; the phase is a fraction of
+the period in $[0, 1)$ and increases along the flow (ADR-0020), as in
+``model/base.py``. `asymptotic_phase` reads the phase off at $t_{\rm end}$ and again
+one period later and reports the gap between the two readings and the distance from
+the cycle, so that a point whose orbit has not converged is flagged rather than given
+a wrong phase. `phase_grid` evaluates it on a grid in chunks and masks the flagged
+points.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Bool, Float
 
-from ...utils.numerics import wrap_phase
+from ...utils.numerics import phase_difference, wrap_phase
 from .limit_cycle import LimitCycle, nearest_cycle_time
 
 
@@ -43,12 +43,14 @@ class AsymptoticPhase(eqx.Module):
 
     **Attributes:**
 
-    - `phase`: The phase in $(-\pi, \pi]$, read off at $t_{\rm end} + T$; ``nan``
+    - `phase`: The phase in turns, in $[0, 1)$ with 0 at ``cycle.x0s[0]`` and
+        increasing with time, read off at $t_{\rm end} + T$; ``nan``
         where the solve failed.
     - `distance`: The distance from the orbit's point at $t_{\rm end} + T$ to the
         nearest cycle point.
-    - `discrepancy`: The absolute wrapped gap between the readings at $t_{\rm end}$
-        and $t_{\rm end} + T$; it vanishes as the orbit converges to the cycle.
+    - `discrepancy`: The unsigned shortest arc, in turns, between the readings at
+        $t_{\rm end}$ and $t_{\rm end} + T$; it vanishes as the orbit converges to the
+        cycle.
     """
 
     phase: Float[Array, "*shape"]
@@ -96,7 +98,6 @@ def asymptotic_phase(
         )
     cycle = copy.replace(cycle, config=copy.replace(cycle.config, throw=False))
     period = cycle.period
-    omega = 2 * jnp.pi / period
     t_reads = jnp.stack([jnp.asarray(t_end, dtype=float), t_end + period])
     ts = jnp.concatenate([jnp.zeros((1,)), t_reads])
     solution = cycle.ode.flow(ts, jnp.asarray(x, dtype=float), config=cycle.config)
@@ -109,7 +110,7 @@ def asymptotic_phase(
         t, point, _ = nearest_cycle_time(
             cycle, y, n_samples=n_samples, newton_steps=newton_steps
         )
-        phase = wrap_phase(omega * jnp.mod(t - t_read, period))
+        phase = wrap_phase(jnp.mod(t - t_read, period) / period)
         return phase, jnp.linalg.norm(y - point)
 
     phases, distances = jax.vmap(read)(ends, t_reads)
@@ -117,7 +118,9 @@ def asymptotic_phase(
     return AsymptoticPhase(
         phase=jnp.where(finite, phases[1], nan),
         distance=jnp.where(finite, distances[1], nan),
-        discrepancy=jnp.where(finite, jnp.abs(wrap_phase(phases[1] - phases[0])), nan),
+        discrepancy=jnp.where(
+            finite, jnp.abs(phase_difference(phases[1], phases[0])), nan
+        ),
     )
 
 
