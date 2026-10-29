@@ -27,6 +27,12 @@ recomputed (ADR-0020, Consequences).
   `orchestrate-implementation` starts once per commit: its boundary (code, tests,
   docstrings, and this document's *Files* bullets and review rows), stop rule and
   report format, versioned here so that a brief points instead of restating them.
+- `src/deep_isochron/utils/numerics.py` — `wrap_phase` wraps to $[0, 1)$; the radian
+  wrap is `wrap_angle`; `phase_difference` is the signed shortest arc in
+  $(-\tfrac12, \tfrac12]$, against the array API as the wraps are.
+- `tests/test_phase.py` — the wrap test split in two: `wrap_angle` against
+  `math.remainder`, and `wrap_phase` and `phase_difference` against floor-based
+  oracles across the five input forms, the tie and the gradient.
 
 ## Design
 
@@ -34,7 +40,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 *Files* bullet and a review row when its commit lands.
 
 1. `utils/numerics.py`: `wrap_phase` to $[0, 1)$, `wrap_angle` for radians,
-   `phase_difference` in $(-\tfrac12, \tfrac12]$, all against the array API.
+   `phase_difference` in $(-\tfrac12, \tfrac12]$, all against the array API. — done.
 2. `systems/normal_forms/base.py`: `phase`, `to_phase_amplitude`, `limit_cycle`,
    `isochron` at the seam; the polar angle negated for $\omega_1 < 0$.
 3. `model/base.py`, `conjugacy.py`, `autoencoder.py`: the contract in turns;
@@ -76,3 +82,5 @@ None yet.
 |---|---|---|
 | `docs/decisions/0020-phase-in-turns.md`, `docs/index.md` — ADR-0020 and its rows | | |
 | `.claude/agents/implementer.md` — the implementer subagent's rules | | |
+| `src/deep_isochron/utils/numerics.py` — `wrap_phase` to $[0, 1)$, `wrap_angle`, `phase_difference` | | |
+| `tests/test_phase.py` — the wrap tests of both wraps and the difference | | |
