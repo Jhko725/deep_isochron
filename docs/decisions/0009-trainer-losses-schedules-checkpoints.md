@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0009
 status: accepted; amended
-updated: 2026-10-29
+updated: 2026-10-30
 verified_by: joon (review round 1, 2026-10-04); round 2 pending
 ---
 
@@ -193,7 +193,8 @@ up to a constant (design document §5.4) and the difference lives on the circle,
 MSE of angle differences needs the offset removed and breaks at `±π`. `sqrt(−2 ln R̄)`,
 `R̄` the mean resultant length (Mardia & Jupp, *Directional Statistics*, 1999; SciPy's
 `circstd`), is invariant to both and equals the ordinary standard deviation for small
-spread, the RMS phase error in radians. For FitzHugh–Nagumo only prediction error and
+spread, the RMS phase error in radians (in turns since 2026-10-30, ADR-0020: the
+resultant is of `2πΔ` and the spread is divided by `2π`). For FitzHugh–Nagumo only prediction error and
 period are available until Phase E.
 
 ### 6. Whole-state checkpoints; the caller owns the directory
@@ -247,3 +248,5 @@ rebuilds the state via a `ShapeDtypeStruct` tree (with sharding) and `eqx.combin
 - 2026-10-14 (`normal-forms-basin`): `Trainer.train(stop_on_nonfinite=True)`;
   `Evaluator` reports the latent extent.
 - 2026-10-29 (`docs-layout`): links follow the scripts into `scripts/diagnostics/`.
+- 2026-10-30 (`phase-turns`, ADR-0020): `phase/circ_std` and the aligned residual read in turns under
+  their names; the resultant is formed from `exp(2πiΔ)`.

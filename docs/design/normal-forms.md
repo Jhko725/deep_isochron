@@ -1,7 +1,7 @@
 ---
 type: design
 status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative; §9 amendment of 2026-10-22 (ADR-0016) pending review
-updated: 2026-10-29
+updated: 2026-10-30
 verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
 sources:
   - "Wilson & Moehlis 2016"
@@ -53,11 +53,11 @@ $\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motion
 | $\omega(r)$ | **angular rate**, $\dot\theta = \omega(r)$ | $\omega(1) =: \omega_1 \ne 0$; even in $r$ for the even family |
 | $\Gamma$ | the limit cycle $r = 1$ | the only attracting cycle |
 | $(r_{\rm in}, r_{\rm out})$ | the **basin** of $\Gamma$, an open annulus (`basin_radii`) | $r_{\rm in} = 0$ when the enclosed fixed point is the only phaseless point, else the radius of an inner repelling cycle; $r_{\rm out} = \infty$ or an outer repelling cycle. $\Theta$, $\Psi$ exist on the basin only |
-| $T = 2\pi/\omega_1$ | period | sign of $\omega_1$ is the sense of rotation |
+| $T = 2\pi/\lvert\omega_1\rvert$ | period | *amended 2026-10-30 (ADR-0020 round):* positive; the sign of $\omega_1$ is the sense of rotation |
 | $\kappa = \rho'(1) < 0$ | non-trivial **Floquet exponent** | **[decided]** no factor 2 — see §4.2 |
 | $\mu = e^{\kappa T}$ | non-trivial **Floquet multiplier** | $0 < \mu < 1$ |
-| $\Theta(\mathbf{u}) \in (-\pi, \pi]$ | **asymptotic phase**: $\dot\Theta = \omega_1$ along every trajectory | $\Theta = \theta$ on $\Gamma$ |
-| $h(r)$ | **phase shift**: $\Theta = \theta + h(r)$ | $h(1) = 0$ |
+| $\Theta(\mathbf{u}) \in [0, 1)$ | **asymptotic phase**, a fraction of the period: $\dot\Theta = 1/T$ along every trajectory | *amended 2026-10-30 (ADR-0020):* $\Theta = \sigma\theta/2\pi$ on $\Gamma$, $\sigma$ the sign of $\omega_1$ |
+| $h(r)$ | **phase shift**, an angle: $\Theta = \sigma(\theta + h(r))/2\pi$ *(amended 2026-10-30, ADR-0020)* | $h(1) = 0$ |
 | $\Psi(\mathbf{u})$ | **isostable coordinate** (amplitude): $\dot\Psi = \kappa\Psi$ | **[decided]** $\Psi = 0$ on $\Gamma$, $\nabla\Psi\cdot\mathbf e_r = 1$ on $\Gamma$ (§5.2) |
 | $\mathsf{J}$ | rotation by $+\pi/2$, $\mathsf{J}(x, y) = (-y, x)$ | |
 
@@ -66,7 +66,9 @@ basin; lowercase $\theta$ is the polar angle. $\Psi$ and $\kappa$ follow Wilson 
 (2016), who write the isostable coordinate as $\psi$ and the exponent as $\kappa$; we
 capitalize $\psi\to\Psi$ so that both coordinate functions $(\Theta,\Psi)$ are uppercase.
 Langfield et al. 2014 use a period-normalized phase $\vartheta\in[0,1)$;
-we use radians, $\Theta = 2\pi\vartheta$.
+we use radians, $\Theta = 2\pi\vartheta$. *Amended 2026-10-30 (ADR-0020): we use turns, $\Theta = \vartheta$; the
+derivations below are written in the angle $\theta + h(r)$, which is $2\pi\Theta$ for a
+counterclockwise form and $-2\pi\Theta$ for a clockwise one.*
 
 "Even in $r$" means $\rho(r) = \tilde\rho(r^2)$ for a smooth $\tilde\rho$; equivalently,
 $\rho$ has only even powers in its Taylor expansion at $0$. Evenness is what makes the
@@ -355,7 +357,10 @@ cartesian field too.
 
 ### 5.1 Asymptotic phase $\Theta$, the shift $h$, and isochrons
 
-Seek $\Theta = \theta + h(r)$ with $\dot\Theta = \omega_1$ everywhere in the basin:
+Seek $\Theta = \theta + h(r)$ with $\dot\Theta = \omega_1$ everywhere in the basin
+(Amended 2026-10-30 (ADR-0020): the phase in turns is $\sigma\Theta/2\pi$ wrapped to $[0, 1)$, with $\sigma$
+the sign of $\omega_1$, so that it increases with time for either orientation; the
+angle $\theta + h(r)$ below is unchanged):
 
 $$
 \dot\Theta = \dot\theta + h'(r)\dot r = \omega(r) + h'(r)\,r\rho(r) = \omega_1
@@ -767,17 +772,19 @@ integrations are tested against.
 
 ```
 to_phase_amplitude(u)       = (Θ(u), Ψ(u))                                  # closed form
-from_phase_amplitude(Θ, Ψ)  = (r(Ψ) cos(Θ − h(r)), r(Ψ) sin(Θ − h(r)))      # r(Ψ): monotone root
+from_phase_amplitude(Θ, Ψ)  = (r(Ψ) cos(σ2πΘ − h(r)), r(Ψ) sin(σ2πΘ − h(r)))  # r(Ψ): monotone root
 ```
 
-With $r(\Psi)$ in hand, `from_phase_amplitude` and `ClosedFormIntegration` are the same
-code. The chart is defined on the basin $r_{\rm in} < r < r_{\rm out}$ only:
+*Amended 2026-10-30 (ADR-0020): $\Theta \in [0, 1)$ is a fraction of the period and $\sigma$ the sign of
+$\omega_1$; `limit_cycle` and `isochron` invert the same $\sigma 2\pi$, and the closed-form
+flow advances $\Theta$ by $t/T$.* With $r(\Psi)$ in hand, `from_phase_amplitude` and
+`ClosedFormIntegration` are the same code. The chart is defined on the basin $r_{\rm in} < r < r_{\rm out}$ only:
 `to_phase_amplitude` (hence `phase`, `amplitude`, the closed-form flow and `isochron`)
 returns `nan` outside it, and `in_basin(u)` is the test; `data.generate` uses it to reject
 or resample initial conditions (`outside_basin`).
 
-$(\cos\Theta, \sin\Theta, \Psi)$ is the latent space of the phase autoencoder of
-Yawata et al. 2024; see §5.3.
+$(\cos 2\pi\Theta, \sin 2\pi\Theta, \Psi)$ is the latent space of the phase autoencoder of
+Yawata et al. 2024; see §5.3 *(amended 2026-10-30: the $2\pi$ since $\Theta$ is in turns)*.
 
 ---
 

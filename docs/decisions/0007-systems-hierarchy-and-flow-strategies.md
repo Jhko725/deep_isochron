@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0007
 status: accepted; amended (ADR-0013 - basins, even subfamily; ADR-0016 - symbolic defining data)
-updated: 2026-10-29
+updated: 2026-10-30
 verified_by: joon
 ---
 
@@ -49,7 +49,7 @@ conjugacy target: planar, with a stable cycle at `r = 1` inside a declared basin
 through two rates `ρ(r)` (log growth rate, `ṙ = rρ(r)`) and `ω(r)` (`θ̇ = ω(r)`), and
 carrying in **closed form** what the observed systems cannot: `period`,
 `floquet_exponent` (`κ = ρ'(1)`, by autodiff of `log_growth_rate`), `phase` (asymptotic
-phase `Θ = θ + h(r)`), `amplitude` (isostable coordinate `Ψ(r)`, normalized
+phase `Θ = θ + h(r)`, since 2026-10-30 the fraction `σ(θ + h(r))/2π` in `[0, 1)`, ADR-0020), `amplitude` (isostable coordinate `Ψ(r)`, normalized
 `∂ᵣΨ(1) = 1`, `Ψ < 0` inside), `limit_cycle`, `isochron`, the polar chart
 `to_polar`/`from_polar` and the phase–amplitude chart
 `to_phase_amplitude`/`from_phase_amplitude`. The charts are named after their targets,
@@ -207,3 +207,5 @@ made `θ̇ = w` but reported zero imaginary part at the origin.
   class and checked, with no hook of its own.
 - 2026-10-29 (`docs-layout`): the design document's *Decisions* section retired; the
   conventions it listed are marked in the document's body, and the rest is here.
+- 2026-10-30 (`phase-turns`, ADR-0020): `phase` is a fraction of the period in `[0, 1)`, increasing with
+  time for either orientation; `period` is positive, `2π/|ω₁|`.

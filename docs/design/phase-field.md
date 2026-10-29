@@ -1,7 +1,7 @@
 ---
 type: design
 status: tentative (survey; route (a) of §3.1 landed)
-updated: 2026-10-29
+updated: 2026-10-30
 verified_by: pending (Joon)
 sources:
   - "ADR-0012 (analysis layout, amendment)"
@@ -39,7 +39,7 @@ it) or [deduced] (our inference from the source or from the mathematics). The an
 
 ## 1. The problem
 
-Conventions fixed with Joon up front: the public phase is an angle $\Theta \in (-\pi, \pi]$, as in `model/base.py`, $\Theta = 0$ at `cycle.x0s[0]` and increasing with time ($\Theta(\gamma(t)) = \omega t$, $\omega = 2\pi/T$); everything is computed in time along `LimitCycle.sample` and rescaled by $\omega$ at the end; the per-point function is vmappable and a `phase_grid` utility handles the grid (masking, chunking).
+Conventions fixed with Joon up front: the public phase is an angle $\Theta \in (-\pi, \pi]$, as in `model/base.py`, $\Theta = 0$ at `cycle.x0s[0]` and increasing with time ($\Theta(\gamma(t)) = \omega t$, $\omega = 2\pi/T$); everything is computed in time along `LimitCycle.sample` and rescaled by $\omega$ at the end; *Amended 2026-10-30 (ADR-0020): the public phase is a fraction of the period, $\Theta \in [0, 1)$ with $\Theta(\gamma(t)) = t/T$, so the rescaling is by $1/T$; every $\omega t$, $\bmod 2\pi$ and $2\pi/T$ in this document reads $t/T$, $\bmod 1$ and $1/T$, and `phase_difference` takes the differences.* the per-point function is vmappable and a `phase_grid` utility handles the grid (masking, chunking).
 
 ### 1.1 O3 — the phase field of the basin
 
@@ -47,7 +47,7 @@ Given a `LimitCycle` of a planar `AbstractODE`, compute the asymptotic phase $\T
 
 ### 1.2 O4 — the phase response curve on the cycle
 
-$Z(\theta) = \nabla\Theta(\gamma(\theta))$, the infinitesimal phase response curve (phase sensitivity function), normalized by $\langle Z, f\rangle = \omega$ (Brown et al. 2004 Eq. 2.4/A.6; Nakao 2016 Eqs. 12–13 with $Z\cdot dX_0/d\theta = 1$, the same normalization in angle, [cited]): what enters every phase reduction $\dot\theta = \omega + Z(\theta)\cdot G$, and the second thing a learned model's phase is assessed on (Yawata et al. Figs. 5, 9, 12, 15: estimated vs "true PSF calculated by solving the adjoint equation", [cited]).
+$Z(\theta) = \nabla\Theta(\gamma(\theta))$, the infinitesimal phase response curve (phase sensitivity function), normalized by $\langle Z, f\rangle = \omega$ (Brown et al. 2004 Eq. 2.4/A.6; Nakao 2016 Eqs. 12–13 with $Z\cdot dX_0/d\theta = 1$, the same normalization in angle, [cited]; Amended 2026-10-30 (ADR-0020): with $\Theta$ in turns the normalization is $\langle Z, f\rangle = 1/T$, ADR-0020 decision 4*): what enters every phase reduction $\dot\theta = \omega + Z(\theta)\cdot G$, and the second thing a learned model's phase is assessed on (Yawata et al. Figs. 5, 9, 12, 15: estimated vs "true PSF calculated by solving the adjoint equation", [cited]).
 
 ## 2. What exists
 
@@ -136,7 +136,7 @@ Done to guard against lock-in; what each adds, and whether it changes the plan.
 
 ### 3.2 The PRC (`analysis/ode/phase.py`, the same module)
 
-- `phase_sensitivity(cycle, n_points) -> (θ (n,), Z (n, dim))` by route (c) at the mesh points (from `floquet_periodic_schur`'s factors, with the normalization $\langle Z, f\rangle = \omega$) and route (e) from the nearest mesh point to each of the `n_points` uniform times (forward solves with `ForwardMode`, a `vmap`). Exact in the sense of the discrete flow, no backward integration, no interpolant. Output in angle: $\theta_j = \omega t_j$, $Z$ scaled by $\omega$.
+- `phase_sensitivity(cycle, n_points) -> (θ (n,), Z (n, dim))` by route (c) at the mesh points (from `floquet_periodic_schur`'s factors, with the normalization $\langle Z, f\rangle = \omega$) and route (e) from the nearest mesh point to each of the `n_points` uniform times (forward solves with `ForwardMode`, a `vmap`). Exact in the sense of the discrete flow, no backward integration, no interpolant. Output in angle: $\theta_j = \omega t_j$, $Z$ scaled by $\omega$. *Amended 2026-10-30 (ADR-0020): output in turns, $\Theta_j = t_j/T$, $Z$ scaled by $1/T$.*
 - `phase_response(cycle, x) -> ∇Θ(x)`: route (d), `jax.grad(asymptotic_phase)` — the response *function* anywhere in the basin; on the cycle a cross-check of (c)+(e) to O3's accuracy.
 - Cross-checks in tests, not in the API: (b) by backward integration over $k$ periods on a dense `Dopri8` interpolant of the orbit — Nakao's Appendix 5 recipe (▶ keep as a test-only reference, or expose as `method="adjoint"`?); (a) finite perturbation at a few points.
 - ▶ The $Z(p)$ needed by O3's correction (b′) is `phase_sensitivity` at mesh point 0 — computed once per cycle; where to cache it (a field on `Floquet`? recomputed?) is a design point.
@@ -192,7 +192,7 @@ variational equation. Nothing here is exact beyond the normal forms' closed form
 |---|---|---|
 | Hopf | $Z(\theta) = (-\sin\theta, \cos\theta)\thinspace\omega/r$ at $r = 1$: tangential | (c)+(e) and (d) to $10^{-8}$; $\langle Z, f\rangle = \omega$; $\langle Z, v\rangle = 0$ |
 | Bautin, Winfree ($a < 0$) | `jax.grad(nf.phase)` on the cycle (nonzero radial component from $\omega'(r)$) | same, to $10^{-8}$; the radial component's sign against $\omega'(1)$ |
-| Any cycle | $\langle Z(\theta), f(\gamma(\theta))\rangle = \omega$ for all $\theta$; $Z$ is $2\pi$-periodic; $Z$ is $\perp$ O2's Floquet vector at every mesh point | identities |
+| Any cycle | $\langle Z(\theta), f(\gamma(\theta))\rangle = \omega$ for all $\theta$; $Z$ is $2\pi$-periodic; $Z$ is $\perp$ O2's Floquet vector at every mesh point | identities *(amended 2026-10-30, ADR-0020: $1/T$ and 1-periodic in turns)* |
 | FitzHugh–Nagumo (slow) | — | (c)+(e), (d) and the backward adjoint (b) agree to $10^{-6}$; the direct method (a) within $O(\Delta x)$; shape against Yawata et al. Fig. 9 and Nakao 2016 Fig. 3(c) only qualitatively (both use $\varepsilon = 0.08$, $a = 0.7$, $b = 0.8$, $I = 0.8$, $T = 36.56$; ours is FitzHugh's $c = 3$ form, $T = 11.23$ — a test with *their* parameters, where Nakao's Fig. E1 code is the reference, is cheap and worth adding) |
 | Conditioning | — | transport (e) over $T/m$ vs over $T$: the latter loses $\log_{10}(1/\mu)$ digits (asserted on FHN) |
 
@@ -207,7 +207,7 @@ variational equation. Nothing here is exact beyond the normal forms' closed form
 
 - Planar in the closed form (c′) only; (c), (d), (e) are dimension-free, (c) needs the general periodic Schur for `dim > 2` (ADR-0015 open issue).
 - $Z$ is as accurate as the orbit and the segment Jacobians ($10^{-8}$); near the almost-phaseless set, `phase_response` off the cycle inherits O3's sensitivity.
-- For training (roadmap M): the PRC error in the first $k$ Fourier modes and the residual $\langle Z, f\rangle - \omega$ of the *learned* phase are now computable against this $Z$.
+- For training (roadmap M): the PRC error in the first $k$ Fourier modes and the residual $\langle Z, f\rangle - \omega$ of the *learned* phase are now computable against this $Z$ *(amended 2026-10-30, ADR-0020: the residual is $\langle Z, f\rangle - 1/T$)*.
 
 ### 6.3 O5–O6 and the data items (D2–D3)
 

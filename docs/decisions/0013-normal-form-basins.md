@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0013
 status: accepted
-updated: 2026-10-29
+updated: 2026-10-30
 verified_by: pending (Joon; the four choices below were taken in discussion 2026-10-08)
 ---
 
@@ -145,3 +145,6 @@ Alternatives rejected for a single decision are listed under that decision.
 - 2026-10-27 (`symbolic-systems`, ADR-0016 review round 1): Decision 1 restated for the
   polar template; even-family membership is declared by the base class and checked, no
   longer written as a second hook.
+- 2026-10-30 (`phase-turns`, ADR-0020): the chart's phase is a fraction of the period in `[0, 1)`;
+  `to_phase_amplitude` negates the polar angle for a clockwise form so that the phase
+  increases with time, and `isochron(Θ, r)` takes that phase.

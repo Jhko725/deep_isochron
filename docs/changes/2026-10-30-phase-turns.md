@@ -1,6 +1,6 @@
 ---
 type: change
-status: ADR written 2026-10-30; the change pending
+status: landed 2026-10-30 (nine units, the period unit, the review's cleanup, the CI change, the documents); review of the documents commit pending
 updated: 2026-10-30
 ---
 
@@ -10,9 +10,14 @@ updated: 2026-10-30
 
 [ADR-0020](../decisions/0020-phase-in-turns.md) moves the phase from an angle in
 $(-\pi, \pi]$ to a fraction of the period in $[0, 1)$, increasing with time on every
-system, with angles kept only where the quantity is one. The ADR was written first and
-is the only change so far; the code follows in dependency order, each layer in its own
-commit, so that no commit leaves master with two conventions.
+system, with angles kept only where the quantity is one. The ADR was written first;
+the code followed in dependency order, each layer in its own commit, so that no commit
+left master with two conventions: the numerics helpers, the normal forms, the model
+contract, `Cycle`, the ODE-side phase, the AUTO pipeline, the isochron configs, the
+evaluation, the figures and the notebook, then the documents. Two decisions were taken
+on the way: a normal form's `period` is a positive time, and `wrap_angle` is deleted.
+The CI `checks` job, which had reached its time limit, keeps JAX's compilation cache
+across runs and runs 100 hypothesis examples.
 
 Irreversible in effect: the isochron hashes are repinned and every saved foliation is
 recomputed (ADR-0020, Consequences).
@@ -170,6 +175,30 @@ recomputed (ADR-0020, Consequences).
 - `tests/helpers.py` — `CompileCounter` counts staged programs only; a program named
   after a `jax.numpy` or `jax.lax` function is an eager operation and is skipped.
 
+- `docs/design/normal-forms.md` — §1's symbol table ($\Theta \in [0, 1)$, $T > 0$, $h$
+  an angle), the notation paragraph ("we use turns, $\Theta = \vartheta$"), §5.1's
+  derivation and §7's chart API, each as a dated amendment at the sentence.
+- `docs/design/phase-field.md` — §1's conventions paragraph (the rescaling by $1/T$,
+  every $\omega t$ read as $t/T$), §1.2's normalization $Z \cdot F = 1/T$, the
+  `phase_sensitivity` route, the O4 identities and item M's residual, as amendments.
+- `docs/design/isochrons.md` — §1's convention ($\Theta = \vartheta$), §3.4's stage 3
+  ($\tau_2 = (1 - \Theta)T$), the adjoint normalization and the bundle's scale, as
+  amendments.
+- `docs/design/cycle-estimation.md` — §1.1's convention (`Cycle`'s phase in turns, the
+  series in $2\pi\varphi$, the protophase and period estimate in radians) and the
+  affine-image oracle row, as amendments.
+- `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`,
+  `docs/decisions/0009-trainer-losses-schedules-checkpoints.md`,
+  `docs/decisions/0013-normal-form-basins.md`,
+  `docs/decisions/0017-isochrons-by-auto-continuation.md` — the sentences that stated
+  the radian convention amended in place; a History line each. ADR-0020's History says
+  the change landed.
+- `docs/architecture.md` — the phase contract lines of the normal forms and the models
+  in $[0, 1)$.
+- `docs/roadmap.md` — O4's and M's normalization $Z \cdot F = 1/T$; the Done ledger row.
+- `docs/changes/2026-10-30-phase-turns.md` — this document: *Summary*, *Design*'s
+  decisions, *Bugs fixed*, *Tests*, *Open issues*.
+
 ## Design
 
 The ledger of the change, in the order the commits will follow. Each item becomes a
@@ -202,23 +231,120 @@ The ledger of the change, in the order the commits will follow. Each item become
     gaps by `phase_difference`. — done.
 11. `tests/`: every phase assertion and the golden isochrons' phase labels
     ($k/100$); the three `_gap` helpers replaced by `phase_difference`; the golden
-    labels done with unit 6.
+    labels done with unit 6. — done, each file with its unit.
 12. `prototype_analysis.ipynb`; the design documents and ADR History lines named in
     ADR-0020; `architecture.md`; the roadmap's item M. — `prototype_analysis.ipynb`
-    done with unit 9.
+    done with unit 9; the documents done in the last commit.
+
+The decisions, each with its reason and where it is recorded. The structural ones are
+ADR-0020's; the rest are this branch's.
+
+- $\Theta \in [0, 1)$, a fraction of the period, 0 at `x0s[0]`, increasing with time
+  on every system. An angle reads as geometry and misleads on a cycle that is not
+  star-shaped; a fraction is defined for every cycle; the coworker's code already uses
+  fractions. Rejected: $[0, T)$ (the range would differ between systems) and
+  $(-\tfrac12, \tfrac12]$ (the seam half a turn from the base point, negative phases
+  for half of every period). ADR-0020 decision 1 and Alternatives.
+- Angles stay where the quantity is an angle, and the $2\pi$ is written at named seams:
+  `to_phase_amplitude`/`from_phase_amplitude`, `limit_cycle`, `isochron`; the
+  autoencoder's `phase`, `cycle_point`, `isochron`; `Cycle`'s series (`__call__`, the
+  two derivatives, `from_points`); `phase_offset`'s and `_learned_curve`'s sample grids
+  are phases and live in $[0, 1)$; `isochron_coordinate` is radial and untouched. One
+  conversion site per seam, no inline constants. ADR-0020 decision 2.
+- The sign of $\omega_1$ is applied inside `to_phase_amplitude` and inverted in
+  `from_phase_amplitude`, `limit_cycle` and `isochron`, so that a clockwise form's cycle
+  point at $\Theta = \tfrac14$ is the point reached a quarter period after the origin.
+  The orientation rule has to hold for the closed forms too. The handoff's assumption,
+  confirmed by the flow law of `tests/test_normal_forms.py`.
+- `phase_difference(a, b)` in $(-\tfrac12, \tfrac12]$, one array-API helper with
+  overloads (JAX in, JAX out; NumPy or float in, NumPy out) and broadcastable arguments
+  (a phase array against a scalar offset). The signed shortest arc is what an RMS error
+  needs; the overloads remove the `asarray` wrapper the union return type forced at
+  eight call sites. ADR-0020 decision 3; the overloads and the `*#shape` annotation from
+  the review of units 1–6 and unit 8.
+- `wrap_angle` deleted. The ADR kept the radian wrap for the geometry of decision 2, but
+  once the normal forms wrapped on the turn no site in `src/` wrapped an angle; the one
+  test that compared angles uses the inline complex-exponential offset. Joon, review of
+  units 1–6; ADR-0020 decision 3 amended.
+- `wrap_phase` sends the one rounding case `x - floor(x) == 1.0` (a negative phase
+  within half an ulp of 0) to 0, so that the range holds bit for bit; the derivative is
+  0 at that float and 1 elsewhere, and the function is discontinuous there in any case.
+- `period()` is $2\pi/|\omega_1|$, a positive time; the orientation is the sign of
+  `omega()` alone. A period is a time, the data-side periods were positive by
+  construction, and every consumer that used the normal form's period as a time already
+  took its absolute value. Joon, 2026-10-30, after unit 2. Reversible, though
+  `floquet_multiplier` would be wrong again for a clockwise form.
+- $Z \cdot F = 1/T$: the normalization in turns. ADR-0020 decision 4;
+  `phase-field.md` §1.2; roadmap M.
+- The netCDF `phase` variable carries `units = "turns"`, and `IsochronFoliation.load`
+  refuses a file without it, so an old file fails loudly rather than reading as turns.
+  The hashes are repinned (`fhn` `d9ded7af → 11305875`, `fhn-easy`
+  `b688cbfe → fb823a3f`) and the foliations are recomputed on the cluster. ADR-0020
+  decision 5. Irreversible in effect.
+- `Isochron.phase` records the requested phase, not the one found by stage 3. The two
+  differ by at most `1e-8 * period`, stage 3's acceptance of a user point
+  (`stages.py:175`); the requested value is what the config, the hash and a user's
+  lookup carry. Joon, 2026-10-30, gate 2. The test tolerance `isochron_phase` is 1e-8
+  turns for that reason; the other phase tolerances were divided by $2\pi$ so that
+  they bound what they bounded before.
+- Metric names unchanged, units change: `phase/circ_std` and the aligned residual read
+  in turns under their names; a renamed metric would be a second name for one quantity.
+  ADR-0020 decision 6. wandb history across this branch is not comparable.
+- `plot_phase_field` takes a matplotlib `norm` in place of a symmetric `limit`: a phase
+  in $[0, 1)$ has no symmetric range; the residual panel passes its own symmetric
+  range. `limit` is replaced, not kept beside `norm`.
+- The CI `checks` job keeps JAX's persistent compilation cache across runs and the `ci`
+  hypothesis profile runs 100 examples (300 took the job to its 45-minute limit on
+  2026-10-29). Joon, 2026-10-30. Reversible.
 
 ## Bugs fixed
 
-None yet.
+- `AbstractNormalForm.floquet_multiplier` returned $e^{\kappa T}$ with the signed
+  period, which exceeds 1 for a stable clockwise cycle ($\kappa < 0$, $T < 0$). The
+  positive period fixes it; `tests/test_normal_forms.py` asserts the Winfree form's
+  orientation through `omega` and its multiplier below 1.
+- `TOL["isochron_phase"]` at 1e-8 rad was tighter than stage 3's acceptance of a user
+  point (1e-8 of a period, up to 6e-8 rad) and passed by luck; it is 1e-8 turns with
+  that reason (`tests/helpers.py`).
 
 ## Tests
 
-- `uv run just check`: every hook passed on the ADR commit.
-- The code's tests: pending.
+- `uv run just check`: clean on every commit of the branch.
+- The full tier, `uv run just test default` at `c6ac9f7` (two cores, 7 GB, JAX's
+  persistent compilation cache on): `673 passed, 1 xfailed in 914 s`. The `xfail` is
+  the pinned `sinh` second-derivative case of `tests/test_analytic.py`, unrelated. At
+  `cca3c27`, before the memory fix, the same run had both workers killed by the
+  memory cgroup at 3.4 and 4.1 GB RSS (`2 failed, 671 passed`, the two "failures" the
+  tests running at the kill); serially it was `673 passed, 1 xfailed` at a peak of
+  4.96 GB. With the fix the workers stay near 1.2 GB.
+- `uv run just test-auto quick` at `cca3c27`, with the AUTO tree: `10 passed in 280 s`.
+- The golden FitzHugh–Nagumo phases (`slow`, three cases): `uv run pytest
+  tests/test_phase.py -k test_fitzhugh_nagumo_phase_on_the_coworkers_isochrons -m slow
+  -n 2 --hypothesis-profile=dev`: `3 passed`.
+- The `slow` tier and the `ci` profile run in CI or on Joon's machine.
+- Per unit, the fast tier of the touched files passed before its commit; the counts
+  are in the commit messages' evidence as the orchestrating session recorded them:
+  `test_normal_forms.py` 29, `test_models.py` 7, `test_baseline.py` 9,
+  `test_analysis.py` 12, `test_analysis_ode.py` 44, `test_phase.py` 14 (+3 slow),
+  `test_auto_stages.py` and `test_isochron.py` 23 together, `test_experiment_isochrons.py`
+  11, `test_training.py` 22, `test_plotting.py` 5.
 
 ## Open issues
 
-- The foliation files on the cluster are recomputed after the merge.
+- The foliation files on the cluster are recomputed after the merge, under the hashes
+  `11305875` (`fhn`) and `fb823a3f` (`fhn-easy`).
+- `test_fitzhugh_nagumo_isochrons_lie_on_the_coworkers` failed once under `-n 2` at
+  `00b5cdb` and passed alone (the handoff's baseline); it passed in every run of this
+  branch. Not reproduced; watch it.
+- Stage 3 accepts a user point within `1e-8 * period` of its target, so a traced
+  isochron's base point sits up to 1e-8 turns off its recorded phase; a tighter base
+  point would come from that acceptance, in the AUTO settings round (`EPSL`/`EPSU`/
+  `EPSS`).
+- The hypothesis-versus-`default_rng` question of the wrap tests (review of units 1–6)
+  has no rule in the repository; a rule for `coding-standards.md` and the implementer
+  agent file is a retro item.
+- `docs/index.md` keeps ADR-0020 at `accepted (review pending)` until Joon reviews the
+  documents commit.
 
 ## Review notes
 
@@ -265,3 +391,7 @@ None yet.
 | `.github/workflows/ci.yml`, `tests/conftest.py` — the JAX cache in CI; `ci` at 100 examples | | |
 | `tests/conftest.py` — the autouse fixture that clears JAX's caches after every test | | |
 | `tests/helpers.py` — `CompileCounter` skips eager `jax.numpy` and `jax.lax` programs | | |
+| `docs/design/normal-forms.md`, `docs/design/phase-field.md`, `docs/design/isochrons.md`, `docs/design/cycle-estimation.md` — the dated amendments to turns | | |
+| `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`, `docs/decisions/0009-trainer-losses-schedules-checkpoints.md`, `docs/decisions/0013-normal-form-basins.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md` — amended sentences and History lines | | |
+| `docs/architecture.md`, `docs/roadmap.md` — the contract lines, the normalizations, the Done row | | |
+| `docs/changes/2026-10-30-phase-turns.md` — the documents commit's sections | | |

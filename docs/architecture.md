@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-29
+updated: 2026-10-30
 sources:
   - "code"
 ---
@@ -311,7 +311,7 @@ closed-form integrals, `phase_shift` `h(r)` and `isostable` `ψ(r)`, as hand-der
 that the tests verify symbolically. The base derives the rest: the cartesian template
 (polynomial for the even family), the cartesian `rhs`, `rhs_polar`, `params()`,
 `period`, `floquet_exponent` (`κ = ρ'(1)` by autodiff),
-`phase` (`Θ = θ + h(r)`), `amplitude` (`Ψ`, `∂ᵣΨ(1) = 1`), `limit_cycle`, `isochron`,
+`phase` (`Θ = σ(θ + h(r))/2π` in `[0, 1)`, ADR-0020), `amplitude` (`Ψ`, `∂ᵣΨ(1) = 1`), `limit_cycle`, `isochron`,
 and the chart maps `to_polar`/`from_polar` (polar) and
 `to_phase_amplitude`/`from_phase_amplitude`. The latter goes through
 `radius_from_isostable`, a differentiable root solve, unless the subclass overrides it
@@ -334,7 +334,7 @@ All return cartesian `.ys` in the same `Solution`, so `ConjugateLatentDynamics` 
 converts charts.
 
 `base.py` is the contract both approaches implement, `AbstractPhaseAmplitudeModel`:
-`phase(x)` in `(-π, π]`, `amplitude(x)` (isostable-like, with no fixed normalization),
+`phase(x)` in `[0, 1)`, a fraction of the period (ADR-0020), `amplitude(x)` (isostable-like, with no fixed normalization),
 `cycle_point(θ)`, `isochron_coordinate(x)` and `isochron(θ, r)` (the learned isochron sampled
 along the model's own latent radial coordinate, so that a reference isochron can be
 matched point by point), and `__call__(ts, x0) -> (xt, yt)`; `phase_gradient` and

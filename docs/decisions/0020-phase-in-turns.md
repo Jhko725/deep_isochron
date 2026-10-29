@@ -120,3 +120,6 @@ such freedom.
   on 2026-10-29.
 - 2026-10-30 (`phase-turns`, review of units 1–6): `wrap_angle` deleted for lack of a
   caller (decision 3 amended).
+- 2026-10-30 (`phase-turns`): implemented in nine units plus the review's cleanup; the
+  period of a normal form made positive on the way (Joon, after unit 2); the design
+  documents and ADRs 0007, 0009, 0013 and 0017 amended.

@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0017
 status: accepted (review pending)
-updated: 2026-10-29
+updated: 2026-10-30
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-27, plan `claude/isochron-auto-plan-2026-10-22`)
 ---
 
@@ -65,7 +65,8 @@ together:
    $\lambda = 1$, then switched onto the bundle normalized to $\vert w\vert = 1$ at the
    junction. The rotation $Jw$ is the stable direction there.
 3. **The rotation** of the junction: the length of segment 2 is continued to
-   $\tau_2 = (1 - \theta/2\pi)T$ for every requested phase $\theta$, which moves the
+   $\tau_2 = (1 - \theta/2\pi)T$ for every requested phase $\theta$ (since 2026-10-30
+   $\tau_2 = (1 - \Theta)T$ for a phase $\Theta$ in turns, ADR-0020), which moves the
    base point and its bundle together around the cycle.
 4. **The isochron** (`NDIM = 10`, per phase): a segment of `n_periods` periods that ends
    at the base point plus $\eta Jw$, continued in $\eta$ in both directions; its start
@@ -92,7 +93,8 @@ Segment 1 starts on O1's section through `x0s[0]`:
 $(u_1(0) - p)\cdot n = 0$ is the boundary condition `FB(6)` (decision 3), with $p$ and
 $n$ in parameter slots. A caller moves phase 0 with `reanchor(cycle, point)` before
 tracing. Phases are radians in $(-\pi, \pi]$, increasing with time from that origin
-(decision 1).
+(decision 1; since 2026-10-30 fractions of the period in $[0, 1)$, ADR-0020, and the
+netCDF `phase` variable carries `units = "turns"`, which `load` requires).
 
 ### 4. AUTO is a locked dependency, its Fortran tree built by a script
 
@@ -214,3 +216,6 @@ another phase origin, listing every mismatch (L1).
 - 2026-10-29 (`isochron2pbvp`): the coworker's directory restored from his last commit
   `d3edbfe` as `isochron2pbvp/`, a project of its own in this repository; the links stay
   pinned at the version compared.
+- 2026-10-30 (`phase-turns`, ADR-0020): phases in turns; the saved `phase` carries `units = "turns"`
+  and `load` refuses a file without it; the shipped hashes repinned (`fhn`
+  `d9ded7af → 11305875`, `fhn-easy` `b688cbfe → fb823a3f`).

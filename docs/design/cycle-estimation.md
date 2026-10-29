@@ -1,7 +1,7 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-29
+updated: 2026-10-30
 verified_by: pending (Joon); the E1 oracle tests in tests/test_analysis.py pass
 sources:
   - "ADR-0012 (analysis layout)"
@@ -47,7 +47,11 @@ $$
 $$
 
 with its period $T$, and the **convention that $\varphi$ advances uniformly in time**
-along the cycle, $\varphi(t) = \varphi_0 + 2\pi t / T$. On the cycle this makes $\varphi$
+along the cycle, $\varphi(t) = \varphi_0 + 2\pi t / T$. *Amended 2026-10-30 (ADR-0020): `Cycle`'s phase is a
+fraction of the period, $\varphi \in [0, 1)$ with $\varphi(t) = \varphi_0 + t/T$, and the
+series is evaluated at the angle $2\pi\varphi$; the angle $\varphi$ of this section is the
+series' argument. The protophase, the density step and the period estimate (§3, steps 3–5)
+stay in radians, and `estimate_cycle` hands $\varphi/2\pi$ to the fit.* On the cycle this makes $\varphi$
 the asymptotic phase up to an additive constant (the asymptotic phase is defined by
 uniform advance along the orbit; design document `normal-forms.md` §2, §4), so a point
 of the cycle and its phase are interchangeable and a learned phase can be compared
@@ -198,7 +202,7 @@ transient, which `converged` reports (step 7) and §6 leaves to E2.
 | Test | Pins down |
 |---|---|
 | Bautin $(a, b, \omega_1, \omega_0) = (1, 0.5, 2, 1)$ and Hopf $(1, 1.5, 0.7)$, 6 trajectories from an annulus $r \in [0.3, 2.5]$, 8 periods at 100 samples per period | radius 1 and center 0 to $2\cdot10^{-3}$ (achieved $10^{-8}$); period `nf.period()` to $10^{-6}$ relative (achieved $10^{-8}$); the recovered phase equals the polar angle up to one constant (spread $< 2\cdot10^{-2}$; achieved $2\cdot10^{-7}$); `winding = +1`; `converged` |
-| the same trajectories through a fixed affine map | the image curve, with the phase *still* the original polar angle up to a constant — the PTP step is what makes this true, since the polar angle about the image center is not uniform in time |
+| the same trajectories through a fixed affine map | the image curve, with the phase *still* the original polar angle up to a constant (over $2\pi$, in turns; amended 2026-10-30) — the PTP step is what makes this true, since the polar angle about the image center is not uniform in time |
 | one trajectory vs the pooled four | the same period and curve; `period_samples` has one entry per completed tail revolution |
 | Gaussian measurement noise $\sigma = 0.05$ on 4 and on 16 trajectories | both converge; the curve residual is the noise level ($\sigma\sqrt 2$ within a factor 2); the curve's radial error is below $10\thinspace\sigma\sqrt{(2K+1)/n}$ and *shrinks* by at least 0.8 when the sample is quadrupled (achieved 0.018 → 0.0077) |
 | Bautin with $a = 0.1$ ($\kappa = -0.2$, the deviation halves per period), 5 periods from $r \in [0.2, 0.5]$ | `converged` is `False`; the same system over 40 periods converges |

@@ -1,7 +1,7 @@
 ---
 type: design
 status: draft for review; decisions settled 2026-10-27 (ADR-0017)
-updated: 2026-10-29
+updated: 2026-10-30
 verified_by: pending (Joon); the measurements in §3.1, §2.3 and §4 were made on 2026-10-27 with AUTO-07p at commit 44cc1c4 and are recorded in the branch's change document
 sources:
   - "Langfield et al. 2014"
@@ -58,6 +58,10 @@ $$
 The isochron of $\gamma_\theta$ is $I(\gamma_\theta) = \lbrace x : \Theta(x) = \theta \rbrace$.
 This document measures $\theta$ in radians in $(-\pi, \pi]$, increasing with time, as
 `model/base.py` and `systems/normal_forms/base.py` already do (decision 1 of the plan).
+*Amended 2026-10-30 (ADR-0020): the phase is Langfield's fraction itself, $\Theta = \vartheta \in [0, 1)$,
+increasing with time; where this document writes $\theta/2\pi$, $\theta T/2\pi$ or
+$2\pi\tau/T$, read $\Theta$, $\Theta T$ and $\tau/T$, and $Z\cdot F = 1/T$ (§3.4 and §6
+below carry the amendment at the sentence).*
 The reference point is `cycle.x0s[0]` of an O1 `LimitCycle`, and the O1 function
 `reanchor(cycle, point)` moves it (decision 2).
 
@@ -331,7 +335,8 @@ vectors on the orbit's mesh [cited].
 **The adjoint equation transports the phase sensitivity.** The phase sensitivity
 $Z(\theta) = \nabla\Theta(\gamma_\theta)$ is the periodic solution of
 $\dot Z = -A^{\mathsf T} Z$, normalized by $Z\cdot F = 2\pi / T$ [cited] (Nakao 2016,
-Eqs. 12–13, with $\omega = 2\pi / T$). The transition matrix of the adjoint equation is
+Eqs. 12–13, with $\omega = 2\pi / T$; Amended 2026-10-30 (ADR-0020): $Z\cdot F = 1/T$ with the phase in
+turns, decision 4*). The transition matrix of the adjoint equation is
 $\Phi(t)^{-\mathsf T}$, so its multipliers are 1 and $1/\mu$. For any solution $y$ of the
 adjoint equation and $z$ of the variational equation, $y\cdot z$ is constant in time.
 Taking $y = Z$, which is periodic, and $z$ the solution through $v_s$, which shrinks by
@@ -395,7 +400,8 @@ With `F(5:6)` and `F(7:8)` negated and every run constant of runs 4–5 unchange
 finds the branch point at $\lambda = 1$, and the normalized bundle at the same base
 point is $w = (-0.37971, 0.92511)$. Its rotation $Jw$ agrees with $-v_s$ to eight digits
 [code]. The bundle vector $w$ itself is the phase sensitivity up to its scale:
-$w\cdot F = 1.1147$ for $\vert w\vert = 1$, against $Z\cdot F = 2\pi/T = 0.5596$. On
+$w\cdot F = 1.1147$ for $\vert w\vert = 1$, against $Z\cdot F = 2\pi/T = 0.5596$ *(in turns,
+$1/T = 0.0891$; amended 2026-10-30, ADR-0020)*. On
 the Hopf and Bautin forms of the previous paragraph, the negated runs find the branch
 point at $\lambda = 0.99999999998$, and $w$ equals the direction of the closed-form
 $\nabla\Theta$ at the base point to round-off [code].
@@ -459,6 +465,9 @@ $10^{-11}$ on every planar system (`tests/test_auto_stages.py`).
 **Stage 3 maps a phase to a segment length.** The base point is the junction, the end
 of segment 1, so it lies $\tau_1$ after the anchor: its phase is $2\pi\tau_1/T$. A
 requested $\theta$, wrapped to $[0, 2\pi)$, is therefore reached at
+(Amended 2026-10-30 (ADR-0020): the phase is $\tau_1/T$, a requested $\Theta$ is wrapped to $[0, 1)$ and
+$\tau_2 = (1 - \Theta)T$; `rotate_phase` converts the fraction to a time and no angle
+reaches AUTO*)
 
 $$
 \tau_2 = \bigl(1 - \theta / 2\pi\bigr)\thinspace T ,
@@ -555,7 +564,7 @@ AUTO's error from its own (§5) [deduced].
 | O2's Floquet vectors | $Jw$ parallel to `floquet(cycle).vectors` at the points `x0s` | the angle at the accuracy of O2's vectors |
 | The closed forms of Bautin and Winfree | `nf.phase(point)` $= \theta$ along every traced isochron, with phase 0 at $(1, 0)$ (decision 14) | $O(\eta^2)$ plus collocation error, since the end direction is $v_s$ |
 | Forward integration | for traced points farther than a set distance from the phaseless set, the phase after $k$ periods against the base point's orbit | scaled by the local phase sensitivity; points near the source are excluded |
-| The bundle's scale | $w\cdot F$ constant along the cycle, since $Z\cdot F = 2\pi/T$ | round-off times the condition of the bundle |
+| The bundle's scale | $w\cdot F$ constant along the cycle, since $Z\cdot F = 2\pi/T$ ($1/T$ in turns; amended 2026-10-30) | round-off times the condition of the bundle |
 
 O3's phase field and O4's $Z(\theta)$ add two more oracles when they exist: the phase
 field is constant along every AUTO isochron, and $w$ is parallel to $Z(\theta)$.
