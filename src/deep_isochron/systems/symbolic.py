@@ -22,7 +22,8 @@ ADR-0016 has the reasoning, the rejected alternatives and the ADR-0004 edge.
 from __future__ import annotations
 
 import abc
-from typing import Any, ClassVar, NamedTuple
+from dataclasses import dataclass
+from typing import Any, ClassVar
 
 import jax.numpy as jnp
 import sympy as sp
@@ -39,7 +40,8 @@ own. The Fortran printer knows neither, so a system that needs them, such as
 Hodgkin–Huxley, cannot be written for AUTO."""
 
 
-class SymbolicODE(NamedTuple):
+@dataclass(frozen=True)
+class SymbolicODE:
     """A vector field as SymPy: the single definition that the JAX ``rhs`` and the
     AUTO Fortran are generated from.
 
@@ -88,7 +90,8 @@ class SymbolicODE(NamedTuple):
         return self
 
 
-class CompiledExpressions(NamedTuple):
+@dataclass(frozen=True)
+class CompiledExpressions:
     """SymPy expressions compiled to JAX, with the bookkeeping to evaluate them on an
     owner object: positional inputs by symbol name, parameters by attribute name.
 

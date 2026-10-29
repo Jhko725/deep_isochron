@@ -21,10 +21,9 @@ the slot layout.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from importlib.resources import files
 from pathlib import Path
-from typing import NamedTuple
 
 import sympy as sp
 from sympy.printing.fortran import FCodePrinter
@@ -46,7 +45,8 @@ MIN_NPAR = 36
 """AUTO's default ``NPAR``; the constants file never goes below it."""
 
 
-class Idx(NamedTuple):
+@dataclass(frozen=True)
+class Idx:
     r"""The pipeline's parameter slots by name. The Fortran file sees them as
     ``IP_<NAME>`` through ``indices.inc``; the Python side uses the attributes.
 
@@ -89,7 +89,7 @@ class Idx(NamedTuple):
         """The constants that ``indices.inc`` declares, ``{"IP_PERIOD": 11, ...}``;
         a pair becomes two ``_X`` and ``_Y`` entries, and `last` is left out."""
         out: dict[str, int] = {}
-        for name, value in self._asdict().items():
+        for name, value in asdict(self).items():
             if name == "last":
                 continue
             if isinstance(value, tuple):

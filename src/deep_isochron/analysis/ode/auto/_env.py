@@ -15,10 +15,11 @@ import io
 import json
 import os
 import warnings
+from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 from types import ModuleType
-from typing import Any, NamedTuple
+from typing import Any
 
 
 DEFAULT_DIR = Path.home() / ".local" / "opt" / "auto-07p"
@@ -35,7 +36,8 @@ class AutoNotInstalled(RuntimeError):
     """No built AUTO-07p tree was found where `auto_dir` looked."""
 
 
-class AutoHandle(NamedTuple):
+@dataclass(frozen=True)
+class AutoHandle:
     """What a pipeline stage needs to run AUTO.
 
     **Attributes:**

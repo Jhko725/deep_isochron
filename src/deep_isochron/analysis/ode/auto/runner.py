@@ -19,8 +19,9 @@ import logging
 import os
 import tempfile
 from collections.abc import Generator
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 import jax
 import numpy as np
@@ -41,7 +42,8 @@ MIN_NPAR = 36
 slots up to the period, ``PAR(11)``, and the pipeline's own block."""
 
 
-class AutoSolution(NamedTuple):
+@dataclass(frozen=True)
+class AutoSolution:
     """An AUTO solution as plain arrays.
 
     **Attributes:**
