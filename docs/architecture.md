@@ -228,7 +228,8 @@ scripts/                                        the command-line entry points (s
     ├── check_spelling.py                       the -ise families (American English)
     ├── check_references.py                     every citation and relative link resolves
     ├── check_docstrings.py                     docstring headers; private functions documented; modules under 600 lines
-    └── check_containers.py                     the container rule: no Array in a frozen dataclass or a static field; NamedTuple only for *Params
+    ├── check_containers.py                     the container rule: no Array in a frozen dataclass or a static field; NamedTuple only for *Params
+    └── check_changes.py                        a Review notes row per Files bullet of a change document
 .github/workflows/ci.yml                        lint · ty · math · spelling · citations · tests; slow + end-to-end run
 ```
 

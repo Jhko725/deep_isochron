@@ -40,5 +40,6 @@ hooks = [
   { id = "check-md-math", name = "check-md-math (GitHub and VS Code previews; frontmatter)", entry = "uv run python scripts/checks/check_md_math.py", language = "system", pass_filenames = false, files = "\\.md$" },
   { id = "check-references", name = "check-references (citations and relative links resolve)", entry = "uv run python scripts/checks/check_references.py", language = "system", pass_filenames = false, types_or = ["python", "markdown"] },
   { id = "check-docstrings", name = "check-docstrings (headers on their own line; private functions documented; modules under 600 lines)", entry = "uv run python scripts/checks/check_docstrings.py", language = "system", types = ["python"] },
+  { id = "check-changes", name = "check-changes (a review row per Files bullet of a change document)", entry = "uv run python scripts/checks/check_changes.py", language = "system", pass_filenames = false, files = "^docs/changes/.*\\.md$" },
   { id = "check-containers", name = "check-containers (eqx.Module, frozen dataclass of NumPy, NamedTuple only for *Params)", entry = "uv run python scripts/checks/check_containers.py", language = "system", pass_filenames = false, types = ["python"] },
 ]

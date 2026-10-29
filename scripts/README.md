@@ -29,5 +29,6 @@ check` runs them all). What each one catches, and why it exists, is in
 `check_references.py` (every citation and relative link resolves),
 `check_docstrings.py` (docstring headers, private functions documented, modules under
 600 lines) and `check_containers.py` (no `jax.Array` in a frozen dataclass or a static field,
-no `NamedTuple` outside the `*Params` bundles; it walks `src` itself). Each exits 1 when
-it flags anything.
+no `NamedTuple` outside the `*Params` bundles; it walks `src` itself) and
+`check_changes.py` (a *Review notes* row per *Files* bullet of a change document; it
+walks `docs/changes` itself). Each exits 1 when it flags anything.

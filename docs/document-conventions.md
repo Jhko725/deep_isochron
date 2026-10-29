@@ -79,11 +79,13 @@ reviewer's map of the change, not a changelog. Its sections:
   that test has run on the code the document describes; until then the document says
   the run is pending.
 - **Open issues**, with the reason each is open.
-- **Review notes**: a table *Change* | *Thoughts* | *Modifications*, one row per file
-  touched. *Change* is the file name plus a one-line summary; the other two columns are
-  Joon's, filled in while vetting, and never edited by Claude except when asked. A new
-  row is appended after the table's last line, never inserted by matching the text of an
-  existing row, since Joon's edits change that text.
+- **Review notes**: a table *Change* | *Thoughts* | *Modifications*, one row per
+  *Files* bullet, appended in the commit that adds the bullet, so that every change the
+  branch makes gets its review. *Change* is the bullet's files plus a one-line summary;
+  the other two columns are Joon's, filled in while vetting, and never edited by Claude
+  except when asked. A new row is appended after the table's last line, never inserted
+  by matching the text of an existing row, since Joon's edits change that text.
+  `scripts/checks/check_changes.py` fails `prek` on a bullet without a row.
 
 A landed change document is history: its review columns keep Joon's words verbatim,
 typos included, and the spelling checks skip `changes/` for that reason.

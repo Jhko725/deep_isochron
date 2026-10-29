@@ -20,8 +20,10 @@ the checks that stand in for prose.
 ## During and at the end of a session
 
 - The change document follows `docs/document-conventions.md` § Change documents and is
-  updated in the same commit as the code; a test's outcome is stated only after that
-  test has run on the code the document describes.
+  updated in the same commit as the code: every file the commit touches gets a *Files*
+  bullet and an empty *Review notes* row in that commit, and Claude fills
+  *Modifications* only when asked. A test's outcome is stated only after that test has
+  run on the code the document describes.
 - `docs/roadmap.md` is the single current plan: finished items are appended to its
   **Done** ledger, never inserted or deleted, in the same commit as the work.
   `git log -p docs/roadmap.md` is the project diary.
