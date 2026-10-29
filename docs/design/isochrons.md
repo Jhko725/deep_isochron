@@ -11,7 +11,7 @@ sources:
   - "Guckenheimer 1975"
   - "Nakao 2016"
   - "AUTO-07p (manual doc/auto.tex and source at 44cc1c4)"
-  - "the coworker's src/Isochron2PBVP"
+  - "the coworker's isochron2pbvp/ at commit 3af99f2 (then src/Isochron2PBVP)"
   - "ADR-0014"
   - "ADR-0015"
   - "ADR-0016"
@@ -23,11 +23,18 @@ This document is the derivation behind roadmap item O7, which computes the isoch
 a planar limit cycle with AUTO-07p. It describes three versions of one method:
 
 - the method as Langfield et al. publish it (2014, §II.B), §2.2;
+<<<<<<< HEAD
 - the coworker's reproduction in [`src/Isochron2PBVP`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP), the
   version this document reads (the directory is his working copy, restored on
   2026-10-29 and excluded from the project's checks; the link pins the version
   compared), which follows the rotating multi-segment set-up of Hannam et al. (2022),
   §2.3;
+=======
+- the coworker's reproduction, [`src/Isochron2PBVP` at commit `3af99f2`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP),
+  the version this document reads; it lives on as his project `isochron2pbvp/` in this
+  repository, which he keeps changing, so the link pins the version compared. It
+  follows the rotating multi-segment set-up of Hannam et al. (2022), §2.3;
+>>>>>>> 2e58f90ba3b74b1a88a3a38084c476e9e6b1b522
 - the version that `analysis/ode/auto/` implements, §3.
 
 §1 says what an isochron is and what is computed; §2.1 explains how AUTO continues a
@@ -601,8 +608,13 @@ field is constant along every AUTO isochron, and $w$ is parallel to $Z(\theta)$.
 
 ## Acknowledgments
 
+<<<<<<< HEAD
 The AUTO-07p reproduction that this pipeline is built from, `src/Isochron2PBVP` (as of
 commit `3af99f2`), is the
+=======
+The AUTO-07p reproduction that this pipeline is built from, `isochron2pbvp/` (read at
+commit `3af99f2`, then `src/Isochron2PBVP`), is the
+>>>>>>> 2e58f90ba3b74b1a88a3a38084c476e9e6b1b522
 work of Andrus Giraldo (Department of Computational Sciences, Korea Institute for
 Advanced Study). §2.3 describes it run by run, and the pipeline of §3 keeps its rotating
 multi-segment structure and its run constants.

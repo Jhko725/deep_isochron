@@ -48,3 +48,5 @@ the checks that stand in for prose.
 - `uv.lock` is not regenerated here; Joon runs `uv lock` after pulling. The notebooks are
   Joon's own records: Claude updates them to follow an API change and does not
   restructure them.
+- `isochron2pbvp/` is Andrus Giraldo's project, kept in this repository under his
+  conventions; Claude does not edit it unless Joon or Andrus asks.

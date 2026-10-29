@@ -24,6 +24,10 @@ the conventions for code, tests and docstrings are in
 | [`references.md`](references.md) | the one bibliography | citing |
 | [`index.md`](index.md) | every document above, with its status | finding a document |
 
+`isochron2pbvp/` at the repository's root is the coworker's project, under his
+conventions: these conventions and the checks that enforce them stop at its edge, and
+its `README.md` is its one document.
+
 A guide is named for what the reader wants to do, not for the tool
 (`guides/auto07p.md` installs AUTO-07p; `guides/isochrons.md` computes isochrons with
 it). A design document holds a method's reasoning and a guide holds its commands; when
