@@ -242,16 +242,16 @@ None yet.
 | `src/deep_isochron/analysis/ode/auto/results.py` — the `units` attribute and the refusal in `load` | Confirmed. | None |
 | `tests/helpers.py` — `golden_phase`, `hand_foliation` and the phase tolerances in turns | Confirmed. | None |
 | `tests/test_auto_stages.py`, `tests/test_isochron.py` — the AUTO tests in turns; the refusal test | Confirmed. | None |
-| `src/deep_isochron/utils/numerics.py` — one prologue helper, overloads, `wrap_angle` deleted | | |
-| `src/deep_isochron/model/autoencoder.py`, `src/deep_isochron/analysis/model.py`, `src/deep_isochron/training/evaluation.py`, `src/deep_isochron/analysis/cycle.py`, `src/deep_isochron/analysis/ode/auto/foliation.py`, `src/deep_isochron/plotting/isochrons.py` — the `asarray` wrappers dropped; `wrap_phases` documents its rounding | | |
-| `tests/test_phase.py` — the `wrap_angle` test deleted; the type law for a float and a mixed call | | |
-| `tests/test_analysis.py` — the angle offset by the complex exponential | | |
-| `docs/decisions/0020-phase-in-turns.md` — the `wrap_angle` amendment | | |
-| `src/deep_isochron/experiment/isochrons.py`, `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — `phases.count` and `phases.values` in turns | | |
-| `tests/test_experiment_isochrons.py` — the config test in turns; the two shipped hashes repinned | | |
-| `src/deep_isochron/training/evaluation.py` — `circular_std`, the sums and `align_phases` in turns | | |
-| `src/deep_isochron/utils/numerics.py` — `phase_difference` broadcasts its arguments | | |
-| `tests/test_training.py` — the spread and alignment laws in turns | | |
-| `tests/test_phase.py` — the scalar-offset case of the difference | | |
-| `src/deep_isochron/plotting/isochrons.py` — `PHASE_NORM` over $[0, 1)$, `norm` in place of `limit`, the gaps by `phase_difference`, colorbars in turns | | |
-| `prototype_analysis.ipynb` — cells 7, 8, 9, 13, 15, 16 follow the API; outputs of the edited code cells cleared | | |
+| `src/deep_isochron/utils/numerics.py` — one prologue helper, overloads, `wrap_angle` deleted | Looks good. | None |
+| `src/deep_isochron/model/autoencoder.py`, `src/deep_isochron/analysis/model.py`, `src/deep_isochron/training/evaluation.py`, `src/deep_isochron/analysis/cycle.py`, `src/deep_isochron/analysis/ode/auto/foliation.py`, `src/deep_isochron/plotting/isochrons.py` — the `asarray` wrappers dropped; `wrap_phases` documents its rounding | Looks good. | None |
+| `tests/test_phase.py` — the `wrap_angle` test deleted; the type law for a float and a mixed call | Confirmed. | None |
+| `tests/test_analysis.py` — the angle offset by the complex exponential | Confirmed. | None |
+| `docs/decisions/0020-phase-in-turns.md` — the `wrap_angle` amendment | Looks good. | None |
+| `src/deep_isochron/experiment/isochrons.py`, `configs/isochrons/fhn.yaml`, `configs/isochrons/fhn-easy.yaml` — `phases.count` and `phases.values` in turns | Confirmed. | None |
+| `tests/test_experiment_isochrons.py` — the config test in turns; the two shipped hashes repinned | Confirmed. | None |
+| `src/deep_isochron/training/evaluation.py` — `circular_std`, the sums and `align_phases` in turns | Confirmed. | None |
+| `src/deep_isochron/utils/numerics.py` — `phase_difference` broadcasts its arguments | Confirmed. | None |
+| `tests/test_training.py` — the spread and alignment laws in turns | Confirmed. | None |
+| `tests/test_phase.py` — the scalar-offset case of the difference | Confirmed. | None |
+| `src/deep_isochron/plotting/isochrons.py` — `PHASE_NORM` over $[0, 1)$, `norm` in place of `limit`, the gaps by `phase_difference`, colorbars in turns | Confirmed. | None |
+| `prototype_analysis.ipynb` — cells 7, 8, 9, 13, 15, 16 follow the API; outputs of the edited code cells cleared | Confirmed. | None |
