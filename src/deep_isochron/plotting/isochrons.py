@@ -34,13 +34,13 @@ from ..analysis.ode import find_equilibrium, Isochron, IsochronFoliation, LimitC
 from ..model.base import AbstractPhaseAmplitudeModel
 from ..model.conjugacy import ConjugateLatentDynamics
 from ..training.evaluation import align_phases, PhaseAlignment
-from ..utils.numerics import wrap_phase
+from ..utils.numerics import phase_difference, wrap_phase
 from .style import colored_curve
 
 
 PHASE_CMAP: Colormap = cc.cm.CET_C6
-r"""A cyclic map: phases $-\pi$ and $\pi$ share a color."""
-PHASE_NORM = Normalize(-np.pi, np.pi)
+"""A cyclic map: phases 0 and 1 share a color."""
+PHASE_NORM = Normalize(0.0, 1.0)
 MASKED_COLOR = "0.6"
 """The background of a field panel: the color of a masked point."""
 
@@ -56,7 +56,7 @@ def _learned_curve(
     model: AbstractPhaseAmplitudeModel, n_points: int = 512
 ) -> Float[np.ndarray, "n 2"]:
     """The learned cycle at `n_points` phases, closed."""
-    thetas = jnp.linspace(-jnp.pi, jnp.pi, n_points, endpoint=False)
+    thetas = jnp.linspace(0.0, 1.0, n_points, endpoint=False)
     points = np.asarray(jax.vmap(model.cycle_point)(thetas))
     return np.vstack([points, points[:1]])
 
@@ -71,7 +71,7 @@ def plot_phase_field(
     *,
     every: int = 10,
     cmap: Colormap = PHASE_CMAP,
-    limit: float = np.pi,
+    norm: Normalize = PHASE_NORM,
 ):
     """Draw a phase field on `ax`: the field as an image on a gray background (``nan``
     is masked), every `every`-th of `isochrons` as a thin white curve over it, the
@@ -85,17 +85,15 @@ def plot_phase_field(
     - `cycle`: The reference cycle.
     - `isochrons`: The reference isochrons; none draws the field alone.
     - `every`: Which isochrons to draw.
-    - `cmap`, `limit`: The colormap and its symmetric range: the cyclic map over
-        $\\pm\\pi$ for a phase, a diverging map over a smaller range for a residual.
+    - `cmap`, `norm`: The colormap and its range: the cyclic map over $[0, 1)$ for a
+        phase, a diverging map over a symmetric range for a residual.
 
     **Returns:**
 
     The image, for a colorbar.
     """
     ax.set_facecolor(MASKED_COLOR)
-    image = ax.pcolormesh(
-        xs, ys, field, cmap=cmap, vmin=-limit, vmax=limit, shading="nearest"
-    )
+    image = ax.pcolormesh(xs, ys, field, cmap=cmap, norm=norm, shading="nearest")
     for iso in isochrons[::every]:
         ax.plot(*iso.points.T, color="w", lw=0.6)
     ax.plot(*_cycle_curve(cycle).T, color="k", lw=1.2)
@@ -168,35 +166,38 @@ def plot_phase_comparison(
         1, 3, figsize=(12, 4), constrained_layout=True, sharey=True
     )
     prefix = f"{name}: " if name else ""
+    bound = float(np.nanpercentile(np.abs(residual), 99.5))
     panels = (
         (
             "Reference phase",
             wrap_phase(sense * field + offset),
             PHASE_CMAP,
-            np.pi,
+            PHASE_NORM,
         ),
-        ("Learned phase", np.where(mask, model_field, np.nan), PHASE_CMAP, np.pi),
+        ("Learned phase", np.where(mask, model_field, np.nan), PHASE_CMAP, PHASE_NORM),
         (
             "Learned − Reference",
             residual,
             cc.cm.CET_D1A_r,
-            float(np.nanpercentile(np.abs(residual), 99.5)),
+            Normalize(-bound, bound),
         ),
     )
     images = []
-    for ax, (title, data, cmap, limit) in zip(axes, panels, strict=True):
-        images.append(plot_phase_field(ax, xs, ys, data, cycle, cmap=cmap, limit=limit))
+    for ax, (title, data, cmap, norm) in zip(axes, panels, strict=True):
+        images.append(plot_phase_field(ax, xs, ys, data, cycle, cmap=cmap, norm=norm))
         ax.plot(*_learned_curve(model).T, color="lightgrey", lw=1.0, ls="--")
         ax.set(title=f"{prefix}{title}")
-    fig.colorbar(images[0], ax=axes[:2], shrink=0.8, label="Phase (rad)")
-    fig.colorbar(images[2], ax=axes[2], shrink=0.8, label="Phase error (rad)")
+    fig.colorbar(images[0], ax=axes[:2], shrink=0.8, label="Phase (turns)")
+    fig.colorbar(images[2], ax=axes[2], shrink=0.8, label="Phase error (turns)")
     fig.supxlabel("$x$")
     fig.supylabel("$y$")
 
     gaps = []
     for iso in isochrons:
         phase = np.asarray(jax.vmap(model.phase)(jnp.asarray(iso.points)))
-        gaps.append(float(np.abs(wrap_phase(phase - sense * iso.phase - offset)).max()))
+        gaps.append(
+            float(np.abs(phase_difference(phase, sense * iso.phase + offset)).max())
+        )
     return fig, PhaseComparison(alignment, np.asarray(gaps))
 
 
@@ -257,7 +258,7 @@ def plot_isochron_match(
             learned[outside] = np.nan
             ax.plot(*learned.T, color=color, lw=1.2, ls="--")
             phase = np.asarray(jax.vmap(model.phase)(jnp.asarray(iso.points)))
-            gaps.append(float(np.abs(wrap_phase(phase - theta)).max()))
+            gaps.append(float(np.abs(phase_difference(phase, theta)).max()))
     ax.plot(*np.asarray(cycle.x0s[0]), "ko")  # phase 0, on the reference section
     prefix = f"{name}: " if name else ""
     title = "AUTO (solid), model (dashed)" if model is not None else "AUTO isochrons"
@@ -270,7 +271,9 @@ def plot_isochron_match(
         aspect="equal",
     )
     fig.colorbar(
-        plt.cm.ScalarMappable(PHASE_NORM, PHASE_CMAP), ax=ax, label="phase $\\theta$"
+        plt.cm.ScalarMappable(PHASE_NORM, PHASE_CMAP),
+        ax=ax,
+        label="phase $\\Theta$ (turns)",
     )
     return fig, np.asarray(gaps)
 

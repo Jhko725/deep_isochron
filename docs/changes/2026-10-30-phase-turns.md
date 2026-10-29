@@ -154,6 +154,14 @@ recomputed (ADR-0020, Consequences).
   `*#shape`, so `a` and `b` broadcast, as a phase against an offset.
 - `tests/test_training.py` — the `circular_std` and `align_phases` laws in turns.
 - `tests/test_phase.py` — the wrap test adds a scalar offset against a phase array.
+- `src/deep_isochron/plotting/isochrons.py` — `PHASE_NORM` is `Normalize(0, 1)` and the
+  learned curve is sampled on turns; `plot_phase_field` takes a matplotlib `norm` in
+  place of the symmetric `limit`, since a phase in $[0, 1)$ has no symmetric range; the
+  residual panel passes `Normalize(-r, r)` from the 99.5th percentile of the residual;
+  the isochron gaps go through `phase_difference`; the colorbars say turns.
+- `prototype_analysis.ipynb` — cells 7, 9, 13, 15 and 16 follow the API (the learned
+  isochron at 0.875 turns, the gap through `phase_difference`, labels in turns) and
+  cell 8 reads "a sixth of a turn"; the outputs of the edited code cells are cleared.
 
 ## Design
 
@@ -184,12 +192,13 @@ The ledger of the change, in the order the commits will follow. Each item become
 9. `training/evaluation.py`: `circular_std` and the sums with $e^{2\pi i\Delta}$;
    `align_phases` in turns. — done.
 10. `plotting/isochrons.py`: `PHASE_NORM = Normalize(0, 1)`, the sample grids, the
-    gaps by `phase_difference`.
+    gaps by `phase_difference`. — done.
 11. `tests/`: every phase assertion and the golden isochrons' phase labels
     ($k/100$); the three `_gap` helpers replaced by `phase_difference`; the golden
     labels done with unit 6.
 12. `prototype_analysis.ipynb`; the design documents and ADR History lines named in
-    ADR-0020; `architecture.md`; the roadmap's item M.
+    ADR-0020; `architecture.md`; the roadmap's item M. — `prototype_analysis.ipynb`
+    done with unit 9.
 
 ## Bugs fixed
 
@@ -244,3 +253,5 @@ None yet.
 | `src/deep_isochron/utils/numerics.py` — `phase_difference` broadcasts its arguments | | |
 | `tests/test_training.py` — the spread and alignment laws in turns | | |
 | `tests/test_phase.py` — the scalar-offset case of the difference | | |
+| `src/deep_isochron/plotting/isochrons.py` — `PHASE_NORM` over $[0, 1)$, `norm` in place of `limit`, the gaps by `phase_difference`, colorbars in turns | | |
+| `prototype_analysis.ipynb` — cells 7, 8, 9, 13, 15, 16 follow the API; outputs of the edited code cells cleared | | |
