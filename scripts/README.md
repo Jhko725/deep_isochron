@@ -28,6 +28,6 @@ check` runs them all). What each one catches, and why it exists, is in
 (the `-ise` families), `check_md_math.py` (Markdown that renders in both previews; the frontmatter),
 `check_references.py` (every citation and relative link resolves),
 `check_docstrings.py` (docstring headers, private functions documented, modules under
-600 lines) and `check_containers.py` (no `jax.Array` in a dataclass or a static field,
+600 lines) and `check_containers.py` (no `jax.Array` in a frozen dataclass or a static field,
 no `NamedTuple` outside the `*Params` bundles; it walks `src` itself). Each exits 1 when
 it flags anything.

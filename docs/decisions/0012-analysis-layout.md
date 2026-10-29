@@ -154,3 +154,8 @@ Alternatives rejected for a single decision are listed under that decision.
 - 2026-10-29 (`plotting`): `analysis/model.py` added for analyses of a trained model
   against a reference (`phase_offset`), the seam between `model/` and `analysis.ode`;
   `analysis.ode.find_equilibrium` beside `find_limit_cycle`.
+- 2026-10-29 (`plotting`, review): Decision 3's axis restated as "pytree or not", the
+  equinox ecosystem's; results that any transform sees are `eqx.Module`s, values kept
+  out of tracing are frozen dataclasses of NumPy, `NamedTuple` only for the `*Params`
+  bundles; `scripts/checks/check_containers.py` enforces it
+  ([coding-standards.md](../coding-standards.md) § Containers).

@@ -227,7 +227,8 @@ scripts/                                        the command-line entry points (s
     ├── check_md_math.py                        GitHub-safe Markdown math check
     ├── check_spelling.py                       the -ise families (American English)
     ├── check_references.py                     every citation and relative link resolves
-    └── check_docstrings.py                     docstring headers; private functions documented; modules under 600 lines
+    ├── check_docstrings.py                     docstring headers; private functions documented; modules under 600 lines
+    └── check_containers.py                     the container rule: no Array in a frozen dataclass or a static field; NamedTuple only for *Params
 .github/workflows/ci.yml                        lint · ty · math · spelling · citations · tests; slow + end-to-end run
 ```
 

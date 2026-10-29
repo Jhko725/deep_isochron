@@ -48,6 +48,22 @@ already red: the branch change document's *Tests* and *Open issues*, the pinned
   bijection is the identity at init to round-off, an entry in it would have meant "this
   class is not", which is what the universal law forbids.
 
+## Containers
+
+A value that any JAX transform will see (returned by, carried through or passed into
+jitted or vmapped code, or holding a model or an ODE) is an `eqx.Module`, and a value
+that must stay out of tracing is a frozen `@dataclass` of NumPy or Python values. A
+`NamedTuple` is allowed only where the tuple structure is the interface (the `*Params`
+bundles of the scalar bijections, a type that mirrors an external API), a mutable
+`@dataclass` only for Hydra schemas and stateful services such as `Evaluator`, and a
+static field (`eqx.field(static=True)`) never holds a `jax.Array`. The axis is the
+equinox ecosystem's (every pytree in diffrax, optimistix and lineax is an `eqx.Module`;
+a frozen dataclass appears only for data that must not be a pytree node) and restates
+[ADR-0012](decisions/0012-analysis-layout.md) Decision 3 in a form that
+`scripts/checks/check_containers.py` can check. Outcome codes stay as `bool` flags
+(`converged`); the ecosystem's `Enum` outcomes become the convention if a third kind of
+outcome appears.
+
 ## Contracts this repository fixes
 
 | Contract | Where | ADR |
@@ -80,6 +96,7 @@ This section says what each check is for; the file has the current values.
 | a docstring on every public module, class, method and function | ruff `D100`–`D103` (notebooks exempt) | `prek`, CI |
 | `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after; a docstring on every `_`-prefixed function and class under `src/` (dunders exempt), since ruff's `D103` skips them; no module under `src/` over 600 lines | `scripts/checks/check_docstrings.py` | `prek`, CI |
 | no invalid escape such as `\Phi` in a docstring that is not raw (Python only warns) | ruff `W605` | `prek`, CI |
+| the container rule (§ Containers): no `Array` field in a frozen dataclass or in a static field, no `NamedTuple` outside the `*Params` bundles; `Array` inside a `Callable[...]` is a signature, not an array | `scripts/checks/check_containers.py` | `prek`, CI |
 | no merge-conflict marker left in any file, in or out of a merge (`84438de` carried four into master) | `check-merge-conflict --assume-in-merge` | `prek`, CI |
 | a driver called again with new values compiles nothing: times and parameters reach `filter_jit` as arrays, a vector field is a module-level function or a bound method, loops run under a jit | `tests/helpers.py` `CompileCounter` in `test_find_limit_cycle_compiles_nothing_for_new_values` and `test_integrations_compile_nothing_for_new_parameters` | `prek`, CI (the tests) |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
