@@ -88,7 +88,7 @@ class Isochron:
 
     **Attributes:**
 
-    - `phase`: The phase $\theta \in (-\pi, \pi]$ of the base point.
+    - `phase`: The phase $\Theta \in [0, 1)$ of the base point, in turns.
     - `base_point`: The point of the cycle at that phase, shape ``(2,)``.
     - `points`: The traced points, shape ``(n, 2)``, ordered along the curve from the
         end of one half, through the base point, to the end of the other.
@@ -116,7 +116,7 @@ class Isochron:
         geometrically along a curve. Between two traced points the chord is off the
         curve by about $\kappa h^2/8$ for a step $h$ and curvature $\kappa$, under
         $10^{-5}$ for AUTO's steps on FitzHugh–Nagumo. A `spacing` coarser than the
-        curve's turns, which near the phaseless set have radii of $10^{-3}$, cuts
+        curve's windings, which near the phaseless set have radii of $10^{-3}$, cuts
         across them.
 
         **Arguments:**
@@ -159,7 +159,7 @@ class Isochron:
     ) -> tuple[Float[np.ndarray, " n"], Float[np.ndarray, " n"]]:
         r"""The traced points in log-polar coordinates about `center`, along the
         curve: $\log_{10}$ of the distance, and the polar angle unwrapped along the
-        curve, in turns. An isochron spirals onto the phaseless point, so about the
+        curve, in windings. An isochron spirals onto the phaseless point, so about the
         equilibrium the distance falls geometrically and the angle winds; the pair
         shows both on linear axes.
 
@@ -260,7 +260,11 @@ class IsochronFoliation:
                 "eta": ("point", cat(lambda i: i.eta, (0,))),
                 "arclength": ("point", cat(lambda i: i.arclength, (0,))),
                 "offsets": ("boundary", np.concatenate([[0], np.cumsum(lengths)])),
-                "phase": ("isochron", [iso.phase for iso in self.isochrons]),
+                "phase": (
+                    "isochron",
+                    [iso.phase for iso in self.isochrons],
+                    {"units": "turns"},
+                ),
                 "base_point": (
                     ("isochron", "xy"),
                     np.reshape([iso.base_point for iso in self.isochrons], (-1, 2)),
@@ -320,11 +324,17 @@ class IsochronFoliation:
 
         **Raises:**
 
-        `ValueError` when `cycle` is of another system, other parameters, another
-        period or another phase origin than the file records.
+        `ValueError` when the file records no phase unit (a file written before
+        ADR-0020 holds angles), or when `cycle` is of another system, other
+        parameters, another period or another phase origin than the file records.
         """
         with xr.open_dataset(path, engine=ENGINE) as ds:
             ds = ds.load()
+        if ds["phase"].attrs.get("units") != "turns":
+            raise ValueError(
+                f"{path} records no phase unit; files written before ADR-0020 hold "
+                "angles and are not read as turns."
+            )
         system = json.loads(ds.attrs["system"])
         mismatches = []
         if system["name"] != type(cycle.ode).__name__:

@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 def wrap_phases(
     phases: Sequence[float] | Float[ArrayLike, " k"],
 ) -> tuple[float, ...]:
-    r"""The requested phases wrapped to $(-\pi, \pi]$.
+    r"""The requested phases wrapped to $[0, 1)$.
 
     **Raises:**
 
@@ -60,7 +60,7 @@ def wrap_phases(
     )
     if np.any(counts > 1):
         raise ValueError(
-            "phases repeat after wrapping to (-π, π]: "
+            "phases repeat after wrapping to [0, 1): "
             f"{values[first[counts > 1]]} each occur more than once."
         )
     return tuple(wrapped.tolist())
@@ -146,7 +146,7 @@ def isochron_foliation(
     **Arguments:**
 
     - `cycle`: An attracting planar cycle from `find_limit_cycle`.
-    - `phases`: The phases, in radians; they are wrapped to $(-\pi, \pi]$.
+    - `phases`: The phases, in turns; they are wrapped to $[0, 1)$.
     - `settings`: How the isochrons are traced.
 
     **Returns:**

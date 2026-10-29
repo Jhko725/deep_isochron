@@ -100,6 +100,22 @@ recomputed (ADR-0020, Consequences).
   projection, offset, closed-form, on-the-cycle ($t/T$) and flow laws are stated in
   turns; the sense of a conjugacy model is $+1$ for both orientations, and the
   closed-form comparison drops the orientation factor.
+- `src/deep_isochron/analysis/ode/auto/stages.py` — `rotate_phase` places the user
+  point of a requested phase $\Theta$ at $\tau_2 = (1 - \Theta)T$, a fraction of the
+  period converted to a time, so no angle reaches AUTO.
+- `src/deep_isochron/analysis/ode/auto/foliation.py` — `wrap_phases` and
+  `isochron_foliation` take phases in turns and wrap them to $[0, 1)$.
+- `src/deep_isochron/analysis/ode/auto/results.py` — `Isochron.phase` is in turns; the
+  netCDF `phase` variable carries `units = "turns"`, and `IsochronFoliation.load`
+  refuses a file without it (ADR-0020, decision 5); "windings" for the spiral's turns.
+- `tests/helpers.py` — `golden_phase(k)` is the coworker's fraction $1 - k/100$;
+  `hand_foliation`'s phases are its polar angles over $2\pi$; the tolerances that bound
+  a phase are restated in turns, and `isochron_phase` is 1e-8 turns, the user-point
+  acceptance of stage 3.
+- `tests/test_auto_stages.py` — the requested phases are fractions; the gaps are taken
+  by `phase_difference`, without the sense of rotation.
+- `tests/test_isochron.py` — the `wrap_phases` test in turns; a new test that `load`
+  refuses a file without a phase unit.
 
 ## Design
 
@@ -122,7 +138,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 6. `analysis/model.py`: `phase_offset` in turns; `phase_sense` by `phase_difference`.
    — done.
 7. `analysis/ode/auto/`: `rotate_phase`'s $\tau_2 = (1 - \Theta)T$; `wrap_phases`;
-   `Isochron.phase`; the netCDF `units` attribute and the refusal in `load`.
+   `Isochron.phase`; the netCDF `units` attribute and the refusal in `load`. — done.
 8. `experiment/isochrons.py`, `configs/isochrons/`: `phases.count` → $k/$`count`;
    the hashes repinned.
 9. `training/evaluation.py`: `circular_std` and the sums with $e^{2\pi i\Delta}$;
@@ -130,7 +146,8 @@ The ledger of the change, in the order the commits will follow. Each item become
 10. `plotting/isochrons.py`: `PHASE_NORM = Normalize(0, 1)`, the sample grids, the
     gaps by `phase_difference`.
 11. `tests/`: every phase assertion and the golden isochrons' phase labels
-    ($k/100$); the three `_gap` helpers replaced by `phase_difference`.
+    ($k/100$); the three `_gap` helpers replaced by `phase_difference`; the golden
+    labels done with unit 6.
 12. `prototype_analysis.ipynb`; the design documents and ADR History lines named in
     ADR-0020; `architecture.md`; the roadmap's item M.
 
@@ -171,3 +188,8 @@ None yet.
 | `src/deep_isochron/analysis/ode/phase.py` — `asymptotic_phase` and its discrepancy in turns | Confirmed. | None |
 | `src/deep_isochron/analysis/model.py` — `phase_sense` and `phase_offset` in turns | Confirmed. | None |
 | `tests/test_phase.py` — the asymptotic-phase and offset laws in turns; `_gap` by `phase_difference` | Do we need an `np.asrray` around `phase_difference`? If it's properly implemented in terms of array api, we don't need it, do we? | To be discussed. |
+| `src/deep_isochron/analysis/ode/auto/stages.py` — stage 3's $\tau_2 = (1 - \Theta)T$ | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/auto/foliation.py` — `wrap_phases` to $[0, 1)$ | This is `wrap_phase` with extra housekeeping.. but I guess we keep it like this because t1) the housekeeping is important and 2) its not used elsewhere? Why do we do the rounding? | To be discussed. |
+| `src/deep_isochron/analysis/ode/auto/results.py` — the `units` attribute and the refusal in `load` | Confirmed. | None |
+| `tests/helpers.py` — `golden_phase`, `hand_foliation` and the phase tolerances in turns | Confirmed. | None |
+| `tests/test_auto_stages.py`, `tests/test_isochron.py` — the AUTO tests in turns; the refusal test | Confirmed. | None |
