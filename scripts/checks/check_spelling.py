@@ -72,6 +72,7 @@ SKIP_PARTS = frozenset(
         "icon",
         "notebooks",
         "changes",
+        "Isochron2PBVP",  # the coworker's working copy, not this project's prose
     }
 )
 

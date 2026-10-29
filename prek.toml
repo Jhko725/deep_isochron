@@ -2,8 +2,9 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
-# Golden data must stay byte for byte, so no hook may rewrite it.
-exclude = "^tests/golden/"
+# Golden data must stay byte for byte, so no hook may rewrite it; the coworker's
+# src/Isochron2PBVP/ is his working copy, not this project's code.
+exclude = "^(src/Isochron2PBVP/|tests/golden/)"
 
 [[repos]]
 repo = "builtin"

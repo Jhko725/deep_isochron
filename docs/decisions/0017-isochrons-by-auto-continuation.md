@@ -19,7 +19,8 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-27, p
 - Andrus Giraldo had reproduced the FitzHugh–Nagumo isochrons of Langfield et al.
   (2014) in AUTO-07p, in a script and a hand-written Fortran file for that one system
   ([`src/Isochron2PBVP`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP)
-  at commit `3af99f2`, removed from the tree afterward). One phase took 140–290 s on two cores,
+  at commit `3af99f2`; the directory is the coworker's working copy, outside the
+  project's checks). One phase took 140–290 s on two cores,
   and the 100 phases ran overnight in sequence.
 - His bundle integrated $+\tau A^{\mathsf T}w$, which is not the adjoint equation. On
   the Hopf and Bautin forms it walks the multiplier from 1.2 to $-8.7$ without a branch
@@ -210,3 +211,5 @@ another phase origin, listing every mismatch (L1).
   point.
 - 2026-10-29 (`docs-layout`): D2, D3, D4 and D6 moved here from the design document's
   retired *Decisions* section.
+- 2026-10-29 (`isochron2pbvp`): `src/Isochron2PBVP` restored from the coworker's last commit
+  `d3edbfe` as his working copy, excluded from the checks; the links stay pinned.

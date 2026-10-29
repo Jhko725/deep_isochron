@@ -174,6 +174,10 @@ signal to split comes before that.
 
 - `tests/golden/` holds reference data byte for byte; `prek.toml` excludes it from every
   hook.
+- `src/Isochron2PBVP/` is the coworker's AUTO-07p scripts, his working copy and not this
+  project's code: `prek.toml`, ruff, `ty`, `codespell`, `check_spelling.py` and
+  `check_docstrings.py` all exclude it, and `docs/design/isochrons.md` links the version
+  it was compared with by commit.
 - `uv.lock` is not regenerated in a cloud session: the container's `uv` rewrites the lock
   format and produces thousands of noise lines for a handful of real version changes
   (`CLAUDE.md` carries the rule).

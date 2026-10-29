@@ -33,7 +33,7 @@ from pathlib import Path
 
 
 HEADER = re.compile(r"^\s*\*\*(Arguments|Returns|Raises|Attributes):\*\*(.*)$")
-EXCLUDED: tuple[str, ...] = ()
+EXCLUDED: tuple[str, ...] = ("src/Isochron2PBVP",)  # the coworker's working copy
 DEFAULT_PATHS = ("src", "tests", "scripts")
 PRIVATE_SCOPE = "src"
 MAX_MODULE_LINES = 600
