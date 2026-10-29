@@ -16,7 +16,9 @@ $2\pi$; the phase, by the protophase-to-phase transformation of Kralemann et al.
 exactly ``tail_periods`` revolutions (``density_coefficients``); the period, from the
 slope of the unwrapped phase against time by least squares over every tail sample;
 the curve, ``Cycle.from_points``; and the self-consistency check, that the earlier
-revolutions fit the curve of the last revolution as well as the last one does.
+revolutions fit the curve of the last revolution as well as the last one does. The
+protophase and phase are angles until the fit, where $\varphi/2\pi$ becomes the
+``Cycle``'s phase in turns.
 
 ``docs/design/cycle-estimation.md`` has the literature and the reason for each step;
 ADR-0012 the layout.
@@ -286,6 +288,7 @@ def estimate_cycle(
     #    2π-periodic in ψ, so the same formula gives the unwrapped φ
     phi_unwrapped, _ = phase_from_protophase(tail_psi, coefficients=F)
     phi = np.mod(phi_unwrapped, 2.0 * np.pi)
+    phase = phi / (2.0 * np.pi)  # the Cycle's phase, in turns
 
     # 5. the period: slope of the unwrapped phase against time over the tail, pooled
     #    over trajectories with one intercept each (every sample contributes, so
@@ -304,13 +307,13 @@ def estimate_cycle(
 
     # 6. the curve from the whole tail
     cycle = Cycle.from_points(
-        phi, tail_pts, period, harmonics=harmonics, note="estimate_cycle (tails)"
+        phase, tail_pts, period, harmonics=harmonics, note="estimate_cycle (tails)"
     )
 
     # 7. self-consistency: the curve fitted to the last revolution alone is the
     #    reference; the earlier tail revolutions must fit it as well as the last does
-    last = Cycle.from_points(phi[last_mask], tail_pts[last_mask], period, harmonics)
-    misfit = np.sum((last(phi) - tail_pts) ** 2, axis=-1)
+    last = Cycle.from_points(phase[last_mask], tail_pts[last_mask], period, harmonics)
+    misfit = np.sum((last(phase) - tail_pts) ** 2, axis=-1)
     residual_last = float(np.sqrt(np.mean(misfit[last_mask])))
     earlier = misfit[~last_mask]
     residual_earlier = float(np.sqrt(np.mean(earlier))) if earlier.size else 0.0

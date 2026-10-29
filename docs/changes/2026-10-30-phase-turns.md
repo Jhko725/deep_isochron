@@ -76,6 +76,30 @@ recomputed (ADR-0020, Consequences).
   latent rotation read $2\pi/T = |\omega_1|$.
 - `tests/test_analysis.py` — the trajectory helper takes the normal form's period
   without an absolute value.
+- `src/deep_isochron/analysis/cycle.py` — `Cycle`'s phase is a fraction of the period
+  in $[0, 1)$: `phases` is uniform on $[0, 1)$, `__call__`, `derivative` and
+  `from_points` evaluate or fit the series at $2\pi\varphi$, `derivative` and the
+  second derivative are taken in turns, and `nearest_phase` takes its Newton step in
+  turns and wraps by `wrap_phase`; `omega` stays the angular frequency of the series.
+- `src/deep_isochron/analysis/data/cycle.py` — `estimate_cycle` keeps the protophase,
+  the density step and the period in radians and hands $\varphi/2\pi$ to
+  `Cycle.from_points` and to the self-consistency check.
+- `tests/test_analysis.py` — `circular_offset` removed: the `Cycle`'s phases are
+  compared through `phase_difference` and the protophase angles through `wrap_angle`;
+  the circle test and the Fourier fit take phases in turns.
+- `tests/test_analysis_ode.py` — the phases handed to `Cycle.from_points` are
+  `times / period`.
+- `src/deep_isochron/analysis/ode/phase.py` — `asymptotic_phase` reads the phase as
+  $\mathrm{wrap}((t - t_{\rm read})/T) \in [0, 1)$, and its discrepancy is the
+  unsigned `phase_difference` of the two readings; the module and `AsymptoticPhase`
+  docstrings state turns.
+- `src/deep_isochron/analysis/model.py` — `phase_sense` is the sign of the
+  `phase_difference` of the model's phases; `phase_offset` samples the learned cycle at
+  phases in $[0, 1)$ and returns the offset in turns.
+- `tests/test_phase.py` — `_gap` is the unsigned `phase_difference`; the radial
+  projection, offset, closed-form, on-the-cycle ($t/T$) and flow laws are stated in
+  turns; the sense of a conjugacy model is $+1$ for both orientations, and the
+  closed-form comparison drops the orientation factor.
 
 ## Design
 
@@ -92,10 +116,11 @@ The ledger of the change, in the order the commits will follow. Each item become
    `cycle_point` and `isochron` take $2\pi\Theta$; `phase_sensitivity` in turns.
    — done.
 4. `analysis/cycle.py`, `analysis/data/cycle.py`: `Cycle`'s phase in turns, the
-   Fourier series in $2\pi\varphi$ inside.
+   Fourier series in $2\pi\varphi$ inside. — done.
 5. `analysis/ode/phase.py`: `phase = wrap(t/T)`, the discrepancy by
-   `phase_difference`.
+   `phase_difference`. — done.
 6. `analysis/model.py`: `phase_offset` in turns; `phase_sense` by `phase_difference`.
+   — done.
 7. `analysis/ode/auto/`: `rotate_phase`'s $\tau_2 = (1 - \Theta)T$; `wrap_phases`;
    `Isochron.phase`; the netCDF `units` attribute and the refusal in `load`.
 8. `experiment/isochrons.py`, `configs/isochrons/`: `phases.count` → $k/$`count`;
@@ -141,3 +166,8 @@ None yet.
 | `tests/test_normal_forms.py`, `tests/test_analysis_ode.py` — the period positive; the Winfree orientation through `omega` | Confirmed. | None |
 | `tests/test_training.py`, `tests/test_baseline.py` — docstrings read $2\pi/T$ | Confirmed. | None |
 | `tests/test_analysis.py` — the trajectory helper's period without `abs` | `circular_offset` looks like a reimplementation of a logic we already have (e.g., `wrap_phase`). | To be discussed. |
+| `src/deep_isochron/analysis/cycle.py`, `src/deep_isochron/analysis/data/cycle.py` — `Cycle`'s phase in turns, the series in $2\pi\varphi$; $\varphi/2\pi$ handed to the fit | Confirmed. | None |
+| `tests/test_analysis.py`, `tests/test_analysis_ode.py` — `Cycle` phases in turns; `phase_difference` and `wrap_angle` replace `circular_offset` | Confirmed. | None |
+| `src/deep_isochron/analysis/ode/phase.py` — `asymptotic_phase` and its discrepancy in turns | Confirmed. | None |
+| `src/deep_isochron/analysis/model.py` — `phase_sense` and `phase_offset` in turns | Confirmed. | None |
+| `tests/test_phase.py` — the asymptotic-phase and offset laws in turns; `_gap` by `phase_difference` | Do we need an `np.asrray` around `phase_difference`? If it's properly implemented in terms of array api, we don't need it, do we? | To be discussed. |
