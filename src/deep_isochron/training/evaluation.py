@@ -109,7 +109,7 @@ def align_phases(
         theta0 = (
             jnp.angle(jnp.nanmean(jnp.exp(1j * shift))) if offset is None else offset
         )
-        residual = jnp.asarray(wrap_phase(shift - theta0))
+        residual = wrap_phase(shift - theta0)
         rms = jnp.sqrt(jnp.nanmean(residual**2))
         if best is None or float(rms) < best.rms:
             best = PhaseAlignment(

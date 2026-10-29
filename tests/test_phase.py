@@ -1,12 +1,11 @@
 """The asymptotic phase (``deep_isochron.analysis.ode.phase``, roadmap O3) and the
-wraps ``wrap_angle``, ``wrap_phase`` and ``phase_difference``.
+phase helpers ``wrap_phase`` and ``phase_difference``.
 
-The oracles: ``math.remainder`` for ``wrap_angle``; ``x - math.floor(x)`` for
-``wrap_phase``, and that wrap less 1 above one half for ``phase_difference``; the
-exact nearest point of Hopf's
-unit circle for `nearest_cycle_time`; the closed-form phase of the Bautin and Winfree
-normal forms, integrated with ``integration="cartesian"`` so that the solver is what is
-tested; the phase along the cycle, $t/T$; the flow law
+The oracles: ``x - math.floor(x)`` for ``wrap_phase``, and that wrap less 1 above one
+half for ``phase_difference``; the exact nearest point of Hopf's unit circle for
+`nearest_cycle_time`; the closed-form phase of the Bautin and Winfree normal forms,
+integrated with ``integration="cartesian"`` so that the solver is what is tested; the
+phase along the cycle, $t/T$; the flow law
 $\\Theta(\\Phi_s x) = \\Theta(x) + s/T$; and (``slow``) the coworker's stored
 FitzHugh–Nagumo isochrons near the cycle.
 """
@@ -36,7 +35,7 @@ from deep_isochron.systems.normal_forms import (
     HopfNormalForm,
     WinfreeNormalForm,
 )
-from deep_isochron.utils.numerics import phase_difference, wrap_angle, wrap_phase
+from deep_isochron.utils.numerics import phase_difference, wrap_phase
 from hypothesis import given, settings, strategies as st
 from jaxtyping import Array, Float
 
@@ -84,34 +83,10 @@ def _phase(cycle: LimitCycle, xs: Float[Array, "n 2"], t_end: float):
 
 def _gap(a, b) -> np.ndarray:
     """The unsigned shortest arc in turns."""
-    return np.abs(np.asarray(phase_difference(a, b)))
+    return np.abs(phase_difference(a, b))
 
 
 # ---------------------------------------------------------------------- 1. wraps --
-def test_wrap_angle_equals_the_ieee_remainder():
-    """`wrap_angle` equals ``math.remainder(θ, 2π)`` bit for bit, with $-\\pi$ sent to
-    $\\pi$, on multiples of $2\\pi/n$ and on random angles; its derivative is 1."""
-    rng = np.random.default_rng(0)
-    angles = [2 * math.pi * k / n for n in (7, 64, 100) for k in range(-3 * n, 3 * n)]
-    angles += rng.uniform(-1e3, 1e3, 1000).tolist()
-    angles += [math.pi, -math.pi, 3 * math.pi, -3 * math.pi, 0.0]
-    expected = np.array(
-        [math.remainder(a, 2 * math.pi) for a in angles], dtype=np.float64
-    )
-    expected[expected == -math.pi] = math.pi
-    got = {
-        "jax": wrap_angle(jnp.asarray(angles)),
-        "jit": jax.jit(wrap_angle)(jnp.asarray(angles)),
-        "vmap": jax.vmap(wrap_angle)(jnp.asarray(angles)),
-        "numpy": wrap_angle(np.asarray(angles)),
-        "scalars": np.array([wrap_angle(a) for a in angles]),
-    }
-    for name, value in got.items():
-        assert np.array_equal(np.asarray(value), expected), name
-    assert isinstance(got["numpy"], np.ndarray) and isinstance(got["jax"], jax.Array)
-    assert float(jax.grad(wrap_angle)(7.0)) == 1.0
-
-
 def _floor_wrap(x: float) -> float:
     """The oracle for `wrap_phase`: `x` less its floor."""
     return x - math.floor(x)
@@ -129,7 +104,9 @@ def test_wrap_phase_and_phase_difference_equal_the_floor_wrap():
     wrap of ``a - b`` less 1 above one half, bit for bit, on multiples of $1/n$ and on
     random phases, for Python floats, NumPy and JAX arrays, under ``jit`` and under
     ``vmap``; a negative phase within half an ulp of 0 wraps to 0, half a turn maps to
-    $+\\tfrac12$, and the derivative of the difference is 1 away from the seam."""
+    $+\\tfrac12$, and the derivative of the difference is 1 away from the seam. A JAX
+    array in either argument gives a JAX array, and NumPy arrays or Python floats give
+    a NumPy array."""
     rng = np.random.default_rng(0)
     phases = [k / n for n in (7, 64, 100) for k in range(-3 * n, 3 * n)]
     phases += rng.uniform(-1e3, 1e3, 1000).tolist()
@@ -165,6 +142,9 @@ def test_wrap_phase_and_phase_difference_equal_the_floor_wrap():
     for got in (wraps, differences):
         assert isinstance(got["numpy"], np.ndarray)
         assert isinstance(got["jax"], jax.Array)
+    for value in (wrap_phase(0.3), phase_difference(0.3, 0.1)):
+        assert isinstance(value, np.ndarray) and value.shape == ()
+    assert isinstance(phase_difference(jnp.asarray(0.3), 0.1), jax.Array)
     assert float(wrap_phase(-1e-20)) == 0.0
     assert float(wrap_phase(jnp.asarray(-1e-20))) == 0.0
     assert float(phase_difference(0.5, 0.0)) == 0.5

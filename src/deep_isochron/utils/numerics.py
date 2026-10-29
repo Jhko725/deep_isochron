@@ -1,11 +1,10 @@
 """Numerical helpers shared by the invertible constraints, the normal forms and the
 analysis: the bounded positive scale transforms, the polar-to-cartesian change of
-coordinates, and the wrapping of a phase and of an angle and the difference of two
-phases, which are written against the array API so that they serve NumPy arrays on the
-host as well as JAX arrays under ``jit`` and ``vmap``."""
+coordinates, and the two phase helpers `wrap_phase` and `phase_difference`, which are
+written against the array API so that they serve NumPy arrays on the host as well as
+JAX arrays under ``jit`` and ``vmap``."""
 
-import math
-from typing import Any, cast
+from typing import Any, overload
 
 import jax.numpy as jnp
 import numpy as np
@@ -46,32 +45,31 @@ def polar_to_cartesian(rtheta: Float[Array, " 2 *rest"]) -> Float[Array, " 2 *re
     return jnp.stack((r * jnp.cos(theta), r * jnp.sin(theta)))
 
 
-def wrap_angle(
-    angle: Float[ArrayLike, "*shape"],
-) -> Float[Array, "*shape"] | Float[np.ndarray, "*shape"]:
-    r"""`angle` wrapped to $(-\pi, \pi]$, with $-\pi$ sent to $\pi$.
+def _array_and_namespace(
+    x: Float[ArrayLike, "*shape"],
+) -> tuple[Array | np.ndarray, Any]:
+    """`x` as an array, with its array-API namespace (``__array_namespace__``).
 
-    The truncated remainder by $2\pi$ is exact, and so is the one correction by
-    $\pm 2\pi$ that follows (Sterbenz's lemma), so the result equals
-    ``math.remainder(angle, 2π)`` bit for bit away from the ties at $\pm\pi$. The
-    derivative is 1.
-
-    Written against the array API (``__array_namespace__``): a JAX array or tracer is
-    wrapped with ``jax.numpy``, under ``jit``, ``vmap`` and ``grad``, and a NumPy
-    array with ``numpy``, in its own dtype whatever ``jax_enable_x64`` is; a Python
-    scalar goes through NumPy. The truncated remainder is ``fmod`` in both
-    namespaces, which the standard does not name but both provide.
+    This prologue is shared by the array-API helpers of this module. A JAX array or
+    tracer, and a NumPy array, pass through unchanged, so a JAX input is computed with
+    ``jax.numpy`` under ``jit``, ``vmap`` and ``grad``, and a NumPy input with
+    ``numpy`` in its own dtype whatever ``jax_enable_x64`` is. Anything else, such as
+    a Python scalar, becomes ``np.asarray(x, dtype=float)`` and goes through NumPy.
     """
     array: Array | np.ndarray = (
-        angle
-        if isinstance(angle, Array | np.ndarray)
-        else np.asarray(angle, dtype=float)
+        x if isinstance(x, Array | np.ndarray) else np.asarray(x, dtype=float)
     )
-    xp: Any = array.__array_namespace__()
-    two_pi = xp.asarray(2 * math.pi, dtype=array.dtype)
-    rem = xp.fmod(array, two_pi)
-    rem = xp.where(rem > math.pi, rem - two_pi, rem)
-    return xp.where(rem <= -math.pi, rem + two_pi, rem)
+    return array, array.__array_namespace__()
+
+
+@overload
+def wrap_phase(phase: Float[Array, "*shape"]) -> Float[Array, "*shape"]: ...
+
+
+@overload
+def wrap_phase(
+    phase: Float[np.ndarray, "*shape"] | float,
+) -> Float[np.ndarray, "*shape"]: ...
 
 
 def wrap_phase(
@@ -84,19 +82,31 @@ def wrap_phase(
     within half an ulp of 0, smaller in magnitude than about ``1.1e-16``, rounds to 1
     and is sent to 0, so that the range holds. The derivative is 1.
 
-    Written against the array API (``__array_namespace__``) as `wrap_angle` is: a JAX
-    array or tracer is wrapped with ``jax.numpy``, under ``jit``, ``vmap`` and ``grad``,
-    and a NumPy array with ``numpy``, in its own dtype whatever ``jax_enable_x64`` is; a
-    Python scalar goes through NumPy.
+    Written against the array API through `_array_and_namespace`: a JAX array in is a
+    JAX array out, and a NumPy array or a Python scalar in is a NumPy array out.
     """
-    array: Array | np.ndarray = (
-        phase
-        if isinstance(phase, Array | np.ndarray)
-        else np.asarray(phase, dtype=float)
-    )
-    xp: Any = array.__array_namespace__()
+    array, xp = _array_and_namespace(phase)
     r = array - xp.floor(array)
     return xp.asarray(xp.where(r >= 1, xp.zeros_like(r), r))
+
+
+@overload
+def phase_difference(
+    a: Float[Array, "*shape"], b: Float[ArrayLike, "*shape"]
+) -> Float[Array, "*shape"]: ...
+
+
+@overload
+def phase_difference(
+    a: Float[ArrayLike, "*shape"], b: Float[Array, "*shape"]
+) -> Float[Array, "*shape"]: ...
+
+
+@overload
+def phase_difference(
+    a: Float[np.ndarray, "*shape"] | float,
+    b: Float[np.ndarray, "*shape"] | float,
+) -> Float[np.ndarray, "*shape"]: ...
 
 
 def phase_difference(
@@ -106,18 +116,17 @@ def phase_difference(
     r"""The signed shortest arc from phase `b` to phase `a`, in $(-\tfrac12, \tfrac12]$.
 
     The result is positive when `a` is ahead of `b`, and a difference of exactly half a
-    turn maps to $+\tfrac12$, as `wrap_angle` maps $-\pi$ to $\pi$. This helper is the
-    one way to compare two phases (ADR-0020, decision 3). The derivative with respect to
-    `a` is 1 away from the seam at half a turn.
+    turn maps to $+\tfrac12$. This helper is the one way to compare two phases
+    (ADR-0020, decision 3). The derivative with respect to `a` is 1 away from the seam
+    at half a turn.
 
-    The namespace is taken from the difference ``a - b`` the way `wrap_phase` takes it
-    from its argument, so NumPy arrays, JAX arrays under ``jit``, ``vmap`` and
-    ``grad``, and Python scalars are all served.
+    Each argument goes through `_array_and_namespace` before the difference ``a - b``
+    is formed, so a JAX array in either argument gives a JAX array, under ``jit``,
+    ``vmap`` and ``grad``, and NumPy arrays or Python scalars give a NumPy array.
     """
-    # `ty` cannot type `-` across the union that `ArrayLike` spells out (arrays, NumPy
-    # scalars, `bool`, `complex`); the cast is type-level only.
-    wrapped = wrap_phase(cast(Any, a) - b)
-    xp: Any = wrapped.__array_namespace__()
+    a_array, _ = _array_and_namespace(a)
+    b_array, _ = _array_and_namespace(b)
+    wrapped, xp = _array_and_namespace(wrap_phase(a_array - b_array))
     return xp.where(wrapped > 0.5, wrapped - 1, wrapped)
 
 

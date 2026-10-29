@@ -21,7 +21,7 @@ from deep_isochron.analysis.data import (
 )
 from deep_isochron.data import generate, UniformAnnulus
 from deep_isochron.systems.normal_forms import BautinNormalForm, HopfNormalForm
-from deep_isochron.utils.numerics import phase_difference, wrap_angle
+from deep_isochron.utils.numerics import phase_difference
 
 from .helpers import TOL
 
@@ -261,7 +261,8 @@ def test_protophase_helpers_and_input_checks():
     # recovers φ (the warp's density has a geometric Fourier tail, ε^k)
     v = u + 0.05 * np.sin(u - 0.4)
     phi_v, _ = phase_from_protophase(np.mod(v, 2 * np.pi), harmonics=11)
-    assert np.ptp(wrap_angle(phi_v - u)) < TOL["closed_form"]  # up to a constant
+    # up to a constant
+    assert np.ptp(np.angle(np.exp(1j * (phi_v - u)))) < TOL["closed_form"]
     # the time-integral estimator over an exact window (one closed period of the warped
     # grid) agrees with the sample mean over the open grid, and ignores samples outside
     # the window

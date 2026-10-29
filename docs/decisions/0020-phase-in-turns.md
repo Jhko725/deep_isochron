@@ -66,6 +66,8 @@ such freedom.
    when `a` is ahead of `b`), written against the array API as `wrap_phase` is, so it
    serves NumPy and JAX arrays under `jit`, `vmap` and `grad`. `wrap_phase` wraps to
    $[0, 1)$; the radian wrap survives as `wrap_angle` for the geometry of decision 2.
+   *Amended 2026-10-30 (`phase-turns`, review of units 1–6): `wrap_angle` was deleted;
+   once the normal forms wrapped on the turn, no site in `src/` wrapped an angle.*
 4. **The phase sensitivity is in turns**: $Z(\Theta) = \nabla\Theta$ on the cycle,
    normalized by $Z \cdot F = 1/T$ (Brown et al. 2004, Eq. 2.4, and Nakao 2016, Eqs.
    12–13, carry $\omega = 2\pi/T$ and $1$ respectively; both become $1/T$ under decision
@@ -116,3 +118,5 @@ such freedom.
 
 - 2026-10-30 (`phase-turns`): accepted; written before the change it decides, as agreed
   on 2026-10-29.
+- 2026-10-30 (`phase-turns`, review of units 1–6): `wrap_angle` deleted for lack of a
+  caller (decision 3 amended).

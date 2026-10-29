@@ -49,12 +49,13 @@ def wrap_phases(
     **Raises:**
 
     `ValueError` naming any phase that is not finite or that repeats another after
-    wrapping.
+    wrapping. Repeats are found after rounding to 12 decimals, so that two requests
+    whose wraps differ by float noise (`0.1` and `2.1 - 2`) count as one phase.
     """
     values = np.atleast_1d(np.asarray(phases, dtype=float))
     if not np.all(np.isfinite(values)):
         raise ValueError(f"phases must be finite; got {values[~np.isfinite(values)]}.")
-    wrapped = np.asarray(wrap_phase(values))  # NumPy in, NumPy out: float64 as given
+    wrapped = wrap_phase(values)
     _, first, counts = np.unique(
         np.round(wrapped, 12), return_index=True, return_counts=True
     )

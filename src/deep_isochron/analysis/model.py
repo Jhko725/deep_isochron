@@ -90,7 +90,7 @@ def phase_offset(
         max_steps=newton_steps,
         throw=False,
     )
-    return jnp.asarray(wrap_phase(sol.value)), sense
+    return wrap_phase(sol.value), sense
 
 
 __all__ = ["phase_offset", "phase_sense"]

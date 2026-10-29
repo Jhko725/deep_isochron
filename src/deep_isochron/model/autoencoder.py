@@ -111,7 +111,7 @@ class PhaseAmplitudeAutoencoder(AbstractPhaseAmplitudeModel):
         """The learned asymptotic phase ``Θ(X) = atan2(Y2, Y1) / 2π`` wrapped to
         ``[0, 1)``, in turns (Eq. 19 in the angle form)."""
         y = self.encode(x)
-        return jnp.asarray(wrap_phase(jnp.arctan2(y[1], y[0]) / (2 * jnp.pi)))
+        return wrap_phase(jnp.arctan2(y[1], y[0]) / (2 * jnp.pi))
 
     def amplitude(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
         """The learned amplitude-like latent ``Y3``, the paper's deviation variable."""

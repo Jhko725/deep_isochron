@@ -171,7 +171,7 @@ def plot_phase_comparison(
     panels = (
         (
             "Reference phase",
-            np.asarray(wrap_phase(sense * field + offset)),
+            wrap_phase(sense * field + offset),
             PHASE_CMAP,
             np.pi,
         ),
@@ -251,7 +251,7 @@ def plot_isochron_match(
         color = PHASE_CMAP(PHASE_NORM(iso.phase))
         ax.plot(*iso.points.T, color=color, lw=1.2)
         if model is not None:
-            theta = jnp.asarray(wrap_phase(sense * iso.phase + offset))
+            theta = wrap_phase(sense * iso.phase + offset)
             learned = np.array(model.isochron(theta, radii))
             outside = ((learned < lo) | (learned > hi)).any(axis=1)
             learned[outside] = np.nan
@@ -351,7 +351,7 @@ def plot_isochron_hairpins(
         else index
     )
     iso = isos[k]
-    theta = jnp.asarray(wrap_phase(sense * iso.phase + offset))
+    theta = wrap_phase(sense * iso.phase + offset)
     arclength = iso.arclength
     radii = jax.vmap(model.isochron_coordinate)(jnp.asarray(iso.points))
     matched = np.array(model.isochron(theta, radii))

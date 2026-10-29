@@ -116,6 +116,22 @@ recomputed (ADR-0020, Consequences).
   by `phase_difference`, without the sense of rotation.
 - `tests/test_isochron.py` — the `wrap_phases` test in turns; a new test that `load`
   refuses a file without a phase unit.
+- `src/deep_isochron/utils/numerics.py` — `wrap_angle` is deleted, since nothing
+  calls it; `wrap_phase` and `phase_difference` share one private prologue,
+  `_array_and_namespace`, and overloads type a JAX array in as a JAX array out and a
+  NumPy array or a float in as a NumPy array out.
+- `src/deep_isochron/model/autoencoder.py`, `src/deep_isochron/analysis/model.py`,
+  `src/deep_isochron/training/evaluation.py`, `src/deep_isochron/analysis/cycle.py`,
+  `src/deep_isochron/analysis/ode/auto/foliation.py`,
+  `src/deep_isochron/plotting/isochrons.py` — the eight calls of `wrap_phase` drop
+  their `asarray` wrapper; the `wrap_phases` docstring says why it rounds to 12
+  decimals before looking for repeats.
+- `tests/test_phase.py` — the `wrap_angle` test is deleted; the wrap test adds the type
+  law for a Python float and for a call that mixes a JAX array and a float; `_gap`
+  drops its `asarray`.
+- `tests/test_analysis.py` — the warped-protophase law takes the angle offset by the
+  complex exponential, as before `wrap_angle`.
+- `docs/decisions/0020-phase-in-turns.md` — decision 3 amended: `wrap_angle` deleted.
 
 ## Design
 
@@ -124,6 +140,8 @@ The ledger of the change, in the order the commits will follow. Each item become
 
 1. `utils/numerics.py`: `wrap_phase` to $[0, 1)$, `wrap_angle` for radians,
    `phase_difference` in $(-\tfrac12, \tfrac12]$, all against the array API. — done.
+   Review of 2026-10-30: `wrap_angle` deleted (no caller), one prologue helper,
+   overloads in place of `asarray` at the call sites.
 2. `systems/normal_forms/base.py`: `phase`, `to_phase_amplitude`, `limit_cycle`,
    `isochron` at the seam; the polar angle negated for $\omega_1 < 0$;
    `from_phase_amplitude` and the closed-form integration follow; `period` is
@@ -193,3 +211,8 @@ None yet.
 | `src/deep_isochron/analysis/ode/auto/results.py` — the `units` attribute and the refusal in `load` | Confirmed. | None |
 | `tests/helpers.py` — `golden_phase`, `hand_foliation` and the phase tolerances in turns | Confirmed. | None |
 | `tests/test_auto_stages.py`, `tests/test_isochron.py` — the AUTO tests in turns; the refusal test | Confirmed. | None |
+| `src/deep_isochron/utils/numerics.py` — one prologue helper, overloads, `wrap_angle` deleted | | |
+| `src/deep_isochron/model/autoencoder.py`, `src/deep_isochron/analysis/model.py`, `src/deep_isochron/training/evaluation.py`, `src/deep_isochron/analysis/cycle.py`, `src/deep_isochron/analysis/ode/auto/foliation.py`, `src/deep_isochron/plotting/isochrons.py` — the `asarray` wrappers dropped; `wrap_phases` documents its rounding | | |
+| `tests/test_phase.py` — the `wrap_angle` test deleted; the type law for a float and a mixed call | | |
+| `tests/test_analysis.py` — the angle offset by the complex exponential | | |
+| `docs/decisions/0020-phase-in-turns.md` — the `wrap_angle` amendment | | |

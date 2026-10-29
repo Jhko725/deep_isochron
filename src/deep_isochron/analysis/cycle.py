@@ -141,7 +141,7 @@ class Cycle:
         f = np.sum((g - x) * dg, axis=-1)
         df = np.sum(dg * dg, axis=-1) + np.sum((g - x) * ddg, axis=-1)
         step = np.where(np.abs(df) > 1e-12, f / np.where(df == 0, 1.0, df), 0.0)
-        return np.asarray(wrap_phase(phi - step))
+        return wrap_phase(phi - step)
 
     def _second_derivative(self, phase):
         """``d²γ/dφ²`` at the phases `phase` in turns, shaped as `__call__`; the
