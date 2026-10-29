@@ -1,10 +1,13 @@
-r"""Analytical bijections for normalizing flows, as introduced in [1]. The code largely
-corresponds to that of the original [2], but with the neural network library changed
-to equinox from flax.nnx.
+r"""The analytic bijections of Gerdes & Cheng 2026, ported from their ``bijx``
+reference implementation
+(https://github.com/mathisgerdes/bijx/blob/master/src/bijx/bijections/analytic.py)
+with the neural-network library changed from ``flax.nnx`` to equinox.
 
-[1] M. Gerdes and M. C. N. Cheng. Analytic bijections for smooth and interpretable
-normalizing flows. ICML (2026).
-[2] https://github.com/mathisgerdes/bijx/blob/master/src/bijx/bijections/analytic.py.
+``CubicRational`` is a rational perturbation of the identity, ``SinhConjugation`` a
+conjugation of a shifted-and-scaled ``sinh`` by ``arcsinh``, and ``CubicConjugation`` a
+conjugation of a shift by a monotone cubic. All three are in the ``raw``/``constrain``
+shape with ``raw = 0`` the identity. The ``sinh`` helpers are written so that every
+order of autodiff stays finite where the direct formulas overflow.
 """
 
 from typing import NamedTuple
@@ -23,10 +26,8 @@ def solve_cubic(
     c: Float[ArrayLike, ""],
     d: Float[ArrayLike, ""],
 ) -> Float[Array, ""]:
-    """Solve cubic equation ax³ + bx² + cx + d = 0 using Cardano's formula.
-
-    Uses numerically stable computation for the real root.
-    """
+    """The real root of ``a x³ + b x² + c x + d = 0`` by Cardano's formula, with the
+    cube root taken of the larger of the two candidates for stability."""
     d0 = b**2 - 3 * a * c
     d1 = 2 * b**3 - 9 * a * b * c + 27 * a**2 * d
 
@@ -44,19 +45,25 @@ def solve_cubic(
 
 
 class CubicRationalParams(NamedTuple):
+    """The constrained parameters of `CubicRational`."""
+
     alpha: Float[Array, ""]
     beta: Float[Array, ""]
     loc: Float[Array, ""]
 
 
 class CubicRational(AbstractScalarBijection[CubicRationalParams]):
-    """Modified rational transform with learnable parameters.
+    """The rational perturbation of the identity ``x + α x' / (1 + β x'²)`` with
+    ``x' = x - loc``, a bijection of the line for ``α ∈ (-1, 8)`` and ``β > 0``.
 
-    Type: [-∞, ∞] → [-∞, ∞]
-    Transform: x + α*x_/(1 + β*x_²), x_ = x - loc, with constrained α ∈ (-1, 8), β >
-    eps.
+    The raw parameters are ``(alpha, beta, loc)``, with ``alpha`` an `Interval`
+    shrunk by `eps_alpha` at each end and ``beta`` a `GreaterThan` with floor
+    `eps_beta`; ``raw = 0`` is the identity, ``α = 0``, ``β = 1``.
 
-    Raw parameters: ``(alpha, beta, loc)``; ``raw = 0`` is the identity (α = 0, β = 1).
+    **Arguments:**
+
+    - `raw`: The raw parameters; the identity when omitted.
+    - `eps_alpha`, `eps_beta`: The margins of the constraints.
     """
 
     raw: Float[Array, " 3"] | None
@@ -77,6 +84,7 @@ class CubicRational(AbstractScalarBijection[CubicRationalParams]):
         self.raw = self._init_raw(jnp.zeros(3) if raw is None else raw)
 
     def constrain(self, raw) -> CubicRationalParams:
+        """``alpha`` through the interval, ``beta`` through the floor, ``loc`` free."""
         alpha, beta, loc = raw
         return CubicRationalParams(
             alpha=Interval(-1 + self.eps_alpha, 8 - self.eps_alpha, at_zero=0.0)(alpha),
@@ -88,6 +96,7 @@ class CubicRational(AbstractScalarBijection[CubicRationalParams]):
     def from_constrained(
         cls, alpha, beta, loc, *, eps_alpha: float = 1e-3, eps_beta: float = 1e-1
     ) -> "CubicRational":
+        """The map with the constrained `alpha`, `beta` and `loc`."""
         raw = jnp.stack(
             [
                 Interval(-1 + eps_alpha, 8 - eps_alpha, at_zero=0.0).inverse(alpha),
@@ -98,11 +107,13 @@ class CubicRational(AbstractScalarBijection[CubicRationalParams]):
         return cls(raw=raw, eps_alpha=eps_alpha, eps_beta=eps_beta)
 
     def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        """``x + α x' / (1 + β x'²)``."""
         p = self.params
         x_ = x - p.loc
         return x + p.alpha * x_ / (1 + p.beta * x_**2)
 
     def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
+        """The root of the cubic that the forward map reduces to."""
         p = self.params
         y = y - p.loc
         x = solve_cubic(p.beta, -p.beta * y, p.alpha + 1, -y)
@@ -110,41 +121,43 @@ class CubicRational(AbstractScalarBijection[CubicRationalParams]):
 
 
 def pow_overflow_log_arg(dtype, power):
-    """log|arg| above which ``|arg|**power`` overflows ``dtype``.
+    """The ``log|arg|`` above which ``|arg|**power`` overflows `dtype`, with a 0.9
+    safety factor.
 
-    The clamp-free sinh helpers evaluate the singularity (arg=0) on a direct,
-    gradient-clean path and only switch to the log-space asymptote once |arg| is
-    too large for that path to stay finite.  ``power`` is 1 for the forward
-    (forms ``arg``) and 2 for the log-Jac (forms ``arg**2``).  A 0.9 factor keeps
-    a safety margin below the true overflow point and is dtype-aware so float32
-    inputs switch to the asymptote well before float32 overflow.
+    The clamp-free ``sinh`` helpers evaluate the singularity at ``arg = 0`` on a
+    direct, gradient-clean path and switch to the log-space asymptote only once
+    ``|arg|`` is too large for that path to stay finite. The factor is dtype-aware,
+    so float32 inputs switch well before float32 overflow.
     """
     return 0.9 * jnp.log(jnp.finfo(dtype).max) / power
 
 
 def log_abs_sinh_stable(abs_x):
-    """log|sinh(x)| = |x| - log 2 + log1p(-exp(-2|x|)); -> -inf at x=0 (sinh=0)."""
+    """``log|sinh(x)|`` as ``|x| - log 2 + log1p(-exp(-2|x|))`` for `abs_x` $= |x|$;
+    ``-inf`` at ``x = 0``."""
     return abs_x - jnp.log(2.0) + jnp.log1p(-jnp.exp(-2.0 * abs_x))
 
 
 def _sinh_overflow_logabs_z(x, beta, mu, nu, power):
-    """Shared overflow mask + ``log|z|`` for the all-order-safe sinh helpers.
+    """The overflow mask and ``log|z|`` shared by the all-order-safe ``sinh``
+    helpers, for ``z = exp(mu) (exp(nu) sinh x + beta)``.
 
-    ``z = exp(mu) (exp(nu) sinh x + beta)``.  Returns ``(big, log_abs_z, sign_z)``
-    where ``big`` marks ``|z|**power`` as too large for the direct primitive path
-    (so the asymptote is used there), and ``log_abs_z`` / ``sign_z`` are computed
-    with double-``where`` SAFE inputs so they are non-singular to all orders
-    wherever ``big`` is False -- the unused overflow branch never poisons the
-    reverse-mode gradient at the ``s=0`` / ``x=0`` singularity.
+    **Returns:**
 
-    Subtle higher-order point: in the overflow regime we must not form ``log|s|``
-    from the raw ``s = exp(nu) sinh x + beta``.  Its value is fine, but its 2nd/3rd
-    x-derivatives form ``cosh(x)^2`` / ``cosh(x)^3`` which overflow to inf (then
-    inf/inf = NaN) for the very large ``|x|`` that put us in the overflow regime.
-    So there we use the asymptote ``log|s| ~= nu + log|sinh x|`` (linear in x, clean
-    derivatives); the dropped ``log|1 + beta/(exp(nu) sinh x)|`` term is ~0 with
-    derivatives ~1/sinh x -> 0.  Exact ``log|s|`` is used only where ``big`` is
-    False (s moderate), and the asymptote only where ``big`` is True.
+    ``(big, log_abs_z, sign_z)``. ``big`` marks where ``|z|**power`` is too large for
+    the direct primitive path, so that the asymptote is used there; ``log_abs_z`` and
+    ``sign_z`` are computed from double-``where`` safe inputs, so they are non-singular
+    to all orders wherever ``big`` is false, and the unused overflow branch never
+    poisons the reverse-mode gradient at the ``s = 0`` singularity.
+
+    In the overflow regime ``log|s|`` must not be formed from the raw
+    ``s = exp(nu) sinh x + beta``: its value is fine, but its second and third
+    derivatives in ``x`` form ``cosh(x)²`` and ``cosh(x)³``, which overflow to
+    ``inf`` and then ``inf/inf = nan`` for the ``|x|`` that put the point in that
+    regime. The asymptote ``log|s| ≈ nu + log|sinh x|`` is linear in ``x`` with
+    clean derivatives, and the dropped term ``log|1 + beta/(exp(nu) sinh x)|`` is
+    near 0 with derivatives near ``1/sinh x``. The exact ``log|s|`` is used only
+    where ``big`` is false, the asymptote only where it is true.
     """
     abs_x = jnp.abs(x)
 
@@ -180,21 +193,19 @@ def _sinh_overflow_logabs_z(x, beta, mu, nu, power):
 
 
 def sinh_conj_nonlinearity(x: Float[Array, ""], beta=0.0, mu=0.0, nu=0.0):
-    """Bijective nonlinearity: f(x) = arcsinh(exp(mu) * (exp(nu) * sinh(x) + beta)).
+    """The bijective nonlinearity ``arcsinh(exp(mu) (exp(nu) sinh(x) + beta))``, whose
+    inverse is the same map with ``(beta, mu, nu) -> (-beta, -nu, -mu)``.
 
-    Inverse is given by mu=-nu, nu=-mu, beta=-beta.
-
-    Computed from the direct smooth primitive ``jnp.arcsinh(z)`` in the normal
-    regime (autodiff-clean to all orders at the regular point ``z=0``/``s=0``), with
-    a full double-``where`` fall-back to the asymptote ``sign(z)(log|z|+log2)`` once
-    ``z`` would overflow.  Plain ``jax.grad^k`` of this is finite for every ``k``.
-
-    ``power=4`` (not 1): ``arcsinh(z)``'s VALUE is fine while ``z`` is
-    representable, but its k-th derivative forms ``z^(k+1)`` intermediates that
-    overflow (silent wrong ``0`` derivative, or NaN at 3rd order) well before ``z``
-    itself does; switching once ``z^4`` would overflow keeps grad, grad^2 and grad^3
-    representable, and there ``arcsinh(z) = log|z| + log2`` (with all derivatives)
-    holds to full float precision.
+    It is computed from the direct primitive ``jnp.arcsinh(z)`` in the normal regime,
+    where autodiff is clean to all orders at the regular point ``z = 0``, with a
+    double-``where`` fallback to the asymptote ``sign(z) (log|z| + log 2)`` once ``z``
+    would overflow, so that ``jax.grad`` of any order is finite. The switch uses
+    ``power = 4`` rather than 1: the value of ``arcsinh(z)`` is fine while ``z`` is
+    representable, but its ``k``-th derivative forms ``z**(k+1)`` intermediates that
+    overflow well before ``z`` does, silently to a wrong 0 or to ``nan`` at third
+    order; switching once ``z**4`` would overflow keeps the first three derivatives
+    representable, and there the asymptote holds with all its derivatives to full
+    float precision.
     """
     big, log_abs_z, sign_z = _sinh_overflow_logabs_z(x, beta, mu, nu, power=4)
 
@@ -213,6 +224,8 @@ def sinh_conj_nonlinearity(x: Float[Array, ""], beta=0.0, mu=0.0, nu=0.0):
 
 
 class SinhConjugationParams(NamedTuple):
+    """The constrained parameters of `SinhConjugation`."""
+
     loc: Float[Array, ""]
     scale: Float[Array, ""]
     beta: Float[Array, ""]
@@ -221,15 +234,19 @@ class SinhConjugationParams(NamedTuple):
 
 
 class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
-    """Sinh-based bijection using conjugation with arcsinh.
+    """The bijection
+    ``arcsinh(exp(mu) (exp(nu) sinh((x - loc) / scale) + beta)) scale + loc``, a
+    conjugation of ``sinh`` by ``arcsinh``.
 
-    Type: [-∞, ∞] → [-∞, ∞]
-    Transform: arcsinh(exp(mu) * (exp(nu) * sinh((x-loc)/scale) + beta)) * scale + loc
+    The raw parameters are ``(loc, scale, beta, mu, nu)``: ``scale`` is a `GreaterThan`
+    with floor `eps_scale`, ``mu`` and ``nu`` pass through `arcsinh`, the rest are
+    free. ``raw = 0`` is the identity. The inverse is the same map with
+    ``(beta, mu, nu) -> (-beta, -nu, -mu)``.
 
-    Raw parameters: ``(loc, scale, beta, mu, nu)``; ``scale`` is constrained to
-    ``(eps_scale, inf)``, ``mu``/``nu`` are passed through ``arcsinh``. ``raw = 0`` is
-    the identity. The inverse is the same map with ``(beta, mu, nu) -> (-beta, -nu,
-    -mu)``.
+    **Arguments:**
+
+    - `raw`: The raw parameters; the identity when omitted.
+    - `eps_scale`: The floor of the scale.
     """
 
     raw: Float[Array, " 5"] | None
@@ -244,6 +261,8 @@ class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
         self.raw = self._init_raw(jnp.zeros(5) if raw is None else raw)
 
     def constrain(self, raw) -> SinhConjugationParams:
+        """``scale`` through the floor, ``mu`` and ``nu`` through `arcsinh`, the rest
+        free."""
         loc, scale, beta, mu, nu = raw
         return SinhConjugationParams(
             loc=free(loc),
@@ -257,6 +276,7 @@ class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
     def from_constrained(
         cls, loc, scale, beta, mu, nu, *, eps_scale: float = 0.1
     ) -> "SinhConjugation":
+        """The map with the constrained parameters."""
         raw = jnp.stack(
             [
                 jnp.asarray(loc),
@@ -269,29 +289,37 @@ class SinhConjugation(AbstractScalarBijection[SinhConjugationParams]):
         return cls(raw=raw, eps_scale=eps_scale)
 
     def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        """The nonlinearity in the normalized coordinate, scaled and shifted back."""
         p = self.params
         x_norm = (x - p.loc) / p.scale
         return sinh_conj_nonlinearity(x_norm, p.beta, p.mu, p.nu) * p.scale + p.loc
 
     def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
+        """The same with ``(beta, mu, nu) -> (-beta, -nu, -mu)``."""
         p = self.params
         y_norm = (y - p.loc) / p.scale
         return sinh_conj_nonlinearity(y_norm, -p.beta, -p.nu, -p.mu) * p.scale + p.loc
 
 
 def _cubic_forward(x, a, b):
+    """The monotone cubic ``g(x) = a x + b x³``."""
     return (a + b * x**2) * x
 
 
 def _cubic_reverse(y, a, b):
+    """The inverse of `_cubic_forward`, the real root of ``b x³ + a x - y = 0``."""
     return solve_cubic(b, 0.0, a, -y)
 
 
 def cubic_conj_nonlinearity(x, a=1, b=1, beta=0):
+    """The conjugation ``g⁻¹(g(x) + beta)`` of the shift by `beta` by the monotone
+    cubic ``g(x) = a x + b x³``."""
     return _cubic_reverse(_cubic_forward(x, a, b) + beta, a, b)
 
 
 class CubicConjugationParams(NamedTuple):
+    """The constrained parameters of `CubicConjugation`."""
+
     loc: Float[Array, ""]
     beta: Float[Array, ""]
     a: Float[Array, ""]
@@ -299,15 +327,17 @@ class CubicConjugationParams(NamedTuple):
 
 
 class CubicConjugation(AbstractScalarBijection[CubicConjugationParams]):
-    """Cubic polynomial-based bijection.
+    """The bijection ``g⁻¹(g(x - loc) + beta) + loc`` with ``g(x) = a x + b x³``.
 
-    Type: [-∞, ∞] → [-∞, ∞]
-    Transform: g^{-1}(g(x - loc) + beta) + loc with g(x) = a x + b x³.
-
-    Raw parameters: ``(loc, beta, a, b)``. ``a`` and ``b`` are bounded positive
-    (``BoundedPositive``: ``eps + squashed_exp``), so a large conditioner output cannot
-    drive them to infinity. ``raw = 0`` gives ``a = 1``, ``b = 0.3``, ``beta = 0``: the
+    The raw parameters are ``(loc, beta, a, b)``. ``a`` and ``b`` are `BoundedPositive`
+    with floors `eps_a` and `eps_b`, so a large conditioner output cannot drive them
+    to infinity. ``raw = 0`` gives ``a = 1``, ``b = 0.3`` and ``beta = 0``: the
     identity.
+
+    **Arguments:**
+
+    - `raw`: The raw parameters; the identity when omitted.
+    - `eps_a`, `eps_b`: The floors of ``a`` and ``b``.
     """
 
     raw: Float[Array, " 4"] | None
@@ -328,6 +358,7 @@ class CubicConjugation(AbstractScalarBijection[CubicConjugationParams]):
         self.raw = self._init_raw(jnp.zeros(4) if raw is None else raw)
 
     def constrain(self, raw) -> CubicConjugationParams:
+        """``a`` and ``b`` bounded positive, ``loc`` and ``beta`` free."""
         loc, beta, a, b = raw
         return CubicConjugationParams(
             loc=free(loc),
@@ -340,6 +371,7 @@ class CubicConjugation(AbstractScalarBijection[CubicConjugationParams]):
     def from_constrained(
         cls, loc, beta, a, b, *, eps_a: float = 1e-2, eps_b: float = 1e-2
     ) -> "CubicConjugation":
+        """The map with the constrained parameters."""
         raw = jnp.stack(
             [
                 jnp.asarray(loc),
@@ -351,9 +383,11 @@ class CubicConjugation(AbstractScalarBijection[CubicConjugationParams]):
         return cls(raw=raw, eps_a=eps_a, eps_b=eps_b)
 
     def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        """The conjugation about `loc`."""
         p = self.params
         return cubic_conj_nonlinearity(x - p.loc, p.a, p.b, p.beta) + p.loc
 
     def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
+        """The same with ``beta -> -beta``."""
         p = self.params
         return cubic_conj_nonlinearity(y - p.loc, p.a, p.b, -p.beta) + p.loc

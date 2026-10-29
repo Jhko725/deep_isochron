@@ -1,35 +1,27 @@
-"""A training run: its directory (``Run``), its objects (``Experiment.from_config``) and
-reopening it (``load_run`` / ``load_model``).
+"""A training run: its directory (``Run``), its objects (``Experiment``) and reopening
+it (``load_run``, ``load_model``).
 
-- ``Run`` is the run directory as an object — ``config.yaml``, ``metadata.json`` and
-  ``checkpoints/`` under one path — and the only place that layout is spelled out.
-  ``Run.from_config`` **refuses** a directory that already holds a run; continuing one
-  is the explicit ``resume=True`` (on ``Run.from_config`` or
-  ``Experiment.from_config``). ``Run.open`` reads one back. ``run.checkpointer()`` is an
-  ``OrbaxCheckpointer`` in the right place carrying the run's metadata, so a checkpoint
-  written through it can always be reopened.
-- ``Experiment.from_config(cfg, run_dir)`` builds everything the config describes
-  *before* the loop — device, dataset, trainer, state (fresh, or restored), loaders,
-  evaluator — and returns an ``Experiment``; ``Experiment.train(...)`` is the default
-  loop, and a notebook can instead call ``trainer.train`` itself with
-  ``exp.run.checkpointer()`` and any logger. ``train(cfg, run_dir)`` is
-  ``Experiment.from_config(cfg, run_dir).train()``: what ``scripts/train.py`` calls
-  under Hydra and what the tests call directly.
-- ``load_run(run_dir)`` rebuilds the state template from the stored config and restores
-  a checkpoint; ``load_run(run_dir, template=...)`` restores into a template the caller
-  built, for a model that never had a config (a bare ``OrbaxCheckpointer`` directory is
-  accepted then).
+``Run`` is the run directory as an object, ``config.yaml``, ``metadata.json`` and
+``checkpoints/`` under one path, and the only place that layout is spelled out.
+``Run.from_config`` refuses a directory that already holds a run; continuing one is
+the explicit ``resume=True``. ``Run.open`` reads one back, and ``run.checkpointer()``
+is an ``OrbaxCheckpointer`` in the right place carrying the run's metadata, so a
+checkpoint written through it can always be reopened. ``Experiment.from_config``
+builds everything the config describes before the loop, the device, dataset,
+trainer, state, loaders and evaluator; ``Experiment.train`` is the default loop, and a
+notebook can instead call ``trainer.train`` itself. ``train(cfg, run_dir)`` is what
+``scripts/train.py`` calls under Hydra. ``load_run`` rebuilds the state template from
+the stored config and restores a checkpoint, or restores into a template the caller
+built, for a model that never had a config.
 
-Two ways to continue training, both explicit: ``cfg.resume = <other run dir>``
-warm-starts a **new** run from that run's latest checkpoint (new directory, same data
-stream from ``state.step``); ``Experiment.from_config(cfg, run_dir, resume=True)``
-continues **this** run in place — ``config.yaml`` is rewritten to ``cfg`` and the
-differences from the stored config are recorded in ``metadata.json``
-(``resumed.config_changes``), so a changed learning rate or a raised ``num_steps`` is on
-record.
-
-Order of operations matters for JAX: ``x64`` and the default device are set before the
-first array exists (``configure_jax``); the loader is ``to_device(..., device)``.
+There are two ways to continue training, both explicit. ``cfg.resume = <other run
+dir>`` warm-starts a new run from that run's latest checkpoint, in a new directory with
+the same data stream from ``state.step``. ``Experiment.from_config(cfg, run_dir,
+resume=True)`` continues this run in place: ``config.yaml`` is rewritten to ``cfg`` and
+the differences from the stored config are recorded in ``metadata.json``, so a changed
+learning rate or a raised ``num_steps`` is on record. The order of operations matters
+for JAX: ``configure_jax`` sets ``x64`` and the default device before the first array
+exists. ADR-0011 §6 has the decisions.
 """
 
 from __future__ import annotations
@@ -60,7 +52,8 @@ from .training import build_trainer, resolved
 
 
 def configure_jax(cfg: DictConfig) -> jax.Device:
-    """``jax_enable_x64`` and the default device, before anything is built."""
+    """Set ``jax_enable_x64`` and the default device from `cfg`, before anything is
+    built, and return the device."""
     jax.config.update("jax_enable_x64", bool(cfg.x64))
     device = resolve_device(cfg.device)
     jax.config.update("jax_default_device", device)
@@ -69,7 +62,7 @@ def configure_jax(cfg: DictConfig) -> jax.Device:
 
 # ------------------------------------------------------------------ the directory --
 class _Default:
-    """Sentinel: ``Run.checkpointer(metric=...)`` not given → the config's metric."""
+    """The sentinel for a `Run.checkpointer` metric not given, meaning the config's."""
 
 
 _DEFAULT = _Default()
@@ -77,9 +70,17 @@ _DEFAULT = _Default()
 
 @dataclass(frozen=True)
 class Run:
-    """A run directory: ``dir/config.yaml`` (the resolved config), ``dir/metadata.json``
-    (dataset hash, git state, batches per epoch, resume record), ``dir/checkpoints/``
-    (Orbax, with the same metadata as ``custom_metadata``)."""
+    """A run directory.
+
+    **Attributes:**
+
+    - `dir`: The path. Under it, ``config.yaml`` is the resolved config,
+        ``metadata.json`` the dataset hash, git state, batches per epoch and resume
+        record, and ``checkpoints/`` the Orbax directory with the same metadata as
+        its ``custom_metadata``.
+    - `cfg`: The config.
+    - `metadata`: The metadata.
+    """
 
     dir: Path
     cfg: DictConfig
@@ -91,13 +92,14 @@ class Run:
 
     @property
     def checkpoint_dir(self) -> Path:
+        """``dir/checkpoints``."""
         return self.dir / self.CHECKPOINT_DIR
 
     @staticmethod
     def exists(run_dir: str | Path) -> bool:
-        """Whether ``run_dir`` already holds a run (a config or checkpoints). A
-        directory that merely exists — Hydra creates it, with ``.hydra/``, before
-        ``train`` is called — is not a run."""
+        """Whether `run_dir` already holds a run, a config or checkpoints. A directory
+        that merely exists is not a run; Hydra creates it, with ``.hydra/``, before
+        ``train`` is called."""
         d = Path(run_dir)
         return (d / Run.CONFIG_FILE).exists() or (d / Run.CHECKPOINT_DIR).exists()
 
@@ -110,11 +112,15 @@ class Run:
         *,
         resume: bool = False,
     ) -> Run:
-        """Start a run in ``run_dir`` — refusing if one is already there — or, with
-        ``resume=True``, continue the run there with ``cfg`` (which may differ from the
-        stored config: the differences go into ``metadata["resumed"]["config_changes"]``
-        and ``config.yaml`` is rewritten; a checkpoint must exist). Writes the config
-        and metadata either way."""
+        """Start a run in `run_dir`, or with `resume` continue the run there with
+        `cfg`, which may differ from the stored config: the differences go into
+        ``metadata["resumed"]["config_changes"]`` and ``config.yaml`` is rewritten.
+        The config and the metadata are written either way.
+
+        **Raises:**
+
+        `FileExistsError` when `run_dir` already holds a run and `resume` is off;
+        `FileNotFoundError` when it holds no checkpoint to resume from."""
         if resume:
             return cls._resume(cfg, run_dir, metadata)
         d = Path(run_dir)
@@ -133,6 +139,8 @@ class Run:
     def _resume(
         cls, cfg: DictConfig, run_dir: str | Path, metadata: dict[str, Any]
     ) -> Run:
+        """The run in `run_dir` continued with `cfg`, with the resume record and its
+        history appended to the metadata."""
         previous = cls.open(run_dir)
         step = previous.latest_step()
         if step is None:
@@ -153,8 +161,14 @@ class Run:
 
     @classmethod
     def open(cls, run_dir: str | Path) -> Run:
-        """Read a run back: the config from ``config.yaml`` (the latest truth — a resume
-        may have changed it), falling back to the checkpoints' ``custom_metadata``."""
+        """Read a run back: the config from ``config.yaml``, the latest truth since a
+        resume may have changed it, with the checkpoints' ``custom_metadata`` as the
+        fallback.
+
+        **Raises:**
+
+        `FileNotFoundError` when `run_dir` holds no run, or checkpoints without any
+        config."""
         d = Path(run_dir)
         if not cls.exists(d):
             raise FileNotFoundError(
@@ -183,6 +197,7 @@ class Run:
         return cls(d, cfg, metadata)
 
     def _write(self) -> None:
+        """Write ``config.yaml`` and ``metadata.json``."""
         (self.dir / self.CONFIG_FILE).write_text(
             OmegaConf.to_yaml(self.cfg, resolve=True)
         )
@@ -197,9 +212,9 @@ class Run:
         metric: str | None | _Default = _DEFAULT,
         keep_best: int | None = None,
     ) -> OrbaxCheckpointer:
-        """An ``OrbaxCheckpointer`` in ``checkpoints/`` carrying this run's metadata;
-        the policy defaults to ``cfg.checkpoint`` (pass ``metric=None`` explicitly to
-        select no best checkpoint)."""
+        """An ``OrbaxCheckpointer`` in ``checkpoints/`` carrying this run's metadata.
+        The policy defaults to ``cfg.checkpoint``; pass ``metric=None`` explicitly to
+        select no best checkpoint."""
         c = self.cfg.checkpoint
         return OrbaxCheckpointer(
             self.checkpoint_dir,
@@ -210,7 +225,7 @@ class Run:
         )
 
     def latest_step(self) -> int | None:
-        """The most recent checkpointed step, ``None`` if there is none yet."""
+        """The most recent checkpointed step, or ``None`` if there is none yet."""
         if not self.checkpoint_dir.exists():
             return None
         ckpt = OrbaxCheckpointer(self.checkpoint_dir, metric=None)
@@ -220,8 +235,8 @@ class Run:
             ckpt.close()
 
     def restore(self, template: TrainerState, step: int | None = None) -> TrainerState:
-        """The checkpointed state at ``step`` (latest if ``None``) in ``template``'s
-        structure."""
+        """The checkpointed state at `step`, the latest when ``None``, in the
+        structure of `template`."""
         ckpt = OrbaxCheckpointer(self.checkpoint_dir, metric=None)
         try:
             return ckpt.restore(template, step)
@@ -230,6 +245,7 @@ class Run:
 
 
 def _flatten(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    """`d` with nested keys joined by dots."""
     out: dict[str, Any] = {}
     for k, v in d.items():
         key = f"{prefix}{k}"
@@ -241,13 +257,16 @@ def _flatten(d: dict[str, Any], prefix: str = "") -> dict[str, Any]:
 
 
 def _config_changes(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
-    """``{dotted.key: [old, new]}`` for every leaf that differs (missing → ``None``)."""
+    """``{dotted.key: [old, new]}`` for every leaf that differs between `old` and
+    `new`, with a missing leaf as ``None``."""
     a, b = _flatten(old), _flatten(new)
     keys = sorted(set(a) | set(b))
     return {k: [a.get(k), b.get(k)] for k in keys if a.get(k) != b.get(k)}
 
 
 def _template(cfg: DictConfig, trainer: Trainer) -> TrainerState:
+    """A fresh state for the model of `cfg`, the template a checkpoint is restored
+    into."""
     return trainer.init(
         build_model(cfg.model, jax.random.key(cfg.seed)),
         key=jax.random.key(cfg.seed + 1),
@@ -257,11 +276,20 @@ def _template(cfg: DictConfig, trainer: Trainer) -> TrainerState:
 # ------------------------------------------------------------------- the objects ---
 @dataclass(frozen=True)
 class Experiment:
-    """Everything ``from_config`` built: the ``run`` directory, the ``device``, the
-    dataset ``source``, the ``trainer``, the initial (or restored) ``state`` with
-    ``start_step``, the ``loaders`` (sliced at ``start_step``) and the ``evaluator``.
-    ``train()`` is the default loop; a notebook may call ``trainer.train`` itself with
-    ``run.checkpointer()`` and any logger."""
+    """Everything `from_config` built. `train` is the default loop; a notebook may
+    call ``trainer.train`` itself with ``run.checkpointer()`` and any logger.
+
+    **Attributes:**
+
+    - `run`: The run directory.
+    - `device`: The device.
+    - `source`: The dataset.
+    - `trainer`: The trainer.
+    - `state`: The initial or restored state.
+    - `start_step`: Its step.
+    - `loaders`: The loaders, sliced at `start_step`.
+    - `evaluator`: The evaluator.
+    """
 
     run: Run
     device: jax.Device
@@ -274,6 +302,7 @@ class Experiment:
 
     @property
     def cfg(self) -> DictConfig:
+        """The run's config."""
         return self.run.cfg
 
     def train(
@@ -284,10 +313,18 @@ class Experiment:
         group: str | None = None,
         wandb_run: Any = None,
     ) -> TrainerState:
-        """Run ``cfg.num_steps − start_step`` steps. ``logger`` defaults to the config's
-        (``build_logger``: Print + wandb as the ``wandb`` group says, or an existing
-        ``wandb_run``); ``checkpointer`` to ``run.checkpointer()``. Returns the final
-        state."""
+        """Run ``cfg.num_steps − start_step`` steps.
+
+        **Arguments:**
+
+        - `logger`: The logger; the config's, from `build_logger`, when ``None``.
+        - `checkpointer`: The checkpointer; ``run.checkpointer()`` when ``None``.
+        - `group`, `wandb_run`: Passed to `build_logger`.
+
+        **Returns:**
+
+        The final state. A wandb run that `build_logger` created is finished afterwards.
+        """
         cfg = self.cfg
         owned_wandb = None
         if logger is None:
@@ -320,10 +357,16 @@ class Experiment:
     def from_config(
         cls, cfg: DictConfig, run_dir: str | Path, *, resume: bool = False
     ) -> Experiment:
-        """Build a run's objects from its config, creating the run directory (refusing
-        an existing run) or, with ``resume=True``, continuing the run already there from
-        its latest checkpoint. ``cfg.resume`` (another run's directory) warm-starts a
-        new run from that run's latest checkpoint instead."""
+        """Build a run's objects from its config, creating the run directory, or with
+        `resume` continuing the run already there from its latest checkpoint;
+        ``cfg.resume``, another run's directory, warm-starts a new run from that run's
+        latest checkpoint instead.
+
+        **Raises:**
+
+        `ValueError` for `resume` together with ``cfg.resume``;
+        `FileExistsError` and `FileNotFoundError` as `Run.from_config`.
+        """
         run_dir = Path(run_dir)
         device = configure_jax(cfg)
         config = resolved(cfg)
@@ -393,8 +436,8 @@ def train(
     group: str | None = None,
     resume: bool = False,
 ) -> TrainerState:
-    """``Experiment.from_config(cfg, run_dir, resume=resume).train(group=group)``: the
-    whole run from a config, as ``scripts/train.py`` does it."""
+    """The whole run from a config, as ``scripts/train.py`` does it:
+    ``Experiment.from_config(cfg, run_dir, resume=resume).train(group=group)``."""
     return Experiment.from_config(cfg, run_dir, resume=resume).train(group=group)
 
 
@@ -405,13 +448,14 @@ def load_run(
     *,
     template: TrainerState | None = None,
 ) -> tuple[DictConfig | None, TrainerState]:
-    """``(cfg, state)`` of a run directory at ``step`` (latest if ``None``).
+    """``(cfg, state)`` of a run directory at `step`, the latest when ``None``.
 
-    Without ``template`` the state template is rebuilt from the run's config with the
-    same builders (``configure_jax`` is applied). With ``template`` — a ``TrainerState``
-    the caller built, for a model that never had a config — the config is only reported
-    when found (else ``None``), and ``run_dir`` may be a bare ``OrbaxCheckpointer``
-    directory (no ``checkpoints/`` layout)."""
+    Without `template` the state template is rebuilt from the run's config with the
+    same builders, and `configure_jax` is applied. With `template`, a ``TrainerState``
+    the caller built for a model that never had a config, the config is reported only
+    when found, else ``None``, and `run_dir` may be a bare ``OrbaxCheckpointer``
+    directory without the ``checkpoints/`` layout.
+    """
     run_dir = Path(run_dir)
     if template is None:
         run = Run.open(run_dir)
@@ -439,6 +483,7 @@ def load_model(
     *,
     template: TrainerState | None = None,
 ) -> AbstractPhaseAmplitudeModel:
-    """The trained model of a run directory at ``step`` (latest if ``None``)."""
+    """The trained model of a run directory at `step`, the latest when ``None``; the
+    arguments are those of `load_run`."""
     _, state = load_run(run_dir, step, template=template)
     return state.model

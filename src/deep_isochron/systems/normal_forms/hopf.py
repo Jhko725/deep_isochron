@@ -1,38 +1,52 @@
-r"""The Hopf (Stuart–Landau) normal form (design document §3): $\rho(r) = a(1 - r^2)$,
+r"""The Hopf (Stuart–Landau) normal form: $\rho(r) = a(1 - r^2)$ and
 $\omega(r) = \omega_0 + (\omega_1 - \omega_0) r^2$.
 
-Limit cycle $r = 1$ with frequency $\omega_1$; unstable focus at the origin with
-eigenvalues $a \pm i\omega_0$; $\omega_0 \ne \omega_1$ shears the isochrons into
-logarithmic spirals (nonisochronicity $\omega_1 - \omega_0$). Closed forms, with
-$c = (\omega_1 - \omega_0)/a$:
+The limit cycle $r = 1$ has frequency $\omega_1$; the origin is an unstable focus with
+eigenvalues $a \pm i\omega_0$, and $\omega_0 \ne \omega_1$ shears the isochrons into
+logarithmic spirals. Hopf is Bautin with $b = 0$. The closed forms, with
+$c = (\omega_1 - \omega_0)/a$: $\kappa = -2a$, $h(r) = c\ln r$ and
+$\Psi(r) = \tfrac12(1 - r^{-2})$, with the explicit inverse $r = (1 - 2\Psi)^{-1/2}$
+(design document §3.1 and §6.1).
 
-* $\kappa = \rho'(1) = -2a$, $\mu = e^{-4\pi a/\omega_1}$;
-* $h(r) = c\ln r$;
-* $\Psi(r) = (r^2 - 1)/(2r^2) = \tfrac12(1 - r^{-2})$ — Wilson–Moehlis normalized
-  ($\partial_r\Psi(1) = 1$), range $(-\infty, \tfrac12)$, inverse
-  $r = (1 - 2\Psi)^{-1/2}$;
-* explicit trajectories (§6.1): $r(t)^{-2} = 1 + (r_0^{-2} - 1)e^{-2at}$.
-
-Hopf is Bautin with $b = 0$. Parameters: $a > 0$ through
-``A_CONSTRAINT = GreaterThan(0)`` (``raw = 0`` ↦ $a = 1$); $\omega_1$ (``w``),
-$\omega_0$ (``w0``) free, ``w0`` defaults to
-``w``. The constructor takes constrained values.
+The parameter $a > 0$ is a constrained leaf through ``A_CONSTRAINT``; $\omega_1$
+(``w``) and $\omega_0$ (``w0``) are free. The constructor takes constrained values.
 """
 
 import jax.numpy as jnp
+import sympy as sp
 from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
+from ..symbolic import SymbolicODE
 from .base import AbstractEvenNormalForm
 
 
 A_CONSTRAINT = GreaterThan(0.0)
-"""``a > 0``; ``raw = 0`` ↦ ``a = 1`` (the default ``at_zero = lower + 1``)."""
+"""The constraint ``a > 0``, with ``raw = 0`` mapped to ``a = 1`` (the default
+``at_zero = lower + 1``)."""
 
 
 class HopfNormalForm(AbstractEvenNormalForm):
-    r"""$\dot r = a r (1 - r^2)$,
-    $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$."""
+    r"""$\dot r = a r (1 - r^2)$, $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$.
+
+    **Arguments:**
+
+    (constrained values)
+
+    - `a`: The radial rate, positive.
+    - `w`: $\omega_1$, the frequency on the cycle.
+    - `w0`: $\omega_0$, the frequency at the origin; `w` when omitted.
+    - `integration`: The default integration of `flow`.
+
+    **Attributes:**
+
+    - `raw_a`: The unconstrained leaf of `a` (ADR-0001).
+    - `w`, `w0`: As above, as scalar arrays.
+
+    **Raises:**
+
+    `ValueError` for ``a <= 0``.
+    """
 
     raw_a: Float[Array, ""]
     w: Float[Array, ""]
@@ -54,25 +68,30 @@ class HopfNormalForm(AbstractEvenNormalForm):
 
     @property
     def a(self) -> Float[Array, ""]:
+        """The constrained radial rate, ``A_CONSTRAINT(raw_a)``."""
         return A_CONSTRAINT(self.raw_a)
 
-    def params(self):
-        return {"a": float(self.a), "w": float(self.w), "w0": float(self.w0)}
+    @classmethod
+    def _symbolic_template_polar(cls) -> SymbolicODE:
+        r"""$\dot r = a r (1 - r^2)$,
+        $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$."""
+        r = sp.Symbol("r", positive=True)
+        theta = sp.Symbol("theta", real=True)
+        a, w, w0 = sp.symbols("a w w0", real=True)
+        return SymbolicODE(
+            states=(r, theta),
+            params={"a": a, "w": w, "w0": w0},
+            rhs=(a * r * (1 - r**2), w0 + (w - w0) * r**2),
+        )
 
-    # defining data, in s = r²
-    def _log_growth_rate_sq(self, s):
-        return self.a * (1 - s)
-
-    def _angular_rate_sq(self, s):
-        return self.w0 + (self.w - self.w0) * s
-
-    # closed forms, in r
     def phase_shift(self, r):
+        r"""$h(r) = c\ln r$ with $c = (\omega_1 - \omega_0)/a$."""
         return (self.w - self.w0) / self.a * jnp.log(r)
 
     def isostable(self, r):
+        r"""$\Psi(r) = \tfrac12(1 - r^{-2})$."""
         return 0.5 * (1 - r ** (-2))
 
     def radius_from_isostable(self, psi):
-        """Explicit inverse: ``r = (1 - 2 Ψ)^(-1/2)`` for ``Ψ < 1/2``."""
+        r"""The explicit inverse $r = (1 - 2\Psi)^{-1/2}$, for $\Psi < \tfrac12$."""
         return (1 - 2 * psi) ** (-0.5)

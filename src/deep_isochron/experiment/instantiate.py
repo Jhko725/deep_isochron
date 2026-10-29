@@ -1,9 +1,12 @@
-"""``instantiate(cfg, **overrides)``: Hydra's ``_target_`` convention with one change —
-**YAML lists become tuples**. The code base types fixed-size parameters as tuples
-(``default_weights: tuple[float, ...]``, ``xy_range``, ``before``/``after``), the test
-suite's beartype hook enforces those annotations at runtime, and Hydra's own
-``instantiate`` can only produce lists. Nested ``_target_`` mappings are instantiated
-recursively; everything else is passed through as plain Python."""
+"""``instantiate``: Hydra's ``_target_`` convention with one change, YAML lists become
+tuples.
+
+The code base types fixed-size parameters as tuples (``default_weights``, ``xy_range``,
+``before`` and ``after``), the test suite's beartype hook enforces those annotations at
+runtime, and Hydra's own ``instantiate`` can only produce lists. Nested ``_target_``
+mappings are instantiated recursively; everything else is passed through as plain
+Python.
+"""
 
 from __future__ import annotations
 
@@ -15,9 +18,11 @@ from omegaconf import DictConfig, ListConfig, OmegaConf
 
 
 TARGET = "_target_"
+"""The key naming the callable."""
 
 
 def _convert(value: Any) -> Any:
+    """`value` with nested targets instantiated and sequences made tuples."""
     if isinstance(value, Mapping):
         if TARGET in value:
             return instantiate(value)
@@ -28,9 +33,18 @@ def _convert(value: Any) -> Any:
 
 
 def instantiate(cfg: Mapping[str, Any] | DictConfig, **overrides: Any) -> Any:
-    """Call ``cfg._target_`` with the remaining keys as keyword arguments (lists as
-    tuples, nested ``_target_``s instantiated), ``overrides`` taking precedence —
-    the per-layer ``key`` and ``flip`` a config cannot express."""
+    """Call ``cfg._target_`` with the remaining keys as keyword arguments.
+
+    **Arguments:**
+
+    - `cfg`: The mapping with a ``_target_``; lists become tuples and nested targets
+        are instantiated.
+    - `overrides`: Keyword arguments that take precedence, such as the per-layer
+        ``key`` and ``flip`` a config cannot express.
+
+    **Raises:**
+
+    `ValueError` without a ``_target_``."""
     if isinstance(cfg, DictConfig | ListConfig):
         plain = OmegaConf.to_container(cfg, resolve=True)
     else:

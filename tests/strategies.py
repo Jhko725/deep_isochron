@@ -48,6 +48,7 @@ EXTREME_RAW_BOUND = 30.0
 
 
 def floats_in(lo: float, hi: float) -> st.SearchStrategy[float]:
+    """Finite floats in ``[lo, hi]``."""
     return st.floats(lo, hi, allow_nan=False, allow_infinity=False)
 
 
@@ -123,6 +124,7 @@ MIN_BINS = {CubicBSpline: 4}
 
 
 def any_spline_template() -> st.SearchStrategy[AbstractScalarBijection]:
+    """A template of any class in ``SPLINE_CLASSES`` with drawn static configuration."""
     return st.sampled_from(SPLINE_CLASSES).flatmap(spline_templates)
 
 

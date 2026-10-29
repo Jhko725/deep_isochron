@@ -1,19 +1,16 @@
 r"""The linear layer of the INN vocabulary.
 
-``BiLipschitzLinear`` is the *only* linear bijection: ``W = U diag(s) Vᵀ`` with ``U, V``
-in ``SO(dim)`` (Cayley transforms of skew-symmetric generators, ADR-0010) and singular
-values ``s`` in ``(1/L, L)``. Every point of the parameter space is therefore an
-orientation-preserving linear map with condition number below ``L²``, and the
-unconstrained leaves can be optimized freely. An unconstrained matrix ``W`` (the former
-``InvertibleLinear``) can cross ``det W = 0`` during training, and with it both
-invertibility and orientation; nothing an INN of conjugacies needs is lost by removing
-it, since ``L`` can be made as large as wanted. See the change document
-``docs/changes/2026-10-02-invertible-cleanup.md`` (A4).
-
-The parametrization follows ADR-0001 in spirit: the leaves ``raw_U``, ``raw_V``,
-``raw_s`` are unconstrained, and the constrained ``LinearParams(U, V, s)`` are computed
-on read by ``params``. All-zero leaves give ``U = V = I``, ``s = 1``: the identity map
-(ADR-0002), which is the default initialization.
+``BiLipschitzLinear`` is the only linear bijection: ``W = U diag(s) Vᵀ`` with ``U`` and
+``V`` in ``SO(dim)``, Cayley transforms of skew-symmetric generators (ADR-0010), and
+singular values ``s`` in ``(1/L, L)``. Every point of the parameter space is therefore
+an orientation-preserving linear map with condition number below ``L²``, and the
+unconstrained leaves can be optimized freely. An unconstrained matrix, the former
+``InvertibleLinear``, can cross ``det W = 0`` during training and lose invertibility and
+orientation with it; nothing an INN of conjugacies needs is lost by removing it, since
+``L`` can be made as large as wanted (change document 2026-10-02, A4). The leaves
+``raw_U``, ``raw_V`` and ``raw_s`` are unconstrained and the constrained
+``LinearParams`` are computed on read, in the spirit of ADR-0001; all-zero leaves give
+the identity map (ADR-0002), the default initialization.
 """
 
 import math
@@ -31,23 +28,27 @@ from .constraints import Interval
 
 
 class LinearParams(NamedTuple):
+    """The constrained parameters of `BiLipschitzLinear`: the rotations `U` and `V`
+    and the singular values `s`."""
+
     U: Float[Array, "dim dim"]
     V: Float[Array, "dim dim"]
     s: Float[Array, " dim"]
 
 
 def cayley(skew: Float[Array, "dim dim"]) -> Float[Array, "dim dim"]:
-    r"""The Cayley transform ``Q = (I - A)(I + A)⁻¹`` of a skew-symmetric ``A``.
+    r"""The Cayley transform ``Q = (I - A)(I + A)⁻¹`` of the skew-symmetric `skew`.
 
-    ``Q`` is orthogonal with ``det Q = +1`` for every skew ``A`` (the eigenvalues of
-    ``I + A`` are ``1 + iλ``, so the solve is always well conditioned), ``Q = I`` at
-    ``A = 0`` (ADR-0002), and the map is smooth and loop-free. It reaches every rotation
-    except those with an eigenvalue ``-1`` (a half turn in a plane), which no training
-    trajectory from the identity crosses. Replaces ``jax.scipy.linalg.expm`` (ADR-0010):
-    JAX's ``expm`` is a 16-step scan of ``lax.cond`` whose predicates the GPU backend
-    reads back from the device, one round trip each — measured at 0.65 ms per 2×2 call
-    on a V100 against 0.05 ms for a closed form. For ``dim = 2`` the solve is written
-    out: with ``a = A[1, 0]``, ``Q`` is the rotation by ``-2 arctan a``."""
+    ``Q`` is orthogonal with ``det Q = +1`` for every skew ``A``, since the eigenvalues
+    of ``I + A`` are ``1 + iλ`` and the solve is always well conditioned; ``Q = I`` at
+    ``A = 0`` (ADR-0002); and the map is smooth and loop-free. It reaches every
+    rotation except those with an eigenvalue ``-1``, a half turn in a plane, which no
+    training trajectory from the identity crosses. It replaces
+    ``jax.scipy.linalg.expm`` (ADR-0010), a 16-step scan of ``lax.cond`` whose
+    predicates the GPU backend reads back from the device one round trip each, 0.65 ms
+    per 2×2 call on a V100 against 0.05 ms for a closed form. For ``dim = 2`` the solve
+    is written out: with ``a = A[1, 0]``, ``Q`` is the rotation by ``-2 arctan a``.
+    """
     n = skew.shape[-1]
     if n == 2:
         a = skew[1, 0]
@@ -59,28 +60,37 @@ def cayley(skew: Float[Array, "dim dim"]) -> Float[Array, "dim dim"]:
 
 
 class BiLipschitzLinear(AbstractBijection):
-    r"""Bi-Lipschitz linear layer ``x -> U diag(s) Vᵀ x + bias``, as introduced in [1].
+    r"""The bi-Lipschitz linear layer ``x -> U diag(s) Vᵀ x + bias`` of Serino et al.
+    2025.
 
-    ``U = cayley(A - Aᵀ)`` and ``V = cayley(B - Bᵀ)`` are rotations; ``s`` lies in
-    ``(1/L, L)`` (``Interval`` with ``at_zero = 1``), so the layer and its inverse are
+    ``U = cayley(A - Aᵀ)`` and ``V = cayley(B - Bᵀ)`` are rotations and ``s`` lies in
+    ``(1/L, L)``, an `Interval` with ``at_zero = 1``, so the layer and its inverse are
     both ``L``-Lipschitz and ``det W > 0`` everywhere in parameter space.
 
     **Arguments:**
 
-    - ``dim``: dimension.
-    - ``max_lipschitz``: ``L > 1``.
-    - ``init``: ``"identity"`` (default; all raw leaves zero, so the layer is the
-      identity map) or ``"rotation"`` (Gaussian skew generators of scale
-      ``1/sqrt(dim)``, giving random rotations ``U``, ``V``; ``s = 1``). The rotation is
-      *not* Haar-distributed; it is the former default initialization, kept for
-      experiments that want a random orthogonal mixing at init.
-    - ``dtype``, ``use_bias``, ``key``: as in ``eqx.nn.Linear``. ``key`` is only drawn
-      from for ``init="rotation"`` but is always required, for a uniform constructor
-      signature across layers.
+    - `dim`: The dimension.
+    - `max_lipschitz`: ``L > 1``.
+    - `dtype`, `use_bias`: As in ``eqx.nn.Linear``.
+    - `init`: ``"identity"``, every raw leaf zero so that the layer is the identity
+        map, or ``"rotation"``, Gaussian skew generators of scale ``1/sqrt(dim)``
+        giving random rotations ``U`` and ``V`` with ``s = 1``. The rotation is not
+        Haar-distributed; it is the former default initialization, kept for
+        experiments that want a random orthogonal mixing at init.
+    - `key`: Drawn from only for ``init="rotation"``, but always required, for a
+        uniform constructor signature across layers.
 
-    [1] D. A. Serino et al. Fast-slow neural networks for learning singularly perturbed
-        dynamical systems. J. Comput. Phys. 537, 114090 (2025).
-    """
+    **Attributes:**
+
+    - `raw_U`, `raw_V`: The skew generators' raw leaves, shape ``(dim, dim)``.
+    - `raw_s`: The singular values' raw leaf, shape ``(dim,)``.
+    - `bias`: The bias, or ``None``.
+    - `max_lipschitz`: ``L`` (static).
+
+    **Raises:**
+
+    `ValueError` for ``max_lipschitz <= 1``, which leaves no room for ``s``, or an
+    unknown `init`."""
 
     raw_U: Float[Array, "{self.dim} {self.dim}"]
     raw_V: Float[Array, "{self.dim} {self.dim}"]
@@ -122,7 +132,8 @@ class BiLipschitzLinear(AbstractBijection):
         self.bias = jnp.zeros((dim,), dtype=dtype) if use_bias else None
 
     def constrain(self, raw_U, raw_V, raw_s) -> LinearParams:
-        """Unconstrained leaves -> ``(U, V, s)``; all zeros give the identity."""
+        """The constrained ``(U, V, s)`` of the raw leaves; all zeros give the
+        identity."""
         L = self.max_lipschitz
         return LinearParams(
             U=cayley(raw_U - raw_U.T),
@@ -132,20 +143,24 @@ class BiLipschitzLinear(AbstractBijection):
 
     @property
     def params(self) -> LinearParams:
+        """The constrained parameters of this instance."""
         return self.constrain(self.raw_U, self.raw_V, self.raw_s)
 
     @property
     def weight(self) -> Float[Array, "{self.dim} {self.dim}"]:
+        """The matrix ``W = U diag(s) Vᵀ``."""
         p = self.params
         return (p.U * p.s) @ p.V.T
 
     def __call__(self, x: Float[Array, " {self.dim}"]) -> Float[Array, " {self.dim}"]:
+        """``W x + bias``."""
         y = self.weight @ x
         if self.bias is not None:
             y = y + self.bias
         return y
 
     def inverse(self, y: Float[Array, " {self.dim}"]) -> Float[Array, " {self.dim}"]:
+        """``W⁻¹ (y - bias)``, with ``W⁻¹ = V diag(1/s) Uᵀ``."""
         if self.bias is not None:
             y = y - self.bias
         p = self.params

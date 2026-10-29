@@ -1,19 +1,34 @@
 ---
 type: design
-status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative
-updated: 2026-10-14
+status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative; §9 amendment of 2026-10-22 (ADR-0016) pending review
+updated: 2026-10-29
 verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
-sources: [Wilson & Moehlis 2016, Yawata et al. 2024, Kvalheim & Revzen 2021, Langfield et al. 2014, Langfield et al. 2025]
+sources:
+  - "Wilson & Moehlis 2016"
+  - "Yawata et al. 2024"
+  - "Kvalheim & Revzen 2021"
+  - "Langfield et al. 2014"
+  - "Langfield et al. 2025"
+  - "Nakao 2016"
+  - "Mauroy et al. 2013"
+  - "Kato et al. 2021"
+  - "Guckenheimer 1975"
+  - "Winfree 2001"
+  - "Guckenheimer & Holmes 1983"
+  - "Chicone 2024"
+  - "Kuznetsov 2004"
+  - "Kidger 2021"
 ---
 
 # Normal forms — conventions, derivations, and the API they imply
 
-**Status: agreed (roadmap B10), 2026-10-03; implemented in B11 (2026-10-03).** Amended 2026-10-03: §5.1 corollary sign (confirmed); §5.3 Yawata paragraph rewritten from the paper's equations and §5.4 (Kvalheim & Revzen) added — both *tentative*, to be revisited by Joon as the claims are checked. **Amended 2026-10-08 (ADR-0013, branch `normal-forms-basin`)**: evenness in $r$ is demoted from a requirement on every normal form to the defining property of the *even family* (`AbstractEvenNormalForm`: Hopf, Bautin); the basin is an annulus $(r_{\rm in}, r_{\rm out})$ with a possibly non-trivial phaseless set inside; §3.3 adds Winfree's model with a hole (Langfield et al. 2025), whose $\rho$ and $\omega$ are not even. This document merges the
+**Status: agreed (roadmap B10), 2026-10-03; implemented in B11 (2026-10-03).** Amended 2026-10-03: §5.1 corollary sign (confirmed); §5.3 Yawata paragraph rewritten from the paper's equations and §5.4 (Kvalheim & Revzen) added, both *tentative*, to be revisited by Joon as the claims are checked. **Amended 2026-10-08 (ADR-0013, branch `normal-forms-basin`)**: evenness in $r$ is demoted from a requirement on every normal form to the defining property of the *even family* (`AbstractEvenNormalForm`: Hopf, Bautin); the basin is an annulus $(r_{\rm in}, r_{\rm out})$ with a possibly non-trivial phaseless set inside; §3.3 adds Winfree's model with a hole (Langfield et al. 2025), whose $\rho$ and $\omega$ are not even. This document merges the
 B10 design note with Joon's earlier derivation notes (LaTeX, "Tractable periodic
 dynamics") and resolves the conflicts between them. It is the single reference for the
 mathematics of the analytic base systems; `systems/normal_forms/` is implemented against
-it (B11), and ADR-0007 points here. All design decisions are settled
-and listed in §11; §9 is the implementation contract.
+it (B11), and ADR-0007 points here. The design decisions are settled and
+marked **[decided]** where they are made; ADR-0007 and ADR-0013 record the structural
+ones, and §9 is the implementation contract.
 
 Companion files: `systems/normal_forms/{base,hopf,bautin,winfree,integration}.py`;
 `tests/test_normal_forms.py`. Related: ADR-0007 (hierarchy, `SolverConfig`, integrations
@@ -49,16 +64,16 @@ $\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motion
 **Notation [decided].** Uppercase $\Theta, \Psi$ are the two *coordinate functions* on the
 basin; lowercase $\theta$ is the polar angle. $\Psi$ and $\kappa$ follow Wilson & Moehlis
 (2016), who write the isostable coordinate as $\psi$ and the exponent as $\kappa$; we
-capitalise $\psi\to\Psi$ so that both coordinate functions $(\Theta,\Psi)$ are uppercase.
-Langfield, Krauskopf & Osinga (2014) use a period-normalized phase $\vartheta\in[0,1)$;
+capitalize $\psi\to\Psi$ so that both coordinate functions $(\Theta,\Psi)$ are uppercase.
+Langfield et al. 2014 use a period-normalized phase $\vartheta\in[0,1)$;
 we use radians, $\Theta = 2\pi\vartheta$.
 
-"Even in $r$" means $\rho(r) = \tilde\rho(r^2)$ for a smooth $\tilde\rho$ — equivalently,
-$\rho$ has only even powers in its Taylor expansion at $0$. This is what makes the
+"Even in $r$" means $\rho(r) = \tilde\rho(r^2)$ for a smooth $\tilde\rho$; equivalently,
+$\rho$ has only even powers in its Taylor expansion at $0$. Evenness is what makes the
 cartesian vector field smooth at the origin (§2). Until 2026-10-08 it was a requirement
 on every normal form; it is now the defining property of the **even family**
-(`AbstractEvenNormalForm`, §9), because a normal form whose basin excludes the origin —
-Winfree's model with a hole, §3.3 — has nothing to be smooth *at*, and its $\rho$, $\omega$
+(`AbstractEvenNormalForm`, §9), because a normal form whose basin excludes the origin
+(Winfree's model with a hole, §3.3) has nothing to be smooth *at*, and its $\rho$, $\omega$
 are not even. Outside the even family the cartesian field is as smooth as $\rho(|\mathbf u|)$,
 $\omega(|\mathbf u|)$ are for $|\mathbf u| > 0$.
 
@@ -91,7 +106,7 @@ $$
 $\dot{\mathbf{u}} = \dot r\thinspace\mathbf e_r +r\dot\theta\thinspace\mathbf e_\theta = r\rho\thinspace\mathbf e_r + r\omega\thinspace\mathbf e_\theta = \rho\mathbf{u}+ \omega\mathsf{J}\mathbf{u}$, since $r\mathbf e_\theta = \mathsf{J}\mathbf{u}$. Because $\rho,\omega$
 are even, $\rho(|\mathbf{u}|) = \tilde\rho(x^2+y^2)$ is a smooth function of $\mathbf{u}$ and the
 field is smooth at the origin. *Numerical note*: $|\mathbf{u}| = \sqrt{x^2+y^2}$ has no
-derivative at exactly $\mathbf{u}=0$, so the code never forms it — the cartesian `rhs` is
+derivative at exactly $\mathbf{u}=0$, so the code never forms it: the cartesian `rhs` is
 evaluated as $\tilde\rho(x^2+y^2)\thinspace\mathbf u + \tilde\omega(x^2+y^2)\thinspace\mathsf J\mathbf u$ (§9).
 
 **Cartesian Jacobian.** For general even $\rho,\omega$,
@@ -120,7 +135,7 @@ $$
 \mathsf{D}\dot{\mathbf{u}}(0) = \rho(0)\,\mathsf{I} + \omega(0)\,\mathsf{J}.
 $$
 
-**Phase–amplitude** $(\Theta, \Psi)$: $\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$ — the
+**Phase–amplitude** $(\Theta, \Psi)$: $\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$, so the
 flow is *linear*:
 
 $$
@@ -156,15 +171,15 @@ $\omega(0) = \omega_0$. Write $c := (\omega_1 - \omega_0)/a$.
 $\dot r = r(\alpha + \beta r^2)$, $\dot\theta = \gamma + \delta r^2$; for $\alpha > 0$,
 $\beta < 0$ it has an unstable focus at $r=0$ and a stable cycle at
 $r^\ast = \sqrt{-\alpha/\beta}$. The cycle radius is immaterial for a conjugacy target, so we
-fix $r^\ast=1$ by $\beta = -\alpha =: -a$, and reparametrise the angular rate by its value on
+fix $r^\ast=1$ by $\beta = -\alpha =: -a$, and reparametrize the angular rate by its value on
 the cycle, $\omega_1 = \gamma+\delta$, and at the origin, $\omega_0 = \gamma$:
 
 $$
 \dot r = a\,r\,(1 - r^2), \qquad \dot\theta = \omega_0 + (\omega_1 - \omega_0)\,r^2 .
 $$
 
-**Bautin (generalized Hopf).** Adds a quintic term. Keeping the same stability pattern
-(unstable focus at $0$, stable cycle at $r=1$) suggests the factorised parametrization
+**Bautin (generalized Hopf).** This form adds a quintic term. Keeping the same stability pattern
+(unstable focus at $0$, stable cycle at $r=1$) suggests the factorized parametrization
 
 $$
 \dot r = a\,r\,(1 - r^2)(1 + b r^2), \qquad \dot\theta = \omega_0 + (\omega_1 - \omega_0)\,r^2 ,
@@ -198,7 +213,7 @@ chosen over cubic Hopf). Hopf is Bautin with $b = 0$ throughout.
 
 ### 3.3 Winfree's model with a hole (not even; a phaseless disk)
 
-Langfield, Krauskopf, Lee & Osinga (2025, §4.1, Eqs. (10)–(13); after Winfree 1980) study
+Langfield et al. 2025 (§4.1, Eqs. 10–13; after Winfree 1980) study
 
 $$
 \dot r = (1 - r)(r - a)\thinspace r, \qquad \dot\psi = -\bigl(1 + \omega (1 - r)\bigr),
@@ -212,11 +227,11 @@ $\vartheta \in [0, 1)$ is, for $r > a$,
 
 $$
 \psi(r) = 2\pi\left(\frac{\omega}{2\pi a}\left[\ln\frac{r}{r-a} - \ln\frac{1}{1-a}\right] - \vartheta\right)
-\qquad\text{(their Eq. (12)).}
+\qquad\text{(their Eq. 12).}
 $$
 
-In our symbols (*deduced* from §5.1–5.2; every identity checked by autodiff and the
-isochron against Eq. (12) numerically, `tests/test_normal_forms.py` §4), with the model's
+In our symbols ([deduced] from §5.1–5.2; every identity checked by autodiff and the
+isochron against Eq. 12 numerically, `tests/test_normal_forms.py` §4), with the model's
 $\omega$ written `w` to keep $\omega(r)$ for the angular rate:
 
 | | Winfree ($0 \le a < 1$) |
@@ -230,17 +245,17 @@ $\omega$ written `w` to keep $\omega(r)$ for the angular rate:
 | basin | $a < r < \infty$; `basin_radii() = (a, ∞)` |
 | eigenvalues at $0$ | $-a \pm i(1 + w)$ — a *stable* focus **outside** the basin: not a conjugacy invariant of $\Gamma$ (hence `eigenvalues_origin` belongs to the even family only) |
 
-Equivalence with Eq. (12): on the isochron $\Theta_0$, $\theta = \Theta_0 - h(r)$; with
+Equivalence with Eq. 12: on the isochron $\Theta_0$, $\theta = \Theta_0 - h(r)$; with
 $\Theta_0 = -2\pi\vartheta$ (on $\Gamma$, $\Theta = \theta$ and $\dot\Theta = \omega_1 = -1$,
 so the point of period-fraction $\vartheta$ along the flow sits at angle $-2\pi\vartheta$)
 this is exactly $\psi(r)$ above.
 
 **Three regimes in $a$** (amended 2026-10-14 after the first training runs):
 
-- $a > 0$ — the paper's case: a hole, the phaseless disk $r \le a$, basin boundary a
+- $a > 0$ is the paper's case: a hole, the phaseless disk $r \le a$, basin boundary a
   repelling cycle.
-- $a = 0$ — the hole closes to the origin, $\dot r = r^2(1 - r)$: a *non-hyperbolic*
-  repelling point (trajectories leave it algebraically — from $r_0$ in $\approx 1/r_0$
+- $a = 0$ closes the hole to the origin, $\dot r = r^2(1 - r)$: a *non-hyperbolic*
+  repelling point (trajectories leave it algebraically, from $r_0$ in $\approx 1/r_0$
   time units); the closed forms are the limits $h = w(1 - 1/r)$,
   $\Psi = \tfrac{r-1}{r}\thinspace e^{1/r - 1}$, an essential singularity where Bautin has a
   power law. **Not a conjugacy target**: the eigenvalues at the enclosed fixed point are
@@ -250,7 +265,7 @@ this is exactly $\psi(r)$ above.
   at step $\approx 1400$: the only way for the map to imitate algebraic escape with
   exponential latent dynamics is to send near-origin data to extreme latent radii, where
   the chart degenerates (see `latent/*` in the Evaluator, ADR-0009 §5).
-- $a < 0$ — *ours*, not in the paper: no hole, the origin is a **hyperbolic** repelling
+- $a < 0$ is *ours*, not in the paper: no hole, the origin is a **hyperbolic** repelling
   focus with eigenvalues $-a \pm i(1+w)$ (`eigenvalues_origin`, meaningful exactly in
   this regime), the same closed forms hold unchanged (the partial fractions never used
   the sign of $a$; identities re-verified by autodiff down to $r = 10^{-3}$), and
@@ -261,13 +276,13 @@ this is exactly $\psi(r)$ above.
 The root solve of §7 handles all three (the probe beyond the inner edge
 $r_{\rm in} = \max(a, 0)$ is `nan`, which the bracket expansion treats as "overshot"; the
 closed forms are made `nan` for $r \le r_{\rm in}$ explicitly, since for integer $1/a$ the
-power of a negative base would otherwise be finite garbage).
+power of a negative base would otherwise be a finite but meaningless value).
 
 **Why this system.** It is the planar case with closed-form isochrons *and* a non-trivial
 phaseless set, the paper's testbed for critical isochrons; for us it is a target with
 exactly known $\Theta$, $\Psi$ to compare a learned conjugacy against, and the simplest
 system on which the question "what does a planar diffeomorphism do with a phaseless
-disk it cannot map to a point" can be asked (roadmap Phase E) — with $a < 0$ as the
+disk it cannot map to a point" can be asked (roadmap Phase E), with $a < 0$ as the
 control case where the conjugacy exists.
 
 ---
@@ -290,7 +305,7 @@ preserves these eigenvalues; a topological one preserves only the stability type
 
 ### 4.2 Stability of the cycle: Floquet exponent and multiplier
 
-Linearise the polar system about $r = 1$ (write $\delta r$, $\delta\theta$):
+Linearize the polar system about $r = 1$ (write $\delta r$, $\delta\theta$):
 
 $$
 \begin{bmatrix}\dot{\delta r}\\ \dot{\delta\theta}\end{bmatrix}
@@ -304,12 +319,12 @@ $$
 using $\partial_r(r\rho)\vert_{r=1} = \rho(1) + \rho'(1) = \rho'(1)$. For the two forms
 $\mathsf{A} = \begin{bmatrix}-2a(1+b) & 0\cr 2(\omega_1-\omega_0) & 0\end{bmatrix}$.
 
-**Convention [decided]: $\kappa = \rho'(1)$ with $\rho$ a function of $r$ — no factor 2.**
+**Convention [decided]: $\kappa = \rho'(1)$ with $\rho$ a function of $r$, no factor 2.**
 The same number written in $s = r^2$, $\dot s = 2s\tilde\rho(s)$, linearizes to
 $2\tilde\rho'(1)$, and since $\rho'(r) = 2r\tilde\rho'(r^2)$ both agree
 (Hopf: $\rho'(1) = -2a = 2\tilde\rho'(1)$). The pre-B11 code computed
 `2·grad(radial_rate)(1)` *because* `radial_rate` took $s$; the factor of two was a chart
-artefact.
+artifact.
 
 **Multiplier.** The multipliers are the eigenvalues of the monodromy matrix $\mathsf{M}(T)$,
 $\dot{\mathsf{M}} = \mathsf{A}(t)\mathsf{M}$, $\mathsf{M}(0) = \mathsf{I}$. Liouville's formula
@@ -351,8 +366,8 @@ $$
 with $h(1) = 0$ so that $\Theta = \theta$ on the cycle. (Equivalently, with the earlier
 notes' sign convention $\Theta = \theta - f(r)$, $f' = (\omega(r) - \omega_1)/\dot r$;
 the general formula there was written with the opposite sign, though the substituted
-result was right.) The integrand is finite at $r = 1$ — numerator and denominator vanish
-linearly, ratio $\to -\omega'(1)/\rho'(1)$ — and the integral from $1$ to $r$ converges
+result was right.) The integrand is finite at $r = 1$ (numerator and denominator vanish
+linearly, ratio $\to -\omega'(1)/\rho'(1)$), and the integral from $1$ to $r$ converges
 for $r$ in the basin.
 
 For the concrete forms, $\omega_1 - \omega(r) = (\omega_1-\omega_0)(1-r^2)$ cancels the
@@ -363,29 +378,29 @@ h'(r) = \frac{c}{r(1+br^2)} = c\left(\frac1r - \frac{br}{1+br^2}\right),\qquad
 h(r) = c\left[\ln r - \tfrac12\ln(1+br^2)\right] + C,
 $$
 
-and $h(1)=0$ gives $C = \tfrac{c}{2}\ln(1+b)$, i.e. the table in §3. Thus
+and $h(1)=0$ gives $C = \tfrac{c}{2}\ln(1+b)$, which is the table in §3. Thus
 
 $$
 \Theta(r,\theta) = \theta + \frac{\omega_1-\omega_0}{2a}\,\ln\frac{(1+b)\,r^2}{1+br^2}
 \qquad(\text{Hopf: } \theta + \tfrac{\omega_1-\omega_0}{a}\ln r).
 $$
 
-For Hopf this is the Stuart–Landau phase function of Nakao (2016, App. D).
+For Hopf this is the Stuart–Landau phase function of Nakao 2016 (App. D).
 
-**Isochrons** are $\Theta = \Theta_0$, i.e. the curves
+**Isochrons** are $\Theta = \Theta_0$, that is, the curves
 
 $$
 \theta = \Theta_0 - h(r).
 $$
 
-This is the primary representation (`isochron(Θ, r)` returns these points in cartesian
+This form is the primary representation (`isochron(Θ, r)` returns these points in cartesian
 coordinates; `limit_cycle(Θ) = (cos Θ, sin Θ)`). For $\omega \equiv \omega_1$ ($c = 0$) they
 are the radial lines $\theta = \Theta_0$; $\omega(r)\ne\omega_1$ shears them into spirals.
 Amplitude dependence of the frequency is what the synchronization literature calls
 *nonisochronicity* (Kuramoto; Pikovsky, Rosenblum & Kurths) or *shear*; for the standard
 $\omega(r)$ the nonisochronicity parameter is $\omega_1-\omega_0$.
 
-*Corollary — radius as a function of angle.* When $c \ne 0$ one can solve for $r$. On
+*Corollary: radius as a function of angle.* When $c \ne 0$ one can solve for $r$. On
 the isochron $\Theta_0$, $h(r) = \Theta_0 - \theta$; let
 $A^2 := \exp\negthinspace\bigl(2(\Theta_0 - \theta)/c\bigr)$ with $\theta$ unwrapped; then
 $(1+b)r^2 = A^2(1+br^2)$ and
@@ -402,27 +417,27 @@ $\theta = \Theta_0 - h(r)$.) Caveats: (i) it is singular at $c = 0$ (radial isoc
 (ii) for $b > 0$ each isochron reaches $r\to\infty$ at the *finite* angle where
 $A^2 = (1+b)/b$, because $h(r)\to \tfrac{c}{2}\ln\tfrac{1+b}{b}$ as $r\to\infty$, so the
 formula is defined only for $A^2 < (1+b)/b$; (iii) for $-1 < b < 0$, $A^2 \to 0$ as $r\to 0$
-and $A^2\to\infty$ is not reached — the isochron ends at the outer cycle. The form
+and $A^2\to\infty$ is not reached, the isochron ending at the outer cycle. The form
 $\theta = \Theta_0 - h(r)$ has none of these problems.
 
 ### 5.2 Isostable coordinate $\Psi$
 
 **Definition.** $\Psi$ is the Koopman eigenfunction of the generator with eigenvalue
-$\kappa$ (Mauroy, Mezić & Moehlis 2013; Kato et al. 2021, Eq. (2)/(12)):
+$\kappa$ (Mauroy et al. 2013; Kato et al. 2021, Eq. 2/(12)):
 
 $$
 \dot{\mathbf{u}}\cdot\nabla\Psi = \kappa\,\Psi \quad\text{on the basin.}
 $$
 
-Wilson & Moehlis (2016) define the same object for periodic orbits through the Poincaré
-map (their Eq. (5)) and fix its scale by **$\nabla\Psi\cdot\mathbf{v} = 1$ on $\Gamma$**
-(their Eq. (14)), where $\mathbf{v}$ is the right Floquet eigenvector for $\mu$. Any
+Wilson & Moehlis 2016 define the same object for periodic orbits through the Poincaré
+map (their Eq. 5) and fix its scale by **$\nabla\Psi\cdot\mathbf{v} = 1$ on $\Gamma$**
+(their Eq. 14), where $\mathbf{v}$ is the right Floquet eigenvector for $\mu$. Any
 $\Psi\mapsto C\Psi$ satisfies the same equation (Kato et al.: "the scale of the amplitude
 function is arbitrary"), so a normalization is a convention, not a modeling choice; it
 matters only when comparing $\nabla\Psi$ (the isostable response curve) with values
 reported elsewhere.
 
-**Normalisation [decided]: Wilson–Moehlis.** For the normal forms the right Floquet vector
+**Normalization [decided]: Wilson–Moehlis.** For the normal forms the right Floquet vector
 at $r=1$ is radial; with $\mathbf{v} = \mathbf e_r$ the condition reads
 
 $$
@@ -434,7 +449,7 @@ coordinate $\delta r$ to first order. (The B10 draft proposed $\Psi \approx 1 - 
 positive inside; that is the Hopf expression $(1-r^2)/r^2$ taken as reference. It is
 superseded. Code and docstrings must agree with the sign here.)
 
-**Derivation.** Seek $\Psi = \Psi(r)$: $\Psi'(r)\thinspace r\rho(r) = \kappa\Psi$, i.e.
+**Derivation.** Seek $\Psi = \Psi(r)$: $\Psi'(r)\thinspace r\rho(r) = \kappa\Psi$, that is,
 
 $$
 \frac{d\ln|\Psi|}{dr} = \frac{\kappa}{r\rho(r)}.
@@ -450,7 +465,7 @@ $$
 \frac{1}{s(1-s)(1+bs)} = \frac1s + \frac{1}{(1+b)(1-s)} - \frac{b^2}{(1+b)(1+bs)},
 $$
 
-so $\ln|\Psi| = -(1+b)\ln s + \ln|1-s| + b\ln(1+bs) + \text{const}$, i.e.
+so $\ln|\Psi| = -(1+b)\ln s + \ln|1-s| + b\ln(1+bs) + \text{const}$, that is,
 
 $$
 \Psi = C\,\frac{(s-1)(1+bs)^{b}}{s^{1+b}}.
@@ -473,7 +488,7 @@ $\Psi\sim -r^{-2(1+b)}/(2(1+b)^b)$, exponent $\kappa/a$) to
 - $+\infty$ at the outer cycle $r^2 = -1/b$ for $-1 < b < 0$, through the factor $(1+br^2)^{b}$.
 
 So $r(\Psi)$ exists and is unique for every reachable $\Psi$ (§7). **Isostables** are the
-circles $r = \text{const}$ — rotational symmetry puts *all* non-trivial isostable (and
+circles $r = \text{const}$: rotational symmetry puts *all* non-trivial isostable (and
 isochron) geometry of a target system into the conjugating map, exactly as `learnings`
 records for isochrons.
 
@@ -482,7 +497,7 @@ with matched $\kappa$, then by the chain rule $(F\cdot\nabla)(\Psi\circ H) = \ka
 so $\Psi\circ H$ is the target's isostable coordinate and $\mathsf{D}H^{\mathsf T}\thinspace\nabla\Psi\circ H$
 its isostable response curve; likewise $\Theta\circ H$ and the phase response. The
 Wilson–Moehlis scale is inherited only if the matched Floquet vector is normalized the same
-way on the target side — this is what makes the normalization choice matter downstream.
+way on the target side, which is what makes the normalization choice matter downstream.
 
 ### 5.3 The family generated by $\Psi$; the first-order member; Yawata et al.'s latent space
 
@@ -497,8 +512,8 @@ $$
 whose isostable coordinate is $\Psi$ by construction and whose Floquet exponent is $\kappa$.
 Hopf and Bautin are the members with $\Psi = \tfrac12(1 - r^{-2})$ and the boxed
 expression above (verified: substituting them recovers $\dot r = ar(1-r^2)$ and
-$ar(1-r^2)(1+br^2)$). The polynomial degree of $\dot r$ in $r$ — cubic for Hopf, quintic
-for Bautin — is a property of the chosen $\Psi$, not of the construction. Note that an
+$ar(1-r^2)(1+br^2)$). The polynomial degree of $\dot r$ in $r$ (cubic for Hopf, quintic
+for Bautin) is a property of the chosen $\Psi$, not of the construction. An
 *odd polynomial* $\dot r = r(\alpha + \beta r^2 + \cdots)$ needs degree $\ge 3$ to have a
 cycle at all: the degree-1 member $\dot r = kr$, $\dot\theta = \omega$ has no limit cycle
 (the origin is a global focus for $k < 0$), so it cannot be a conjugacy target for an
@@ -534,27 +549,28 @@ $\Psi\sim -\tfrac12 r^{-2} = -\tfrac12 r^{\kappa/a}$). Consequences for this pro
   $\omega_1$, $\omega_0$) and the smallest possible nonlinearity in the base.
 
 It is admissible as a *third* subclass (`LogPolarNormalForm`) provided the base class
-does not assume finite `eigenvalues_origin()`; it is **deferred** (§11). The row for the §3 table would be: $\rho = \kappa\ln r$; $\kappa$ free;
+does not assume finite `eigenvalues_origin()`; it is **deferred**. The row for the §3 table would be: $\rho = \kappa\ln r$; $\kappa$ free;
 $\mu = e^{\kappa T}$; $\Psi = \ln r$; eigenvalues at $0$: none; basin
 $\mathbb{R}^2\setminus\lbrace0\rbrace$; $\Psi\to\pm\infty$ as $r\to\infty, 0$. The angular rate
 should *not* be the standard $\omega_0 + (\omega_1-\omega_0)r^2$ here: the $(1-r^2)$ no
 longer cancels against $\rho$ and $h' = (\omega_1-\omega_0)(1-r^2)/(\kappa r\ln r)$
 integrates to $\ln|\ln r| - \mathrm{Ei}(2\ln r)$, not elementary. The natural shear
 for this member is linear in the log chart, $\omega(r) = \omega_1 + \delta\ln r$, giving
-$h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 + (\delta/\kappa)\ln r$ — logarithmic spirals, as for Hopf — and $\omega(0)$ undefined,
+$h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 + (\delta/\kappa)\ln r$ (logarithmic spirals, as for Hopf)
+and $\omega(0)$ undefined,
 consistent with the missing eigenvalues.
 
-**Relation to Yawata et al. (2024).** Their phase autoencoder maps the oscillator state
+**Relation to Yawata et al. 2024.** Their phase autoencoder maps the oscillator state
 $X$ to a three-dimensional latent $\mathbf Y = (Y_1, Y_2, Y_3) = f_{\rm enc}(X)$ with
-$Y_1^2 + Y_2^2 = 1$ (Eq. (11), enforced by normalizing the first two encoder outputs,
-Eqs. (15)–(16)), $(Y_1, Y_2)$ rotating at a constant learned frequency $\omega$ and $Y_3$
+$Y_1^2 + Y_2^2 = 1$ (Eq. 11, enforced by normalizing the first two encoder outputs,
+Eqs. 15–16), $(Y_1, Y_2)$ rotating at a constant learned frequency $\omega$ and $Y_3$
 decaying as $e^{\lambda\tau}$ per sampling interval $\tau$ with learned $\lambda < 0$
-(Eqs. (12)–(14)), "for all $\tau > 0$". The phase is $\Theta(X) = \arctan(Y_2/Y_1)$
-(Eq. (19)) and the phase sensitivity function is $Z(\theta) = \nabla_X\Theta\vert_{X = f_{\rm dec}(\theta)}$ by autodiff (Eq. (20)). Sec. VI identifies $Y_1 + iY_2$ with the
+(Eqs. 12–14), "for all $\tau > 0$". The phase is $\Theta(X) = \arctan(Y_2/Y_1)$
+(Eq. 19) and the phase sensitivity function is $Z(\theta) = \nabla_X\Theta\vert_{X = f_{\rm dec}(\theta)}$ by autodiff (Eq. 20). Sec. VI identifies $Y_1 + iY_2$ with the
 Koopman eigenfunction of exponent $i\omega$ and, for planar oscillators, $Y_3$ with the
-eigenfunction of exponent $\lambda$ — i.e. with $e^{i\Theta}$ and $\Psi$, $\lambda = \kappa$
-— while noting that the trained $Y_3$ is "closely related, though not equivalent" to it
-(their learned $\lambda$ differs from the true second Floquet exponent because Eq. (14)
+eigenfunction of exponent $\lambda$ (that is, with $e^{i\Theta}$ and $\Psi$,
+$\lambda = \kappa$), while noting that the trained $Y_3$ is "closely related, though not equivalent" to it
+(their learned $\lambda$ differs from the true second Floquet exponent because Eq. 14
 "is not strictly satisfied by the trained phase autoencoder"; they report it is "not easy
 to realize in practice"). So their latent space is exactly the chart of §7,
 
@@ -568,27 +584,27 @@ $\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$ of §2 discretized at $\tau$.
 Two things about this chart that the baseline inherits from §5.4 rather than from the
 autoencoder: the exact $(\Theta, \Psi)$ **exists and is unique on the whole basin**, as a
 $C^{k,\alpha}$ *diffeomorphism* $Q \to S^1 \times \mathbb R$ (Kvalheim & Revzen 2021,
-Prop. 3 — see §5.4), so the cylinder is not a near-cycle approximation but the global
-structure of every planar oscillator's basin; and the two conventions the autoencoder
-cannot learn — the phase origin and the scale of $\Psi$ — are precisely the two
+Prop. 3; see §5.4), so the cylinder is not a near-cycle approximation but the global
+structure of every planar oscillator's basin; and the two conventions that the autoencoder
+cannot learn, the phase origin and the scale of $\Psi$, are precisely the two
 normalizations in that uniqueness statement ($\psi_\theta(x_0) = 1$ and
 $\mathsf D_{x_0}\psi_z\vert_{E^s} = \mathrm{id}$, the latter being the Wilson–Moehlis choice
 of §5.2). What is *approximate* in Yawata et al. is the learned map, and it is trained
 near the cycle by construction: initial states are points of the cycle perturbed by
 Gaussian noise of $\gamma_2 = 0.5$ cycle-standard-deviations and evolved for
-$\gamma_1 = 3$ periods ($N_s = 1000$ orbits; Eqs. (27)–(28)), which is why their
+$\gamma_1 = 3$ periods ($N_s = 1000$ orbits; Eqs. 27–28), which is why their
 $\lambda$ is poorly determined. Which planar normal form one associates with the chart is
 a matter of choosing $\Psi(r)$: the log-polar member corresponds to $Y_3 = \ln r$, Hopf to
 $Y_3 = \tfrac12(1 - r^{-2})$, and so on.
 
 What distinguishes this project's setting is topological. The chart $(\Theta, \Psi)$ maps
 the *punctured* plane onto the cylinder; there is no diffeomorphism of $\mathbb R^2$ onto
-$S^1\times\mathbb R$. The autoencoder sidesteps this by not being invertible (separate
+$S^1\times\mathbb R$. The autoencoder avoids the obstruction by not being invertible (separate
 encoder and decoder, the cylinder embedded in $\mathbb R^3$). The conjugacy approach keeps
 a diffeomorphism of the plane, $H:\mathbb R^2\to\mathbb R^2$, and lets the *normal form's
 own* chart $\psi_{\rm NF}: \mathbb R^2\setminus\lbrace0\rbrace\to S^1\times\mathbb R$ carry the
-topology: $\psi_{\rm FHN} = \psi_{\rm NF}\circ H$ (§5.2, transport). This is the precise
-sense in which Hopf/Bautin "add" the fixed point to Yawata's picture (§5.4 for what that
+topology: $\psi_{\rm FHN} = \psi_{\rm NF}\circ H$ (§5.2, transport). That composition is the
+precise sense in which Hopf/Bautin "add" the fixed point to Yawata's picture (§5.4 for what that
 costs), and why the log-polar member sits between the two.
 
 *Implementation mapping (roadmap B12).* The baseline lives in `model/`, not in
@@ -596,8 +612,8 @@ costs), and why the log-polar member sits between the two.
 
 | Yawata et al. | this document | `deep_isochron` |
 |---|---|---|
-| $(Y_1, Y_2)/R$, $Y_3$ (Eqs. (15)–(16)) | $(\cos\Theta, \sin\Theta, \Psi)$ | `PhaseAmplitudeAutoencoder.encoder`: MLP, first two outputs normalized |
-| $f_{\rm step}$ with learned $\omega$, $\lambda$ (Eq. (18)) | $\Theta(t+\tau) = \Theta + \omega_1\tau$, $\Psi(t+\tau) = e^{\kappa\tau}\Psi$ | `PhaseAmplitudeLatentDynamics(omega, kappa)`: closed-form flow on $\mathbb R^3$, continuous in $t$ (replaces `LinearLatentDynamics`) |
+| $(Y_1, Y_2)/R$, $Y_3$ (Eqs. 15–16) | $(\cos\Theta, \sin\Theta, \Psi)$ | `PhaseAmplitudeAutoencoder.encoder`: MLP, first two outputs normalized |
+| $f_{\rm step}$ with learned $\omega$, $\lambda$ (Eq. 18) | $\Theta(t+\tau) = \Theta + \omega_1\tau$, $\Psi(t+\tau) = e^{\kappa\tau}\Psi$ | `PhaseAmplitudeLatentDynamics(omega, kappa)`: closed-form flow on $\mathbb R^3$, continuous in $t$ (replaces `LinearLatentDynamics`) |
 | $L_{\rm recon}$ (21); $L_{\rm pha}$, $L_{\rm dev}$ over $k = 1..K$ steps with $\alpha_k = k^{-\min(1, L_{\rm pha})}$ (22)–(24); $L_{\rm aux}$ = center of mass of $(Y_1,Y_2)$ in the batch (25), to escape the $\omega = 0$ solution; weights $(1, 0.5, 0.5, 2)$ then $(1, 5, 0.5, 0)$ once $L_{\rm pha} < 0.01$, $L_{\rm aux} < 0.05$ (26) | — | `PhaseAutoencoderLoss` over a window: reconstruction, latent consistency split into phase/amplitude parts, center-of-mass term; the $\alpha_k$ and weight schedules as config |
 | ICs on the cycle $+\thinspace\gamma_2\sigma\odot\xi$, evolved $\gamma_1 T$ (27)–(28) | near-cycle training distribution | an `AbstractICSampler` `OnCycleGaussian(cycle_points, gamma2)`; `limit_cycle(Θ)` for normal forms, a long integration for FHN |
 | $\Theta = \arctan(Y_2/Y_1)$, $Z = \nabla\Theta$ at $f_{\rm dec}(\theta)$ (19)–(20) | $\Theta$, $\nabla\Theta$ (§1) | `phase(x)`, `jax.grad` |
@@ -606,11 +622,11 @@ costs), and why the log-polar member sits between the two.
 ### 5.4 (*tentative*) Global existence and uniqueness of the chart (Kvalheim & Revzen 2021)
 
 The closed forms of §5.1–5.2 are special to the normal forms, but the *objects* they
-compute exist for every oscillator in the study, on the whole basin, and are unique. This
-is the content of Kvalheim & Revzen's global Floquet normal form, specialised here to the
+compute exist for every oscillator in the study, on the whole basin, and are unique. That
+statement is the content of Kvalheim & Revzen's global Floquet normal form, specialized here to the
 plane.
 
-**Statement** (their Prop. 3, specialised). Let $\Phi$ be a $C_{\rm loc}^{k,\alpha}$ flow on
+**Statement** (their Prop. 3, specialized). Let $\Phi$ be a $C_{\rm loc}^{k,\alpha}$ flow on
 the basin $Q$ of an attracting hyperbolic $\tau$-periodic orbit $\Gamma$, $x_0\in\Gamma$,
 $E_{x_0}^s$ the $\mathsf D_{x_0}\Phi^\tau$-invariant complement of $\mathsf T_{x_0}\Gamma$,
 and assume the spectral-spread condition $\nu(\mathsf D\Phi^\tau\vert_{E^s}, \mathsf D\Phi^\tau\vert_{E^s}) < k+\alpha$
@@ -619,7 +635,7 @@ proper $C_{\rm loc}^{k,\alpha}$ embedding** $\psi = (\psi_\theta, \psi_z): Q\to 
 
 $$
 \psi_\theta\circ\Phi^t = e^{2\pi i t/\tau}\,\psi_\theta,\qquad \psi_z\circ\Phi^t = e^{tA}\psi_z
-\qquad(\text{their Eq. (21)}),
+\qquad(\text{their Eq. 21}),
 $$
 
 and when $A$ is real, $\psi: Q\to S^1\times E_{x_0}^s$ is a **diffeomorphism**. Their
@@ -653,11 +669,11 @@ H := \psi_{\rm NF}^{-1}\circ\psi_{\rm target}: \ \mathbb R^2\setminus\{x^*\}\ \t
 $$
 
 is a $C^\infty$ diffeomorphism conjugating the two flows on the punctured basins, and it is
-**unique up to the two-parameter group** generated by the normalizations — a phase shift
-$\Theta\mapsto\Theta + c$ (rotation of the normal form) and a scale $\Psi\mapsto C\Psi$ —
+**unique up to the two-parameter group** generated by the normalizations, a phase shift
+$\Theta\mapsto\Theta + c$ (rotation of the normal form) and a scale $\Psi\mapsto C\Psi$,
 because any two such $H$ differ by a self-conjugacy of the normal form on its basin, and
 uniqueness pins those down. Conversely, if $T$ or $\kappa$ differ no conjugacy exists
-(they are invariants). This is the existence/uniqueness theory behind the project's
+(they are invariants). This result is the existence and uniqueness theory behind the project's
 "co-optimize the invariants with the INN" (`learnings`): once the invariants match, the
 map the INN is asked to learn exists, is smooth on the punctured plane, and is determined
 up to a rotation and an amplitude scale.
@@ -669,8 +685,8 @@ bounded by $\Gamma$, and their Prop. 2 (global Sternberg linearization) gives a 
 $C^{k,\alpha}$ linearizing diffeomorphism of that disk, determined by its derivative at
 $x^\ast$, provided the eigenvalues $\alpha\pm i\beta$ at $x^\ast$ are nonresonant. So a smooth
 conjugacy *including the fixed point* requires, in addition, the eigenvalues at $x^\ast$ to
-equal $a\pm i\omega_0$ — three further invariants are therefore one period, one Floquet
-exponent and one complex eigenvalue, i.e. four real numbers, which is exactly the number
+equal $a\pm i\omega_0$; three further invariants are therefore one period, one Floquet
+exponent and one complex eigenvalue, that is, four real numbers, which is exactly the number
 of parameters $(a, b, \omega_1, \omega_0)$ of the Bautin form and one more than Hopf has.
 That the two local conjugacies (basin-of-$\Gamma$ and disk-of-$x^\ast$) glue into one
 diffeomorphism of the plane is plausible by the uniqueness statements on the overlap (the
@@ -682,9 +698,9 @@ is still a diffeomorphism of the punctured planes extending to a *homeomorphism*
 planes (both ends compactify to a point), which is the NCF-style topological conjugacy
 (`learnings`: homeomorphism vs diffeomorphism trade-off).
 
-**For the baseline (B12).** The autoencoder learns $\psi_{\rm target}$ directly — the
-cylinder *is* the global target, Prop. 3 guarantees it exists and is smooth — without
-the planar intermediate; its two free conventions are the two normalizations; and the
+**For the baseline (B12).** The autoencoder learns $\psi_{\rm target}$ directly,
+without the planar intermediate (the cylinder *is* the global target, and Prop. 3
+guarantees that it exists and is smooth); its two free conventions are the two normalizations; and the
 quality of its $\Psi$ is limited by the near-cycle training distribution, not by the
 theory.
 
@@ -721,8 +737,8 @@ formula above.)
 
 **Bautin needs one scalar root solve** per output time: $\Psi$ is strictly monotone (§5.2),
 so $r(\Psi)$ is a bracketed 1-D root on $(0, r_{\max})$ with $r_{\max} = 1/\sqrt{-b}$ for
-$b < 0$ and a growing bracket otherwise. No ODE solver, no step-size error; exactly the map
-the conjugacy learns. Implemented in B11 as `ClosedFormIntegration`, bisection-safeguarded
+$b < 0$ and a growing bracket otherwise. There is no ODE solver and no step-size error,
+and the root solve is exactly the map the conjugacy learns. Implemented in B11 as `ClosedFormIntegration`, bisection-safeguarded
 Newton as in `CubicBSpline` (ADR-0006).
 
 ### 6.2 Numerical integrations
@@ -737,7 +753,7 @@ All take cartesian $\mathbf u_0$ and return a `diffrax.Solution` with cartesian 
 | `closed_form` (B11) | none — $(\Theta,\Psi)$ chart | $r=0$ | §6.1; needs $\Psi^{-1}$ |
 
 For Bautin the `r_squared` system is
-$\dot s = 2a\thinspace s(1-s)(1+bs)$, $\dot\theta = \omega_0 + (\omega_1-\omega_0)s$ — the earlier
+$\dot s = 2a\thinspace s(1-s)(1+bs)$, $\dot\theta = \omega_0 + (\omega_1-\omega_0)s$. The earlier
 notes used the equivalent pair $(u, v) = (r^2, \int_0^t r^2)$ and reported that adaptive
 explicit Runge–Kutta methods sometimes failed to converge for larger $b$ in this chart,
 falling back to the implicit `Kvaerno5` (rtol $10^{-4}$, atol $10^{-6}$). The current
@@ -761,7 +777,7 @@ returns `nan` outside it, and `in_basin(u)` is the test; `data.generate` uses it
 or resample initial conditions (`outside_basin`).
 
 $(\cos\Theta, \sin\Theta, \Psi)$ is the latent space of the phase autoencoder of
-Yawata et al. (2024); see §5.3.
+Yawata et al. 2024; see §5.3.
 
 ---
 
@@ -776,9 +792,12 @@ reports the constrained values. $b > -1$ is exactly the stability condition $\rh
 
 ---
 
-## 9. API implied (for B11; amended 2026-10-08)
+## 9. API implied (for B11; amended 2026-10-08; amended 2026-10-22)
 
-**Decided 2026-10-03: Option B** — the defining data are even functions of $r$, enforced
+> **Amendment 2026-10-22, revised 2026-10-27 (ADR-0016).** The hooks `log_growth_rate`/`angular_rate` (and the even family's `_log_growth_rate_sq`/`_angular_rate_sq`) are no longer what a subclass writes. A subclass writes its field in polar coordinates as a SymPy template, the classmethod `_symbolic_template_polar()` returning the states $(r, \theta)$ and the expressions $(\dot r, \dot\theta)$. The base class reads $\rho = \dot r / r$ and $\omega = \dot\theta$ off it and compiles them once per class to the JAX hooks listed below, whose contracts are unchanged, and to the cartesian template used by the AUTO-07p code generator. A form joins the even family by declaring `AbstractEvenNormalForm` as its base class, which checks that both rates are functions of $r^2$. Everything else in this section stands.
+
+
+**Decided 2026-10-03: Option B.** The defining data are even functions of $r$, enforced
 *by construction* by having subclasses supply them as smooth functions of $s = r^2$.
 **Amended 2026-10-08 (ADR-0013):** that is now the contract of the *even family*
 `AbstractEvenNormalForm`; the base `AbstractNormalForm` takes its data in $r$ on a declared
@@ -835,11 +854,11 @@ class WinfreeNormalForm(AbstractNormalForm):               # §3.3; basin_radii 
   the origin, so the practical difference is small; the structural guarantee is the
   reason for B *within the even family*. The base class uses the safe-$\sqrt{}$ form
   because for a form with a hole the origin is not in the basin and the field there
-  (§3.3: $C^1$, flowing to a stable focus) is correct but not smooth — there is no
+  (§3.3: $C^1$, flowing to a stable focus) is correct but not smooth; there is no
   guarantee to give.
 - **`basin_radii` are Python floats** (static): they drive `jnp.where` masks and the
   initial-condition samplers, never gradients.
-- **Factor 2.** `floquet_exponent` is `grad(log_growth_rate)(1.0)` — the $r$-chart
+- **Factor 2.** `floquet_exponent` is `grad(log_growth_rate)(1.0)`, the $r$-chart
   derivative, $\kappa = \rho'(1)$, by §4.2. Autodiff through `r * r` supplies
   $\rho'(1) = 2\tilde\rho'(1)$; no manual factor anywhere. Concrete on the base class, with
   the subclasses' closed forms tested against it.
@@ -881,83 +900,7 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
   over the even family only. Winfree: $T = -2\pi$, $\kappa = a - 1$, $\kappa_u = a(1-a)$,
   $\Psi \to -\infty$ at $a^+$ and $\to (1-a)^{1/a}$ at $\infty$, `nan` outside the basin
   (`phase`, `amplitude`, `isostable`, `isochron`) while `rhs` stays finite; the isochron
-  equals Eq. (12) of Langfield et al. (2025) for $(a, w) = (0.25, -0.5)$; the $a = 0$
+  equals Eq. 12 of Langfield et al. 2025 for $(a, w) = (0.25, -0.5)$; the $a = 0$
   formulas are the $a \to 0$ limits; `r_squared` refuses it. `data.generate`: initial
   conditions in the hole raise, or are resampled with a warning, the count recorded and
   the mode hashed (`test_data.py`).
-
----
-
-## 11. Decisions
-
-**Decided 2026-10-03.**
-
-- Notation: $\Theta$ phase, $\Psi$ isostable (uppercase coordinate functions), $\theta$
-  polar angle, $\kappa$ exponent, $\mu$ multiplier, $\omega_1$ (`w`) / $\omega_0$ (`w0`).
-- $\kappa = \rho'(1)$ with $\rho(r)$; no factor 2.
-- $\Psi$ normalized à la Wilson & Moehlis: $\partial_r\Psi(1) = 1$, negative inside.
-  Bautin's expression is divided by $2(1+b)^b$ and sign-flipped relative to the B10 draft.
-- This document lives in the repo as Markdown with LaTeX math; the LaTeX manuscript
-  section is to be regenerated from it, not maintained separately.
-- `ClosedFormIntegration` and the $(\Theta,\Psi)$ chart go into B11 (§6.1, §7); the Hopf
-  trajectories were already computed from the analytical formula before, so this
-  restores that and extends it to Bautin via the root solve.
-- The log-polar member of §5.3 is **deferred**: it cannot match the fixed-point invariant
-  the project relies on, and has no concrete use until a Yawata-style baseline (roadmap
-  B12) needs it. If added later it is a third subclass with non-finite
-  `eigenvalues_origin()` and a non-standard `angular_rate`.
-- Names: `log_growth_rate` for $\rho$, `angular_rate` for $\omega$, with `_sq` suffix for
-  the $s$-chart hooks (§9).
-- Defining data in $s$ with the public API in $r$ (**Option B**, §9); Option A and its
-  safe-$\sqrt{}$ device are rejected.
-
-**Amended 2026-10-08 (ADR-0013).** Option B is the contract of the even family; the base
-class takes data in $r$ on a declared basin $(r_{\rm in}, r_{\rm out})$, and uses the
-safe-$\sqrt{}$ form for `rhs`. `eigenvalues_origin` moves to the even family. Winfree's
-model with a hole (§3.3) is the first non-even member; its parameters are plain floats
-(an observed system). Initial conditions outside a basin: `generate(outside_basin=
-"error" | "resample")`. Decided with Joon 2026-10-08; the experiments will mostly use
-$a = 0$ (phaseless set a point), with $a > 0$ to see what the INN does with the disk.
-
-Nothing else remains open. Changes to any of the above go through this document first.
-
----
-
-## References
-
-- Langfield, P., Krauskopf, B., Lee, K. H. & Osinga, H. M. (2025). The global geometry of phase-resetting surfaces: the role of critical level sets and isochrons. *Commun. Nonlinear Sci. Numer. Simul.* **151**, 109043. (§3.3: Eqs. (10)–(13), Fig. 4.)
-
-- A. T. Winfree, *The Geometry of Biological Time*, 2nd ed., Springer (2001) — isochrons,
-  asymptotic phase.
-- J. Guckenheimer, Isochrons and phaseless sets, *J. Math. Biol.* 1, 259–273 (1975).
-- J. Guckenheimer, P. Holmes, *Nonlinear Oscillations, Dynamical Systems, and Bifurcations
-  of Vector Fields*, Springer (1983) — Floquet theory.
-- C. Chicone, *Ordinary Differential Equations with Applications*, 3rd ed., Springer
-  (2024) — Liouville's formula, Prop. 2.20.
-- Yu. A. Kuznetsov, *Elements of Applied Bifurcation Theory*, 3rd ed., Springer (2004),
-  Ch. 8 — the Bautin (generalized Hopf) normal form and its two-cycle regime.
-- H. Nakao, Phase reduction approach to synchronization of nonlinear oscillators,
-  *Contemp. Phys.* 57(2), 188–214 (2016) — phase function $\Theta(\mathbf{X})$; Stuart–Landau
-  isochrons (App. D).
-- A. Mauroy, I. Mezić, J. Moehlis, Isostables, isochrons, and Koopman spectrum for the
-  action–angle representation of stable fixed point dynamics, *Physica D* 261, 19–30
-  (2013) — isostables as level sets of a Koopman eigenfunction.
-- D. Wilson, J. Moehlis, Isostable reduction of periodic orbits, *Phys. Rev. E* 94, 052213
-  (2016) — isostable coordinates $\psi_i$ of limit cycles, Eq. (5); normalization
-  $\nabla\psi_i\cdot\mathbf v_i = 1$, Eq. (14).
-- Y. Kato, J. Zhu, W. Kurebayashi, H. Nakao, Asymptotic phase and amplitude for classical
-  and semiclassical stochastic oscillators via Koopman operator theory, *Mathematics*
-  9(18), 2188 (2021) — eigenfunction characterization of phase and amplitude, Eqs. (2),
-  (12); arbitrariness of the amplitude scale.
-- P. Langfield, B. Krauskopf, H. M. Osinga, Solving Winfree's puzzle: the isochrons in the
-  FitzHugh–Nagumo model, *Chaos* 24, 013131 (2014) — FHN isochrons; period-normalized
-  phase $\vartheta\in[0,1)$.
-- K. Yawata, K. Fukami, K. Taira, H. Nakao, Phase autoencoder for limit-cycle
-  oscillators, *Chaos* 34, 063111 (2024) — latent variables $(Y_1,Y_2,Y_3)$, Eqs.
-  (11)–(14); relation to Koopman eigenfunctions, App. B and Sec. VI.
-- M. D. Kvalheim, S. Revzen, Existence and uniqueness of global Koopman eigenfunctions
-  for stable fixed points and periodic orbits, *Physica D* 425, 132959 (2021);
-  arXiv:1911.11996v4 — Theorem 2 / Prop. 3 (global Floquet normal form, unique proper
-  embedding $Q\to S^1\times E^s$), Prop. 7 (principal eigenfunctions of a limit cycle),
-  Prop. 2 (global Sternberg linearization of a sink), Remark 6 ($C^\infty$ case).
-- P. Kidger, *On Neural Differential Equations*, DPhil thesis, Oxford (2021) — diffrax.

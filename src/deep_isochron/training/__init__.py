@@ -1,3 +1,12 @@
+"""Training: the loop, its losses and loss-weight schedules, loggers, checkpointing and
+held-out evaluation (ADR-0009).
+
+``Trainer`` holds what defines a step and ``TrainerState`` everything that changes; a
+loss is an ``AbstractLoss`` of weighted terms, an ``AbstractLossSchedule`` supplies the
+weights, a ``Logger`` receives the metrics, a ``Checkpointer`` is offered the state at
+every evaluation, and an ``Evaluator`` computes the validation metrics.
+"""
+
 from .checkpoint import (
     Checkpointer as Checkpointer,
     NullCheckpointer as NullCheckpointer,

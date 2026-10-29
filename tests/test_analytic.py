@@ -2,8 +2,9 @@
 bijx's ``test_bijections_analytic.py`` where applicable. Shared laws are in
 ``test_bijections.py``.
 
-  1. inverse symmetry   SinhConjugation⁻¹ is SinhConjugation with (β, μ, ν) -> (-β, -ν,
-  -μ) 2. asymptotics        CubicRational -> identity as |x| -> ∞; SinhConjugation is
+  1. inverse symmetry   SinhConjugation⁻¹ is SinhConjugation with
+                        (β, μ, ν) -> (-β, -ν, -μ)
+  2. asymptotics        CubicRational -> identity as |x| -> ∞; SinhConjugation is
                         asymptotically linear
   3. extreme regime     f, f⁻¹ and grad..grad³ stay finite for |raw| <= 30, |x| <= 1e3
                         (the overflow-safe branches of the sinh helpers)
@@ -39,6 +40,8 @@ extreme_x = magnitudes(1e-12, 1e3)
 # ---------------------------------------------------------- 1. inverse symmetry ---
 @given(raw=raw_vectors(5), x=raw_vectors(8))
 def test_sinh_inverse_is_parameter_swap(raw, x):
+    """``SinhConjugation.inverse`` equals the forward map with ``(β, μ, ν)`` replaced by
+    ``(-β, -ν, -μ)``, to ``TOL["closed_form"]``."""
     f = SinhConjugation().from_unconstrained(raw)
     p = f.params
     g = SinhConjugation.from_constrained(p.loc, p.scale, -p.beta, -p.nu, -p.mu)
@@ -61,6 +64,8 @@ def test_cubic_rational_asymptotic_identity(raw):
 
 @given(raw=raw_vectors(5))
 def test_sinh_asymptotically_linear(raw):
+    """Secant slopes of ``SinhConjugation`` between 50, 100 and 200 are 1 to 1e-3, the
+    ``O(1/x)`` approach to linearity at those ``x``."""
     f = SinhConjugation().from_unconstrained(raw)
     x = jnp.array([50.0, 100.0, 200.0])
     slopes = jnp.diff(jax.vmap(f)(x)) / jnp.diff(x)
@@ -72,6 +77,8 @@ def test_sinh_asymptotically_linear(raw):
 @pytest.mark.parametrize("name", ANALYTIC)
 @given(data=st.data())
 def test_extreme_regime_is_finite(name, data):
+    """``f``, ``f⁻¹`` and the first three derivatives are finite for ``|raw| <= 30`` and
+    ``|x| <= 1e3``, the overflow-safe branches of the sinh helpers."""
     t = ANALYTIC[name]
     f = t.from_unconstrained(
         data.draw(raw_vectors(t.num_params, extreme_raw), label="raw")
@@ -92,6 +99,8 @@ def test_extreme_regime_is_finite(name, data):
     "path); exactly 0 is fine",
 )
 def test_sinh_second_derivative_near_zero_is_finite():
+    """The second derivative of ``SinhConjugation`` at ``1e-158`` is finite; a strict
+    ``xfail`` pinning the known underflow."""
     f = SinhConjugation()
     d2 = jax.grad(jax.grad(f))
     assert jnp.isfinite(d2(jnp.asarray(1e-158)))
@@ -100,6 +109,8 @@ def test_sinh_second_derivative_near_zero_is_finite():
 # ---------------------------------------------------------- 4. from_constrained ---
 @given(raw=raw_vectors(3))
 def test_cubic_rational_from_constrained_round_trip(raw):
+    """``CubicRational.from_constrained(*params)`` recovers ``raw`` to
+    ``TOL["closed_form"]`` with ``eps_beta=0.5``."""
     f = CubicRational(eps_beta=0.5).from_unconstrained(raw)
     p = f.params
     g = CubicRational.from_constrained(p.alpha, p.beta, p.loc, eps_beta=0.5)
@@ -108,6 +119,8 @@ def test_cubic_rational_from_constrained_round_trip(raw):
 
 @given(raw=raw_vectors(4))
 def test_cubic_conjugation_from_constrained_round_trip(raw):
+    """``CubicConjugation.from_constrained(*params)`` recovers ``raw`` to
+    ``TOL["closed_form"]``."""
     f = CubicConjugation().from_unconstrained(raw)
     p = f.params
     g = CubicConjugation.from_constrained(p.loc, p.beta, p.a, p.b)

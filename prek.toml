@@ -2,6 +2,9 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
+# Golden data must stay byte for byte, so no hook may rewrite it.
+exclude = "^tests/golden/"
+
 [[repos]]
 repo = "builtin"
 hooks = [
@@ -16,4 +19,21 @@ rev = "v0.16.9"
 hooks = [
   { id = "ruff-check", args = ["--fix"] },
   { id = "ruff-format" },
+]
+
+[[repos]]
+repo = "https://github.com/codespell-project/codespell"
+rev = "v2.4.3"
+hooks = [
+  # tomli lets the hook read [tool.codespell] from pyproject.toml on Python < 3.11.
+  { id = "codespell", additional_dependencies = ["tomli"] },
+]
+
+[[repos]]
+repo = "local"
+hooks = [
+  { id = "check-spelling", name = "check-spelling (-ise families)", entry = "uv run python scripts/checks/check_spelling.py", language = "system", types_or = ["python", "markdown", "toml", "yaml"] },
+  { id = "check-md-math", name = "check-md-math (GitHub and VS Code previews; frontmatter)", entry = "uv run python scripts/checks/check_md_math.py", language = "system", pass_filenames = false, files = "\\.md$" },
+  { id = "check-references", name = "check-references (citations and relative links resolve)", entry = "uv run python scripts/checks/check_references.py", language = "system", pass_filenames = false, types_or = ["python", "markdown"] },
+  { id = "check-docstrings", name = "check-docstrings (headers on their own line; private functions documented; modules under 600 lines)", entry = "uv run python scripts/checks/check_docstrings.py", language = "system", types = ["python"] },
 ]

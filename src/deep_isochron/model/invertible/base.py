@@ -1,25 +1,20 @@
-r"""Bijection interfaces.
+r"""The bijection interfaces.
 
-``AbstractBijection``
-    A diffeomorphism of $\mathbb{R}^{\text{dim}}$: ``__call__``, ``inverse``,
-    ``jacobian``, plus two declared properties — ``dim`` and ``smoothness`` (the map is
-    $C^k$; ``None`` means $C^\infty$).
+``AbstractBijection`` is a diffeomorphism of $\mathbb{R}^{\text{dim}}$ with
+``__call__``, ``inverse`` and ``jacobian``, and two declared properties, ``dim`` and
+``smoothness``. ``AbstractScalarBijection`` is a map $\mathbb{R}\to\mathbb{R}$
+parametrized by a single unconstrained vector ``raw``, the only trainable leaf, whose
+constrained parameters are computed on read by ``constrain(raw)``, with
+``constrain(0)`` the identity map; that shape is what makes a standalone scalar
+bijection safe to optimize and lets ``CouplingFlow`` write a conditioner's output
+straight into ``raw`` (ADR-0001, ADR-0002). ``ScalarChain`` and ``SequentialINN``
+compose scalar and vector bijections.
 
-``AbstractScalarBijection``
-    $\mathbb{R}\to\mathbb{R}$ maps parametrized by a single *unconstrained* vector
-    ``raw``, which is the only trainable leaf. Constrained parameters are computed on
-    read by ``constrain(raw)`` (see ``params``); ``constrain(0)`` is the identity map.
-    This is what makes a standalone scalar bijection safe to optimize and what lets
-    ``CouplingFlow`` write a conditioner's output straight into ``raw``.
-
-``ScalarChain`` / ``SequentialINN``
-    Compositions of scalar / vector bijections.
-
-Implementing an ``eqx.AbstractVar`` (``dim``, ``smoothness``, ``num_params``, ``raw``):
-use a static ``init=False`` field — ``eqx.field(static=True, default=..., init=False)``
-when the value is fixed by the class, assigned in ``__init__`` when it is derived. A
-bare class attribute or a ``ClassVar`` is rejected by type checkers as an incompatible
-override; a property is too. See ``docs/decisions/0004-abstractvar-fields.md``.
+An ``eqx.AbstractVar`` such as ``dim``, ``smoothness``, ``num_params`` or ``raw`` is
+implemented as a static ``init=False`` field, with ``default=`` when the class fixes
+the value and assigned in ``__init__`` when it is derived; a bare class attribute, a
+``ClassVar`` or a property is rejected by type checkers as an incompatible override
+(ADR-0004).
 """
 
 import abc
@@ -34,34 +29,42 @@ from jaxtyping import Array, Float
 
 
 def min_smoothness(values: Sequence[int | None]) -> int | None:
-    """Minimum regularity of a composition: ``None`` (C^∞) only if all members are."""
+    r"""The regularity of a composition: the minimum of `values`, with ``None``, that
+    is $C^\infty$, only if every member is ``None``."""
     finite = [v for v in values if v is not None]
     return min(finite) if finite else None
 
 
 class AbstractBijection(eqx.Module):
+    r"""A diffeomorphism of $\mathbb{R}^{\text{dim}}$.
+
+    **Attributes:**
+
+    - `dim`: The dimension.
+    - `smoothness`: The map is $C^k$ with ``k = smoothness``; ``None`` means
+        $C^\infty$ (ADR-0003).
+    """
+
     dim: eqx.AbstractVar[int]
     smoothness: eqx.AbstractVar[int | None]
-    """The map is C^k with k = smoothness; None means C^∞."""
 
     @abc.abstractmethod
-    def __call__(
-        self, x: Float[Array, " {self.dim}"]
-    ) -> Float[Array, " {self.dim}"]: ...
+    def __call__(self, x: Float[Array, " {self.dim}"]) -> Float[Array, " {self.dim}"]:
+        """The image of `x`."""
 
     @abc.abstractmethod
-    def inverse(
-        self, y: Float[Array, " {self.dim}"]
-    ) -> Float[Array, " {self.dim}"]: ...
+    def inverse(self, y: Float[Array, " {self.dim}"]) -> Float[Array, " {self.dim}"]:
+        """The preimage of `y`."""
 
     def jacobian(
         self, x: Float[Array, " {self.dim}"]
     ) -> Float[Array, " {self.dim} {self.dim}"]:
+        """The Jacobian at `x`, by forward-mode autodiff."""
         return eqx.filter_jacfwd(self)(x)
 
     @property
     def num_trainable_params(self) -> int:
-        """Total size of inexact-array leaves. Equal to the number of trainable
+        """The total size of the inexact-array leaves: the number of trainable
         parameters."""
         return sum(
             leaf.size
@@ -133,25 +136,28 @@ class AbstractScalarBijection[P: tuple](AbstractBijection):
         return self.constrain(self.raw)
 
     def jacobian(self, x: Float[Array, ""]) -> Float[Array, ""]:
-        """Scalar bijections act on 0-d arrays, so the Jacobian is ``f'(x)``."""
+        """The derivative ``f'(x)``, since a scalar bijection acts on 0-d arrays."""
         return jax.grad(self)(x)
 
     def from_unconstrained(
         self: B, params_raw: Float[Array, " {self.num_params}"]
     ) -> B:
-        """Copy of ``self`` (same static configuration) with ``raw = params_raw``.
-        Final: identical for every subclass."""
+        """A copy of `self`, with the same static configuration, whose ``raw`` is
+        `params_raw`. Final: identical for every subclass."""
         return eqx.tree_at(
             lambda m: m.raw, self, params_raw, is_leaf=lambda x: x is None
         )
 
     def identity_like(self: B) -> B:
-        """Copy of ``self`` that is the identity map (``raw = 0``)."""
+        """A copy of `self` that is the identity map, with ``raw = 0``."""
         return self.from_unconstrained(jnp.zeros((self.num_params,)))
 
     def _init_raw(self, raw: Float[Array, " {self.num_params}"] | None):
-        """Helper for subclass ``__init__``: validate and store ``raw`` (``None`` keeps
-        a template; omitted -> identity)."""
+        """`raw` validated for a subclass ``__init__``: ``None`` keeps a template.
+
+        **Raises:**
+
+        `ValueError` for a shape other than ``(num_params,)``."""
         if raw is not None:
             raw = jnp.asarray(raw)
             if raw.shape != (self.num_params,):
@@ -192,17 +198,21 @@ class ScalarChain(AbstractScalarBijection[tuple]):
         self.smoothness = min_smoothness([m.smoothness for m in members])
 
     def _chunks(self, raw):
+        """`raw` split into one chunk per member."""
         sizes = [m.num_params for m in self.members]
         return jnp.split(raw, list(itertools.accumulate(sizes))[:-1])
 
     def constrain(self, raw):
+        """The tuple of the members' constrained parameters."""
         return tuple(m.constrain(c) for m, c in zip(self.members, self._chunks(raw)))
 
     @property
     def params(self):
+        """The tuple of the members' `params`."""
         return tuple(m.params for m in self.members)
 
     def from_unconstrained(self, params_raw):
+        """A copy whose members received their chunks of `params_raw`."""
         members = tuple(
             m.from_unconstrained(c)
             for m, c in zip(self.members, self._chunks(params_raw))
@@ -210,18 +220,24 @@ class ScalarChain(AbstractScalarBijection[tuple]):
         return eqx.tree_at(lambda s: s.members, self, members)
 
     def __call__(self, x: Float[Array, ""]) -> Float[Array, ""]:
+        """The members applied left to right."""
         for m in self.members:
             x = m(x)
         return x
 
     def inverse(self, y: Float[Array, ""]) -> Float[Array, ""]:
+        """The members' inverses applied right to left."""
         for m in self.members[::-1]:
             y = m.inverse(y)
         return y
 
 
 class SequentialINN(AbstractBijection):
-    """Composition of vector bijections of equal ``dim``, applied left to right."""
+    """The composition of vector bijections of one `dim`, applied left to right.
+
+    **Raises:**
+
+    `ValueError` for no transforms, or transforms of different dimensions."""
 
     transforms: tuple[AbstractBijection, ...]
     dim: int = eqx.field(static=True, init=False)
@@ -241,11 +257,13 @@ class SequentialINN(AbstractBijection):
         self.smoothness = min_smoothness([t.smoothness for t in transforms])
 
     def __call__(self, x: Float[Array, " {self.dim}"]) -> Float[Array, " {self.dim}"]:
+        """The transforms applied left to right."""
         for T in self.transforms:
             x = T(x)
         return x
 
     def inverse(self, y: Float[Array, " {self.dim}"]) -> Float[Array, " {self.dim}"]:
+        """The transforms' inverses applied right to left."""
         for T in self.transforms[::-1]:
             y = T.inverse(y)
         return y

@@ -23,15 +23,14 @@ dependencies = [
     "numpy>=2.5.1",
     "optax>=0.2.8",
     "orbax-checkpoint>=0.12.4",
+    "sympy>=1.14.0",
+    "sympy2jax>=0.0.8",
     "wandb>=0.28.0",
     "xarray>=2025.1",
 ]
 
 [project.optional-dependencies]
 cuda = ["jax[cuda12]>=0.10.2"]
-
-[project.scripts]
-deep-isochron = "deep_isochron:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -46,7 +45,23 @@ fix = true
 [tool.ruff.lint]
 fixable = ["I001", "F401"]
 ignore = ["E402", "E721", "E731", "E741", "F722"]
-select = ["E", "F", "I001"]
+# TID251 enforces banned-api below. W605 rejects an invalid escape, such as LaTeX's
+# "\Phi" in a docstring that is not raw, which Python only reports as a SyntaxWarning.
+# D100-D103 require a docstring on every public module, class, method and function;
+# the content rules are in docs/coding-standards.md.
+select = ["E", "F", "W605", "I001", "TID251", "D100", "D101", "D102", "D103"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"  # the section parser; only the selected D rules run
+
+[tool.ruff.lint.per-file-ignores]
+# Docstrings are required everywhere the prose pass (branch `prose`, 2026-10-26) went:
+# the package, its tests and its scripts. Notebooks stay exempt.
+"*.ipynb" = ["D"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"dataclasses.replace".msg = "use copy.replace (Python 3.13, this project's floor)"
+"jax.scipy.linalg.expm".msg = "use linear.cayley: expm's 16-step cond scan is a host round trip per step on GPU (ADR-0010)"
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -54,21 +69,40 @@ lines-after-imports = 2
 order-by-type = false
 
 [dependency-groups]
+# AUTO-07p's Python layer, pinned by commit; the Fortran tree it drives is built at the
+# same commit by scripts/install_auto.sh, which reads the commit from uv.lock. Importing
+# `auto` needs AUTO_DIR set to that tree; analysis/ode/auto/_env.py does it.
+auto = ["auto-07p"]
 dev = [
+    { include-group = "auto" },
+    { include-group = "slurm" },
     "beartype>=0.22.9",
     "hypothesis>=6.168.3",
     "ipykernel>=7.3.0",
     "markdown-it-py>=3.0.0",
     "nbformat>=5.11.1",
+    "prek>=0.2",  # the pre-commit runner of prek.toml; `just setup` installs its hook
     "pytest>=9.1.1",
     "pytest-xdist>=3.8.0",
+    "rust-just>=1.59.0",  # the task runner: `uv run just --list` (justfile)
     "ty>=0.0.88",
 ]
+# Hydra's SLURM launcher: `-m hydra/launcher=slurm hydra.launcher.partition=<name>`
+# submits a training or isochron run as a job (configs/hydra/launcher/slurm.yaml).
+slurm = [
+    "hydra-submitit-launcher>=1.2.0",
+]
+
+[tool.uv.sources]
+auto-07p = { git = "https://github.com/auto-07p/auto-07p", rev = "44cc1c42a888179bdbd608a40613caee9cbc4675" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --import-mode=importlib --strict-markers"
-markers = ["slow: full-pipeline tests; deselect with -m 'not slow'"]
+markers = [
+    "slow: full-pipeline tests; deselect with -m 'not slow'",
+    "auto: needs a built AUTO-07p tree (scripts/install_auto.sh); skipped without one",
+]
 filterwarnings = [
     "error::DeprecationWarning:deep_isochron.*",
     # JAX's compiler uses Python's `random` internally; a draw that triggers a first
@@ -78,3 +112,12 @@ filterwarnings = [
 xfail_strict = true
 
 [tool.hypothesis]
+
+[tool.codespell]
+# The irregular British spellings and typos; scripts/checks/check_spelling.py covers the
+# productive -ise/-isation/-yse families. "./docs/changes" skips the directory when
+# codespell walks from the root (CI); "docs/changes/*" skips the paths a git hook
+# passes. docs/coding-standards.md says why that directory is out of scope.
+builtin = "clear,en-GB_to_en-US"
+skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,./docs/changes,docs/changes/*"
+ignore-words-list = "oint,numer,Numer,Commun,Stoer,INOUT,nd"

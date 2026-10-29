@@ -57,6 +57,8 @@ VECTOR_IDS = list(VECTOR_BUILDERS)
 # ---------------------------------------------------------------- scalar laws -----
 @pytest.mark.parametrize("name", SCALAR_IDS)
 def test_scalar_identity_at_zero(name):
+    """``from_unconstrained(0)`` is the identity on ``[-4, 4]`` to
+    ``TOL["identity"]``."""
     f = SCALAR_TEMPLATES[name].identity_like()
     x = jnp.linspace(-4, 4, 41)
     assert_close(
@@ -88,6 +90,8 @@ def test_scalar_template_has_no_trainable_state(name):
 @pytest.mark.parametrize("name", SCALAR_IDS)
 @given(data=st.data())
 def test_scalar_round_trip(name, data):
+    """``f⁻¹∘f`` and ``f∘f⁻¹`` return a drawn batch to ``TOL["scalar_roundtrip"]``, and
+    the forward values are finite, over drawn raw parameters."""
     f = data.draw(scalar_bijections(SCALAR_TEMPLATES[name]), label="bijection")
     x = data.draw(point_batches(1), label="x")[:, 0]
     y, x_rt, y_rt = roundtrip(f, x)
@@ -111,6 +115,7 @@ def test_scalar_round_trip(name, data):
 @pytest.mark.parametrize("name", SCALAR_IDS)
 @given(data=st.data())
 def test_scalar_strictly_increasing(name, data):
+    """``f'(x) > 0`` on a drawn batch over drawn raw parameters."""
     f = data.draw(scalar_bijections(SCALAR_TEMPLATES[name]), label="bijection")
     x = data.draw(point_batches(1), label="x")[:, 0]
     assert jnp.all(jax.vmap(jax.grad(f))(x) > 0), f"{name}: non-positive derivative"
@@ -119,6 +124,7 @@ def test_scalar_strictly_increasing(name, data):
 @pytest.mark.parametrize("name", SCALAR_IDS)
 @given(data=st.data())
 def test_scalar_jacobian_consistent_with_inverse(name, data):
+    """``f'(x) · (f⁻¹)'(f(x)) == 1`` to ``TOL["jacobian"]`` on a drawn batch."""
     f = data.draw(scalar_bijections(SCALAR_TEMPLATES[name]), label="bijection")
     x = data.draw(point_batches(1), label="x")[:, 0]
     dfdx = jax.vmap(f.jacobian)(x)
@@ -149,6 +155,8 @@ def test_vector_identity_at_init(name, key):
 @pytest.mark.parametrize("name", VECTOR_IDS)
 @given(data=st.data())
 def test_vector_round_trip_random_weights(name, data):
+    """Both round trips hold to ``TOL["vector_roundtrip"]`` for a perturbed vector
+    bijection on a drawn batch, with finite forward values."""
     f = data.draw(vector_bijections(name), label="bijection")
     x = data.draw(point_batches(f.dim), label="x")
     y, x_rt, y_rt = roundtrip(f, x)
@@ -193,6 +201,7 @@ def test_vector_orientation_preserving_at_init(name, data):
 @pytest.mark.parametrize("name", VECTOR_IDS)
 @given(data=st.data())
 def test_vector_jacobian_consistent_with_inverse(name, data):
+    """``Df⁻¹(f(x)) · Df(x) == I`` to ``TOL["jacobian"]`` on a drawn batch."""
     f = data.draw(vector_bijections(name), label="bijection")
     x = data.draw(point_batches(f.dim), label="x")
     P = inverse_jacobian_product(f, x)
@@ -207,10 +216,12 @@ def test_vector_jacobian_consistent_with_inverse(name, data):
 
 @given(data=st.data())
 def test_sequential_inn_composes_inverse(data):
-    """Composition semantics: inverse applies the members' inverses in reverse order.
-    Three mildly perturbed dim-2 layers — every layer alone round-trips to ~1e-10, but a
-    deep chain of aggressively perturbed layers amplifies that by its Lipschitz constant
-    (intermediate values reach ~1e2), which is conditioning, not composition."""
+    """``SequentialINN.inverse`` applies the members' inverses in reverse order,
+    exactly, and the chain round-trips to ``TOL["vector_roundtrip"]``. The three dim-2
+    layers are mildly perturbed: every layer alone round-trips to about 1e-10, but a
+    chain of aggressively perturbed layers amplifies that by its Lipschitz constant,
+    with intermediate values near 1e2, which is conditioning rather than
+    composition."""
     names = [n for n in VECTOR_IDS if VECTOR_BUILDERS[n](jax.random.key(0)).dim == 2]
     chosen = data.draw(
         st.lists(st.sampled_from(names), min_size=3, max_size=3, unique=True),
@@ -232,6 +243,8 @@ def test_sequential_inn_composes_inverse(data):
 # ------------------------------------------------------------- pytree hygiene -----
 @pytest.mark.parametrize("name", SCALAR_IDS + VECTOR_IDS)
 def test_partition_combine_round_trip(name, key):
+    """``eqx.combine(*eqx.partition(f))`` equals ``f``, and ``num_trainable_params``
+    counts the inexact-array leaves."""
     f = (
         SCALAR_TEMPLATES[name]
         if name in SCALAR_TEMPLATES
@@ -277,6 +290,8 @@ def test_scalar_standalone_training_keeps_validity(name, seed, x):
 @pytest.mark.parametrize("name", VECTOR_IDS)
 @given(seed=seeds, x=point_batches(2))
 def test_vector_standalone_training_keeps_validity(name, seed, x):
+    """An Adam step along a random direction (``lr=0.1``) leaves a vector bijection
+    finite and round-tripping to ``TOL["vector_roundtrip"]``."""
     f = adam_step(
         VECTOR_BUILDERS[name](jax.random.key(seed)), jax.random.key(seed + 1), lr=0.1
     )
@@ -294,9 +309,8 @@ def test_vector_standalone_training_keeps_validity(name, seed, x):
 
 @pytest.mark.parametrize("name", SCALAR_IDS)
 def test_true_gradient_step_decreases_loss(name):
-    """Plumbing check complementing the random-direction law: gradients flow through
-    ``constrain`` to ``raw``, and a true gradient step on a fit-to-target loss lowers
-    it."""
+    """Gradients flow through ``constrain`` to ``raw``: one SGD step on a fit-to-target
+    loss is finite and lowers the loss, which complements the random-direction law."""
     import optax
 
     f = SCALAR_TEMPLATES[name].from_unconstrained(

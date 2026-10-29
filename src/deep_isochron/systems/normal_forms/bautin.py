@@ -1,42 +1,58 @@
-r"""The Bautin (generalized Hopf) normal form (design document §3):
-$\rho(r) = a(1 - r^2)(1 + b r^2)$, $\omega(r) = \omega_0 + (\omega_1 - \omega_0) r^2$.
+r"""The Bautin (generalized Hopf) normal form: $\rho(r) = a(1 - r^2)(1 + b r^2)$ and
+$\omega(r) = \omega_0 + (\omega_1 - \omega_0) r^2$.
 
-The quintic factor makes the radial contraction depend on $r$, decoupling the cycle's
-Floquet exponent from the focus's instability: with $c = (\omega_1 - \omega_0)/a$,
+The quintic factor makes the radial contraction depend on $r$, which decouples the
+cycle's Floquet exponent $\kappa = -2a(1 + b)$ from the focus's instability $a$. The
+closed forms $h(r)$ and $\Psi(r)$ are in the design document §3.2; they are written
+here in $r^{-2}$ so that they stay finite up to the float range, where the textbook
+forms give ``inf/inf``. For $b \ge 0$ the cycle attracts the punctured plane; for
+$-1 < b < 0$ an unstable outer cycle at $r^2 = -1/b$ bounds the basin, the two-cycle
+regime of the Bautin bifurcation (Kuznetsov 2004, Ch. 8). As a conjugacy target use
+$b \ge 0$.
 
-* $\kappa = \rho'(1) = -2a(1 + b)$, $\mu = e^{-4\pi a(1+b)/\omega_1}$;
-* $h(r) = c\,[\ln r - \tfrac12\ln((1 + b r^2)/(1 + b))]$;
-* $\Psi(r) = \dfrac{(r^2 - 1)(1 + b r^2)^b}{2(1 + b)^b\, r^{2(1+b)}}$ — Wilson–Moehlis
-  normalized ($\partial_r\Psi(1) = 1$); $\Psi \to \tfrac12(b/(1+b))^b$ as $r \to \infty$
-  for $b \ge 0$.
-
-For $b \ge 0$ the cycle attracts $\mathbb R^2 \setminus \{0\}$. For $-1 < b < 0$ there
-is
-an unstable outer cycle at $r^2 = -1/b$ bounding the basin (the two-cycle regime of the
-Bautin bifurcation); $\Psi \to +\infty$ there. As a conjugacy target use $b \ge 0$.
-
-Parameters: $a > 0$ through ``A_CONSTRAINT = GreaterThan(0)`` (``raw = 0`` ↦ $a = 1$),
-$b > -1$ through ``B_CONSTRAINT = GreaterThan(-1)`` (``raw = 0`` ↦ $b = 0$, the Hopf
-form;
-$b > -1$ is exactly $\rho'(1) < 0$); $\omega_1$ (``w``), $\omega_0$ (``w0``) free. The
-constructor takes constrained values.
+The parameters $a > 0$ and $b > -1$ are constrained leaves through ``A_CONSTRAINT`` and
+``B_CONSTRAINT``; $b > -1$ is exactly $\rho'(1) < 0$. $\omega_1$ (``w``) and
+$\omega_0$ (``w0``) are free. The constructor takes constrained values.
 """
 
 import jax.numpy as jnp
+import sympy as sp
 from jaxtyping import Array, Float
 
 from ...model.invertible.constraints import GreaterThan
+from ..symbolic import SymbolicODE
 from .base import AbstractEvenNormalForm
 from .hopf import A_CONSTRAINT
 
 
 B_CONSTRAINT = GreaterThan(-1.0)
-"""``b > -1`` (stability of the cycle); ``raw = 0`` ↦ ``b = 0`` (the Hopf form)."""
+"""The constraint ``b > -1``, the stability of the cycle, with ``raw = 0`` mapped to
+``b = 0``, the Hopf form."""
 
 
 class BautinNormalForm(AbstractEvenNormalForm):
-    r"""$\dot r = a r (1 - r^2)(1 + b r^2)$, $\dot\theta = \omega_0 + (\omega_1 -
-    \omega_0) r^2$."""
+    r"""$\dot r = a r (1 - r^2)(1 + b r^2)$,
+    $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$.
+
+    **Arguments:**
+
+    (constrained values)
+
+    - `a`: The radial rate, positive.
+    - `b`: The quintic coefficient, above $-1$.
+    - `w`: $\omega_1$, the frequency on the cycle.
+    - `w0`: $\omega_0$, the frequency at the origin; `w` when omitted.
+    - `integration`: The default integration of `flow`.
+
+    **Attributes:**
+
+    - `raw_a`, `raw_b`: The unconstrained leaves of `a` and `b` (ADR-0001).
+    - `w`, `w0`: As above, as scalar arrays.
+
+    **Raises:**
+
+    `ValueError` for ``a <= 0`` or ``b <= -1``.
+    """
 
     raw_a: Float[Array, ""]
     raw_b: Float[Array, ""]
@@ -63,40 +79,43 @@ class BautinNormalForm(AbstractEvenNormalForm):
 
     @property
     def a(self) -> Float[Array, ""]:
+        """The constrained radial rate, ``A_CONSTRAINT(raw_a)``."""
         return A_CONSTRAINT(self.raw_a)
 
     @property
     def b(self) -> Float[Array, ""]:
+        """The constrained quintic coefficient, ``B_CONSTRAINT(raw_b)``."""
         return B_CONSTRAINT(self.raw_b)
 
-    def params(self):
-        return {
-            "a": float(self.a),
-            "b": float(self.b),
-            "w": float(self.w),
-            "w0": float(self.w0),
-        }
+    @classmethod
+    def _symbolic_template_polar(cls) -> SymbolicODE:
+        r"""$\dot r = a r (1 - r^2)(1 + b r^2)$,
+        $\dot\theta = \omega_0 + (\omega_1 - \omega_0) r^2$."""
+        r = sp.Symbol("r", positive=True)
+        theta = sp.Symbol("theta", real=True)
+        a, b, w, w0 = sp.symbols("a b w w0", real=True)
+        return SymbolicODE(
+            states=(r, theta),
+            params={"a": a, "b": b, "w": w, "w0": w0},
+            rhs=(a * r * (1 - r**2) * (1 + b * r**2), w0 + (w - w0) * r**2),
+        )
 
-    # defining data, in s = r²
-    def _log_growth_rate_sq(self, s):
-        return self.a * (1 - s) * (1 + self.b * s)
-
-    def _angular_rate_sq(self, s):
-        return self.w0 + (self.w - self.w0) * s
-
-    # closed forms, in r — written in 1/s = r⁻² so that they stay finite for r up to
-    # the float range: the textbook forms (design document §3) pair an overflowing
+    # The closed forms are written in 1/s = r⁻² so that they stay finite for r up to
+    # the float range: the textbook forms (design document §3.2) pair an overflowing
     # numerator with an overflowing denominator (inf/inf = nan) from r ≈ 1e150 on,
-    # which a learned bijection can reach before anything else goes wrong
+    # which a learned bijection can reach before anything else goes wrong.
     def phase_shift(self, r):
-        # c [ln r − ½(ln(1 + b r²) − ln(1 + b))] = ½ c [ln(1 + b) − ln(r⁻² + b)]
+        r"""$h(r) = c\thinspace[\ln r - \tfrac12\ln((1 + br^2)/(1 + b))]$ with
+        $c = (\omega_1 - \omega_0)/a$, evaluated as
+        $\tfrac12 c\thinspace[\ln(1 + b) - \ln(r^{-2} + b)]$."""
         b = self.b
         inv_s = 1.0 / (r * r)
         return 0.5 * (self.w - self.w0) / self.a * (jnp.log1p(b) - jnp.log(inv_s + b))
 
     def isostable(self, r):
-        # (s − 1)(1 + b s)^b / (2 (1 + b)^b s^(1+b))
-        #   = (1 − 1/s)(1/s + b)^b / (2 (1 + b)^b)
+        r"""$\Psi(r) = (r^2 - 1)(1 + br^2)^b / (2(1 + b)^b r^{2(1 + b)})$, evaluated as
+        $(1 - r^{-2})(r^{-2} + b)^b / (2(1 + b)^b)$; it tends to
+        $\tfrac12(b/(1 + b))^b$ as $r \to \infty$ for $b \ge 0$."""
         b = self.b
         inv_s = 1.0 / (r * r)
         return (1.0 - inv_s) * (inv_s + b) ** b / (2 * (1 + b) ** b)

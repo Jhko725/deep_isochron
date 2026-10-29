@@ -25,6 +25,9 @@ results/
 
 # Phase D runs and datasets (scripts/train.py, scripts/generate_data.py)
 runs/
-data/*.nc
+data/**/*.nc
 ci-data/
 ci-run/
+
+# macOS
+.DS_Store

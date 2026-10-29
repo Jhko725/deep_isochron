@@ -1,9 +1,11 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-06
+updated: 2026-10-27
 verified_by: pending (Joon; the remedy chosen in discussion 2026-10-06)
-sources: [ADR-0008 (window sampling), ADR-0009 §5 (evaluation)]
+sources:
+  - "ADR-0008 (window sampling)"
+  - "ADR-0009 §5 (evaluation)"
 ---
 
 # Validation error split by window start: `val/mse_early` and `val/mse_late`
@@ -21,15 +23,15 @@ roughly the first hundred steps) that is one window in four; for a longer run of
 system it is fewer still.
 
 `val/mse` is the mean over all windows, so it is dominated by windows that start on the
-cycle. A model that reproduces the cycle and gets the transient wrong — the approach to the
-cycle is exactly where the amplitude coordinate, the Floquet exponent and the isochrons'
-shape are decided — scores almost as well as one that gets both right. Selecting the best
-checkpoint on `val/mse` (ADR-0009 §6) therefore selects for the cycle **[deduced from the
-window count; not a measurement of a trained model yet]**.
+cycle. A model that reproduces the cycle and gets the transient wrong scores almost as
+well as one that gets both right, although the approach to the cycle is exactly where
+the amplitude coordinate, the Floquet exponent and the isochrons' shape are decided.
+Selecting the best checkpoint on `val/mse` (ADR-0009 §6) therefore selects for the cycle
+**[deduced from the window count; not a measurement of a trained model yet]**.
 
 The training sampler can be made to oversample the transient (`weighted`, `mixed`,
-ADR-0008), but the validation metric must not follow the training distribution blindly —
-it should *report* what the model does on each part.
+ADR-0008), but the validation metric must not follow the training distribution blindly;
+it should report what the model does on each part.
 
 ## 2. The split
 
@@ -45,23 +47,23 @@ $$
 
 with $e(w)$ the window's trajectory MSE (mean over time of the squared Euclidean error of
 the rollout from the window's first point, `losses.trajectory_mse`) and $N_{\rm early} +
-N_{\rm late} = N$. `val/mse` is unchanged — the overall mean, $(N_{\rm early} \cdot
-\mathrm{early} + N_{\rm late} \cdot \mathrm{late}) / N$ — so existing runs and the default
+N_{\rm late} = N$. `val/mse` is unchanged, the overall mean $(N_{\rm early} \cdot
+\mathrm{early} + N_{\rm late} \cdot \mathrm{late}) / N$, so existing runs and the default
 checkpoint metric are unaffected. The counts are reported too (`val/n_early`,
 `val/n_late`); an empty bucket is `NaN`, never a silent zero.
 
-Implementation: `Evaluator(val_data, reference, t_split=None)`; the jitted
-`prediction_sums(model, batch, t_split)` returns per-batch sums (total and early) and the
-`Evaluator` accumulates them across batches exactly as it does for the phase and amplitude
-statistics (ADR-0009 §5) — nothing is held in memory, one pass. `t_split = None` disables
-the split.
+The implementation is `Evaluator(val_data, reference, t_split=None)`: the jitted
+`prediction_sums(model, batch, t_split)` returns per-batch sums (total and early), and
+the `Evaluator` accumulates them across batches exactly as it does for the phase and
+amplitude statistics (ADR-0009 §5), in one pass with nothing held in memory.
+`t_split = None` disables the split.
 
 ## 3. Choosing $t_{\rm split}$
 
 - **With the `mixed` training sampler**, the natural value is the sampler's own boundary,
   $t_{\rm split} = t_{\rm s}$ with `split_idx` the index the two start ranges meet at
   (ADR-0008): training oversamples "before $t_{\rm s}$" and validation reports "before
-  $t_{\rm s}$" — the same definition of the transient on both sides. `validation.t_split:
+  $t_{\rm s}$", the same definition of the transient on both sides. `validation.t_split:
   null` resolves to this automatically (`experiment.validation_t_split`).
 - **With `weighted` sampling** (`transient_weight(boost, tau)`) there is no hard boundary;
   a few multiples of `tau` after $t_0$ is the analogous choice, set explicitly.
@@ -77,9 +79,9 @@ transient right.
 ## 4. What the split does not do
 
 - It buckets by **where a window starts along its trajectory**, not by **how far from the
-  cycle the data are**. If every trajectory starts within a hair of the cycle, `early` is
+  cycle the data are**. If every trajectory starts very close to the cycle, `early` is
   an easy test; the fix is a validation set with far-from-cycle initial conditions
-  (`UniformAnnulus`, a dedicated `data` config) — Phase E, remedy (c) of the discussion.
+  (`UniformAnnulus`, a dedicated `data` config), Phase E, remedy (c) of the discussion.
 - It does not reweight training. The training distribution is the sampler's business
   (ADR-0008); the split only makes the fit on each part visible.
 - Two buckets, not a curve. A per-start-time curve (`val/mse_by_start/<k>`) is a useful
@@ -89,7 +91,7 @@ transient right.
 ## 5. Alternatives considered
 
 - *Importance-weighting the validation MSE* by the training weight ($w(t_0)$): one number,
-  but it inherits the training bias and hides the cycle fit — the opposite failure.
+  but it inherits the training bias and hides the cycle fit, the opposite failure.
 - *Validating on early windows only* (`start_range` on the validation set): loses the check
   that the cycle is still fit; the two-bucket report keeps both.
 - *A far-from-cycle validation dataset* (different initial-condition sampler): the real

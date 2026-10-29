@@ -1,3 +1,12 @@
+"""The data layer: trajectory generation, datasets on disk, windows for training and
+validation, and the transfer to the accelerator (ADR-0008).
+
+``generate`` integrates a system from sampled initial conditions into a
+``TimeSeriesDataSource``, one netCDF4 file per dataset with grouped
+``DatasetMetadata``; ``windows`` cuts training and validation windows from the whole
+trajectories as grain pipelines; ``device`` carries the batches to the accelerator.
+"""
+
 from .dataset import (
     DatasetMetadata as DatasetMetadata,
     GridSpec as GridSpec,

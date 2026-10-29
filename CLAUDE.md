@@ -1,84 +1,50 @@
 # Working conventions for Claude in this repository
 
-## Change documents
+Joon's personal rules are in his global `CLAUDE.md`; the conventions they rest on are in
+the `code-conventions` skill. This file carries the session protocol and the facts Claude
+cannot infer from the code. Where each convention is enforced here is
+[`docs/coding-standards.md`](docs/coding-standards.md) for code and
+[`docs/document-conventions.md`](docs/document-conventions.md) for documents; both name
+the checks that stand in for prose.
 
-Every branch that Claude works on has a companion document
-`docs/changes/<YYYY-MM-DD>-<branch>.md`, committed together with the code. It is
-the reviewer's map of the change, not a changelog:
+## Start of a session
 
-- **Summary**: what the branch does and why, in a few sentences.
-- **Files**: every file touched, one line each, saying what changed there. A
-  reviewer should be able to confirm the list against `git diff --stat`.
-- **Design**: decisions that are not obvious from the code, with the alternative
-  that was rejected and why.
-- **Bugs fixed**: pre-existing bugs found on the way, with the symptom.
-- **Tests**: what the new tests pin down, and how to run them.
-- **Open issues**: things deliberately left alone, with the reason.
-- **Review notes**: a table with columns *Change* | *Thoughts* | *Modifications*.
-  Claude pre-populates one row per file touched, with *Change* = the file name
-  plus a one-line summary of what changed there, and leaves *Thoughts* and
-  *Modifications* blank. Joon fills those in while vetting; Claude reads them
-  at the start of the next session on that branch and treats them as the
-  current state of the review.
+1. Read `docs/index.md`, then `docs/architecture.md`, then the current phase of
+   `docs/roadmap.md`.
+2. Find the branch's change document `docs/changes/<YYYY-MM-DD>-<branch>.md`. Its
+   **Review notes** table is the current state of the review: rows with *Thoughts* or
+   *Modifications* filled in are instructions for this session, and those two columns
+   are never edited except when asked.
+3. Read the ADRs in `docs/decisions/` that cover the area being touched.
 
-Claude updates the document in the same commit as any later change on the
-branch, and never edits *Review notes* except when asked to.
+## During and at the end of a session
+
+- The change document follows `docs/document-conventions.md` § Change documents and is
+  updated in the same commit as the code; a test's outcome is stated only after that
+  test has run on the code the document describes.
+- `docs/roadmap.md` is the single current plan: finished items are appended to its
+  **Done** ledger, never inserted or deleted, in the same commit as the work.
+  `git log -p docs/roadmap.md` is the project diary.
+- `docs/architecture.md` follows every module move, rename, addition or removal;
+  `docs/index.md` lists every document under `docs/` with its status.
+- `just check` is clean, and the test files of the touched modules pass at the `dev`
+  profile; the full tier runs once at the end (`docs/coding-standards.md` § Tiers).
 
 ## Repository facts
 
-- Python 3.13, `uv sync --group dev`; run tests with `uv run pytest`.
-  Hypothesis profiles: `--hypothesis-profile=dev` (10 examples, quick),
-  default (50), `ci` (300, derandomised). `-n 4` (pytest-xdist) helps.
-- Tests install the jaxtyping/beartype import hook, so shape annotations are
-  checked at runtime: the first occurrence of an axis name must be a plain
-  name (`" K"`, not `" K+1"`), and `{self.attr}` expressions are allowed.
-- Pre-commit hooks run through `prek` (ruff check --fix, ruff format,
-  whitespace fixers).
-- Every concrete `AbstractBijection` must be registered in `tests/registry.py`
-  (or listed in `UNTESTED` with a reason); `tests/test_registry.py` enforces it.
-- Implement an `eqx.AbstractVar` (`dim`, `smoothness`, `num_params`, ...) as
-  `eqx.field(static=True, init=False)` — with `default=` when the value is fixed
-  by the class, assigned in `__init__` when derived. Never a bare class
-  attribute, `ClassVar` or property: type checkers reject those as overrides
-  (ADR-0004). `ty check src/deep_isochron/model/invertible` must stay clean.
-- Scalar bijections hold one unconstrained leaf `raw`; constrained parameters
-  come from `constrain(raw)` (ADR-0001); `constrain(0)` is the identity
-  (ADR-0002). Templates are instances with `raw=None`. Constraint primitives are
-  plain Python objects created *inside* `constrain`, never stored as fields
-  (ADR-0005).
-- Design decisions live in `docs/decisions/` as numbered ADRs; a change
-  document's *Design* section links to them. `docs/architecture.md` is the
-  module map and data flow — read it first in a new session, and update it in
-  the same commit as a change that moves or renames a module.
-- Markdown must render on GitHub *and* in VS Code's preview. GitHub runs Markdown
-  before MathJax, so: no line-length limit (ruff formats Python only) but an inline
-  formula `$…$` never crosses a line; display math only as a standalone block (`$$`
-  alone on a line, formula, `$$` alone on a line), never `$$…$$` inside a paragraph;
-  inside inline math no backslash + ASCII punctuation (`\,` `\;` `\{` `\|` `\\` →
-  `\thinspace` `\medspace` `\lbrace` `\Vert`, matrices in blocks), no `*` (use
-  `\ast`), spaces around `<` `>`, and no `_` right after `}` `)` `|` (write `\mathbf e_r`,
-  `C_{\rm loc}^{k}`, `\vert_{E}`), because such an `_` opens Markdown emphasis.
-  `uv run python scripts/check_md_math.py` emulates GitHub and must report 0 problems;
-  run it before committing a Markdown change. Every document under `docs/` starts
-  with a frontmatter block (`type`, `status`, `updated`, plus
-  `verified_by`/`sources`/`id` where relevant; see `docs/index.md`), updated in the
-  same commit as the document.
-- American English throughout (code, docstrings, documents): *center*, *normalize*,
-  *optimizer*, *behavior*, *initialization*. Identifiers follow (`normalize_phase_plane`).
-- Docstrings follow the equinox/diffrax convention (e.g. `diffrax.diffeqsolve`,
-  `equinox.nn.Conv`): a one-paragraph summary, then `**Arguments:**` (one `- \`name\`:`
-  entry per argument, continuation lines indented four spaces), `**Returns:**`,
-  `**Raises:**` as needed; class docstrings use `**Attributes:**`; names in single
-  backticks. Existing docstrings are migrated when their file is touched, not in a
-  sweep. (Chosen so that MkDocs can render the API later.)
-- Jit and vmap: a function that is naturally jit- and vmap-compatible is left
-  undecorated — the caller jits at the level they want. A function that is not
-  (a host-side driver with Python control flow or informative errors) jits the
-  subcomponents it calls, e.g. `_settle = eqx.filter_jit(settle)` next to the
-  driver. Result objects are fixed-shape `eqx.Module` pytrees so that functions of
-  them jit and vmap as they stand; per-call records of varying length are returned
-  separately, not stored on them.
-- `docs/roadmap.md` is the single, current plan. Finished items move to its
-  *Done* ledger (not deleted), which is chronological: new rows are always
-  appended at the end, never inserted; it is updated in the same commit as the
-  work that changes it, never on its own; history is `git log -p docs/roadmap.md`.
+- Python 3.13; `uv sync` (the `dev` group is uv's default). Every command is a recipe in
+  the `justfile`, and CI runs the same recipes. `just test` runs at `-n auto`: 2 cores in
+  the cloud sessions, which have 7 GB, and 4 in CI.
+- AUTO-07p (`docs/guides/auto07p.md`): in a cloud session, `apt-get update && apt-get
+  install -y gfortran make`, then `uv run just install-auto` (about 40 s). Tests marked
+  `auto` skip without a tree; the gfortran tests of `tests/test_auto_codegen.py` are
+  `slow` and skip without gfortran.
+- float64 throughout: library drivers raise when `jax_enable_x64` is off; notebooks and
+  scripts enable it at the top.
+- The jaxtyping/beartype import hook runs in the tests, so shape annotations are checked
+  at runtime: the first occurrence of an axis name is a plain name (`" K"`, not
+  `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a
+  string forward reference.
+- `uv.lock` is not regenerated here; Joon runs `uv lock` after pulling. The notebooks are
+  Joon's own records: Claude updates them to follow an API change and does not
+  restructure them.
