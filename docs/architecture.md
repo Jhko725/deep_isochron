@@ -204,6 +204,11 @@ deep_isochron
     │                        (constraints, normal forms, analysis)
     └── provenance.py        git_state(), package_version() — for dataset and run metadata
 
+isochron2pbvp/               the second project in this repository: Andrus Giraldo's AUTO-07p
+                             isochrons of FitzHugh–Nagumo, under his conventions (its README);
+                             the package's checks stop at its edge; the pipeline was built from
+                             and compared with commit 3af99f2 (design/isochrons.md)
+
 configs/train.yaml + {data,model,loss,schedule,optimizer,wandb}/   the composed experiment
 configs/cycle/ (schema CycleConfig)                                a system's cycle and phase 0
 configs/phase_field/ (schema PhaseFieldConfig)                     t_end of phase_grid, per system

@@ -2,8 +2,9 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
-# Golden data must stay byte for byte, so no hook may rewrite it.
-exclude = "^tests/golden/"
+# Golden data must stay byte for byte, so no hook may rewrite it; isochron2pbvp/ is the
+# coworker's project under his conventions, not this one's.
+exclude = "^(isochron2pbvp/|tests/golden/)"
 
 [[repos]]
 repo = "builtin"
@@ -11,6 +12,9 @@ hooks = [
     { id = "trailing-whitespace" },
     { id = "end-of-file-fixer" },
     { id = "check-added-large-files" },
+    # Conflict markers in any file. --assume-in-merge scans outside a merge too, so that
+    # `just check` and CI catch markers a merge commit carried in (84438de had four).
+    { id = "check-merge-conflict", args = ["--assume-in-merge"] },
 ]
 
 [[repos]]

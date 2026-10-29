@@ -80,6 +80,7 @@ This section says what each check is for; the file has the current values.
 | a docstring on every public module, class, method and function | ruff `D100`–`D103` (notebooks exempt) | `prek`, CI |
 | `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after; a docstring on every `_`-prefixed function and class under `src/` (dunders exempt), since ruff's `D103` skips them; no module under `src/` over 600 lines | `scripts/checks/check_docstrings.py` | `prek`, CI |
 | no invalid escape such as `\Phi` in a docstring that is not raw (Python only warns) | ruff `W605` | `prek`, CI |
+| no merge-conflict marker left in any file, in or out of a merge (`84438de` carried four into master) | `check-merge-conflict --assume-in-merge` | `prek`, CI |
 | a driver called again with new values compiles nothing: times and parameters reach `filter_jit` as arrays, a vector field is a module-level function or a bound method, loops run under a jit | `tests/helpers.py` `CompileCounter` in `test_find_limit_cycle_compiles_nothing_for_new_values` and `test_integrations_compile_nothing_for_new_parameters` | `prek`, CI (the tests) |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
 
@@ -174,6 +175,10 @@ signal to split comes before that.
 
 - `tests/golden/` holds reference data byte for byte; `prek.toml` excludes it from every
   hook.
+- `isochron2pbvp/` is the coworker's project, under his conventions: `prek.toml`, ruff,
+  `codespell` and `check_spelling.py` exclude it (`ty` and `check_docstrings.py` look at
+  `src/` only), and `docs/design/isochrons.md` links the version it was compared with by
+  commit.
 - `uv.lock` is not regenerated in a cloud session: the container's `uv` rewrites the lock
   format and produces thousands of noise lines for a handful of real version changes
   (`CLAUDE.md` carries the rule).

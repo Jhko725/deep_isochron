@@ -38,6 +38,9 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 88  # ruff's default; pinned so editors with other profiles agree
+# isochron2pbvp/ is the coworker's project under his conventions; without this line a
+# whole-tree `ruff check` fails on it (and `fix = true` reorders his imports).
+exclude = ["isochron2pbvp"]
 extend-include = ["*.ipynb"]
 src = []
 fix = true
@@ -119,5 +122,5 @@ xfail_strict = true
 # codespell walks from the root (CI); "docs/changes/*" skips the paths a git hook
 # passes. docs/coding-standards.md says why that directory is out of scope.
 builtin = "clear,en-GB_to_en-US"
-skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,./docs/changes,docs/changes/*"
+skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,./isochron2pbvp,isochron2pbvp/*,./docs/changes,docs/changes/*"
 ignore-words-list = "oint,numer,Numer,Commun,Stoer,INOUT,nd"

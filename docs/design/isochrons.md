@@ -1,7 +1,7 @@
 ---
 type: design
 status: draft for review; decisions settled 2026-10-27 (ADR-0017)
-updated: 2026-10-28
+updated: 2026-10-29
 verified_by: pending (Joon); the measurements in §3.1, §2.3 and §4 were made on 2026-10-27 with AUTO-07p at commit 44cc1c4 and are recorded in the branch's change document
 sources:
   - "Langfield et al. 2014"
@@ -11,7 +11,7 @@ sources:
   - "Guckenheimer 1975"
   - "Nakao 2016"
   - "AUTO-07p (manual doc/auto.tex and source at 44cc1c4)"
-  - "the coworker's src/Isochron2PBVP"
+  - "the coworker's isochron2pbvp/ at commit 3af99f2 (then src/Isochron2PBVP)"
   - "ADR-0014"
   - "ADR-0015"
   - "ADR-0016"
@@ -23,9 +23,10 @@ This document is the derivation behind roadmap item O7, which computes the isoch
 a planar limit cycle with AUTO-07p. It describes three versions of one method:
 
 - the method as Langfield et al. publish it (2014, §II.B), §2.2;
-- the coworker's reproduction in [`src/Isochron2PBVP`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP), removed from the tree
-  once the pipeline reproduced it, which follows the rotating
-  multi-segment set-up of Hannam et al. (2022), §2.3;
+- the coworker's reproduction, [`src/Isochron2PBVP` at commit `3af99f2`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP),
+  the version this document reads; it lives on as his project `isochron2pbvp/` in this
+  repository, which he keeps changing, so the link pins the version compared. It
+  follows the rotating multi-segment set-up of Hannam et al. (2022), §2.3;
 - the version that `analysis/ode/auto/` implements, §3.
 
 §1 says what an isochron is and what is computed; §2.1 explains how AUTO continues a
@@ -599,8 +600,8 @@ field is constant along every AUTO isochron, and $w$ is parallel to $Z(\theta)$.
 
 ## Acknowledgments
 
-The AUTO-07p reproduction that this pipeline is built from, `src/Isochron2PBVP` (in the
-tree until commit `3af99f2`), is the
+The AUTO-07p reproduction that this pipeline is built from, `isochron2pbvp/` (read at
+commit `3af99f2`, then `src/Isochron2PBVP`), is the
 work of Andrus Giraldo (Department of Computational Sciences, Korea Institute for
 Advanced Study). §2.3 describes it run by run, and the pipeline of §3 keeps its rotating
 multi-segment structure and its run constants.
