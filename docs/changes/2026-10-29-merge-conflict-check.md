@@ -54,5 +54,5 @@ None.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `prek.toml` — `check-merge-conflict --assume-in-merge` | | |
-| `docs/coding-standards.md`, `docs/roadmap.md` — the check's row; the ledger | | |
+| `prek.toml` — `check-merge-conflict --assume-in-merge` | Confirmed. | None |
+| `docs/coding-standards.md`, `docs/roadmap.md` — the check's row; the ledger | Confirmed. | None |

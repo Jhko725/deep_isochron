@@ -78,6 +78,6 @@ None.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `isochron2pbvp/` — 110 files from `d3edbfe`, no `.DS_Store`; the README | | |
-| `prek.toml`, `pyproject.toml`, `scripts/checks/check_spelling.py` — the four exclusions | | |
-| `stages.py`, `docs/design/isochrons.md`, `docs/decisions/0016`, `0017`, `docs/coding-standards.md`, `docs/document-conventions.md`, `docs/architecture.md`, `CLAUDE.md`, `docs/roadmap.md` — the project named | | |
+| `isochron2pbvp/` — 110 files from `d3edbfe`, no `.DS_Store`; the README | Confirmed. | None |
+| `prek.toml`, `pyproject.toml`, `scripts/checks/check_spelling.py` — the four exclusions | Confirmed.| Noned |
+| `stages.py`, `docs/design/isochrons.md`, `docs/decisions/0016`, `0017`, `docs/coding-standards.md`, `docs/document-conventions.md`, `docs/architecture.md`, `CLAUDE.md`, `docs/roadmap.md` — the project named | Confirmed. | None |
