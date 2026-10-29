@@ -165,6 +165,10 @@ recomputed (ADR-0020, Consequences).
 - `.github/workflows/ci.yml`, `tests/conftest.py` — JAX's persistent compilation cache
   kept across CI runs by `actions/cache` in each job, and the `ci` hypothesis profile at
   100 examples: the `checks` job had reached its 45-minute limit at 300.
+- `tests/conftest.py` — an autouse fixture that calls `jax.clear_caches()` after every
+  test, so a worker's memory no longer grows with each compiled program.
+- `tests/helpers.py` — `CompileCounter` counts staged programs only; a program named
+  after a `jax.numpy` or `jax.lax` function is an eager operation and is skipped.
 
 ## Design
 
@@ -259,3 +263,5 @@ None yet.
 | `src/deep_isochron/plotting/isochrons.py` — `PHASE_NORM` over $[0, 1)$, `norm` in place of `limit`, the gaps by `phase_difference`, colorbars in turns | Confirmed. | None |
 | `prototype_analysis.ipynb` — cells 7, 8, 9, 13, 15, 16 follow the API; outputs of the edited code cells cleared | Confirmed. | None |
 | `.github/workflows/ci.yml`, `tests/conftest.py` — the JAX cache in CI; `ci` at 100 examples | | |
+| `tests/conftest.py` — the autouse fixture that clears JAX's caches after every test | | |
+| `tests/helpers.py` — `CompileCounter` skips eager `jax.numpy` and `jax.lax` programs | | |

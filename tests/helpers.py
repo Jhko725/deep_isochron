@@ -4,6 +4,7 @@ FitzHugh–Nagumo isochrons, a foliation of Hopf's cycle built by hand, jitted c
 for the bijection laws, and an optimizer step along a random direction."""
 
 import logging
+import re
 from pathlib import Path
 
 import diffrax as dfx
@@ -221,16 +222,21 @@ def golden_phase(k: int) -> float:
 
 
 class CompileCounter(logging.Handler):
-    """Counts XLA compilations while ``jax_log_compiles`` is on: the guard against a
-    driver that compiles again for every new value (a Python float reaching
-    ``filter_jit`` as a static argument, a closure built per call, an eager loop).
+    """Counts the staged programs XLA compiles while ``jax_log_compiles`` is on: the
+    guard against a driver that compiles a stage again for every new value (a Python
+    float reaching ``filter_jit`` as a static argument, a closure built per call).
 
     Use as a context manager; `count` is the number of programs compiled inside it.
+    A program named after a ``jax.numpy`` or ``jax.lax`` function (``jit(subtract)``,
+    ``jit(log)``) is an eager operation, compiled once per dtype, and is not counted:
+    host-side arithmetic is ignored and a stage that compiles again is caught. The one
+    blind spot is a stage named after such a function, which would be ignored, so stages
+    are named otherwise (``settle``, ``polish``, ``stage``).
     ``equinox.debug.assert_max_traces`` and ``get_num_traces`` count the traces of one
-    function and have to wrap it inside its jit at definition, and they do not see an
-    eager loop or a jit inside diffrax; this counter sees every program the process
-    compiles, and ``jax_explain_cache_misses`` or ``equinox.debug.announce_transform``
-    then names the argument that missed.
+    function and have to wrap it inside its jit at definition, and they do not see a
+    jit inside diffrax; this counter sees every staged program the process compiles, and
+    ``jax_explain_cache_misses`` or ``equinox.debug.announce_transform`` then names the
+    argument that missed.
     """
 
     def __init__(self):
@@ -238,8 +244,14 @@ class CompileCounter(logging.Handler):
         self.count = 0
 
     def emit(self, record: logging.LogRecord) -> None:
-        """Count a record of jax's compile log."""
-        if "Compiling" in record.getMessage():
+        """Count a compile record of jax, except that of an eager jax function."""
+        message = record.getMessage()
+        if "Compiling" not in message:
+            return
+        match = re.search(r"Compiling jit\(([^)]*)\)", message)
+        if match is None or not (
+            hasattr(jnp, match.group(1)) or hasattr(jax.lax, match.group(1))
+        ):
             self.count += 1
 
     def __enter__(self) -> "CompileCounter":

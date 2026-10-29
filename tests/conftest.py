@@ -43,6 +43,20 @@ settings.register_profile("ci", max_examples=100, derandomize=True, **_common)
 settings.load_profile("default")
 
 
+@pytest.fixture(autouse=True)
+def _discard_compilations():
+    """Clear JAX's compilation caches after every test.
+
+    JAX keeps every compiled executable for the life of the process, and
+    ``tests/test_analysis_ode.py`` alone compiles about 100 MB of fresh diffrax solves
+    per test, so on 2026-10-30 both workers of the full tier reached 3.4 and 4.1 GB and
+    the 7 GB memory cgroup killed them. The persistent compilation cache keeps the
+    recompile of a later test cheap.
+    """
+    yield
+    jax.clear_caches()
+
+
 @pytest.fixture(scope="session")
 def auto():
     """AUTO-07p's Python layer on the built tree, or a skip when no tree is found; the
