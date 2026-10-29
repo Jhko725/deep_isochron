@@ -80,6 +80,7 @@ This section says what each check is for; the file has the current values.
 | a docstring on every public module, class, method and function | ruff `D100`–`D103` (notebooks exempt) | `prek`, CI |
 | `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after; a docstring on every `_`-prefixed function and class under `src/` (dunders exempt), since ruff's `D103` skips them; no module under `src/` over 600 lines | `scripts/checks/check_docstrings.py` | `prek`, CI |
 | no invalid escape such as `\Phi` in a docstring that is not raw (Python only warns) | ruff `W605` | `prek`, CI |
+| no merge-conflict marker left in any file, in or out of a merge (`84438de` carried four into master) | `check-merge-conflict --assume-in-merge` | `prek`, CI |
 | a driver called again with new values compiles nothing: times and parameters reach `filter_jit` as arrays, a vector field is a module-level function or a bound method, loops run under a jit | `tests/helpers.py` `CompileCounter` in `test_find_limit_cycle_compiles_nothing_for_new_values` and `test_integrations_compile_nothing_for_new_parameters` | `prek`, CI (the tests) |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
 

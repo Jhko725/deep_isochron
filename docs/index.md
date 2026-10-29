@@ -92,3 +92,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `phase-field` | [`2026-10-28-phase-field.md`](changes/2026-10-28-phase-field.md) |
 | `docs-layout` | [`2026-10-29-docs-layout.md`](changes/2026-10-29-docs-layout.md) |
 | `isochron2pbvp` | [`2026-10-29-isochron2pbvp.md`](changes/2026-10-29-isochron2pbvp.md) |
+| `merge-conflict-check` | [`2026-10-29-merge-conflict-check.md`](changes/2026-10-29-merge-conflict-check.md) |

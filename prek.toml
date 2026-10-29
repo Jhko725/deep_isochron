@@ -12,6 +12,9 @@ hooks = [
     { id = "trailing-whitespace" },
     { id = "end-of-file-fixer" },
     { id = "check-added-large-files" },
+    # Conflict markers in any file. --assume-in-merge scans outside a merge too, so that
+    # `just check` and CI catch markers a merge commit carried in (84438de had four).
+    { id = "check-merge-conflict", args = ["--assume-in-merge"] },
 ]
 
 [[repos]]
