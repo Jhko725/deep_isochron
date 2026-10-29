@@ -2,7 +2,7 @@
 type: decision
 id: ADR-0016
 status: accepted (review pending)
-updated: 2026-10-28
+updated: 2026-10-29
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-22, plan `claude/isochron-auto-plan-2026-10-22`)
 ---
 
@@ -14,7 +14,7 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-22, p
 
 - The isochrons of FitzHugh–Nagumo are to be computed by continuation of a two-point
   boundary value problem in AUTO-07p (Langfield et al. 2014; a coworker's reproduction
-  in [`src/Isochron2PBVP`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP), since removed, multi-segment form). AUTO needs
+  in [`src/Isochron2PBVP`](https://github.com/Jhko725/deep_isochron/tree/3af99f2/src/Isochron2PBVP), as of that commit, multi-segment form). AUTO needs
   the vector field and its Jacobian as a Fortran `RHS` subroutine.
 - Written by hand, that subroutine is a second copy of the physics next to the JAX
   `rhs`, and a third once the Jacobian is typed. The coworker's files are the instance:
@@ -224,3 +224,6 @@ Hodgkin–Huxley is symbolic for `rhs` only.
   the `_compile` extension point); `SupportsSymbolic` removed from Decision 1.
 - 2026-10-28 (`auto-isochrons`): the links to `src/Isochron2PBVP` point at commit
   `3af99f2`, since the pipeline replaced the directory and it was deleted.
+- 2026-10-29 (`isochron2pbvp`): the coworker's directory restored from his last commit
+  `d3edbfe` as `isochron2pbvp/`, a project of its own in this repository; the links stay
+  pinned at the version compared.

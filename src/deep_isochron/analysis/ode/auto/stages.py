@@ -3,8 +3,9 @@ r"""The four stages of the isochron pipeline (``docs/design/isochrons.md`` §3).
 Each stage is a function of a `Runner` and the previous stage's `AutoSolution`, and
 returns an `AutoSolution`; the driver in ``foliation`` strings them together. The
 boundary value problem is the rotating multi-segment set-up of Hannam, Krauskopf and
-Osinga, as reproduced by Andrus Giraldo (``src/Isochron2PBVP`` until commit
-``3af99f2``), stated in one Fortran file in four nested sizes selected by ``NDIM``.
+Osinga, as reproduced by Andrus Giraldo (``isochron2pbvp/``, his project in this
+repository; the version read is commit ``3af99f2``), stated in one Fortran file in four
+nested sizes selected by ``NDIM``.
 
 **Stage 1, `periodic_orbit`** (``NDIM = 4``): O1's cycle cut at half its period into
 two segments, the first starting on the section through phase 0, handed to AUTO as a
