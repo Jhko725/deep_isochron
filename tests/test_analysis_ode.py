@@ -393,7 +393,7 @@ def test_limit_cycle_points_are_a_phase_uniform_cycle():
         BautinNormalForm(a=1.0, b=0.1, w=-1.5, **INTEGRATION), X0, t_settle=5.0, m=2
     )
     times, points = lc.sample(256)
-    phases = 2 * np.pi * np.asarray(times) / float(lc.period)
+    phases = np.asarray(times) / float(lc.period)
     cyc = Cycle.from_points(phases, np.asarray(points), float(lc.period))
     assert cyc.residual < TOL["cycle_query"]
     assert_close(cyc(phases), points, atol=TOL["cycle_query"])

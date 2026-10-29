@@ -21,6 +21,7 @@ from deep_isochron.analysis.data import (
 )
 from deep_isochron.data import generate, UniformAnnulus
 from deep_isochron.systems.normal_forms import BautinNormalForm, HopfNormalForm
+from deep_isochron.utils.numerics import phase_difference, wrap_angle
 
 from .helpers import TOL
 
@@ -34,11 +35,6 @@ def trajectories(nf, *, periods=8.0, steps_per_period=100, n=6, seed=0, r=(0.3, 
     return np.asarray(src.ys), np.asarray(src.ts)
 
 
-def circular_offset(a, b):
-    """``a − b`` wrapped to ``(−π, π]``."""
-    return np.angle(np.exp(1j * (a - b)))
-
-
 # ------------------------------------------------------------------ 1. Cycle --------
 def test_circle_evaluation_derivative_and_queries():
     """A `Cycle.circle` evaluates to its parametrization, its derivative is the
@@ -46,23 +42,31 @@ def test_circle_evaluation_derivative_and_queries():
     from the center."""
     c = Cycle.circle(2.0, period=3.0, center=(1.0, -1.0))
     phi = c.phases(16)
+    assert np.allclose(phi, np.arange(16) / 16, atol=TOL["identity"])
+    angle = 2 * np.pi * phi
     pts = c(phi)
     assert np.allclose(
         pts,
-        np.stack([1.0 + 2 * np.cos(phi), -1.0 + 2 * np.sin(phi)], -1),
+        np.stack([1.0 + 2 * np.cos(angle), -1.0 + 2 * np.sin(angle)], -1),
         atol=TOL["identity"],
     )
+    # the tangent with respect to the phase in turns: 2π times the angle's tangent
     assert np.allclose(
         c.derivative(phi),
-        np.stack([-2 * np.sin(phi), 2 * np.cos(phi)], -1),
+        2 * np.pi * np.stack([-2 * np.sin(angle), 2 * np.cos(angle)], -1),
         atol=TOL["identity"],
     )
     assert c.harmonics == 1 and np.isclose(c.omega, 2 * np.pi / 3.0)
-    # nearest phase and distance of points along a ray at phase 1.0
+    # nearest phase and distance of points along a ray at polar angle 1.0
     x = np.array([1.0, -1.0]) + np.outer([0.5, 2.0, 3.5], [np.cos(1.0), np.sin(1.0)])
-    assert np.allclose(c.nearest_phase(x), 1.0, atol=TOL["cycle_query"])
+    ray_phase = 1.0 / (2 * np.pi)
+    assert np.allclose(
+        phase_difference(c.nearest_phase(x), ray_phase), 0.0, atol=TOL["cycle_query"]
+    )
     assert np.allclose(c.distance(x), [1.5, 0.0, 1.5], atol=TOL["cycle_query"])
-    assert np.allclose(c.nearest_point(x), c(np.full(3, 1.0)), atol=TOL["cycle_query"])
+    assert np.allclose(
+        c.nearest_point(x), c(np.full(3, ray_phase)), atol=TOL["cycle_query"]
+    )
 
 
 def test_from_points_recovers_a_fourier_curve_and_reports_the_residual():
@@ -76,7 +80,7 @@ def test_from_points_recovers_a_fourier_curve_and_reports_the_residual():
         sin=np.array([[0.0, 0.8], [0.1, 0.1], [0.02, 0.0]]),
         period=2.0,
     )
-    phi = rng.uniform(0, 2 * np.pi, 500)  # any order, any spacing
+    phi = rng.uniform(0, 1, 500)  # any order, any spacing
     fit = Cycle.from_points(phi, truth(phi), truth.period, harmonics=3)
     assert np.allclose(fit.center, truth.center, atol=TOL["closed_form"])
     assert np.allclose(fit.cos, truth.cos, atol=TOL["closed_form"])
@@ -120,7 +124,7 @@ def test_estimate_cycle_recovers_the_unit_circle_and_period(nf):
     # the phase advances uniformly in time: on the unit circle it is the polar angle up
     # to one constant
     phi = est.cycle.phases(256)
-    offset = circular_offset(np.arctan2(pts[:, 1], pts[:, 0]), phi)
+    offset = phase_difference(np.arctan2(pts[:, 1], pts[:, 0]) / (2 * np.pi), phi)
     assert np.ptp(offset) < TOL["cycle_phase"]
     assert est.revolutions.min() > 7.0
 
@@ -142,10 +146,12 @@ def test_estimate_cycle_on_an_affine_image_keeps_the_phase_uniform_in_time():
     pts = est.cycle(phi)
     back = (pts - b) @ np.linalg.inv(A).T
     angle = np.arctan2(back[:, 1], back[:, 0])
-    offset = circular_offset(angle, phi)
+    offset = phase_difference(angle / (2 * np.pi), phi)
     assert np.ptp(offset) < TOL["cycle_phase"]
-    const = np.angle(np.mean(np.exp(1j * offset)))  # circular mean
-    shifted = np.stack([np.cos(phi + const), np.sin(phi + const)], -1)
+    const = np.angle(np.mean(np.exp(2j * np.pi * offset)))  # circular mean, an angle
+    shifted = np.stack(
+        [np.cos(2 * np.pi * phi + const), np.sin(2 * np.pi * phi + const)], -1
+    )
     assert np.allclose(pts, shifted @ A.T + b, atol=TOL["cycle_curve"])
 
 
@@ -255,7 +261,7 @@ def test_protophase_helpers_and_input_checks():
     # recovers φ (the warp's density has a geometric Fourier tail, ε^k)
     v = u + 0.05 * np.sin(u - 0.4)
     phi_v, _ = phase_from_protophase(np.mod(v, 2 * np.pi), harmonics=11)
-    assert np.ptp(circular_offset(phi_v, u)) < TOL["closed_form"]  # up to a constant
+    assert np.ptp(wrap_angle(phi_v - u)) < TOL["closed_form"]  # up to a constant
     # the time-integral estimator over an exact window (one closed period of the warped
     # grid) agrees with the sample mean over the open grid, and ignores samples outside
     # the window

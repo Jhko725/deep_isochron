@@ -76,6 +76,19 @@ recomputed (ADR-0020, Consequences).
   latent rotation read $2\pi/T = |\omega_1|$.
 - `tests/test_analysis.py` — the trajectory helper takes the normal form's period
   without an absolute value.
+- `src/deep_isochron/analysis/cycle.py` — `Cycle`'s phase is a fraction of the period
+  in $[0, 1)$: `phases` is uniform on $[0, 1)$, `__call__`, `derivative` and
+  `from_points` evaluate or fit the series at $2\pi\varphi$, `derivative` and the
+  second derivative are taken in turns, and `nearest_phase` takes its Newton step in
+  turns and wraps by `wrap_phase`; `omega` stays the angular frequency of the series.
+- `src/deep_isochron/analysis/data/cycle.py` — `estimate_cycle` keeps the protophase,
+  the density step and the period in radians and hands $\varphi/2\pi$ to
+  `Cycle.from_points` and to the self-consistency check.
+- `tests/test_analysis.py` — `circular_offset` removed: the `Cycle`'s phases are
+  compared through `phase_difference` and the protophase angles through `wrap_angle`;
+  the circle test and the Fourier fit take phases in turns.
+- `tests/test_analysis_ode.py` — the phases handed to `Cycle.from_points` are
+  `times / period`.
 
 ## Design
 
@@ -92,7 +105,7 @@ The ledger of the change, in the order the commits will follow. Each item become
    `cycle_point` and `isochron` take $2\pi\Theta$; `phase_sensitivity` in turns.
    — done.
 4. `analysis/cycle.py`, `analysis/data/cycle.py`: `Cycle`'s phase in turns, the
-   Fourier series in $2\pi\varphi$ inside.
+   Fourier series in $2\pi\varphi$ inside. — done.
 5. `analysis/ode/phase.py`: `phase = wrap(t/T)`, the discrepancy by
    `phase_difference`.
 6. `analysis/model.py`: `phase_offset` in turns; `phase_sense` by `phase_difference`.
@@ -141,3 +154,5 @@ None yet.
 | `tests/test_normal_forms.py`, `tests/test_analysis_ode.py` — the period positive; the Winfree orientation through `omega` | | |
 | `tests/test_training.py`, `tests/test_baseline.py` — docstrings read $2\pi/T$ | | |
 | `tests/test_analysis.py` — the trajectory helper's period without `abs` | | |
+| `src/deep_isochron/analysis/cycle.py`, `src/deep_isochron/analysis/data/cycle.py` — `Cycle`'s phase in turns, the series in $2\pi\varphi$; $\varphi/2\pi$ handed to the fit | | |
+| `tests/test_analysis.py`, `tests/test_analysis_ode.py` — `Cycle` phases in turns; `phase_difference` and `wrap_angle` replace `circular_offset` | | |
