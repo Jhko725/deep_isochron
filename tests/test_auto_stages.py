@@ -5,14 +5,12 @@ oracles of ``docs/design/isochrons.md`` §5; every test but the stop reason runs
 - Stages 1–3 against O1 and O2, for every planar system: the bundle's branch point at
   multiplier 1, which the coworker's ``+Aᵀ`` bundle did not have (§3.1); the orbit and
   period against O1's flow; ``Jw`` along O2's Floquet vector; ``w·F`` constant; each
-  rotated base point at its phase on O1's cycle, phase π included; and, for the normal
+  rotated base point at its phase on O1's cycle, phase ½ included; and, for the normal
   forms, ``w`` along the closed-form gradient of the phase.
 - The coworker's Hopf route (his runs 0–1) against O1's cycle (decision 12).
 - Stage 4 on the Bautin and Winfree forms against their closed-form phase
-  (decision 14), and the stop reason of a half by the box edge.
+  (decision 14) in turns, and the stop reason of a half by the box edge.
 """
-
-import math
 
 import jax
 import jax.numpy as jnp
@@ -29,6 +27,7 @@ from deep_isochron.analysis.ode.auto import (
     stages,
 )
 from deep_isochron.analysis.ode.auto.codegen import AutoProblem, internal_indices
+from deep_isochron.utils.numerics import phase_difference
 from jaxtyping import Float
 
 from .helpers import anchored_cycle, ISOCHRON_SETTINGS, PLANAR_SYSTEMS, TOL
@@ -50,16 +49,16 @@ def test_stages_one_to_three_agree_with_o1_and_o2(auto, name):
     """Stage 2 branches at multiplier 1 and normalizes the bundle (decision D1); its
     orbit is O1's flow and its period O1's; ``Jw`` lies along O2's Floquet vector and
     ``w·F`` is constant along the cycle; stage 3 puts the base point of phase
-    ``2πk/m`` at O1's mesh point ``x0s[k]``, with ``Jw`` along the Floquet vector
-    there, phase π included, where the rotation starts. On the normal forms ``w``
+    ``k/m`` at O1's mesh point ``x0s[k]``, with ``Jw`` along the Floquet vector
+    there, phase ½ included, where the rotation starts. On the normal forms ``w``
     lies along the gradient of the closed-form phase, and that phase at each base point
-    is the requested one, signed by the sense of rotation (decision 14)."""
+    is the requested one (decision 14; ADR-0020, decision 1)."""
     cycle = anchored_cycle(name)
     ode, m = cycle.ode, cycle.x0s.shape[0]
     vectors = np.asarray(floquet(cycle).vectors)
-    assert m % 2 == 0  # so that k = m/2 is phase π, the start of stage 3
+    assert m % 2 == 0  # so that k = m/2 is phase ½, the start of stage 3
     ks = sorted({m // 8, m // 3, m // 2, (5 * m) // 8})
-    phases = [math.remainder(2 * math.pi * k / m, 2 * math.pi) for k in ks]
+    phases = [k / m for k in ks]
     with auto_session(ode) as run:
         idx = run.idx
         bundle = adjoint_bundle(run, periodic_orbit(run, cycle))
@@ -102,11 +101,8 @@ def test_stages_one_to_three_agree_with_o1_and_o2(auto, name):
         if name != "fitzhugh_nagumo":
             gradient = np.asarray(jax.grad(ode.phase)(jnp.asarray(base)))
             assert _sine(w, gradient) < TOL["bundle_direction"]
-            sense = math.copysign(1.0, float(ode.omega()))
-            gap = math.remainder(
-                float(ode.phase(jnp.asarray(base))) - sense * theta, 2 * math.pi
-            )
-            assert abs(gap) < TOL["isochron_phase"]
+            gap = phase_difference(ode.phase(jnp.asarray(base)), theta)
+            assert abs(float(gap)) < TOL["isochron_phase"]
 
 
 def _hopf_route(run: Runner, problem: AutoProblem, c: float) -> AutoSolution:
@@ -170,17 +166,16 @@ def test_a_user_point_on_the_box_is_a_box_stop():
 @pytest.mark.parametrize("name", ["bautin", "winfree"])
 def test_normal_form_isochrons_carry_the_closed_form_phase(auto, name):
     """With phase 0 at ``(1, 0)``, the closed-form phase at every traced point equals
-    the requested phase, signed by the sense of rotation (decision 14), on halves
-    that reach from inside half the cycle's radius to outside one and a half."""
+    the requested phase (decision 14; ADR-0020, decision 1), on halves that reach from
+    inside half the cycle's radius to outside one and a half."""
     cycle = anchored_cycle(name)
     ode = cycle.ode
-    phases = [0.5, 2.0]
+    phases = [0.5 / (2 * np.pi), 2.0 / (2 * np.pi)]
     foliation = isochron_foliation(cycle, phases, ISOCHRON_SETTINGS["reach"])
     assert not foliation.failures, foliation.failures
-    sense = math.copysign(1.0, float(ode.omega()))
     for iso, theta in zip(foliation.isochrons, phases, strict=True):
         got = np.asarray(jax.vmap(ode.phase)(jnp.asarray(iso.points)))
-        gap = np.remainder(got - sense * theta + np.pi, 2 * np.pi) - np.pi
+        gap = phase_difference(got, theta)
         assert np.abs(gap).max() < TOL["isochron_phase"]
         radius = np.linalg.norm(iso.points, axis=1)
         assert radius.min() < 0.5 and radius.max() > 1.5

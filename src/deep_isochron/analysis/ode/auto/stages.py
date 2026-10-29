@@ -17,8 +17,8 @@ the multiplier from 1.2 to the branch point at 1, then the switch onto the bundl
 normalized at the junction, whose rotation $Jw$ is the stable direction there.
 
 **Stage 3, `rotate_phase`** (``NDIM = 8``): the junction's segment length continued to
-$\tau_2 = (1 - \theta/2\pi)T$ for every requested phase $\theta$, which moves the base
-point and its bundle together around the cycle.
+$\tau_2 = (1 - \Theta)T$ for every requested phase $\Theta$ in turns, which moves the
+base point and its bundle together around the cycle.
 
 **Stage 4, `isochron`** (``NDIM = 10``): a segment of ``n_periods`` periods appended,
 ending on the stable direction at distance $\eta$ from the base point, and continued
@@ -27,7 +27,6 @@ in $\eta$ in both directions; its start traces the isochron of the base point.
 
 from __future__ import annotations
 
-import math
 from collections.abc import Sequence
 
 import jax.numpy as jnp
@@ -148,18 +147,18 @@ def rotate_phase(
 
     The junction's segment length ``seg2`` is continued in both directions over
     $[0, 1.01T]$ with ``mult``, ``seg1`` and ``period`` free, and a user point at
-    $\tau_2 = (1 - \theta/2\pi)T$ for every requested phase $\theta$; at each user
+    $\tau_2 = (1 - \Theta)T$ for every requested phase $\Theta$ in turns; at each user
     point the junction, and with it the base point ``U(3:4)`` and its bundle
     ``U(7:8)``, sits at that phase (§3.4). AUTO reports a user point where its function
     changes sign between two steps, never at the starting value, so the phase whose
-    target is the bundle's own ``seg2`` (θ = π, for stage 1's split at $T/2$) takes
-    the bundle itself.
+    target is the bundle's own ``seg2`` ($\Theta = \tfrac12$, for stage 1's split at
+    $T/2$) takes the bundle itself.
 
     **Arguments:**
 
     - `run`: The session's runner.
     - `bundle`: Stage 2's normalized bundle.
-    - `phases`: The requested phases, wrapped to $(-\pi, \pi]$.
+    - `phases`: The requested phases, wrapped to $[0, 1)$.
 
     **Returns:**
 
@@ -167,8 +166,7 @@ def rotate_phase(
     """
     idx = run.idx
     period = bundle.par[idx.period]
-    targets = {theta: (1 - (theta % (2 * math.pi)) / (2 * math.pi)) * period
-               for theta in phases}  # fmt: skip
+    targets = {theta: (1 - theta) * period for theta in phases}
     targets = {theta: (period if tau == 0 else tau) for theta, tau in targets.items()}
     start = bundle.par[idx.seg2]
     found = {

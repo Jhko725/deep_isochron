@@ -3,20 +3,20 @@
 Section 1 tests the settings, the checks on the requested phases, and `resample`,
 saving, loading and plotting on a foliation built by hand; none needs AUTO. Section 2
 (marker ``auto``) runs `isochron_foliation` on FitzHugh–Nagumo against the coworker's
-stored curves (``tests/golden/fncMultiSeg_Iso_*.csv``, file ``k`` at phase fraction
-``1 - k/100`` after their anchor), measured from points to the stored polyline
+stored curves (``tests/golden/fncMultiSeg_Iso_*.csv``, file ``k`` at phase
+``1 - k/100`` in turns after their anchor), measured from points to the stored polyline
 (decision D3): one way with the quick settings, whose curves are shorter, together with
 forward integration of the traced points; both ways with the full settings (also
 ``slow``). The stages' own oracles are in ``test_auto_stages.py``.
 """
 
-import math
 import os
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import xarray as xr
 from deep_isochron.analysis.ode import (
     find_limit_cycle,
     Isochron,
@@ -27,6 +27,7 @@ from deep_isochron.analysis.ode import (
     reanchor,
 )
 from deep_isochron.analysis.ode.auto import _env, STOP_REASONS, wrap_phases
+from deep_isochron.data.dataset import ENGINE
 from deep_isochron.systems.normal_forms import HopfNormalForm
 from deep_isochron.utils.numerics import arclength
 from jaxtyping import Float
@@ -84,14 +85,14 @@ def test_settings_defaults_scale_the_mesh_and_use_the_allowed_cores():
 
 
 def test_phases_are_wrapped_and_refused_when_not_finite_or_repeated():
-    """The requested phases are wrapped to $(-π, π]$; a non-finite phase and a phase
+    """The requested phases are wrapped to $[0, 1)$; a non-finite phase and a phase
     that repeats another after wrapping raise `ValueError` naming them (G9)."""
-    wrapped = wrap_phases([0.0, 2 * math.pi + 0.5, -math.pi])
-    assert wrapped == pytest.approx((0.0, 0.5, math.pi))
+    wrapped = wrap_phases([0.0, 1.5, -0.25])
+    assert wrapped == pytest.approx((0.0, 0.5, 0.75))
     with pytest.raises(ValueError, match="finite"):
         wrap_phases([0.0, float("nan")])
     with pytest.raises(ValueError, match="repeat"):
-        wrap_phases([0.5, 0.5 + 2 * math.pi])
+        wrap_phases([0.5, 1.5])
 
 
 # ------------------------------------------------ 1b. saving, loading, plotting ----
@@ -130,6 +131,20 @@ def test_load_refuses_another_cycle(hopf_foliation, tmp_path):
     moved = reanchor(hopf_foliation.cycle, jnp.array([0.0, 1.0]))
     with pytest.raises(ValueError, match="phase origin"):
         IsochronFoliation.load(path, moved)
+
+
+def test_load_refuses_a_file_without_a_phase_unit(hopf_foliation, tmp_path):
+    """`save` records the phase in turns, and `load` raises `ValueError` for a file
+    whose phase has no unit, as a file written before ADR-0020 has (decision 5)."""
+    path = hopf_foliation.save(tmp_path / "foliation.nc")
+    with xr.open_dataset(path, engine=ENGINE) as ds:
+        ds = ds.load()
+    assert ds["phase"].attrs["units"] == "turns"
+    ds["phase"].attrs.pop("units")
+    unitless = tmp_path / "unitless.nc"
+    ds.to_netcdf(unitless, engine=ENGINE)
+    with pytest.raises(ValueError, match="unit"):
+        IsochronFoliation.load(unitless, hopf_foliation.cycle)
 
 
 def _arc_isochron(radius: float, angles: Float[np.ndarray, " n"]) -> Isochron:

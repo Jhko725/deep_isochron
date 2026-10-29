@@ -4,7 +4,6 @@ FitzHugh–Nagumo isochrons, a foliation of Hopf's cycle built by hand, jitted c
 for the bijection laws, and an optimizer step along a random direction."""
 
 import logging
-import math
 from pathlib import Path
 
 import diffrax as dfx
@@ -28,6 +27,7 @@ from deep_isochron.systems.normal_forms import (
     HopfNormalForm,
     WinfreeNormalForm,
 )
+from deep_isochron.utils.numerics import wrap_phase
 from jaxtyping import Float
 
 
@@ -62,11 +62,11 @@ TOL = {
     "cycle_query": 1e-6,
     # ``estimate_cycle`` on noise-free normal-form data: the period from interpolated
     # crossing times (relative), the curve and center (absolute), the phase against the
-    # true one (peak-to-peak spread of the offset) — limited by the time grid (100 steps
-    # per period) and the truncated density expansion, not by round-off
+    # true one (peak-to-peak spread of the offset, in turns) — limited by the time grid
+    # (100 steps per period) and the truncated density expansion, not by round-off
     "cycle_period": 1e-6,
     "cycle_curve": 2e-3,
-    "cycle_phase": 2e-2,
+    "cycle_phase": 3e-3,
     # ``analysis.ode`` (O1), the vector field integrated at rtol 1e-10 / atol 1e-12
     # (``SHOOTING_SOLVER_CONFIG``; always the solver, never a normal form's closed form,
     # which is the oracle): over one period the global error is ~1e-9, so the period and
@@ -99,20 +99,23 @@ TOL = {
     # arithmetic since d(w·F)/dt = 0 for the adjoint; measured 7e-10
     "bundle_scale": 1e-8,
     # O7: a normal form's closed-form phase along a traced isochron, against the
-    # requested phase; the end direction is the stable direction, so the error is
-    # O(eta²) plus the collocation error, measured 4e-10
+    # requested phase; stage 3 accepts a user point within 1e-8 T of its target
+    # (``stages.py``), so the base point's phase is off by up to 1e-8 turns; beyond
+    # that the end direction is the stable direction, so the error is O(eta²) plus the
+    # collocation error (measured 6e-11 turns)
     "isochron_phase": 1e-8,
     # O7: a traced point flowed five periods, against the base point; a point off its
     # isochron by delta ends |grad Θ| |F| delta away, measured 4e-6 at most on
     # FitzHugh–Nagumo and 1e-9 for most points
     "isochron_forward": 2e-5,
     # O3: the asymptotic phase by forward integration and read-off, against a closed
-    # form, the phase along the cycle or the flow law; the solve at rtol 1e-10 over
-    # t_end sets the floor, measured 1.5e-9 at most (also the discrepancy and distance)
-    "phase": 1e-8,
+    # form, the phase along the cycle or the flow law, in turns; the solve at rtol 1e-10
+    # over t_end sets the floor, measured 2.4e-10 at most (also the discrepancy and
+    # distance)
+    "phase": 2e-9,
     # O3: the phase at the coworker's FitzHugh–Nagumo isochron points within
-    # GOLDEN_NEAR_CYCLE of the cycle, against the file's phase; measured 4.5e-9
-    "golden_phase": 5e-8,
+    # GOLDEN_NEAR_CYCLE of the cycle, against the file's phase, in turns; measured 7e-10
+    "golden_phase": 1e-8,
 }
 
 
@@ -177,7 +180,7 @@ PHASE_T_END = {
 
 
 # The coworker's FitzHugh–Nagumo isochrons (tests/golden/fncMultiSeg_Iso_*.csv), the
-# oracle of O7 and O3: file k is the isochron at phase fraction 1 - k/100 after his
+# oracle of O7 and O3: file k is the isochron at phase 1 - k/100, in turns, after his
 # phase 0, the base point of file 100.
 GOLDEN = Path(__file__).parent / "golden"
 FHN_ANCHOR = jnp.array([-1.72170711, 0.5])
@@ -185,8 +188,8 @@ FHN_ANCHOR = jnp.array([-1.72170711, 0.5])
 GOLDEN_NEAR_CYCLE = 0.01
 """The distance from the cycle within which a stored isochron point is an oracle of
 the phase: farther out, near the source, the stored points' position error of about
-1e-5 times the phase gradient reaches a radian (measured gaps: 4.5e-9 within 0.01,
-4.5e-3 within 0.05, 1.8 rad within 0.1)."""
+1e-5 times the phase gradient reaches a quarter of a turn (measured gaps, in turns:
+7e-10 within 0.01, 7e-4 within 0.05, 0.29 within 0.1)."""
 
 
 PLANAR_SYSTEMS = {
@@ -213,8 +216,8 @@ def golden_isochron(k: int) -> tuple[Float[np.ndarray, "2"], Float[np.ndarray, "
 
 
 def golden_phase(k: int) -> float:
-    """The phase of the coworker's file `k`, wrapped to $(-π, π]$."""
-    return math.remainder(2 * math.pi * (1 - k / 100), 2 * math.pi)
+    """The phase of the coworker's file `k`, in turns."""
+    return float(wrap_phase(1 - k / 100))
 
 
 class CompileCounter(logging.Handler):
@@ -321,22 +324,23 @@ foliation's phase exactly."""
 
 
 def hand_foliation() -> IsochronFoliation:
-    """A foliation of Hopf's cycle built by hand, without AUTO: two isochrons on
+    r"""A foliation of Hopf's cycle built by hand, without AUTO: two isochrons on
     radial lines (this form's isochrons are radial), one with its halves stopped for
     different reasons, and a failure. The cycle's phase 0 is at ``(1, 0)``, the normal
-    form's own origin, so the isochrons' phases are the form's."""
+    form's own origin, so the isochrons' phases are the form's: the polar angles of the
+    lines over $2\pi$, since the form turns counterclockwise."""
     cycle = find_limit_cycle(
         HAND_FOLIATION_FORM, jnp.array([1.2, 0.1]), t_settle=20.0, m=2
     )
     cycle = reanchor(cycle, jnp.array([1.0, 0.0]))  # phase 0 at (1, 0), as the form's
     isochrons = []
-    for phase, n in ((0.0, 5), (2.0, 7)):
+    for angle, n in ((0.0, 5), (2.0, 7)):
         r = np.linspace(0.5, 1.5, n)
-        points = np.column_stack([r * np.cos(phase), r * np.sin(phase)])
+        points = np.column_stack([r * np.cos(angle), r * np.sin(angle)])
         isochrons.append(
             Isochron(
-                phase=phase,
-                base_point=np.array([np.cos(phase), np.sin(phase)]),
+                phase=angle / (2 * np.pi),
+                base_point=np.array([np.cos(angle), np.sin(angle)]),
                 points=points,
                 eta=r - 1.0,
                 arclength=r - 1.0,
