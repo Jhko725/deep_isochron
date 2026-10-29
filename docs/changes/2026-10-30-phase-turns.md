@@ -126,18 +126,18 @@ None yet.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `docs/decisions/0020-phase-in-turns.md`, `docs/index.md` — ADR-0020 and its rows | | |
-| `.claude/agents/implementer.md` — the implementer subagent's rules | | |
-| `src/deep_isochron/utils/numerics.py` — `wrap_phase` to $[0, 1)$, `wrap_angle`, `phase_difference` | | |
-| `tests/test_phase.py` — the wrap tests of both wraps and the difference | | |
-| `src/deep_isochron/systems/normal_forms/base.py` — the phase in turns at the chart, cycle and isochron seams | | |
-| `src/deep_isochron/systems/normal_forms/integration.py` — the closed form advances the phase by $t/T$, with the period positive | | |
-| `tests/test_normal_forms.py` — phase comparisons in turns; the orientation law | | |
-| `src/deep_isochron/model/base.py`, `src/deep_isochron/model/conjugacy.py` — the model contract in turns | | |
-| `src/deep_isochron/model/autoencoder.py` — the phase seams $\mathrm{atan2}/2\pi$ and $2\pi\Theta$ | | |
-| `tests/test_models.py`, `tests/test_baseline.py`, `tests/test_training.py` — the range law, phase comparisons and the exact chart in turns | | |
-| `justfile` — `test` recipe with positional arguments for `-k` | | |
-| `src/deep_isochron/systems/normal_forms/base.py`, `src/deep_isochron/systems/normal_forms/integration.py` — `period` is $2\pi/\lvert\omega_1\rvert$; the closed form advances by $t/T$ | | |
-| `tests/test_normal_forms.py`, `tests/test_analysis_ode.py` — the period positive; the Winfree orientation through `omega` | | |
-| `tests/test_training.py`, `tests/test_baseline.py` — docstrings read $2\pi/T$ | | |
-| `tests/test_analysis.py` — the trajectory helper's period without `abs` | | |
+| `docs/decisions/0020-phase-in-turns.md`, `docs/index.md` — ADR-0020 and its rows | Looks good. | Changed the date of my presentation. |
+| `.claude/agents/implementer.md` — the implementer subagent's rules | Looks god. | None |
+| `src/deep_isochron/utils/numerics.py` — `wrap_phase` to $[0, 1)$, `wrap_angle`, `phase_difference` | `wrap_angle` and `wrap_phase` are essentially the same function. Seems like different implementation of the same logic, upto scaling and offsets. Also we will be implementing more array standards api-based function. To might be useful to create a common helper function that either - passes numpy array and JAX arrays through and coerces floats to numpy / if the object has array_namespace use that, else (such as floats) use a default (which would be numpy). | To be discussed. |
+| `tests/test_phase.py` — the wrap tests of both wraps and the difference | Tests like `test_wrap_angle_equals_the_ieee_remainder` feel like they should be tested with hypothesis strategies, but have numpy rngs baked into them. Is this our intended rule? Are the subagents properly getting instructions on how we setup tests (hypothesis for specific properties; unit tests ; golden tests). Also, if we make all property tests hypothesis tests, will this slow down testing? | To be discussed. |
+| `src/deep_isochron/systems/normal_forms/base.py` — the phase in turns at the chart, cycle and isochron seams | Confirmed. | None |
+| `src/deep_isochron/systems/normal_forms/integration.py` — the closed form advances the phase by $t/T$, with the period positive | Confirmed. | None |
+| `tests/test_normal_forms.py` — phase comparisons in turns; the orientation law | Confirmed. | None |
+| `src/deep_isochron/model/base.py`, `src/deep_isochron/model/conjugacy.py` — the model contract in turns | Confirmed. | None |
+| `src/deep_isochron/model/autoencoder.py` — the phase seams $\mathrm{atan2}/2\pi$ and $2\pi\Theta$ | Confirmed. | None |
+| `tests/test_models.py`, `tests/test_baseline.py`, `tests/test_training.py` — the range law, phase comparisons and the exact chart in turns | Confirmed. | None |
+| `justfile` — `test` recipe with positional arguments for `-k` | Confirmed. | None |
+| `src/deep_isochron/systems/normal_forms/base.py`, `src/deep_isochron/systems/normal_forms/integration.py` — `period` is $2\pi/\lvert\omega_1\rvert$; the closed form advances by $t/T$ | Confirmed. | None |
+| `tests/test_normal_forms.py`, `tests/test_analysis_ode.py` — the period positive; the Winfree orientation through `omega` | Confirmed. | None |
+| `tests/test_training.py`, `tests/test_baseline.py` — docstrings read $2\pi/T$ | Confirmed. | None |
+| `tests/test_analysis.py` — the trajectory helper's period without `abs` | `circular_offset` looks like a reimplementation of a logic we already have (e.g., `wrap_phase`). | To be discussed. |

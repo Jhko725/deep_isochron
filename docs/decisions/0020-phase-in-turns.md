@@ -15,7 +15,7 @@ verified_by: pending (Joon; the decisions were taken in discussion 2026-10-29/30
 - A phase written as an angle in $(-\pi, \pi]$ invites reading it as a geometric angle
   about an interior point. That reading is right for a star-shaped cycle (the angle
   between a reference axis and the ray from an interior point to the cycle point) and
-  wrong in general, and it led a listener at Joon's presentation of 2026-10-29 to ask
+  wrong in general, and it led a listener at Joon's presentation of 2026-10-28 to ask
   whether the phase is defined for a cycle that is not star-shaped. It is: the
   asymptotic phase is a rescaled time along the orbit (Winfree 1974; Guckenheimer 1975,
   Theorem A), defined for every hyperbolic attracting cycle. A phase that is visibly a
