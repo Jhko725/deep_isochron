@@ -54,7 +54,7 @@ def _chart(nf):
 
 def _exact_dynamics(nf):
     """The latent flow that `_chart` conjugates `nf` to: the encoded angle ``2πΘ``
-    advances at ``2π/|T| = |ω₁|`` whichever way the form turns, since ``Θ`` increases
+    advances at ``2π/T = |ω₁|`` whichever way the form turns, since ``Θ`` increases
     with time, and ``Ψ`` decays at ``κ``."""
     return PhaseAmplitudeLatentDynamics(
         omega=float(jnp.abs(nf.omega())), kappa=float(nf.floquet_exponent())

@@ -130,7 +130,7 @@ def _exact_autoencoder(nf):
     """A `PhaseAmplitudeAutoencoder` whose encoder and decoder are `nf`'s exact
     phase–amplitude chart ``(cos 2πΘ, sin 2πΘ, Ψ)``, with the phase ``Θ`` in turns,
     and whose latent dynamics carry `nf`'s Floquet exponent and the rate of the encoded
-    angle ``2πΘ``, which is ``2π/|T| = |ω₁|`` whichever way the form turns."""
+    angle ``2πΘ``, which is ``2π/T = |ω₁|`` whichever way the form turns."""
 
     def encode(u):
         phase, psi = nf.to_phase_amplitude(u)

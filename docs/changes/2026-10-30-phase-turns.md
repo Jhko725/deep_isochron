@@ -39,7 +39,7 @@ recomputed (ADR-0020, Consequences).
   the same sign and $2\pi$; the docstrings of `phase`, `phase_shift` and the module
   state the phase in turns.
 - `src/deep_isochron/systems/normal_forms/integration.py` — `ClosedFormIntegration`
-  advances the phase by $t/|T|$, since `period` is signed.
+  advances the phase by $t/T$, with the period positive.
 - `tests/test_normal_forms.py` — phases compared through `phase_difference`; a
   `phases` strategy in $[0, 1)$; the flow law states that the phase advances by the
   elapsed fraction of the period on every form, clockwise ones included; Langfield's
@@ -64,6 +64,18 @@ recomputed (ADR-0020, Consequences).
 - `justfile` — the `test` recipe takes positional arguments, so that a quoted `-k`
   expression reaches pytest as one argument (`just test dev tests/test_x.py -k "a or b"`
   used to split it into three).
+- `src/deep_isochron/systems/normal_forms/base.py` — `period` is $2\pi/|\omega_1| > 0$,
+  with the orientation in the sign of `omega` alone; `floquet_multiplier`
+  $e^{\kappa T}$ is therefore below 1 for a stable clockwise cycle.
+- `src/deep_isochron/systems/normal_forms/integration.py` — `ClosedFormIntegration`
+  advances the phase by $t/T$, without the absolute value.
+- `tests/test_normal_forms.py` — the identity reads $T = 2\pi/|\omega_1|$; the
+  clockwise Winfree has $T = 2\pi$ and $\omega_1 < 0$; the flow law divides by $T$.
+- `tests/test_analysis_ode.py` — every `abs` around the normal form's period removed.
+- `tests/test_training.py`, `tests/test_baseline.py` — the docstrings of the exact
+  latent rotation read $2\pi/T = |\omega_1|$.
+- `tests/test_analysis.py` — the trajectory helper takes the normal form's period
+  without an absolute value.
 
 ## Design
 
@@ -74,7 +86,8 @@ The ledger of the change, in the order the commits will follow. Each item become
    `phase_difference` in $(-\tfrac12, \tfrac12]$, all against the array API. — done.
 2. `systems/normal_forms/base.py`: `phase`, `to_phase_amplitude`, `limit_cycle`,
    `isochron` at the seam; the polar angle negated for $\omega_1 < 0$;
-   `from_phase_amplitude` and the closed-form integration follow. — done.
+   `from_phase_amplitude` and the closed-form integration follow; `period` is
+   $2\pi/|\omega_1|$ (Joon, 2026-10-30). — done.
 3. `model/base.py`, `conjugacy.py`, `autoencoder.py`: the contract in turns;
    `cycle_point` and `isochron` take $2\pi\Theta$; `phase_sensitivity` in turns.
    — done.
@@ -118,9 +131,13 @@ None yet.
 | `src/deep_isochron/utils/numerics.py` — `wrap_phase` to $[0, 1)$, `wrap_angle`, `phase_difference` | | |
 | `tests/test_phase.py` — the wrap tests of both wraps and the difference | | |
 | `src/deep_isochron/systems/normal_forms/base.py` — the phase in turns at the chart, cycle and isochron seams | | |
-| `src/deep_isochron/systems/normal_forms/integration.py` — the closed form advances the phase by $t/\lvert T\rvert$ | | |
+| `src/deep_isochron/systems/normal_forms/integration.py` — the closed form advances the phase by $t/T$, with the period positive | | |
 | `tests/test_normal_forms.py` — phase comparisons in turns; the orientation law | | |
 | `src/deep_isochron/model/base.py`, `src/deep_isochron/model/conjugacy.py` — the model contract in turns | | |
 | `src/deep_isochron/model/autoencoder.py` — the phase seams $\mathrm{atan2}/2\pi$ and $2\pi\Theta$ | | |
 | `tests/test_models.py`, `tests/test_baseline.py`, `tests/test_training.py` — the range law, phase comparisons and the exact chart in turns | | |
 | `justfile` — `test` recipe with positional arguments for `-k` | | |
+| `src/deep_isochron/systems/normal_forms/base.py`, `src/deep_isochron/systems/normal_forms/integration.py` — `period` is $2\pi/\lvert\omega_1\rvert$; the closed form advances by $t/T$ | | |
+| `tests/test_normal_forms.py`, `tests/test_analysis_ode.py` — the period positive; the Winfree orientation through `omega` | | |
+| `tests/test_training.py`, `tests/test_baseline.py` — docstrings read $2\pi/T$ | | |
+| `tests/test_analysis.py` — the trajectory helper's period without `abs` | | |

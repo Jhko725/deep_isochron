@@ -211,8 +211,9 @@ class AbstractNormalForm(AbstractSymbolicODE):
         return self.angular_rate(jnp.asarray(1.0))
 
     def period(self) -> Float[Array, ""]:
-        r"""$T = 2\pi/\omega_1$, signed: negative for a clockwise cycle."""
-        return 2 * jnp.pi / self.omega()
+        r"""The period $T = 2\pi/|\omega_1| > 0$; the orientation is the sign of
+        `omega`."""
+        return 2 * jnp.pi / jnp.abs(self.omega())
 
     def floquet_exponent(self) -> Float[Array, ""]:
         r"""$\kappa = \rho'(1) < 0$, by autodiff of `log_growth_rate`: the derivative
@@ -237,7 +238,7 @@ class AbstractNormalForm(AbstractSymbolicODE):
 
     def to_phase_amplitude(self, u: Float[Array, " 2"]) -> Float[Array, " 2"]:
         r"""The phase–amplitude coordinates $(\Theta, \Psi)$ of cartesian `u`: the
-        chart in which the flow is linear, $\dot\Theta = 1/|T|$ and
+        chart in which the flow is linear, $\dot\Theta = 1/T$ and
         $\dot\Psi = \kappa\Psi$ (design document §7).
 
         The phase is $\Theta = \sigma(\theta + h(r)) / 2\pi$ wrapped to $[0, 1)$,

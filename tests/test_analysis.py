@@ -28,7 +28,7 @@ from .helpers import TOL
 def trajectories(nf, *, periods=8.0, steps_per_period=100, n=6, seed=0, r=(0.3, 2.5)):
     """``n`` trajectories of ``nf`` from an annulus, ``periods`` periods long, as
     ``(ys (n, T, 2), ts (T,))`` NumPy arrays."""
-    T = abs(float(nf.period()))  # signed: the sense of rotation (design doc §2)
+    T = float(nf.period())
     ts = jnp.linspace(0.0, periods * T, int(periods * steps_per_period) + 1)
     src = generate(nf, UniformAnnulus(*r), ts, n, seed=seed)
     return np.asarray(src.ys), np.asarray(src.ts)

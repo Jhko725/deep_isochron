@@ -163,7 +163,7 @@ def test_normal_form_closed_forms_are_consistent(nf):
     assert nf.floquet_exponent() < 0
     # Wilson–Moehlis normalization: ∂ᵣΨ(1) = 1
     assert_close(jax.grad(nf.isostable)(one), 1.0, rtol=TOL["closed_form"])
-    assert_close(nf.period(), 2 * jnp.pi / nf.omega(), rtol=TOL["identity"])
+    assert_close(nf.period(), 2 * jnp.pi / jnp.abs(nf.omega()), rtol=TOL["identity"])
     assert_close(
         nf.floquet_multiplier(),
         jnp.exp(nf.floquet_exponent() * nf.period()),
@@ -278,7 +278,7 @@ def test_cartesian_rhs_is_polar_rhs_in_the_chart(nf, r, theta):
 @given(nf=all_normal_forms, r=radii, theta=angles)
 def test_phase_and_amplitude_along_the_flow(nf, r, theta):
     """Integrated version: the phase advances by the elapsed fraction of the period,
-    ``phase(u(t)) == phase(u0) + t/|T| (mod 1)``, on every form, clockwise ones
+    ``phase(u(t)) == phase(u0) + t/T (mod 1)``, on every form, clockwise ones
     included (ADR-0020, decision 1); and
     ``amplitude(u(t)) == amplitude(u0) exp(kappa t)``."""
     ts = jnp.linspace(0.0, 1.5, 7)
@@ -288,7 +288,7 @@ def test_phase_and_amplitude_along_the_flow(nf, r, theta):
         config=SOLVERS["tight"],
         integration="cartesian",
     ).ys
-    elapsed = ts / jnp.abs(nf.period())  # `period` is signed
+    elapsed = ts / nf.period()
     dphi = phase_difference(jax.vmap(nf.phase)(ys), nf.phase(ys[0]) + elapsed)
     assert_close(dphi, jnp.zeros_like(ts), atol=TOL["flow"])
     amp = jax.vmap(nf.amplitude)(ys)
@@ -539,7 +539,8 @@ def test_winfree_structure(a, w):
     r_in, r_out = nf.basin_radii()
     assert_close(r_in, max(a, 0.0), atol=TOL["identity"])
     assert r_out == float("inf")
-    assert_close(nf.period(), -2 * jnp.pi, rtol=TOL["identity"])  # clockwise
+    assert_close(nf.period(), 2 * jnp.pi, rtol=TOL["identity"])
+    assert nf.omega() < 0  # clockwise: the orientation is in `omega`
     assert_close(nf.floquet_exponent(), a - 1.0, rtol=TOL["closed_form"])
     assert_close(nf.inner_floquet_exponent(), a * (1 - a), atol=TOL["closed_form"])
     edge = jnp.asarray(max(a, 0.0) + 1e-3)

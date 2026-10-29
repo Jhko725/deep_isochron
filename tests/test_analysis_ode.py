@@ -70,8 +70,8 @@ def _on_cycle(nf, angle=0.0):
 
 
 def _multiplier(nf) -> float:
-    """e^{κT} with the *unsigned* period (the normal forms' ``period()`` is signed)."""
-    return float(jnp.exp(nf.floquet_exponent() * jnp.abs(nf.period())))
+    """e^{κT}, with the period T > 0."""
+    return float(jnp.exp(nf.floquet_exponent() * nf.period()))
 
 
 # --------------------------------------------------------------- 1. CrossSection --
@@ -116,11 +116,11 @@ def test_flow_normal_section_points_along_the_flow():
 )
 def test_return_map_on_the_cycle_returns_in_one_period(nf):
     """From a point of the cycle the first-return map returns the same point after
-    the normal form's unsigned period, to `TOL["return_map"]`."""
+    the normal form's period, to `TOL["return_map"]`."""
     p = _on_cycle(nf, 0.4)
     P = PoincareMap(nf, CrossSection.normal_to_flow(nf, p), CFG, t_max=20.0)
     y, tau = P(p)
-    assert_close(tau, abs(float(nf.period())), atol=TOL["return_map"])
+    assert_close(tau, float(nf.period()), atol=TOL["return_map"])
     assert_close(y, p, atol=TOL["return_map"])
 
 
@@ -139,7 +139,7 @@ def test_return_map_is_jittable_and_vmappable():
     xs = radii[:, None] * p[None]
     ys, taus = jax.vmap(P)(xs)
     assert_close(jax.vmap(P.section.signed_distance)(ys), 0.0, atol=TOL["return_map"])
-    assert_close(taus, abs(float(HOPF.period())), atol=TOL["return_map"])  # ω constant
+    assert_close(taus, float(HOPF.period()), atol=TOL["return_map"])  # ω constant
 
 
 def test_negative_map_is_the_positive_map_of_the_flipped_section():
@@ -154,7 +154,7 @@ def test_negative_map_is_the_positive_map_of_the_flipped_section():
     assert_close(y1, y2, atol=TOL["return_map"])
     assert_close(t1, t2, atol=TOL["return_map"])
     # the halfway point: half a period, on the opposite side of the circle
-    assert_close(t1, 0.5 * abs(float(HOPF.period())), atol=TOL["return_map"])
+    assert_close(t1, 0.5 * float(HOPF.period()), atol=TOL["return_map"])
     assert_close(y1, -p, atol=TOL["return_map"])
 
 
@@ -289,7 +289,7 @@ def test_shooting_polishes_a_perturbed_guess(m):
     """`multiple_shooting` with ``m`` segments recovers Hopf's period and unit radius
     from a guess perturbed by ``1e-2``, eagerly and under `filter_jit`."""
     nf = HOPF
-    T = abs(float(nf.period()))
+    T = float(nf.period())
     p = _on_cycle(nf)
     plane = CrossSection.normal_to_flow(nf, p)
     times = T * jnp.arange(m) / m
@@ -312,7 +312,7 @@ def test_shooting_is_more_accurate_with_tighter_solver_tolerances():
     """The period error of `multiple_shooting` is smaller with ``rtol = 1e-10`` than
     with ``1e-6`` on the inner solver."""
     nf = HOPF
-    T = abs(float(nf.period()))
+    T = float(nf.period())
     p = _on_cycle(nf)
     plane = CrossSection.normal_to_flow(nf, p)
     out = []
@@ -364,7 +364,7 @@ def test_limit_cycle_matches_the_normal_form(nf, orientation):
     """`find_limit_cycle` recovers the unit circle and the period of the normal form
     with the expected orientation, and `sample` is uniform in phase."""
     lc = find_limit_cycle(nf, X0, t_settle=5.0, m=2, config=CFG)
-    assert_close(lc.period, abs(float(nf.period())), atol=TOL["limit_cycle"])
+    assert_close(lc.period, float(nf.period()), atol=TOL["limit_cycle"])
     _, points = lc.sample(64)
     assert_close(np.linalg.norm(points, axis=1), 1.0, atol=TOL["limit_cycle"])
     _check_invariants(lc, orientation)
@@ -470,7 +470,7 @@ def test_limit_cycle_near_hopf_needs_the_polish():
     with pytest.raises(NotConvergedError):
         find_limit_cycle(nf, X0, t_settle=5.0, m=2, settle_tol=1e-10, max_returns=3)
     lc = find_limit_cycle(nf, X0, t_settle=5.0, m=2, settle_tol=1e-2, max_returns=40)
-    assert_close(lc.period, abs(float(nf.period())), atol=TOL["limit_cycle"])
+    assert_close(lc.period, float(nf.period()), atol=TOL["limit_cycle"])
     assert_close(np.linalg.norm(lc.x0s, axis=1), 1.0, atol=TOL["limit_cycle"])
 
 
