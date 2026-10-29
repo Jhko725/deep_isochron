@@ -224,11 +224,6 @@ Hodgkin–Huxley is symbolic for `rhs` only.
   the `_compile` extension point); `SupportsSymbolic` removed from Decision 1.
 - 2026-10-28 (`auto-isochrons`): the links to `src/Isochron2PBVP` point at commit
   `3af99f2`, since the pipeline replaced the directory and it was deleted.
-<<<<<<< HEAD
-- 2026-10-29 (`isochron2pbvp`): `src/Isochron2PBVP` restored from the coworker's last commit
-  `d3edbfe` as his working copy, excluded from the checks; the links stay pinned.
-=======
 - 2026-10-29 (`isochron2pbvp`): the coworker's directory restored from his last commit
   `d3edbfe` as `isochron2pbvp/`, a project of its own in this repository; the links stay
   pinned at the version compared.
->>>>>>> 2e58f90ba3b74b1a88a3a38084c476e9e6b1b522
