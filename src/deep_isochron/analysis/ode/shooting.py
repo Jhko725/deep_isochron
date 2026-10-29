@@ -21,8 +21,6 @@ has the decisions.
 
 from __future__ import annotations
 
-from typing import NamedTuple
-
 import diffrax as dfx
 import equinox as eqx
 import jax.numpy as jnp
@@ -47,7 +45,7 @@ one, the classical rule that high order pays at stringent tolerances (Hairer et 
 1993, §II.4); ``Tsit5`` at the same tolerances gives the same answers more slowly."""
 
 
-class ShootingResult(NamedTuple):
+class ShootingResult(eqx.Module):
     """The result of `multiple_shooting`, as arrays, since the function is jittable.
 
     **Attributes:**
@@ -64,7 +62,7 @@ class ShootingResult(NamedTuple):
     steps: Array
 
 
-class ShootingArgs(NamedTuple):
+class ShootingArgs(eqx.Module):
     """The fixed data of the shooting residual: the system, the section of the phase
     condition, the solver settings and the time direction."""
 
@@ -90,12 +88,13 @@ def shooting_residual(
     ``(matching, phase)``, shapes ``(m, dim)`` and ``()``.
     """
     points, period = y
-    ode, section, config, reverse_time = args
     m = points.shape[0]
-    duration = (-1.0 if reverse_time else 1.0) * period / m
-    ends = eqx.filter_vmap(lambda x: ode.flow_to(duration, x, config=config))(points)
+    duration = (-1.0 if args.reverse_time else 1.0) * period / m
+    ends = eqx.filter_vmap(lambda x: args.ode.flow_to(duration, x, config=args.config))(
+        points
+    )
     matching = ends - jnp.roll(points, -1, axis=0)
-    phase = section.signed_distance(points[0])
+    phase = args.section.signed_distance(points[0])
     return matching, phase
 
 

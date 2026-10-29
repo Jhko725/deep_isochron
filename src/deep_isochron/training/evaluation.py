@@ -77,7 +77,7 @@ class PhaseAlignment:
 
     sense: float
     offset: float
-    residual: Float[Array, "..."]
+    residual: Float[np.ndarray, "..."]
     rms: float
 
 
@@ -90,7 +90,7 @@ def align_phases(
 
     The orientation is the one with the smaller residual, and the offset is the
     circular mean of ``model − sense · reference`` unless `offset` is given, as from
-    ``analysis.phase_origin``, in which case only the sense is chosen (roadmap item M:
+    ``analysis.phase_offset``, in which case only the sense is chosen (roadmap item M:
     the aligned phase-field error, shared by the metric and the plot).
 
     **Arguments:**
@@ -112,7 +112,9 @@ def align_phases(
         residual = jnp.asarray(wrap_phase(shift - theta0))
         rms = jnp.sqrt(jnp.nanmean(residual**2))
         if best is None or float(rms) < best.rms:
-            best = PhaseAlignment(sense, float(theta0), residual, float(rms))
+            best = PhaseAlignment(
+                sense, float(theta0), np.asarray(residual), float(rms)
+            )
     assert best is not None
     return best
 

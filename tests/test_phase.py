@@ -16,7 +16,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from deep_isochron.analysis import phase_origin
+from deep_isochron.analysis import phase_offset
 from deep_isochron.analysis.ode import (
     asymptotic_phase,
     find_equilibrium,
@@ -144,9 +144,9 @@ def test_find_equilibrium_finds_the_normal_forms_origin(normal_form_cycle):
     assert bool(converged)
 
 
-def test_phase_origin_is_the_reference_origins_angle_in_the_models_phase():
+def test_phase_offset_is_the_reference_origins_angle_in_the_models_phase():
     """For a model conjugate to the cycle's own normal form by the identity, with the
-    phase origin moved off ``(1, 0)``, `phase_origin` returns the polar angle of
+    phase origin moved off ``(1, 0)``, `phase_offset` returns the polar angle of
     ``x0s[0]`` (the normal form's phase there) and the sense of the angular rate, for a
     counterclockwise and a clockwise form."""
     for form in (HopfNormalForm(a=1.0, w=2.0), HopfNormalForm(a=1.0, w=-2.0)):
@@ -155,9 +155,9 @@ def test_phase_origin_is_the_reference_origins_angle_in_the_models_phase():
         model = ConjugateLatentDynamics(
             form, BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=jax.random.key(0))
         )
-        theta0, sense = phase_origin(model, cycle)
+        offset, sense = phase_offset(model, cycle)
         x0 = np.asarray(cycle.x0s[0])
-        assert _gap(theta0, np.arctan2(x0[1], x0[0])).max() < TOL["limit_cycle"]
+        assert _gap(offset, np.arctan2(x0[1], x0[0])).max() < TOL["limit_cycle"]
         assert float(sense) == np.sign(float(form.w))
 
 

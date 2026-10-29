@@ -71,7 +71,7 @@ deep_isochron
 │   │   └── linear.py        BiLipschitzLinear (the linear layer)
 │   ├── fourier.py           TruncatedFourier (conditioner on S¹)
 │   ├── base.py              AbstractPhaseAmplitudeModel: phase · amplitude · cycle_point ·
-│   │                        latent_radius · isochron · __call__; phase_sensitivity derived
+│   │                        isochron_coordinate · isochron · __call__; phase_sensitivity derived
 │   ├── conjugacy.py         ConjugateLatentDynamics = bijection + normal form + SolverConfig;
 │   │                        equilibrium() = H⁻¹(0)
 │   ├── latent_dynamics.py   PhaseAmplitudeLatentDynamics(omega, kappa): rotation ⊕ decay
@@ -103,8 +103,8 @@ deep_isochron
 │   │                        PTP phase → period by regression → Fourier curve → converged;
 │   │                        orientation(points) (signed area of a closed polygon)
 │   ├── errors.py            NotConvergedError (stage, message, last iterate)
-│   ├── model.py             a trained model against a reference: phase_origin(model, cycle)
-│   │                        -> (theta0, sense), phase_sense — the seam between model/ and
+│   ├── model.py             a trained model against a reference: phase_offset(model, cycle)
+│   │                        -> (offset, sense), phase_sense — the seam between model/ and
 │   │                        analysis.ode (neither knows the other)
 │   └── ode/                 from an AbstractODE (status: roadmap Phase E)     ── ADR-0014/15
 │       │                    results are fixed-shape eqx.Modules; functions of them
@@ -333,7 +333,7 @@ converts charts.
 
 `base.py` is the contract both approaches implement, `AbstractPhaseAmplitudeModel`:
 `phase(x)` in `(-π, π]`, `amplitude(x)` (isostable-like, with no fixed normalization),
-`cycle_point(θ)`, `latent_radius(x)` and `isochron(θ, r)` (the learned isochron sampled
+`cycle_point(θ)`, `isochron_coordinate(x)` and `isochron(θ, r)` (the learned isochron sampled
 along the model's own latent radial coordinate, so that a reference isochron can be
 matched point by point), and `__call__(ts, x0) -> (xt, yt)`; `phase_gradient` and
 `phase_sensitivity` are derived once for all. Training and evaluation code takes the

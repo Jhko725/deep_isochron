@@ -193,6 +193,7 @@ class Isochron:
         The indices into `points`, in order along the curve, shape ``(k,)``.
         """
         _, turns = self.log_polar(center)
+        # The local-extrema test of the unwrapped angle.
         extrema = np.flatnonzero(np.diff(np.sign(np.diff(turns)))) + 1
         kept: list[int] = []
         last = 0

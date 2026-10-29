@@ -178,9 +178,7 @@ class ScalarChain(AbstractScalarBijection[tuple]):
     """
 
     members: tuple[AbstractScalarBijection, ...]
-    raw: Float[Array, " num_params"] | None = eqx.field(
-        static=True, default=None, init=False
-    )
+    raw: Float[Array, " num_params"] | None = eqx.field(default=None, init=False)
     num_params: int = eqx.field(static=True, init=False)
     smoothness: int | None = eqx.field(static=True, init=False)
 

@@ -30,7 +30,8 @@ ADR-0014 has the decisions, including why the departure guard is a separate solv
 
 from __future__ import annotations
 
-from typing import Literal, NamedTuple
+from dataclasses import dataclass
+from typing import Literal
 
 import diffrax as dfx
 import equinox as eqx
@@ -73,7 +74,8 @@ class FixedPoint(eqx.Module):
     converged: bool = eqx.field(static=True)
 
 
-class FixedPointIteration(NamedTuple):
+@dataclass(frozen=True)
+class FixedPointIteration:
     """The record of a ``fixed_point`` search, as host-side NumPy arrays.
 
     **Attributes:**

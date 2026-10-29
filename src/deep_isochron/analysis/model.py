@@ -2,12 +2,12 @@ r"""Analyses of a trained model against a reference cycle.
 
 A model's phase has its own origin and may run either way round the cycle, so before a
 learned phase field, isochron or metric is compared with a reference, the two phases
-have to be aligned: ``phase_origin(model, cycle)`` gives the model's phase ``theta0``
+have to be aligned: ``phase_offset(model, cycle)`` gives the model's phase ``offset``
 where its learned cycle crosses the reference cycle's section in the direction of the
 flow, and the ``sense`` in which the model's phase advances in time, so that the
 reference phase $\vartheta$ corresponds to the model phase
-$\mathrm{sense}\cdot\vartheta + \theta_0$. The aligned error itself is
-``training.evaluation.align_phases``, which seeds from this origin when a cycle is at
+$\mathrm{sense}\cdot\vartheta + \mathrm{offset}$. The aligned error itself is
+``training.evaluation.align_phases``, which seeds from this offset when a cycle is at
 hand.
 
 This module is the seam between ``model/``, which knows no reference, and
@@ -37,7 +37,7 @@ def phase_sense(
     return jnp.sign(wrap_phase(model.phase(xt[1]) - model.phase(xt[0])))
 
 
-def phase_origin(
+def phase_offset(
     model: AbstractPhaseAmplitudeModel,
     cycle: LimitCycle,
     *,
@@ -60,9 +60,9 @@ def phase_origin(
 
     **Returns:**
 
-    ``(theta0, sense)``: the model phase of the crossing, wrapped to $(-\pi, \pi]$, and
+    ``(offset, sense)``: the model phase of the crossing, wrapped to $(-\pi, \pi]$, and
     `phase_sense`. A reference phase $\vartheta$ is the model phase
-    $\mathrm{sense}\cdot\vartheta + \theta_0$.
+    $\mathrm{sense}\cdot\vartheta + \mathrm{offset}$.
 
     **Raises:**
 
@@ -93,4 +93,4 @@ def phase_origin(
     return jnp.asarray(wrap_phase(sol.value)), sense
 
 
-__all__ = ["phase_origin", "phase_sense"]
+__all__ = ["phase_offset", "phase_sense"]

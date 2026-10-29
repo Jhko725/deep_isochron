@@ -45,17 +45,22 @@ class AbstractPhaseAmplitudeModel(eqx.Module):
         ``Θ(cycle_point(θ)) == θ``."""
 
     @abc.abstractmethod
-    def latent_radius(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
-        """The model's latent radial coordinate of `x`: the coordinate along which
-        `isochron` is sampled, in the model's own normalization (the normal form's
-        radius for the conjugacy model, the deviation variable for the autoencoder)."""
+    def isochron_coordinate(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
+        """The coordinate of `x` along its learned isochron: the coordinate along which
+        `isochron` is sampled, with ``Θ(isochron(θ, r)) == θ`` and
+        ``isochron_coordinate(isochron(θ, r)) == r``.
+
+        Its normalization is the model's own: the normal form's radius, 1 on the
+        cycle, for the conjugacy model, and the deviation variable ``Y3``, 0 on the
+        cycle, for the autoencoder. Not the limit cycle, which is `cycle_point`."""
 
     @abc.abstractmethod
     def isochron(
         self, theta: Float[Array, ""], r: Float[Array, " n"]
     ) -> Float[Array, "n obs_dim"]:
-        """The points of the learned isochron of phase `theta` at the latent radii `r`,
-        with ``Θ(isochron(θ, r)) == θ`` and ``latent_radius(isochron(θ, r)) == r``."""
+        """The points of the learned isochron of phase `theta` at the isochron
+        coordinates `r`, with ``Θ(isochron(θ, r)) == θ`` and
+        ``isochron_coordinate(isochron(θ, r)) == r``."""
 
     @abc.abstractmethod
     def __call__(

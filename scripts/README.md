@@ -26,6 +26,8 @@ check` runs them all). What each one catches, and why it exists, is in
 [`docs/coding-standards.md`](../docs/coding-standards.md) § Deterministic checks and
 [`docs/document-conventions.md`](../docs/document-conventions.md): `check_spelling.py`
 (the `-ise` families), `check_md_math.py` (Markdown that renders in both previews; the frontmatter),
-`check_references.py` (every citation and relative link resolves) and
+`check_references.py` (every citation and relative link resolves),
 `check_docstrings.py` (docstring headers, private functions documented, modules under
-600 lines). Each takes paths and exits 1 when it flags anything.
+600 lines) and `check_containers.py` (no `jax.Array` in a dataclass or a static field,
+no `NamedTuple` outside the `*Params` bundles; it walks `src` itself). Each exits 1 when
+it flags anything.

@@ -6,7 +6,7 @@ Four figures, each the shape of the notebook cell it grew from
 phase field as a panel, with every $k$-th reference isochron over it as a thin white
 curve, so the curves read as its contour lines; `plot_phase_comparison` sets the
 reference field, a model's field and their aligned difference side by side, the model's
-phase aligned by `analysis.phase_origin` and `training.align_phases`;
+phase aligned by `analysis.phase_offset` and `training.align_phases`;
 `plot_isochron_match` draws the reference isochrons colored by phase on the cyclic map,
 and, when a model is given, the learned isochron of each phase dashed in the same
 color; `plot_isochron_hairpins` follows one reference isochron into the phaseless
@@ -29,7 +29,7 @@ from jaxtyping import Float
 from matplotlib.axes import Axes
 from matplotlib.colors import Colormap, Normalize
 
-from ..analysis.model import phase_origin
+from ..analysis.model import phase_offset
 from ..analysis.ode import find_equilibrium, Isochron, IsochronFoliation, LimitCycle
 from ..model.base import AbstractPhaseAmplitudeModel
 from ..model.conjugacy import ConjugateLatentDynamics
@@ -135,7 +135,7 @@ def plot_phase_comparison(
     side by side.
 
     The model's phase is aligned to the reference by `align_phases`, seeded with the
-    offset that `phase_origin` finds at the reference's phase 0, so the left panel
+    offset that `phase_offset` finds at the reference's phase 0, so the left panel
     shows the reference field mapped into the model's phase, the middle one the
     model's own field over the reference's mask, and the right one the residual on a
     diverging map whose range is the 99.5th percentile of its magnitude; both cycles
@@ -153,16 +153,16 @@ def plot_phase_comparison(
 
     The figure and the `PhaseComparison`.
     """
-    theta0, sense = phase_origin(model, cycle)
+    offset, sense = phase_offset(model, cycle)
     grid = np.stack(np.meshgrid(xs, ys), axis=-1).reshape(-1, 2)
     model_field = np.asarray(jax.vmap(model.phase)(jnp.asarray(grid)))
     model_field = model_field.reshape(field.shape)
     mask = np.isfinite(field)
     alignment = align_phases(
-        jnp.asarray(model_field), jnp.asarray(field), offset=float(theta0)
+        jnp.asarray(model_field), jnp.asarray(field), offset=float(offset)
     )
-    residual = np.asarray(alignment.residual)
-    sense, theta0 = alignment.sense, alignment.offset
+    residual = alignment.residual
+    sense, offset = alignment.sense, alignment.offset
 
     fig, axes = plt.subplots(
         1, 3, figsize=(12, 4), constrained_layout=True, sharey=True
@@ -171,7 +171,7 @@ def plot_phase_comparison(
     panels = (
         (
             "Reference phase",
-            np.asarray(wrap_phase(sense * field + theta0)),
+            np.asarray(wrap_phase(sense * field + offset)),
             PHASE_CMAP,
             np.pi,
         ),
@@ -196,7 +196,7 @@ def plot_phase_comparison(
     gaps = []
     for iso in isochrons:
         phase = np.asarray(jax.vmap(model.phase)(jnp.asarray(iso.points)))
-        gaps.append(float(np.abs(wrap_phase(phase - sense * iso.phase - theta0)).max()))
+        gaps.append(float(np.abs(wrap_phase(phase - sense * iso.phase - offset)).max()))
     return fig, PhaseComparison(alignment, np.asarray(gaps))
 
 
@@ -235,11 +235,11 @@ def plot_isochron_match(
     lo, hi = points.min(axis=0), points.max(axis=0)
     gaps: list[float] = []
     if model is not None:
-        theta0, sense = phase_origin(model, cycle)
+        offset, sense = phase_offset(model, cycle)
         ax.plot(*_learned_curve(model).T, color="0.5", lw=1.0, ls="--")
         corners = np.array([[x, y] for x in (lo[0], hi[0]) for y in (lo[1], hi[1])])
         r_max = 1.1 * float(
-            jnp.max(jax.vmap(model.latent_radius)(jnp.asarray(corners)))
+            jnp.max(jax.vmap(model.isochron_coordinate)(jnp.asarray(corners)))
         )
         radii = jnp.concatenate(
             (
@@ -251,7 +251,7 @@ def plot_isochron_match(
         color = PHASE_CMAP(PHASE_NORM(iso.phase))
         ax.plot(*iso.points.T, color=color, lw=1.2)
         if model is not None:
-            theta = jnp.asarray(wrap_phase(sense * iso.phase + theta0))
+            theta = jnp.asarray(wrap_phase(sense * iso.phase + offset))
             learned = np.array(model.isochron(theta, radii))
             outside = ((learned < lo) | (learned > hi)).any(axis=1)
             learned[outside] = np.nan
@@ -343,7 +343,7 @@ def plot_isochron_hairpins(
         raise ValueError(f"no equilibrium by Newton from the centroid {centroid}.")
     q = np.asarray(q_array)
     q_model = np.asarray(model.equilibrium())
-    theta0, sense = phase_origin(model, cycle)
+    offset, sense = phase_offset(model, cycle)
     isos = foliation.isochrons
     k = (
         int(np.argmin([np.linalg.norm(iso.points - q, axis=1).min() for iso in isos]))
@@ -351,9 +351,9 @@ def plot_isochron_hairpins(
         else index
     )
     iso = isos[k]
-    theta = jnp.asarray(wrap_phase(sense * iso.phase + theta0))
+    theta = jnp.asarray(wrap_phase(sense * iso.phase + offset))
     arclength = iso.arclength
-    radii = jax.vmap(model.latent_radius)(jnp.asarray(iso.points))
+    radii = jax.vmap(model.isochron_coordinate)(jnp.asarray(iso.points))
     matched = np.array(model.isochron(theta, radii))
     error = np.linalg.norm(iso.points - matched, axis=1)
     rho_ref, phi_ref = iso.log_polar(q)

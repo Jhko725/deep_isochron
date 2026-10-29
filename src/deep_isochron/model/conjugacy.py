@@ -60,7 +60,7 @@ class ConjugateLatentDynamics(AbstractPhaseAmplitudeModel):
         """``H⁻¹`` of the normal form's cycle point at `theta`."""
         return self.bijection.inverse(self.latent_dynamics.limit_cycle(theta))
 
-    def latent_radius(self, x):
+    def isochron_coordinate(self, x):
         """``|H(x)|``, the normal form's radius; 1 on the learned cycle."""
         return jnp.linalg.norm(self.bijection(x))
 

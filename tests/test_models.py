@@ -69,19 +69,19 @@ def test_phase_amplitude_contract(build):
 
 
 @pytest.mark.parametrize("build", [_conjugacy, _autoencoder], ids=["conjugacy", "ae"])
-def test_isochron_and_latent_radius_have_the_contract_shapes(build):
-    """`isochron(θ, r)` returns one point per radius and `latent_radius` a scalar, for
-    both model kinds."""
+def test_isochron_and_isochron_coordinate_have_the_contract_shapes(build):
+    """`isochron(θ, r)` returns one point per coordinate and `isochron_coordinate` a
+    scalar, for both model kinds."""
     model = build(jax.random.key(0))
     r = jnp.array([0.5, 1.0, 1.5])
     points = model.isochron(jnp.asarray(0.9), r)
     assert points.shape == (3, 2) and bool(jnp.all(jnp.isfinite(points)))
-    assert model.latent_radius(jnp.array([0.4, -1.1])).shape == ()
+    assert model.isochron_coordinate(jnp.array([0.4, -1.1])).shape == ()
 
 
 def test_conjugacy_isochron_is_the_normal_forms_through_the_bijection():
-    """``Θ(isochron(θ, r)) == θ`` and ``latent_radius(isochron(θ, r)) == r`` for the
-    conjugacy model, by construction through any bijection; ``isochron(θ, 1)`` is
+    """``Θ(isochron(θ, r)) == θ`` and ``isochron_coordinate(isochron(θ, r)) == r`` for
+    the conjugacy model, by construction through any bijection; ``isochron(θ, 1)`` is
     `cycle_point`; `equilibrium` is ``H⁻¹(0)``, so its phase is ``nan``."""
     model = _conjugacy(jax.random.key(0))
     theta = jnp.asarray(-2.3)
@@ -89,7 +89,7 @@ def test_conjugacy_isochron_is_the_normal_forms_through_the_bijection():
     points = model.isochron(theta, r)
     phases = jax.vmap(model.phase)(points)
     assert_close(phases, jnp.full(3, theta), rtol=TOL["identity"])
-    assert_close(jax.vmap(model.latent_radius)(points), r, rtol=TOL["identity"])
+    assert_close(jax.vmap(model.isochron_coordinate)(points), r, rtol=TOL["identity"])
     assert_close(points[1], model.cycle_point(theta), rtol=TOL["identity"])
     q = model.equilibrium()
     assert_close(model.bijection(q), jnp.zeros(2), atol=TOL["identity"])

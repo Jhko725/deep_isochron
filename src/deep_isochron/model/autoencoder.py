@@ -118,7 +118,7 @@ class PhaseAmplitudeAutoencoder(AbstractPhaseAmplitudeModel):
         """``f_dec(cos θ, sin θ, 0)``: the learned limit cycle at phase `theta`."""
         return self.decode(jnp.stack((jnp.cos(theta), jnp.sin(theta), 0.0)))
 
-    def latent_radius(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
+    def isochron_coordinate(self, x: Float[Array, " obs_dim"]) -> Float[Array, ""]:
         """The deviation variable ``Y3``, the same as `amplitude`; 0 on the cycle."""
         return self.encode(x)[2]
 

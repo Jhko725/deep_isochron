@@ -576,14 +576,15 @@ def test_bounding_box_grid_and_circular_std():
 
 def test_align_phases_recovers_sense_and_offset_and_ignores_nan():
     """A model phase that is the reference reversed and shifted by 0.7 aligns with
-    sense −1, offset 0.7 and a residual at round-off, with ``nan`` entries ignored; a
-    given offset is kept and only the sense chosen."""
+    sense −1, offset 0.7 and a residual at round-off, held as NumPy, with ``nan``
+    entries ignored; a given offset is kept and only the sense chosen."""
     reference = jnp.linspace(-3.0, 3.0, 50)
     model = wrap_phase(-reference + 0.7).at[3].set(jnp.nan)
     alignment = align_phases(model, reference)
     assert alignment.sense == -1.0
     assert abs(alignment.offset - 0.7) < 1e-9 and alignment.rms < 1e-9
-    assert bool(jnp.isnan(alignment.residual[3]))
+    assert isinstance(alignment.residual, np.ndarray)
+    assert bool(np.isnan(alignment.residual[3]))
     seeded = align_phases(model, reference, offset=0.7)
     assert seeded.sense == -1.0 and seeded.offset == 0.7
 

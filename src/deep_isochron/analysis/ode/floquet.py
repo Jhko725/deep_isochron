@@ -29,7 +29,7 @@ ADR-0015 has the choice of method, the direction rule and the rejected routes;
 
 from __future__ import annotations
 
-from typing import Literal, NamedTuple
+from typing import Literal
 
 import diffrax as dfx
 import equinox as eqx
@@ -46,22 +46,22 @@ FloquetMethod = Literal["periodic_schur", "monodromy", "liouville"]
 """The names `floquet` dispatches on."""
 
 
-class PeriodicSchur(NamedTuple):
+class PeriodicSchur(eqx.Module):
     """The periodic Schur decomposition of a product ``M_m ⋯ M_1``, as arrays.
 
     **Attributes:**
 
+    - `R`: The triangular factors ``R[i] = Q[i+1]ᵀ M_i Q[i]``, shape
+        ``(m, dim, dim)``, upper triangular with positive diagonal.
     - `Q`: The orthogonal frames, shape ``(m+1, dim, dim)``; ``Q[i]`` is the frame at
         mesh point ``i``, ``Q[0]`` the seed frame and ``Q[m]`` the frame the chain
         closes on.
-    - `R`: The triangular factors ``R[i] = Q[i+1]ᵀ M_i Q[i]``, shape
-        ``(m, dim, dim)``, upper triangular with positive diagonal.
     - `signs`: The diagonal of ``D`` in ``Q[m] ≈ Q[0] D``, shape ``(dim,)``: the
         multipliers' signs.
     """
 
-    Q: Float[Array, "m+1 dim dim"]
     R: Float[Array, "m dim dim"]
+    Q: Float[Array, "m+1 dim dim"]
     signs: Float[Array, " dim"]
 
     @property
@@ -191,7 +191,7 @@ def periodic_schur(
     Qm, (Zs, Rs) = jax.lax.scan(step, Q1, jacobians)
     Qs = jnp.concatenate([Q1[None], Zs], axis=0)
     signs = jnp.sign(jnp.diag(Q1.T @ Qm))
-    return PeriodicSchur(Qs, Rs, signs)
+    return PeriodicSchur(Rs, Qs, signs)
 
 
 def monodromy(jacobians: Float[Array, "m dim dim"]) -> Float[Array, "dim dim"]:
