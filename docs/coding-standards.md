@@ -17,7 +17,7 @@ touches tiers, tolerances, contracts or checks.
 
 The commands are the recipes of the `justfile` (`uv run just --list`), and CI runs the
 same recipes. `just test [profile] [paths]` runs pytest at `-n auto`, the machine's core
-count; the Hypothesis profiles are `dev` (10 examples), `default` (50) and `ci` (300,
+count; the Hypothesis profiles are `dev` (10 examples), `default` (50) and `ci` (100,
 derandomized).
 
 | Purpose | Recipe |

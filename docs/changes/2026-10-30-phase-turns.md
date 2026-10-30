@@ -198,6 +198,10 @@ recomputed (ADR-0020, Consequences).
 - `docs/roadmap.md` — O4's and M's normalization $Z \cdot F = 1/T$; the Done ledger row.
 - `docs/changes/2026-10-30-phase-turns.md` — this document: *Summary*, *Design*'s
   decisions, *Bugs fixed*, *Tests*, *Open issues*.
+- `tests/conftest.py`, `.github/workflows/ci.yml`, `CLAUDE.md`, `docs/coding-standards.md`
+  — retro: the compilation cache is turned on by `conftest.py` so every launcher gets it
+  (CI only caches the directory); the `ci` profile's count corrected in the standards;
+  the cache and the memory-cgroup fact in `CLAUDE.md`.
 
 ## Design
 
@@ -395,3 +399,4 @@ ADR-0020's; the rest are this branch's.
 | `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`, `docs/decisions/0009-trainer-losses-schedules-checkpoints.md`, `docs/decisions/0013-normal-form-basins.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md` — amended sentences and History lines | | |
 | `docs/architecture.md`, `docs/roadmap.md` — the contract lines, the normalizations, the Done row | | |
 | `docs/changes/2026-10-30-phase-turns.md` — the documents commit's sections | | |
+| `tests/conftest.py`, `.github/workflows/ci.yml`, `CLAUDE.md`, `docs/coding-standards.md` — retro: the cache in `conftest.py`, the facts written down | | |

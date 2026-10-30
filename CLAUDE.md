@@ -43,6 +43,12 @@ the checks that stand in for prose.
   `slow` and skip without gfortran.
 - float64 throughout: library drivers raise when `jax_enable_x64` is off; notebooks and
   scripts enable it at the top.
+- `tests/conftest.py` turns on JAX's persistent compilation cache (`~/.cache/jax`, or
+  `JAX_COMPILATION_CACHE_DIR`) and clears the in-process caches after every test:
+  `just test default` is about 15 minutes on two cores with the disk cache and over an
+  hour without, and a worker that dies mid-run (`node down`, `replacing crashed worker`)
+  was killed by the 7 GB memory cgroup (`dmesg | grep -i 'out of memory'`), which the
+  per-test clearing prevents.
 - The jaxtyping/beartype import hook runs in the tests, so shape annotations are checked
   at runtime: the first occurrence of an axis name is a plain name (`" K"`, not
   `" K+1"`), `{self.attr}` expressions are allowed, and `typing.Self` is written as a
