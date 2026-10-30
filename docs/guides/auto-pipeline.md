@@ -2,7 +2,7 @@
 type: guide
 status: current
 updated: 2026-10-30
-verified_by: "pending: the tests deriving the slot table and the per-stage constants from the code land later on auto-docs"
+verified_by: "tests/test_auto_codegen.py (the slot table from internal_indices(4)) and tests/test_auto_stages.py (the per-stage table from what the stages pass, auto tier) assert the tables against the code"
 sources:
   - "src/deep_isochron/analysis/ode/auto/codegen.py"
   - "src/deep_isochron/analysis/ode/auto/runner.py"
@@ -84,6 +84,10 @@ stage 4 reads the traced isochron from the branch's `PAR(24)`, `PAR(25)` columns
 other slot is input, set on the start solution's `PAR` dict and handed to `run` as the
 `PAR` keyword.
 
+`tests/test_auto_codegen.py` renders every row's slot cells from `internal_indices(4)`
+and asserts them in this page, so a change of the layout fails the test until the
+table follows.
+
 ## The base constants file
 
 `constants_file` writes `c.isochron` for a planar system as
@@ -148,6 +152,10 @@ reports a user point only where its function changes sign between steps. Stage 4
 `ICP` lists eight parameters for a problem with four free ones: AUTO prints every
 parameter in `ICP`, and the four extra slots are how the base point and the traced
 point reach the branch's columns (AUTO manual, § ICP, parameter overspecification).
+
+`tests/test_auto_stages.py` records the keywords of the eight runs of one phase on the
+Hopf form and asserts each row's `NDIM`, `NBC`, `ICP`, `DS` and literal constants, and
+stage 4's settings fields with the defaults quoted, in this table (`auto` tier).
 
 ## The constants, in brief
 

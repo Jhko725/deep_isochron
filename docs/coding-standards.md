@@ -1,7 +1,7 @@
 ---
 type: reference
 status: current
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # Coding standards
@@ -105,6 +105,7 @@ This section says what each check is for; the file has the current values.
 | the container rule (§ Containers): no `Array` field in a frozen dataclass or in a static field, no `NamedTuple` outside the `*Params` bundles; `Array` inside a `Callable[...]` is a signature, not an array | `scripts/checks/check_containers.py` | `prek`, CI |
 | no merge-conflict marker left in any file, in or out of a merge (`84438de` carried four into master) | `check-merge-conflict --assume-in-merge` | `prek`, CI |
 | a driver called again with new values compiles nothing: times and parameters reach `filter_jit` as arrays, a vector field is a module-level function or a bound method, loops run under a jit | `tests/helpers.py` `CompileCounter` in `test_find_limit_cycle_compiles_nothing_for_new_values` and `test_integrations_compile_nothing_for_new_parameters` | `prek`, CI (the tests) |
+| a table in a document that restates code (the `PAR` slot layout, what each stage passes to AUTO) is derived by a test that renders the code's values in the table's own cells, so the table cannot drift from the code | `tests/test_auto_codegen.py` `test_the_guides_slot_table_is_the_layout`, `tests/test_auto_stages.py` `test_the_guides_stage_table_is_what_the_stages_pass` (`auto`) for [`guides/auto-pipeline.md`](guides/auto-pipeline.md) | CI (the tests) |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |
 
 The one deliberate exemption is in `scripts/diagnostics/bench_dataloader.py`, which times

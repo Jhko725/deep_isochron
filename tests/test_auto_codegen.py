@@ -14,12 +14,14 @@ equation. Section 4 tests `write_problem`: the four files, the ``PAR`` dict and 
 lookup, a stable source hash, non-planar systems rejected. Section 5 (slow, needs
 ``gfortran``) compiles the generic file with each system's includes, and compiles a
 driver around ``rhs.inc`` whose ``F`` and ``A`` are compared with the JAX ``rhs`` and
-``jacfwd(rhs)``.
+``jacfwd(rhs)``. Section 6 derives the slot table of ``docs/guides/auto-pipeline.md``
+from the layout.
 """
 
 import re
 import shutil
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
 import jax
@@ -328,3 +330,26 @@ def test_compiled_rhs_agrees_with_jax(ode, tmp_path):
         x = jnp.asarray(u)
         assert_close(f, ode.rhs(0.0, x), rtol=TOL["identity"], atol=TOL["identity"])
         assert_close(a, jac(0.0, x), rtol=TOL["identity"], atol=TOL["identity"])
+
+
+# -------------------------------------------------------- 6. the guide's table ----
+GUIDE = Path(__file__).parents[1] / "docs" / "guides" / "auto-pipeline.md"
+
+
+def test_the_guides_slot_table_is_the_layout():
+    """Every row of the slot table in ``docs/guides/auto-pipeline.md`` states the
+    slot that `internal_indices(4)` assigns, with the unused slots between the
+    fourth parameter and the block; a change of the layout fails here until the
+    guide follows."""
+    guide = GUIDE.read_text()
+    idx = internal_indices(4)
+    for name, value in asdict(idx).items():
+        if name == "last":
+            continue
+        if isinstance(value, tuple):
+            row = f"| {value[0]}–{value[1]} | `{name}`, `IP_{name.upper()}_X/Y` |"
+        else:
+            row = f"| {value} | `{name}`, `IP_{name.upper()}` |"
+        assert row in guide, row
+    assert f"| 5–{codegen.RESERVED_LOW} | — | unused |" in guide
+    assert f"`NPAR` is {codegen.MIN_NPAR}" in guide

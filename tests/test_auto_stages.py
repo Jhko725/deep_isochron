@@ -12,6 +12,8 @@ oracles of ``docs/design/isochrons.md`` §5; every test but the stop reason runs
 - The coworker's Hopf route (his runs 0–1) against O1's cycle (decision 12).
 - Stage 4 on the Bautin and Winfree forms against their closed-form phase
   (decision 14) in turns, and the stop reason of a half by the box edge.
+- The per-stage table of ``docs/guides/auto-pipeline.md`` derived from what the
+  stages pass on the Hopf form.
 """
 
 import shutil
@@ -206,3 +208,75 @@ def test_normal_form_isochrons_carry_the_closed_form_phase(auto, name):
         assert np.abs(gap).max() < TOL["isochron_phase"]
         radius = np.linalg.norm(iso.points, axis=1)
         assert radius.min() < 0.5 and radius.max() > 1.5
+
+
+# --------------------------------------------------------- the guide's table ----
+GUIDE = Path(__file__).parents[1] / "docs" / "guides" / "auto-pipeline.md"
+
+RUN_ROWS = (0, 1, 2, 3, 3, 4, 5, 5)
+"""The row of the guide's per-stage table that each of the eight runs of a foliation
+belongs to: stage 1; stage 2's trivial bundle and switch; stage 3's two directions;
+stage 4's setup and two halves."""
+
+LITERAL = ("ISW", "DSMAX", "NMX", "NPR", "RL0")
+"""The run constants the table states as literals, beside ``NDIM``, ``NBC``, ``ICP``
+and ``DS``; the others (``SP``, ``UZR``, ``UZSTOP``, ``RL1``) are prose."""
+
+
+@pytest.mark.auto
+def test_the_guides_stage_table_is_what_the_stages_pass(auto, monkeypatch):
+    """Every run of the four stages on the Hopf form passes the constants that its
+    row of the per-stage table in ``docs/guides/auto-pipeline.md`` states: `NDIM`
+    and `NBC`, the `ICP` slots by name, `DS` by magnitude, the literal constants, and
+    stage 4's `NTST`, `NMX` and `DS` as the settings fields the row names, with the
+    defaults the row quotes. A change of what a stage passes fails here until the
+    guide follows."""
+    calls: list[dict] = []
+    original = Runner.__call__
+
+    def recording(self, start, **constants):
+        calls.append(dict(constants))
+        return original(self, start, **constants)
+
+    monkeypatch.setattr(Runner, "__call__", recording)
+    cycle = anchored_cycle("hopf")
+    settings = ISOCHRON_SETTINGS["reach"]
+    with auto_session(cycle.ode, tolerances=settings.tolerances) as run:
+        idx = run.idx
+        names = {v: k for k, v in idx.fortran_constants().items()}
+        rotated = rotate_phase(
+            run, adjoint_bundle(run, periodic_orbit(run, cycle)), [0.25]
+        )
+        box = stages.bounding_box(cycle, settings.box_scale)
+        stages.isochron(run, rotated[0.25], cycle, 0.25, settings, box)
+    assert len(calls) == len(RUN_ROWS)
+    table = GUIDE.read_text().split("## What each stage sets")[1].split("\n## ")[0]
+    rows = [
+        line for line in table.splitlines() if line.startswith("| ") and "`" in line
+    ]
+    rows = [row for row in rows if not row.startswith("| Stage")]
+    assert len(rows) == max(RUN_ROWS) + 1
+    defaults = IsochronSettings()
+    for constants, row in zip(calls, (rows[i] for i in RUN_ROWS)):
+        assert f"| {constants['NDIM']}, {constants['NBC']} |" in row, row
+        icp = ", ".join(
+            names[slot].removeprefix("IP_").lower() for slot in constants["ICP"]
+        )
+        assert f"| `{icp}` |" in row or "| the same |" in row, (icp, row)
+        for key in LITERAL:
+            if key in constants and f"`{key} = max_steps`" not in row:
+                assert f"`{key} = {constants[key]:g}`" in row, (key, row)
+        if "DS" in constants:
+            if "`DS = ∓ds`" in row:
+                assert abs(constants["DS"]) == settings.ds
+                assert f"(`{format(defaults.ds, 'g').replace('e-0', 'e-')}`)" in row
+            elif "∓" in row:
+                assert f"`DS = ∓{abs(constants['DS']):g}`" in row, row
+            else:
+                assert f"`DS = {constants['DS']:g}`" in row, row
+        if "NTST" in constants:
+            assert "`NTST = mesh_intervals`" in row
+            assert constants["NTST"] == settings.mesh_intervals
+        if "NMX" in constants and "`NMX = max_steps`" in row:
+            assert constants["NMX"] == settings.max_steps
+            assert f"(`{defaults.max_steps}`)" in row
