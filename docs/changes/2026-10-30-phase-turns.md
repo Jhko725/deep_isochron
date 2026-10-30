@@ -416,5 +416,5 @@ ADR-0020's; the rest are this branch's.
 | `docs/architecture.md`, `docs/roadmap.md` — the contract lines, the normalizations, the Done row | Confirmed. | None |
 | `docs/changes/2026-10-30-phase-turns.md` — the documents commit's sections | Confirmed. | None |
 | `tests/conftest.py`, `.github/workflows/ci.yml`, `CLAUDE.md`, `docs/coding-standards.md` — retro: the cache in `conftest.py`, the facts written down | Confirmed. | None |
-| `docs/design/normal-forms.md`, `docs/design/phase-field.md`, `docs/design/isochrons.md`, `docs/design/cycle-estimation.md` — converted to the turn convention, the amendment lines removed | | |
-| `docs/decisions/0020-phase-in-turns.md` — History: the design documents rewritten, not amended | | |
+| `docs/design/normal-forms.md`, `docs/design/phase-field.md`, `docs/design/isochrons.md`, `docs/design/cycle-estimation.md` — converted to the turn convention, the amendment lines removed | Looks good. | None |
+| `docs/decisions/0020-phase-in-turns.md` — History: the design documents rewritten, not amended | Looks good. | None |
