@@ -3,7 +3,8 @@
 A `FillScale` colors the cells by one of the per-cell values of `plotting.sheet`:
 `area_scale` and `anisotropy_scale` build it from the values of one or more stages, so
 that a pair and a sequence of stages share one scale. A `SheetStyle` holds the drawing
-defaults, and `plot_deformation` draws a domain | image pair.
+defaults. `plot_deformation` draws a domain | image pair, `plot_deformation_strip` a
+row of stages, and `animate_deformation` a flipbook of the stages.
 
 The design and its decisions are in `docs/changes/2026-10-30-deformation-plots.md`.
 """
@@ -16,6 +17,7 @@ import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Float
+from matplotlib.animation import FuncAnimation
 from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection, QuadMesh
 from matplotlib.colors import Colormap, ListedColormap, Normalize
@@ -258,6 +260,45 @@ def _draw_sheet(
     return fill
 
 
+def _format_panel(ax: Axes) -> None:
+    """Equal aspect, at most five ticks per axis at round steps, and no grid."""
+    ax.set_aspect("equal")
+    for axis in (ax.xaxis, ax.yaxis):
+        axis.set_major_locator(MaxNLocator(nbins=5, steps=[1, 2, 5, 10]))
+    ax.grid(False)
+
+
+def _set_limits(
+    ax: Axes, limits: tuple[Float[np.ndarray, "2"], Float[np.ndarray, "2"]]
+) -> None:
+    """Set the panel's box to `limits`, a `(lo, hi)` pair of corners."""
+    lo, hi = limits
+    ax.set_xlim(lo[0], hi[0])
+    ax.set_ylim(lo[1], hi[1])
+
+
+def _add_colorbar(
+    fig: plt.Figure, fill: QuadMesh, axes: list[Axes], scale: FillScale
+) -> None:
+    """One colorbar at the right of `axes`, with the factor ticks of `scale`."""
+    bar = fig.colorbar(fill, ax=axes, location="right", shrink=0.85, label=scale.label)
+    bar.set_ticks(scale.ticks, labels=scale.tick_labels)
+    bar.ax.yaxis.set_minor_locator(NullLocator())
+
+
+def _check_lengths(
+    sheets: Sequence[Sheet],
+    values: Sequence[Float[np.ndarray, "c c"]],
+    labels: Sequence[str],
+) -> None:
+    """Raise unless there is one value array and one label per sheet."""
+    if not len(sheets) == len(values) == len(labels):
+        raise ValueError(
+            f"{len(sheets)} sheets, {len(values)} value arrays and {len(labels)} "
+            "labels; one value array and one label per sheet."
+        )
+
+
 def plot_deformation(
     reference: Sheet,
     deformed: Sheet,
@@ -271,7 +312,8 @@ def plot_deformation(
     right, both filled by `values`.
 
     The domain panel spans the bounding box of `reference.fill_nodes` and the image
-    panel fits `deformed`, both at equal aspect. One colorbar at the right shows
+    panel fits `deformed`, both at equal aspect. The panels are titled `"domain"` and
+    `"image"`, with axes $x$, $y$ and $u$, $v$. One colorbar at the right shows
     `scale` with its factor ticks.
 
     **Arguments:**
@@ -293,18 +335,157 @@ def plot_deformation(
     fill = _draw_sheet(domain, reference, values, scale, style)
     _draw_sheet(image, deformed, values, scale, style)
     points = reference.fill_nodes.reshape(-1, 2)
-    lo, hi = points.min(axis=0), points.max(axis=0)
-    domain.set_xlim(lo[0], hi[0])
-    domain.set_ylim(lo[1], hi[1])
+    _set_limits(domain, (points.min(axis=0), points.max(axis=0)))
     image.autoscale_view()
-    for ax in axes:
-        ax.set_aspect("equal")
-        for axis in (ax.xaxis, ax.yaxis):
-            axis.set_major_locator(MaxNLocator(nbins=5, steps=[1, 2, 5, 10]))
-        ax.grid(False)
-    bar = fig.colorbar(
-        fill, ax=list(axes), location="right", shrink=0.85, label=scale.label
-    )
-    bar.set_ticks(scale.ticks, labels=scale.tick_labels)
-    bar.ax.yaxis.set_minor_locator(NullLocator())
+    for ax, title, (xlabel, ylabel) in [
+        (domain, "domain", ("$x$", "$y$")),
+        (image, "image", ("$u$", "$v$")),
+    ]:
+        _format_panel(ax)
+        ax.set_title(title)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+    _add_colorbar(fig, fill, list(axes), scale)
     return fig
+
+
+def plot_deformation_strip(
+    sheets: Sequence[Sheet],
+    values: Sequence[Float[np.ndarray, "c c"]],
+    scale: FillScale,
+    labels: Sequence[str],
+    *,
+    limits: tuple[Float[np.ndarray, "2"], Float[np.ndarray, "2"]],
+    style: SheetStyle = SheetStyle(),
+    figsize: tuple[float, float] | None = None,
+) -> plt.Figure:
+    """A row of panels, one per sheet, such as the stages of a layer sequence.
+
+    Every panel spans `limits` at equal aspect and is titled by its label, broken
+    onto two lines at its first `" — "`; only the leftmost carries the axis labels
+    $x$, $y$. One colorbar at the right shows
+    `scale` with its factor ticks.
+
+    **Arguments:**
+
+    - `sheets`: The sheets, from left to right, such as a selection of
+        `stage_sheets(layers, sheet)`.
+    - `values`: The value of each mesh cell of each sheet, such as
+        `cell_values(sheets[0], sheets[k]).log_area`, cumulative relative to the
+        first sheet.
+    - `scale`: The color scale of every entry of `values`, pooled over them.
+    - `labels`: The title of each panel, such as the entries of `stage_labels`.
+    - `limits`: The `(lo, hi)` corners of every panel's box, from `sheet_limits`.
+    - `style`: The drawing constants.
+    - `figsize`: The figure's size in inches; `(3.2 * len(sheets), 3.8)` if `None`.
+
+    **Returns:**
+
+    The figure: its axes are the panels from left to right, then the colorbar.
+
+    **Raises:**
+
+    `ValueError` if `sheets`, `values` and `labels` differ in length.
+    """
+    _check_lengths(sheets, values, labels)
+    fig, axes = plt.subplots(
+        1,
+        len(sheets),
+        figsize=(3.2 * len(sheets), 3.8) if figsize is None else figsize,
+        layout="constrained",
+        sharex=True,
+        sharey=True,
+        squeeze=False,
+    )
+    panels = list(axes[0])
+    fills = [
+        _draw_sheet(ax, sheet, value, scale, style)
+        for ax, sheet, value in zip(panels, sheets, values, strict=True)
+    ]
+    for ax, label in zip(panels, labels, strict=True):
+        _set_limits(ax, limits)
+        _format_panel(ax)
+        ax.set_title(label.replace(" — ", "\n", 1), fontsize=10)
+    panels[0].set_xlabel("$x$")
+    panels[0].set_ylabel("$y$")
+    _add_colorbar(fig, fills[0], panels, scale)
+    return fig
+
+
+def animate_deformation(
+    sheets: Sequence[Sheet],
+    values: Sequence[Float[np.ndarray, "c c"]],
+    scale: FillScale,
+    labels: Sequence[str],
+    *,
+    limits: tuple[Float[np.ndarray, "2"], Float[np.ndarray, "2"]],
+    style: SheetStyle = SheetStyle(),
+    figsize: tuple[float, float] = (8.0, 4.5),
+    interval_ms: int = 1000,
+) -> FuncAnimation:
+    """A flipbook of the sheets: one frame per sheet on a single panel.
+
+    Each frame clears the panel and redraws its sheet over the box `limits`, with the
+    frame's label in a white box at the upper left. The colorbar at the right of the
+    panel is created once and shows `scale` with its factor ticks.
+
+    The caller saves the animation with the writer of their choice:
+    `FFMpegWriter(fps=1000 // interval_ms, codec="libx264", extra_args=["-pix_fmt",
+    "yuv420p"])` for an MP4 that a slide deck plays, or `PillowWriter` for a GIF. The
+    `yuv420p` pixel format needs `figsize × dpi` to be even in both dimensions: the
+    default `figsize` at `dpi=160` gives 1280×720.
+
+    **Arguments:**
+
+    - `sheets`: The sheets in frame order, such as `stage_sheets(layers, sheet)`.
+    - `values`: The value of each mesh cell of each sheet, such as
+        `cell_values(sheets[0], sheets[k]).log_area`, cumulative relative to the
+        first sheet.
+    - `scale`: The color scale of every entry of `values`, pooled over them.
+    - `labels`: The text of each frame, such as the entries of `stage_labels`.
+    - `limits`: The `(lo, hi)` corners of the panel's box, from `sheet_limits`.
+    - `style`: The drawing constants.
+    - `figsize`: The figure's size in inches.
+    - `interval_ms`: The time each frame is shown, in milliseconds.
+
+    **Returns:**
+
+    The animation; its figure stays open until the caller closes it.
+
+    **Raises:**
+
+    `ValueError` if `sheets`, `values` and `labels` differ in length.
+    """
+    _check_lengths(sheets, values, labels)
+    fig, ax = plt.subplots(figsize=figsize, layout="constrained")
+
+    def draw(k: int) -> QuadMesh:
+        ax.clear()
+        fill = _draw_sheet(ax, sheets[k], values[k], scale, style)
+        _set_limits(ax, limits)
+        _format_panel(ax)
+        ax.text(
+            0.015,
+            0.975,
+            labels[k],
+            transform=ax.transAxes,
+            family="monospace",
+            fontsize=10,
+            ha="left",
+            va="top",
+            zorder=10,
+            bbox=dict(
+                boxstyle="round,pad=0.3", facecolor="white", edgecolor="0.7", alpha=0.9
+            ),
+        )
+        return fill
+
+    _add_colorbar(fig, draw(0), [ax], scale)
+    return FuncAnimation(
+        fig,
+        lambda k: (draw(k),),
+        frames=len(sheets),
+        interval=interval_ms,
+        blit=False,
+        repeat=False,
+    )

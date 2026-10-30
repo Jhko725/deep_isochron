@@ -8,8 +8,8 @@ identity is itself, the cell values of the identity are zero, the cell values of
 linear map are the logarithms of its determinant and condition number by NumPy's SVD of
 the matrix, a folded cell raises with the count, the stages of a two-layer model end at
 the model's own map in both directions, and the limits are the padded union box. The
-fill scales of ``plotting.deformation`` are pinned on hand-made cell values, and its
-pair figure by its panels.
+fill scales of ``plotting.deformation`` are pinned on hand-made cell values, its pair
+figure and its strip by their panels, and its animation by the frames of a saved GIF.
 """
 
 import jax
@@ -32,9 +32,11 @@ from deep_isochron.plotting import (
     plot_phase_field,
 )
 from deep_isochron.plotting.deformation import (
+    animate_deformation,
     anisotropy_scale,
     area_scale,
     plot_deformation,
+    plot_deformation_strip,
 )
 from deep_isochron.plotting.sheet import (
     build_sheet,
@@ -47,7 +49,9 @@ from deep_isochron.plotting.sheet import (
 )
 from hypothesis import given
 from jaxtyping import Float
+from matplotlib.animation import PillowWriter
 from matplotlib.collections import QuadMesh
+from PIL import Image
 
 from .helpers import hand_foliation, HAND_FOLIATION_FORM, TOL
 from .strategies import perturb, planar_matrices
@@ -328,3 +332,54 @@ def test_plot_deformation_draws_both_panels(square_sheet, layers):
     halos = [line for line in domain.lines if line.get_path_effects()]
     assert len(halos) == len(square_sheet.curves)
     plt.close(fig)
+
+
+def test_plot_deformation_strip_has_one_panel_per_stage(square_sheet, layers):
+    """Three stages give three panels and a colorbar, each panel at the given limits."""
+    sheets = stage_sheets(layers, square_sheet)
+    values = [cell_values(sheets[0], s) for s in sheets]
+    lo, hi = sheet_limits(sheets)
+    fig = plot_deformation_strip(
+        sheets,
+        [v.log_area for v in values],
+        area_scale(values),
+        stage_labels(layers),
+        limits=(lo, hi),
+    )
+    assert len(fig.axes) == len(sheets) + 1
+    for ax in fig.axes[: len(sheets)]:
+        assert ax.get_xlim() == (lo[0], hi[0])
+        assert ax.get_ylim() == (lo[1], hi[1])
+    plt.close(fig)
+
+
+def test_animate_deformation_writes_every_frame(square_sheet, layers, tmp_path):
+    """The animation saved as a GIF has one frame per stage."""
+    sheets = stage_sheets(layers, square_sheet)
+    values = [cell_values(sheets[0], s) for s in sheets]
+    animation = animate_deformation(
+        sheets,
+        [v.log_area for v in values],
+        area_scale(values),
+        stage_labels(layers),
+        limits=sheet_limits(sheets),
+    )
+    path = tmp_path / "flipbook.gif"
+    animation.save(path, writer=PillowWriter(fps=2))
+    plt.close("all")
+    with Image.open(path) as gif:
+        assert gif.n_frames == len(sheets)
+
+
+def test_strip_rejects_mismatched_lengths(square_sheet, layers):
+    """Two sheets with three labels raise."""
+    sheets = stage_sheets(layers[:1], square_sheet)
+    values = [cell_values(sheets[0], s) for s in sheets]
+    with pytest.raises(ValueError, match="3"):
+        plot_deformation_strip(
+            sheets,
+            [v.log_area for v in values],
+            area_scale(values),
+            stage_labels(layers),
+            limits=sheet_limits(sheets),
+        )
