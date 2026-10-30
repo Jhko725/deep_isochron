@@ -96,3 +96,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `isochron2pbvp` | [`2026-10-29-isochron2pbvp.md`](changes/2026-10-29-isochron2pbvp.md) |
 | `merge-conflict-check` | [`2026-10-29-merge-conflict-check.md`](changes/2026-10-29-merge-conflict-check.md) |
 | `phase-turns` | [`2026-10-30-phase-turns.md`](changes/2026-10-30-phase-turns.md) |
+| `deformation-plots` | [`2026-10-30-deformation-plots.md`](changes/2026-10-30-deformation-plots.md) |
