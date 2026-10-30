@@ -317,6 +317,10 @@ The mapping is:
 | `createMultSegPeriodCopy2D` | the start of stage 4 | on AUTO's stored grid: `U(1:8)` as stored, `U(9:10)` integrated by O1's solver; no splines (D2) |
 | the two isochron runs | stage 4, `_isochron` | stop when the traced point leaves a box relative to the cycle (decision 15) |
 | the loop over phases | `isochron_foliation` | a process pool (decision 17) |
+
+The `PAR` slots, the base constants file and the constants each stage passes are
+tabulated in [`guides/auto-pipeline.md`](../guides/auto-pipeline.md), with the
+coworker's numbering beside ours.
 ### 3.1 The stable direction
 
 The isochron segment of §2.3 ends on the line through the base point along a direction

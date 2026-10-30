@@ -196,8 +196,9 @@ def one_thread() -> Generator[None]:
 
 def bvp(ndim: int, nbc: int) -> dict[str, int]:
     """The run constants of the staged boundary value problem with `ndim` components
-    and `nbc` boundary conditions. Every run passes them, because each run reloads the
-    constants file and nothing carries over from the run before."""
+    and `nbc` boundary conditions. AUTO's ``run`` applies the constants file first and
+    every keyword passed to the call on top, and nothing survives from the run before,
+    so a stage states what differs from the file on every run, these included."""
     return {"IPS": 4, "NDIM": ndim, "NBC": nbc, "NINT": 0}
 
 

@@ -28,6 +28,7 @@ document opens with and what its `status` means are in
 | Document | Covers |
 |---|---|
 | [`auto07p.md`](guides/auto07p.md) | installing AUTO-07p: the `auto` dependency group, `scripts/install_auto.sh`, the variables, the pinned commit, clusters, the `auto` test tier, troubleshooting |
+| [`auto-pipeline.md`](guides/auto-pipeline.md) | reading the pipeline's AUTO runs: the generated files, the `PAR` slot table beside the coworker's, the base constants file, what each stage passes, a glossary of the constants, inspecting a run |
 | [`isochrons.md`](guides/isochrons.md) | computing the reference isochrons of a system with `scripts/compute_isochrons.py`, reading the file back, running it as a SLURM job |
 | [`experiments.md`](guides/experiments.md) | running an experiment from a notebook: composing configs, datasets, training with your own loop, reading a run back |
 
@@ -96,3 +97,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `isochron2pbvp` | [`2026-10-29-isochron2pbvp.md`](changes/2026-10-29-isochron2pbvp.md) |
 | `merge-conflict-check` | [`2026-10-29-merge-conflict-check.md`](changes/2026-10-29-merge-conflict-check.md) |
 | `phase-turns` | [`2026-10-30-phase-turns.md`](changes/2026-10-30-phase-turns.md) |
+| `auto-docs` | [`2026-10-30-auto-docs.md`](changes/2026-10-30-auto-docs.md) |

@@ -1,7 +1,7 @@
 ---
 type: guide
 status: current
-updated: 2026-10-29
+updated: 2026-10-30
 sources:
   - "ADR-0017"
   - "ADR-0011 §1"
@@ -17,7 +17,8 @@ The isochrons of a system's limit cycle are traced by AUTO-07p continuation
 ([ADR-0017](../decisions/0017-isochrons-by-auto-continuation.md); the method is
 [`design/isochrons.md`](../design/isochrons.md)), once per system, and saved as one netCDF
 file that notebooks and analyses read back. AUTO has to be installed first
-([`auto07p.md`](auto07p.md)).
+([`auto07p.md`](auto07p.md)); what the pipeline hands AUTO, slot by slot and run by
+run, is [`auto-pipeline.md`](auto-pipeline.md).
 
 ## Computing a foliation
 

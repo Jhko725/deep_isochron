@@ -226,9 +226,11 @@ def constants_file(sym: SymbolicODE, idx: Idx) -> str:
     """The text of the base constants file ``c.<name>``.
 
     It carries the discretization and tolerances of the coworker's reproduction
-    (``NTST`` 300, ``NCOL`` 5, ``EPS`` 1e-10), ``NDIM`` from `sym`, ``NPAR`` covering
-    the slot block of `idx`, and ``THL`` zero-weighting the time slots. The constants
-    specific to a run, such as ``IPS``, ``ICP`` and ``UZSTOP``, are passed per ``run``.
+    (``NTST`` 300, ``NCOL`` 5, ``EPSL`` and ``EPSU`` 1e-10, ``EPSS`` 1e-9), ``NDIM``
+    from `sym`, ``NPAR`` covering the slot block of `idx`, and ``THL`` zero-weighting
+    the time slots. The constants specific to a run, such as ``IPS``, ``ICP`` and
+    ``UZSTOP``, are passed per ``run``; ``docs/guides/auto-pipeline.md`` lists the
+    file and what each stage passes.
     """
     thl = ", ".join(f"{k}: 0.0" for k in (idx.period, idx.seg1, idx.seg2))
     return (
