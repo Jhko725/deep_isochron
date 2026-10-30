@@ -31,6 +31,13 @@ factor or anisotropy as the fill. The design is the Project document
 - `tests/test_plotting.py` — four tests of the pair: the symmetric area scale and its
   ticks, the zeros left out of the anisotropy pool, the percentile check, and the
   pair figure's panels.
+- `src/deep_isochron/plotting/sheet.py` (**new**) — the geometry of the first bullet
+  moved out of `deformation.py` unchanged: `Sheet` with `map`, `build_sheet`,
+  `CellValues` and `cell_values`, `stage_sheets`, `stage_labels` and `sheet_limits`.
+- `src/deep_isochron/plotting/deformation.py` — the geometry removed, and its module
+  docstring and imports reduced to the scales, the style and the renderers.
+- `tests/test_plotting.py` — the geometry names import from `plotting.sheet`; no test
+  body changes.
 
 ## Design
 
@@ -43,6 +50,7 @@ The ledger of the change, in the order the commits will follow. Each item become
    `SheetStyle`, `plot_deformation`; the smoke test — done.
 3. `plotting/deformation.py`: `plot_deformation_strip`, `animate_deformation`; the
    exports in `plotting/__init__.py`; the smoke tests.
+4. `plotting/sheet.py`: the geometry of item 1 moved out of `deformation.py`, which had reached the 600-line module limit at item 2 (decided 2026-10-30). — done.
 
 The decisions and their rejected alternatives are written in the documents commit.
 
@@ -70,3 +78,6 @@ Pending.
 | `tests/strategies.py` — `planar_matrices` | | |
 | `src/deep_isochron/plotting/deformation.py` — the fill scale and the pair: `FillScale`, `area_scale`, `anisotropy_scale`, `SheetStyle`, `_draw_sheet`, `plot_deformation` | | |
 | `tests/test_plotting.py` — the four tests of the scales and the pair | | |
+| `src/deep_isochron/plotting/sheet.py` — the geometry moved from `deformation.py` | | |
+| `src/deep_isochron/plotting/deformation.py` — the geometry removed | | |
+| `tests/test_plotting.py` — the geometry imports from `plotting.sheet` | | |

@@ -3,12 +3,13 @@ and a model conjugate to the same normal form by the identity, with the expected
 panels and the numbers they report; nothing is compared pixel by pixel, so that an API
 change breaks the figure here and not in a notebook.
 
-The geometry of ``plotting.deformation`` is pinned by laws: a sheet mapped by the
+The geometry of ``plotting.sheet`` is pinned by laws: a sheet mapped by the
 identity is itself, the cell values of the identity are zero, the cell values of a
 linear map are the logarithms of its determinant and condition number by NumPy's SVD of
 the matrix, a folded cell raises with the count, the stages of a two-layer model end at
-the model's own map in both directions, and the limits are the padded union box. Its
-fill scales are pinned on hand-made cell values, and its pair figure by its panels.
+the model's own map in both directions, and the limits are the padded union box. The
+fill scales of ``plotting.deformation`` are pinned on hand-made cell values, and its
+pair figure by its panels.
 """
 
 import jax
@@ -33,10 +34,12 @@ from deep_isochron.plotting import (
 from deep_isochron.plotting.deformation import (
     anisotropy_scale,
     area_scale,
+    plot_deformation,
+)
+from deep_isochron.plotting.sheet import (
     build_sheet,
     cell_values,
     CellValues,
-    plot_deformation,
     Sheet,
     sheet_limits,
     stage_labels,
