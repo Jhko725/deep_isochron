@@ -53,22 +53,33 @@ $\mathbf{u} = (x, y) = (r\cos\theta, r\sin\theta)$ the radial and angular motion
 | $\omega(r)$ | **angular rate**, $\dot\theta = \omega(r)$ | $\omega(1) =: \omega_1 \ne 0$; even in $r$ for the even family |
 | $\Gamma$ | the limit cycle $r = 1$ | the only attracting cycle |
 | $(r_{\rm in}, r_{\rm out})$ | the **basin** of $\Gamma$, an open annulus (`basin_radii`) | $r_{\rm in} = 0$ when the enclosed fixed point is the only phaseless point, else the radius of an inner repelling cycle; $r_{\rm out} = \infty$ or an outer repelling cycle. $\Theta$, $\Psi$ exist on the basin only |
-| $T = 2\pi/\lvert\omega_1\rvert$ | period | *amended 2026-10-30 (ADR-0020 round):* positive; the sign of $\omega_1$ is the sense of rotation |
+| $T = 2\pi/\lvert\omega_1\rvert$ | period | positive; the sign of $\omega_1$ is the sense of rotation, and $\omega_1 T = \pm 2\pi$ is the angle swept per period |
 | $\kappa = \rho'(1) < 0$ | non-trivial **Floquet exponent** | **[decided]** no factor 2 — see §4.2 |
 | $\mu = e^{\kappa T}$ | non-trivial **Floquet multiplier** | $0 < \mu < 1$ |
-| $\Theta(\mathbf{u}) \in [0, 1)$ | **asymptotic phase**, a fraction of the period: $\dot\Theta = 1/T$ along every trajectory | *amended 2026-10-30 (ADR-0020):* $\Theta = \sigma\theta/2\pi$ on $\Gamma$, $\sigma$ the sign of $\omega_1$ |
-| $h(r)$ | **phase shift**, an angle: $\Theta = \sigma(\theta + h(r))/2\pi$ *(amended 2026-10-30, ADR-0020)* | $h(1) = 0$ |
+| $\phi(\mathbf{u}) = \theta + h(r)$ | **phase angle** of the chart: $\dot\phi = \omega_1$ along every trajectory | $\phi = \theta$ on $\Gamma$ |
+| $\Theta(\mathbf{u}) \in [0, 1)$ | **asymptotic phase**, a fraction of the period: $\Theta = \phi/(\omega_1 T) \bmod 1$, so $\dot\Theta = 1/T$ along every trajectory for either orientation | $\Theta = 0$ at $\phi = 0$; inverse $\phi = \omega_1 T\thinspace\Theta$ |
+| $h(r)$ | **phase shift**, an angle: $\phi = \theta + h(r)$ | $h(1) = 0$ |
 | $\Psi(\mathbf{u})$ | **isostable coordinate** (amplitude): $\dot\Psi = \kappa\Psi$ | **[decided]** $\Psi = 0$ on $\Gamma$, $\nabla\Psi\cdot\mathbf e_r = 1$ on $\Gamma$ (§5.2) |
 | $\mathsf{J}$ | rotation by $+\pi/2$, $\mathsf{J}(x, y) = (-y, x)$ | |
 
 **Notation [decided].** Uppercase $\Theta, \Psi$ are the two *coordinate functions* on the
-basin; lowercase $\theta$ is the polar angle. $\Psi$ and $\kappa$ follow Wilson & Moehlis
+basin; lowercase $\theta$ is the polar angle, and $\phi$ is the phase angle of the chart,
+the polar angle shifted by $h(r)$. $\Psi$ and $\kappa$ follow Wilson & Moehlis
 (2016), who write the isostable coordinate as $\psi$ and the exponent as $\kappa$; we
 capitalize $\psi\to\Psi$ so that both coordinate functions $(\Theta,\Psi)$ are uppercase.
-Langfield et al. 2014 use a period-normalized phase $\vartheta\in[0,1)$;
-we use radians, $\Theta = 2\pi\vartheta$. *Amended 2026-10-30 (ADR-0020): we use turns, $\Theta = \vartheta$; the
-derivations below are written in the angle $\theta + h(r)$, which is $2\pi\Theta$ for a
-counterclockwise form and $-2\pi\Theta$ for a clockwise one.*
+Langfield et al. 2014 use a period-normalized phase $\vartheta\in[0,1)$, and our
+$\Theta$ is that fraction itself.
+
+**The phase is the fraction of the period's sweep [decided].** Since $\omega_1 T = \pm 2\pi$
+is the angle that $\phi$ sweeps in one period, $\Theta = \phi/(\omega_1 T) \bmod 1$ increases
+at the rate $1/T$ whether the form turns clockwise or counterclockwise, and $\Theta = 0$
+where $\phi = 0$, at the polar angle $0$ on the cycle. The inverse is
+$\phi = \omega_1 T\thinspace\Theta$, so the cycle point of phase $\Theta$ is at
+$\theta = \omega_1 T\thinspace\Theta$ and its isochron is $\theta = \omega_1 T\thinspace\Theta - h(r)$. For a
+counterclockwise form ($\omega_1 > 0$) the phase is $\phi/2\pi$. The code writes the same
+number as `sign(omega) * phi / (2 pi)`, wrapped to $[0, 1)$ (`to_phase_amplitude`). The
+derivations below are written in the angle $\phi$. The convention changed on 2026-10-30
+under ADR-0020; before, the phase was the angle itself, in $(-\pi, \pi]$.
 
 "Even in $r$" means $\rho(r) = \tilde\rho(r^2)$ for a smooth $\tilde\rho$; equivalently,
 $\rho$ has only even powers in its Taylor expansion at $0$. Evenness is what makes the
@@ -137,11 +148,11 @@ $$
 \mathsf{D}\dot{\mathbf{u}}(0) = \rho(0)\,\mathsf{I} + \omega(0)\,\mathsf{J}.
 $$
 
-**Phase–amplitude** $(\Theta, \Psi)$: $\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$, so the
-flow is *linear*:
+**Phase–amplitude** $(\Theta, \Psi)$: $\dot\Theta = 1/T$ (the angle has $\dot\phi = \omega_1$),
+$\dot\Psi = \kappa\Psi$, so the flow is *linear*:
 
 $$
-\Theta(t) = \Theta_0 + \omega_1 t, \qquad \Psi(t) = \Psi_0\, e^{\kappa t}.
+\Theta(t) = \Theta_0 + t/T \bmod 1, \qquad \Psi(t) = \Psi_0\, e^{\kappa t}.
 $$
 
 This chart is defined on the basin minus the origin; its inverse needs the inverse of
@@ -239,7 +250,7 @@ $\omega$ written `w` to keep $\omega(r)$ for the angular rate:
 | | Winfree ($0 \le a < 1$) |
 |---|---|
 | $\rho(r)$ | $(1 - r)(r - a) = -a + (1 + a) r - r^2$ — **not even** |
-| $\omega(r)$ | $-(1 + w(1 - r))$ — not even; $\omega_1 = -1$ (clockwise, $T = 2\pi$; the signed `period()` is $-2\pi$) |
+| $\omega(r)$ | $-(1 + w(1 - r))$ — not even; $\omega_1 = -1$ (clockwise; $T = 2\pi$, which `period()` returns) |
 | $\kappa = \rho'(1)$ | $a - 1$ |
 | inner cycle $\Gamma_u$ | $r = a$, exponent $\kappa_u = a\thinspace\rho'(a) = a(1 - a) > 0$ (`inner_floquet_exponent`) |
 | $h(r)$ | $\dfrac{w}{a}\left[\ln\dfrac{r - a}{r} - \ln(1 - a)\right]$, from $h' = (\omega_1 - \omega)/(r\rho) = w/(r(r - a))$; $h \to +\infty$ as $r \to a^+$ — every isochron spirals infinitely often into the hole (their Fig. 4(a)) |
@@ -247,10 +258,10 @@ $\omega$ written `w` to keep $\omega(r)$ for the angular rate:
 | basin | $a < r < \infty$; `basin_radii() = (a, ∞)` |
 | eigenvalues at $0$ | $-a \pm i(1 + w)$ — a *stable* focus **outside** the basin: not a conjugacy invariant of $\Gamma$ (hence `eigenvalues_origin` belongs to the even family only) |
 
-Equivalence with Eq. 12: on the isochron $\Theta_0$, $\theta = \Theta_0 - h(r)$; with
-$\Theta_0 = -2\pi\vartheta$ (on $\Gamma$, $\Theta = \theta$ and $\dot\Theta = \omega_1 = -1$,
-so the point of period-fraction $\vartheta$ along the flow sits at angle $-2\pi\vartheta$)
-this is exactly $\psi(r)$ above.
+Equivalence with Eq. 12: the isochron of phase $\Theta$ is $\theta = \omega_1 T\thinspace\Theta - h(r)$
+(§5.1); here $\omega_1 T = -2\pi$, and Langfield's $\vartheta$ is our $\Theta$, since both
+increase with time, so the isochron is $\theta = -2\pi\vartheta - h(r)$, which is exactly
+$\psi(r)$ above.
 
 **Three regimes in $a$** (amended 2026-10-14 after the first training runs):
 
@@ -357,19 +368,17 @@ cartesian field too.
 
 ### 5.1 Asymptotic phase $\Theta$, the shift $h$, and isochrons
 
-Seek $\Theta = \theta + h(r)$ with $\dot\Theta = \omega_1$ everywhere in the basin
-(Amended 2026-10-30 (ADR-0020): the phase in turns is $\sigma\Theta/2\pi$ wrapped to $[0, 1)$, with $\sigma$
-the sign of $\omega_1$, so that it increases with time for either orientation; the
-angle $\theta + h(r)$ below is unchanged):
+Seek the phase angle $\phi = \theta + h(r)$ with $\dot\phi = \omega_1$ everywhere in the
+basin; the phase is then $\Theta = \phi/(\omega_1 T) \bmod 1$ (§1):
 
 $$
-\dot\Theta = \dot\theta + h'(r)\dot r = \omega(r) + h'(r)\,r\rho(r) = \omega_1
+\dot\phi = \dot\theta + h'(r)\dot r = \omega(r) + h'(r)\,r\rho(r) = \omega_1
 \quad\Longrightarrow\quad
 h'(r) = \frac{\omega_1 - \omega(r)}{r\rho(r)},
 $$
 
-with $h(1) = 0$ so that $\Theta = \theta$ on the cycle. (Equivalently, with the earlier
-notes' sign convention $\Theta = \theta - f(r)$, $f' = (\omega(r) - \omega_1)/\dot r$;
+with $h(1) = 0$ so that $\phi = \theta$ on the cycle. (Equivalently, with the earlier
+notes' sign convention $\phi = \theta - f(r)$, $f' = (\omega(r) - \omega_1)/\dot r$;
 the general formula there was written with the opposite sign, though the substituted
 result was right.) The integrand is finite at $r = 1$ (numerator and denominator vanish
 linearly, ratio $\to -\omega'(1)/\rho'(1)$), and the integral from $1$ to $r$ converges
@@ -386,44 +395,45 @@ $$
 and $h(1)=0$ gives $C = \tfrac{c}{2}\ln(1+b)$, which is the table in §3. Thus
 
 $$
-\Theta(r,\theta) = \theta + \frac{\omega_1-\omega_0}{2a}\,\ln\frac{(1+b)\,r^2}{1+br^2}
+\phi(r,\theta) = \theta + \frac{\omega_1-\omega_0}{2a}\,\ln\frac{(1+b)\,r^2}{1+br^2}
 \qquad(\text{Hopf: } \theta + \tfrac{\omega_1-\omega_0}{a}\ln r).
 $$
 
 For Hopf this is the Stuart–Landau phase function of Nakao 2016 (App. D).
 
-**Isochrons** are $\Theta = \Theta_0$, that is, the curves
+**Isochrons** are $\phi = \phi_0$, that is, the curves
 
 $$
-\theta = \Theta_0 - h(r).
+\theta = \phi_0 - h(r),
 $$
 
+and the isochron of phase $\Theta$ has $\phi_0 = \omega_1 T\thinspace\Theta$.
 This form is the primary representation (`isochron(Θ, r)` returns these points in cartesian
-coordinates; `limit_cycle(Θ) = (cos Θ, sin Θ)`). For $\omega \equiv \omega_1$ ($c = 0$) they
-are the radial lines $\theta = \Theta_0$; $\omega(r)\ne\omega_1$ shears them into spirals.
+coordinates; `limit_cycle(Θ) = (cos ω₁TΘ, sin ω₁TΘ)`). For $\omega \equiv \omega_1$ ($c = 0$) they
+are the radial lines $\theta = \phi_0$; $\omega(r)\ne\omega_1$ shears them into spirals.
 Amplitude dependence of the frequency is what the synchronization literature calls
 *nonisochronicity* (Kuramoto; Pikovsky, Rosenblum & Kurths) or *shear*; for the standard
 $\omega(r)$ the nonisochronicity parameter is $\omega_1-\omega_0$.
 
 *Corollary: radius as a function of angle.* When $c \ne 0$ one can solve for $r$. On
-the isochron $\Theta_0$, $h(r) = \Theta_0 - \theta$; let
-$A^2 := \exp\negthinspace\bigl(2(\Theta_0 - \theta)/c\bigr)$ with $\theta$ unwrapped; then
+the isochron $\phi_0$, $h(r) = \phi_0 - \theta$; let
+$A^2 := \exp\negthinspace\bigl(2(\phi_0 - \theta)/c\bigr)$ with $\theta$ unwrapped; then
 $(1+b)r^2 = A^2(1+br^2)$ and
 
 $$
-r(\theta;\Theta_0) = \frac{A}{\sqrt{1 + b(1 - A^2)}},\qquad
-A = \exp\frac{a(\Theta_0-\theta)}{\omega_1-\omega_0}
+r(\theta;\phi_0) = \frac{A}{\sqrt{1 + b(1 - A^2)}},\qquad
+A = \exp\frac{a(\phi_0-\theta)}{\omega_1-\omega_0}
 \qquad(\text{Hopf: } r = A).
 $$
 
-(Sign corrected 2026-10-03: the first version had $A^2 = \exp(2(\theta-\Theta_0)/c)$, the
+(Sign corrected 2026-10-03: the first version had $A^2 = \exp(2(\theta-\phi_0)/c)$, the
 reciprocal, which recovers $1/r$-like values; checked numerically against
-$\theta = \Theta_0 - h(r)$.) Caveats: (i) it is singular at $c = 0$ (radial isochrons);
+$\theta = \phi_0 - h(r)$.) Caveats: (i) it is singular at $c = 0$ (radial isochrons);
 (ii) for $b > 0$ each isochron reaches $r\to\infty$ at the *finite* angle where
 $A^2 = (1+b)/b$, because $h(r)\to \tfrac{c}{2}\ln\tfrac{1+b}{b}$ as $r\to\infty$, so the
 formula is defined only for $A^2 < (1+b)/b$; (iii) for $-1 < b < 0$, $A^2 \to 0$ as $r\to 0$
 and $A^2\to\infty$ is not reached, the isochron ending at the outer cycle. The form
-$\theta = \Theta_0 - h(r)$ has none of these problems.
+$\theta = \phi_0 - h(r)$ has none of these problems.
 
 ### 5.2 Isostable coordinate $\Psi$
 
@@ -532,8 +542,8 @@ $$
 \rho(r) = \kappa\ln r .
 $$
 
-In log-polar coordinates $(\ln r, \theta)$ the flow is literally linear, $\tfrac{d}{dt}\ln r = \kappa\ln r$, so the $(\Theta,\Psi)$ chart *is* the log-polar chart: $h\equiv 0$ when
-$\omega\equiv\omega_1$, isochrons are the rays $\theta = \Theta_0$, isostables the circles,
+In log-polar coordinates $(\ln r, \theta)$ the flow is literally linear, $\tfrac{d}{dt}\ln r = \kappa\ln r$, so the $(\phi,\Psi)$ chart *is* the log-polar chart: $h\equiv 0$ when
+$\omega\equiv\omega_1$, isochrons are the rays $\theta = \phi_0$, isostables the circles,
 $r(t) = r_0^{\thinspace e^{\kappa t}}$. The alternative "affine" choice $\Psi = r - 1$ gives
 $\dot r = \kappa(r-1)$, which is linear in $r$ but has $\dot r = -\kappa > 0$ at the origin:
 the origin is not a fixed point and the field is not even continuous there as a planar
@@ -561,7 +571,7 @@ should *not* be the standard $\omega_0 + (\omega_1-\omega_0)r^2$ here: the $(1-r
 longer cancels against $\rho$ and $h' = (\omega_1-\omega_0)(1-r^2)/(\kappa r\ln r)$
 integrates to $\ln|\ln r| - \mathrm{Ei}(2\ln r)$, not elementary. The natural shear
 for this member is linear in the log chart, $\omega(r) = \omega_1 + \delta\ln r$, giving
-$h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \Theta_0 + (\delta/\kappa)\ln r$ (logarithmic spirals, as for Hopf)
+$h(r) = -(\delta/\kappa)\ln r$ (verified), isochrons $\theta = \phi_0 + (\delta/\kappa)\ln r$ (logarithmic spirals, as for Hopf)
 and $\omega(0)$ undefined,
 consistent with the missing eigenvalues.
 
@@ -573,18 +583,19 @@ decaying as $e^{\lambda\tau}$ per sampling interval $\tau$ with learned $\lambda
 (Eqs. 12–14), "for all $\tau > 0$". The phase is $\Theta(X) = \arctan(Y_2/Y_1)$
 (Eq. 19) and the phase sensitivity function is $Z(\theta) = \nabla_X\Theta\vert_{X = f_{\rm dec}(\theta)}$ by autodiff (Eq. 20). Sec. VI identifies $Y_1 + iY_2$ with the
 Koopman eigenfunction of exponent $i\omega$ and, for planar oscillators, $Y_3$ with the
-eigenfunction of exponent $\lambda$ (that is, with $e^{i\Theta}$ and $\Psi$,
+eigenfunction of exponent $\lambda$ (that is, with $e^{2\pi i\Theta}$ and $\Psi$,
 $\lambda = \kappa$), while noting that the trained $Y_3$ is "closely related, though not equivalent" to it
 (their learned $\lambda$ differs from the true second Floquet exponent because Eq. 14
 "is not strictly satisfied by the trained phase autoencoder"; they report it is "not easy
-to realize in practice"). So their latent space is exactly the chart of §7,
+to realize in practice"). Their phase is an angle, $2\pi\Theta$ up to its origin. So their
+latent space is exactly the chart of §7,
 
 $$
-\mathbf Y = (\cos\Theta, \sin\Theta, \Psi),
+\mathbf Y = (\cos 2\pi\Theta, \sin 2\pi\Theta, \Psi),
 $$
 
 a cylinder embedded in $\mathbb R^3$, and their latent dynamics is the linear flow
-$\dot\Theta = \omega_1$, $\dot\Psi = \kappa\Psi$ of §2 discretized at $\tau$.
+$\dot\Theta = 1/T$, $\dot\Psi = \kappa\Psi$ of §2 discretized at $\tau$.
 
 Two things about this chart that the baseline inherits from §5.4 rather than from the
 autoencoder: the exact $(\Theta, \Psi)$ **exists and is unique on the whole basin**, as a
@@ -617,11 +628,11 @@ costs), and why the log-polar member sits between the two.
 
 | Yawata et al. | this document | `deep_isochron` |
 |---|---|---|
-| $(Y_1, Y_2)/R$, $Y_3$ (Eqs. 15–16) | $(\cos\Theta, \sin\Theta, \Psi)$ | `PhaseAmplitudeAutoencoder.encoder`: MLP, first two outputs normalized |
-| $f_{\rm step}$ with learned $\omega$, $\lambda$ (Eq. 18) | $\Theta(t+\tau) = \Theta + \omega_1\tau$, $\Psi(t+\tau) = e^{\kappa\tau}\Psi$ | `PhaseAmplitudeLatentDynamics(omega, kappa)`: closed-form flow on $\mathbb R^3$, continuous in $t$ (replaces `LinearLatentDynamics`) |
+| $(Y_1, Y_2)/R$, $Y_3$ (Eqs. 15–16) | $(\cos 2\pi\Theta, \sin 2\pi\Theta, \Psi)$ | `PhaseAmplitudeAutoencoder.encoder`: MLP, first two outputs normalized |
+| $f_{\rm step}$ with learned $\omega$, $\lambda$ (Eq. 18) | $\Theta(t+\tau) = \Theta + \tau/T$, $\Psi(t+\tau) = e^{\kappa\tau}\Psi$ | `PhaseAmplitudeLatentDynamics(omega, kappa)`: closed-form flow on $\mathbb R^3$, continuous in $t$ (replaces `LinearLatentDynamics`) |
 | $L_{\rm recon}$ (21); $L_{\rm pha}$, $L_{\rm dev}$ over $k = 1..K$ steps with $\alpha_k = k^{-\min(1, L_{\rm pha})}$ (22)–(24); $L_{\rm aux}$ = center of mass of $(Y_1,Y_2)$ in the batch (25), to escape the $\omega = 0$ solution; weights $(1, 0.5, 0.5, 2)$ then $(1, 5, 0.5, 0)$ once $L_{\rm pha} < 0.01$, $L_{\rm aux} < 0.05$ (26) | — | `PhaseAutoencoderLoss` over a window: reconstruction, latent consistency split into phase/amplitude parts, center-of-mass term; the $\alpha_k$ and weight schedules as config |
 | ICs on the cycle $+\thinspace\gamma_2\sigma\odot\xi$, evolved $\gamma_1 T$ (27)–(28) | near-cycle training distribution | an `AbstractICSampler` `OnCycleGaussian(cycle_points, gamma2)`; `limit_cycle(Θ)` for normal forms, a long integration for FHN |
-| $\Theta = \arctan(Y_2/Y_1)$, $Z = \nabla\Theta$ at $f_{\rm dec}(\theta)$ (19)–(20) | $\Theta$, $\nabla\Theta$ (§1) | `phase(x)`, `jax.grad` |
+| $\Theta = \arctan(Y_2/Y_1)$, $Z = \nabla\Theta$ at $f_{\rm dec}(\theta)$ (19)–(20) | $\phi$, and the phase $\Theta = \phi/(\omega_1 T) \bmod 1$ with its gradient $\nabla\Theta$ (§1) | `phase(x)`, `jax.grad` |
 | evaluation: Stuart–Landau analytic phase | §7 `to_phase_amplitude` on Hopf/Bautin data | learned $\Theta$ vs exact up to a constant; $\Psi$ up to scale; $\kappa$ *reported*, not asserted |
 
 ### 5.4 (*tentative*) Global existence and uniqueness of the chart (Kvalheim & Revzen 2021)
@@ -654,9 +665,9 @@ because $0 < \mu < 1$. For a $C^\infty$ field (FHN is polynomial) the conditions
 automatic (their Remark 6). Hence, *for every planar oscillator in this project*:
 
 $$
-(\Theta, \Psi) := \bigl(\arg\psi_\theta,\ \psi_z\bigr): \ Q \to S^1\times\mathbb R
+(\Theta, \Psi) := \bigl(\arg\psi_\theta / (\omega_1 T) \bmod 1,\ \psi_z\bigr): \ Q \to S^1\times\mathbb R
 \quad\text{is a $C^\infty$ diffeomorphism of the whole basin},\qquad
-\dot\Theta = \omega_1,\ \dot\Psi = \kappa\Psi .
+\dot\Theta = 1/T,\ \dot\Psi = \kappa\Psi .
 $$
 
 For the normal forms this is §5.1–5.2 with $Q = \mathbb R^2\setminus\lbrace0\rbrace$ ($b\ge0$) and
@@ -715,7 +726,8 @@ theory.
 
 ### 6.1 Closed form via the phase–amplitude chart
 
-Since $\Psi(t) = \Psi_0 e^{\kappa t}$ and $\Theta(t) = \Theta_0 + \omega_1 t$,
+Since $\Psi(t) = \Psi_0 e^{\kappa t}$ and $\phi(t) = \phi_0 + \omega_1 t$, that is,
+$\Theta(t) = \Theta_0 + t/T \bmod 1$,
 
 $$
 r(t) = \Psi^{-1}\!\bigl(\Psi(r_0)\,e^{\kappa t}\bigr), \qquad
@@ -771,20 +783,21 @@ integrations are tested against.
 ## 7. The phase–amplitude chart as API
 
 ```
-to_phase_amplitude(u)       = (Θ(u), Ψ(u))                                  # closed form
-from_phase_amplitude(Θ, Ψ)  = (r(Ψ) cos(σ2πΘ − h(r)), r(Ψ) sin(σ2πΘ − h(r)))  # r(Ψ): monotone root
+to_phase_amplitude(u)       = (Θ(u), Ψ(u))                                    # closed form
+from_phase_amplitude(Θ, Ψ)  = (r(Ψ) cos(ω₁TΘ − h(r)), r(Ψ) sin(ω₁TΘ − h(r)))  # r(Ψ): monotone root
 ```
 
-*Amended 2026-10-30 (ADR-0020): $\Theta \in [0, 1)$ is a fraction of the period and $\sigma$ the sign of
-$\omega_1$; `limit_cycle` and `isochron` invert the same $\sigma 2\pi$, and the closed-form
-flow advances $\Theta$ by $t/T$.* With $r(\Psi)$ in hand, `from_phase_amplitude` and
+Here $\Theta = \phi/(\omega_1 T) \bmod 1 \in [0, 1)$ and $\omega_1 T\thinspace\Theta$ is its inverse
+(§1); `limit_cycle` and `isochron` invert the same factor, and the closed-form flow
+advances $\Theta$ by $t/T$. With $r(\Psi)$ in hand, `from_phase_amplitude` and
 `ClosedFormIntegration` are the same code. The chart is defined on the basin $r_{\rm in} < r < r_{\rm out}$ only:
 `to_phase_amplitude` (hence `phase`, `amplitude`, the closed-form flow and `isochron`)
 returns `nan` outside it, and `in_basin(u)` is the test; `data.generate` uses it to reject
 or resample initial conditions (`outside_basin`).
 
 $(\cos 2\pi\Theta, \sin 2\pi\Theta, \Psi)$ is the latent space of the phase autoencoder of
-Yawata et al. 2024; see §5.3 *(amended 2026-10-30: the $2\pi$ since $\Theta$ is in turns)*.
+Yawata et al. 2024 (§5.3), as in `model/autoencoder.py`. For a counterclockwise form it
+equals $(\cos\phi, \sin\phi, \Psi)$, since there $\Theta = \phi/2\pi$.
 
 ---
 
@@ -888,7 +901,8 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
 
 - $\Psi$ normalization: `grad(isostable)(1.0) == 1` and $\Psi(1) = 0$ for both forms, and
   $\Psi < 0$ for $r < 1$;
-- the defining identities $\dot{\mathbf{u}}\cdot\nabla\Theta = \omega_1$ and
+- the defining identities $\dot{\mathbf{u}}\cdot\nabla\phi = \omega_1$ (so
+  $\dot{\mathbf{u}}\cdot\nabla\Theta = 1/T$) and
   $\dot{\mathbf{u}}\cdot\nabla\Psi = \kappa\Psi$ by autodiff on the basin, including
   $-1 < b < 0$ inside the outer cycle (`test_phase_and_isostable_identities`), and along
   integrated trajectories (`test_phase_and_amplitude_along_the_flow`);
@@ -904,7 +918,7 @@ Existing tests carry over with $\kappa = $ `grad(log_growth_rate)(1)`. New or ch
   for $b < 0$.
 - (2026-10-08) The shared laws above run over the even forms *and* Winfree (radii clamped
   into the basin); the `_sq` views, the origin's Jacobian and eigenvalues and `r_squared`
-  over the even family only. Winfree: $T = -2\pi$, $\kappa = a - 1$, $\kappa_u = a(1-a)$,
+  over the even family only. Winfree: $T = 2\pi$, $\kappa = a - 1$, $\kappa_u = a(1-a)$,
   $\Psi \to -\infty$ at $a^+$ and $\to (1-a)^{1/a}$ at $\infty$, `nan` outside the basin
   (`phase`, `amplitude`, `isostable`, `isochron`) while `rhs` stays finite; the isochron
   equals Eq. 12 of Langfield et al. 2025 for $(a, w) = (0.25, -0.5)$; the $a = 0$

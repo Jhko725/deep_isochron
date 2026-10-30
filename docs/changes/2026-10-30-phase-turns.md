@@ -202,6 +202,22 @@ recomputed (ADR-0020, Consequences).
   — retro: the compilation cache is turned on by `conftest.py` so every launcher gets it
   (CI only caches the directory); the `ci` profile's count corrected in the standards;
   the cache and the memory-cgroup fact in `CLAUDE.md`.
+- `docs/design/normal-forms.md` — converted to the turn convention: the chart's angle
+  named $\phi$, $\Theta = \phi/(\omega_1 T)$. The derivations of §5.1, the isochron
+  corollary and the closed forms are about $\phi$; §1, §2, §5.3–5.4, §6.1, §7 and §10
+  state the phase; the Winfree period is $2\pi$; the amendment lines are gone.
+- `docs/design/phase-field.md` — converted to the turn convention: $t/T$, $\bmod 1$,
+  $Z\cdot F = 1/T$ in §1, the routes, the ledger and the oracle tables; the cited
+  normalizations keep their angle form with ours beside it.
+- `docs/design/isochrons.md` — converted to the turn convention: $t/T$, $\bmod 1$,
+  $Z\cdot F = 1/T$. Langfield's $\vartheta$ is the phase; §1,
+  §3.1, §3.4, §4 and §5 in turns, with the bundle's $Z\cdot F = 1/T = 0.0891$.
+- `docs/design/cycle-estimation.md` — converted to the turn convention: $t/T$,
+  $\bmod 1$, $Z\cdot F = 1/T$. `Cycle`'s series in $2\pi\varphi$;
+  the radian quantity of §3 named the angle $\varphi_{\rm angle}$, handed to the fit as
+  $\varphi_{\rm angle}/2\pi$; the oracle rows in turns and the period positive.
+- `docs/decisions/0020-phase-in-turns.md` — its History line says the design documents
+  were rewritten in the convention rather than amended.
 
 ## Design
 
@@ -400,3 +416,5 @@ ADR-0020's; the rest are this branch's.
 | `docs/architecture.md`, `docs/roadmap.md` — the contract lines, the normalizations, the Done row | Confirmed. | None |
 | `docs/changes/2026-10-30-phase-turns.md` — the documents commit's sections | Confirmed. | None |
 | `tests/conftest.py`, `.github/workflows/ci.yml`, `CLAUDE.md`, `docs/coding-standards.md` — retro: the cache in `conftest.py`, the facts written down | Confirmed. | None |
+| `docs/design/normal-forms.md`, `docs/design/phase-field.md`, `docs/design/isochrons.md`, `docs/design/cycle-estimation.md` — converted to the turn convention, the amendment lines removed | | |
+| `docs/decisions/0020-phase-in-turns.md` — History: the design documents rewritten, not amended | | |

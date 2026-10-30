@@ -45,23 +45,23 @@ and the branch's change document.
 
 **An isochron is a level set of the asymptotic phase.** Let $\dot x = F(x)$ be a planar
 system with an attracting periodic orbit $\Gamma$ of period $T$, and let
-$\gamma_0 \in \Gamma$ be the reference point of phase 0. The point of phase $\theta$ on the cycle is
-$\gamma_\theta = \varphi(\theta T / 2\pi, \gamma_0)$, where $\varphi(t, x)$ is the flow.
+$\gamma_0 \in \Gamma$ be the reference point of phase 0. The point of phase $\Theta$ on the cycle is
+$\gamma_\Theta = \varphi(\Theta T, \gamma_0)$, where $\varphi(t, x)$ is the flow.
 The asymptotic phase $\Theta(x)$ of a point $x$ in the basin is the phase of the cycle
-point that the orbit of $x$ converges to [cited] (Langfield et al. 2014, §I.A, who use
-the fraction $\vartheta = \theta / 2\pi \in [0, 1)$):
+point that the orbit of $x$ converges to [cited] (Langfield et al. 2014, §I.A, whose
+fraction $\vartheta \in [0, 1)$ is this $\Theta$ itself):
 
 $$
-\lim_{t \to \infty} \bigl\vert \varphi(t, x) - \varphi\bigl(t + \Theta(x) T / 2\pi, \gamma_0\bigr) \bigr\vert = 0 .
+\lim_{t \to \infty} \bigl\vert \varphi(t, x) - \varphi\bigl(t + \Theta(x) T, \gamma_0\bigr) \bigr\vert = 0 .
 $$
 
-The isochron of $\gamma_\theta$ is $I(\gamma_\theta) = \lbrace x : \Theta(x) = \theta \rbrace$.
-This document measures $\theta$ in radians in $(-\pi, \pi]$, increasing with time, as
-`model/base.py` and `systems/normal_forms/base.py` already do (decision 1 of the plan).
-*Amended 2026-10-30 (ADR-0020): the phase is Langfield's fraction itself, $\Theta = \vartheta \in [0, 1)$,
-increasing with time; where this document writes $\theta/2\pi$, $\theta T/2\pi$ or
-$2\pi\tau/T$, read $\Theta$, $\Theta T$ and $\tau/T$, and $Z\cdot F = 1/T$ (§3.4 and §6
-below carry the amendment at the sentence).*
+The isochron of $\gamma_{\Theta_0}$ is $I(\gamma_{\Theta_0}) = \lbrace x : \Theta(x) = \Theta_0 \rbrace$.
+This document measures the phase as a fraction of the period, $\Theta \in [0, 1)$,
+increasing with time, so the phase of $\varphi(t, \gamma_0)$ is $t/T \bmod 1$, as
+`model/base.py` and `systems/normal_forms/base.py` do; differences of phases are the
+signed shortest arc in $(-\tfrac12, \tfrac12]$ (`phase_difference`). The convention
+changed on 2026-10-30 under ADR-0020; before, the phase was an angle in $(-\pi, \pi]$
+(decision 1 of the plan).
 The reference point is `cycle.x0s[0]` of an O1 `LimitCycle`, and the O1 function
 `reanchor(cycle, point)` moves it (decision 2).
 
@@ -69,14 +69,14 @@ The reference point is `cycle.x0s[0]` of an O1 `LimitCycle`, and the O1 function
 Guckenheimer (1975) shows this, and it has three consequences that the method uses
 [cited] (Langfield et al. 2014, §I.B):
 
-1. The Jacobian $D\varphi_T(\gamma_\theta)$ has the eigenvalue 1, with the eigenvector
-   $F(\gamma_\theta)$ tangent to the cycle, and the stable eigenvalue $\mu$, with an
-   eigenvector $v_s(\theta)$ transverse to it. In the plane, $\mu$ is the cycle's
-   nontrivial Floquet multiplier, the same at every $\theta$.
-2. $I(\gamma_\theta)$ is a smooth curve tangent at $\gamma_\theta$ to the line
-   $E^s(\gamma_\theta) = \gamma_\theta + \mathbb R\thinspace v_s(\theta)$.
+1. The Jacobian $D\varphi_T(\gamma_\Theta)$ has the eigenvalue 1, with the eigenvector
+   $F(\gamma_\Theta)$ tangent to the cycle, and the stable eigenvalue $\mu$, with an
+   eigenvector $v_s(\Theta)$ transverse to it. In the plane, $\mu$ is the cycle's
+   nontrivial Floquet multiplier, the same at every $\Theta$.
+2. $I(\gamma_\Theta)$ is a smooth curve tangent at $\gamma_\Theta$ to the line
+   $E^s(\gamma_\Theta) = \gamma_\Theta + \mathbb R\thinspace v_s(\Theta)$.
 3. The flow maps isochrons onto isochrons:
-   $I(\gamma_{\theta}) = \varphi\bigl(\theta T / 2\pi, I(\gamma_0)\bigr)$
+   $I(\gamma_{\Theta}) = \varphi\bigl(\Theta T, I(\gamma_0)\bigr)$
    (their Eq. 2).
 
 For FitzHugh–Nagumo with Langfield's parameters, $T = 11.2279$ and
@@ -86,10 +86,10 @@ perturbation transverse to the cycle shrinks by a factor of about $6\times 10^{1
 period.
 
 **All three versions trace an isochron as the start points of orbit segments.** An orbit
-segment of duration $\tau$ that ends on $E^s(\gamma_\theta)$ at a small signed distance
-$\eta$ from $\gamma_\theta$ starts at a point whose phase is the end point's phase minus
-$2\pi\tau / T$. With $\tau$ a whole number $k$ of periods, the start point lies on
-$I(\gamma_\theta)$ up to the error of the linear approximation, which §4 bounds.
+segment of duration $\tau$ that ends on $E^s(\gamma_\Theta)$ at a small signed distance
+$\eta$ from $\gamma_\Theta$ starts at a point whose phase is the end point's phase minus
+$\tau / T$. With $\tau$ a whole number $k$ of periods, the start point lies on
+$I(\gamma_\Theta)$ up to the error of the linear approximation, which §4 bounds.
 Continuing the segment in $\eta$ moves the end point along $E^s$ and makes the start
 point trace the isochron as a curve parametrized by arclength. Backward integration from
 $E^s$ would reach the same points, but its error grows by the factor $1/\mu$ per period,
@@ -320,34 +320,34 @@ The mapping is:
 ### 3.1 The stable direction
 
 The isochron segment of §2.3 ends on the line through the base point along a direction
-$d(\theta)$, and §1 requires $d(\theta) = v_s(\theta)$. Three linear equations along the
+$d(\Theta)$, and §1 requires $d(\Theta) = v_s(\Theta)$. Three linear equations along the
 cycle give access to it.
 
 **The variational equation transports tangent vectors.** Let $A(t) = DF(\gamma(t))$ and
 let $\Phi(t)$ solve $\dot\Phi = A\Phi$ with $\Phi(0) = I$. The monodromy
-$\Phi(T)$ at $\gamma_\theta$ has the eigenvalues 1 and $\mu$, with eigenvectors
-$F(\gamma_\theta)$ and $v_s(\theta)$, and $\mu = \exp\int_0^T \operatorname{tr} A\thinspace dt$
+$\Phi(T)$ at $\gamma_\Theta$ has the eigenvalues 1 and $\mu$, with eigenvectors
+$F(\gamma_\Theta)$ and $v_s(\Theta)$, and $\mu = \exp\int_0^T \operatorname{tr} A\thinspace dt$
 in the plane (Liouville's formula). Langfield et al. (2014, §II.B) obtain $v_s$ this way:
 they "solve the first variational equation together with the periodic orbit as an
 extended system", following Krauskopf & Rieß (2008), and find the bundle of stable
 vectors on the orbit's mesh [cited].
 
 **The adjoint equation transports the phase sensitivity.** The phase sensitivity
-$Z(\theta) = \nabla\Theta(\gamma_\theta)$ is the periodic solution of
-$\dot Z = -A^{\mathsf T} Z$, normalized by $Z\cdot F = 2\pi / T$ [cited] (Nakao 2016,
-Eqs. 12–13, with $\omega = 2\pi / T$; Amended 2026-10-30 (ADR-0020): $Z\cdot F = 1/T$ with the phase in
-turns, decision 4*). The transition matrix of the adjoint equation is
+$Z(\Theta) = \nabla\Theta(\gamma_\Theta)$ is the periodic solution of
+$\dot Z = -A^{\mathsf T} Z$, normalized by $Z\cdot F = 1/T$ (ADR-0020 decision 4). Nakao
+2016, Eqs. 12–13, normalize $Z\cdot dX_0/d\theta = 1$, that is $Z\cdot F = \omega = 2\pi/T$
+with the phase an angle [cited]. The transition matrix of the adjoint equation is
 $\Phi(t)^{-\mathsf T}$, so its multipliers are 1 and $1/\mu$. For any solution $y$ of the
 adjoint equation and $z$ of the variational equation, $y\cdot z$ is constant in time.
 Taking $y = Z$, which is periodic, and $z$ the solution through $v_s$, which shrinks by
-$\mu$ per period, gives $Z(\theta)\cdot v_s(\theta) = \mu\thinspace Z(\theta)\cdot v_s(\theta)$. Since $\mu \neq 1$,
+$\mu$ per period, gives $Z(\Theta)\cdot v_s(\Theta) = \mu\thinspace Z(\Theta)\cdot v_s(\Theta)$. Since $\mu \neq 1$,
 
 $$
-Z(\theta)\cdot v_s(\theta) = 0 \quad\text{for every } \theta \qquad [\text{deduced}].
+Z(\Theta)\cdot v_s(\Theta) = 0 \quad\text{for every } \Theta \qquad [\text{deduced}].
 $$
 
 In the plane this makes the stable direction the rotation of $Z$ by a right angle,
-$v_s(\theta) \parallel J Z(\theta)$, with
+$v_s(\Theta) \parallel J Z(\Theta)$, with
 
 $$
 J = \begin{pmatrix} 0 & -1 \\ 1 & 0 \end{pmatrix} .
@@ -387,7 +387,7 @@ D A D^{-1} = A^{\mathsf T} ,
 $$
 
 with a constant $D$, so $\Psi(t) = D\Phi(t)D^{-1}$ [deduced]. Its eigenvector for the
-multiplier 1 is $D F(\gamma_\theta)$, a rescaled tangent vector, not the phase
+multiplier 1 is $D F(\gamma_\Theta)$, a rescaled tangent vector, not the phase
 sensitivity. At the base point $(-0.19007, -0.12319)$ that AUTO's runs 0–5 produce, the
 bundle vector is $w = (-0.58385, -0.81186)$, which equals $DF/\vert DF\vert$ to eight
 digits [code]. The end direction $Jw$ is then $58.0°$ from the true stable direction
@@ -400,8 +400,8 @@ With `F(5:6)` and `F(7:8)` negated and every run constant of runs 4–5 unchange
 finds the branch point at $\lambda = 1$, and the normalized bundle at the same base
 point is $w = (-0.37971, 0.92511)$. Its rotation $Jw$ agrees with $-v_s$ to eight digits
 [code]. The bundle vector $w$ itself is the phase sensitivity up to its scale:
-$w\cdot F = 1.1147$ for $\vert w\vert = 1$, against $Z\cdot F = 2\pi/T = 0.5596$ *(in turns,
-$1/T = 0.0891$; amended 2026-10-30, ADR-0020)*. On
+$w\cdot F = 1.1147$ for $\vert w\vert = 1$, against $Z\cdot F = 1/T = 0.0891$ ($2\pi/T = 0.5596$
+with the phase as an angle). On
 the Hopf and Bautin forms of the previous paragraph, the negated runs find the branch
 point at $\lambda = 0.99999999998$, and $w$ equals the direction of the closed-form
 $\nabla\Theta$ at the base point to round-off [code].
@@ -410,8 +410,8 @@ $\nabla\Theta$ at the base point to round-off [code].
 
 | Option | Equation in `FUNC` | Branch point at | What $w$ is | Cost |
 |---|---|---|---|---|
-| (a) adjoint | $\dot w = -\tau A^{\mathsf T} w$ | $\lambda = 1$, for every system | the direction of $Z(\theta)$ | one sign; `BCND` unchanged |
-| (b) variational | $\dot w = \tau A w$ | $\lambda = \mu$ ($1.7\times 10^{-12}$ for FitzHugh–Nagumo) | $v_s(\theta)$ itself | `BCND` uses $w$, not $Jw$; the continuation in $\lambda$ must pass $\lambda = 1$ and travel twelve orders of magnitude |
+| (a) adjoint | $\dot w = -\tau A^{\mathsf T} w$ | $\lambda = 1$, for every system | the direction of $Z(\Theta)$ | one sign; `BCND` unchanged |
+| (b) variational | $\dot w = \tau A w$ | $\lambda = \mu$ ($1.7\times 10^{-12}$ for FitzHugh–Nagumo) | $v_s(\Theta)$ itself | `BCND` uses $w$, not $Jw$; the continuation in $\lambda$ must pass $\lambda = 1$ and travel twelve orders of magnitude |
 | (c) from O2 | none; the bundle stage is removed | — | O2's `Floquet.vectors`, carried to each base point | new slots for $d$; $d$ must follow the rotation of stage 3 |
 
 Option (a) keeps every stage of the coworker's pipeline and makes $w$ double as the
@@ -463,19 +463,17 @@ $10^{-11}$ on every planar system (`tests/test_auto_stages.py`).
 ### 3.4 Stage 3: the rotation to each phase (`rotate_phase`)
 
 **Stage 3 maps a phase to a segment length.** The base point is the junction, the end
-of segment 1, so it lies $\tau_1$ after the anchor: its phase is $2\pi\tau_1/T$. A
-requested $\theta$, wrapped to $[0, 2\pi)$, is therefore reached at
-(Amended 2026-10-30 (ADR-0020): the phase is $\tau_1/T$, a requested $\Theta$ is wrapped to $[0, 1)$ and
-$\tau_2 = (1 - \Theta)T$; `rotate_phase` converts the fraction to a time and no angle
-reaches AUTO*)
+of segment 1, so it lies $\tau_1$ after the anchor: its phase is $\tau_1/T$. A
+requested phase $\Theta$, wrapped to $[0, 1)$, is therefore reached at
 
 $$
-\tau_2 = \bigl(1 - \theta / 2\pi\bigr)\thinspace T ,
+\tau_2 = \bigl(1 - \Theta\bigr)\thinspace T ,
 $$
 
 and stage 3 places one `UZR` value per requested phase [deduced; consistent with the
 coworker's files, §2.3]. Phase 0 is $\tau_2 = T$; stage 3 continues to $1.01T$, as the
-coworker does, so that it is an interior `UZ` point.
+coworker does, so that it is an interior `UZ` point. `rotate_phase` converts the
+fraction to a time, so no angle reaches AUTO.
 
 ### 3.5 Stage 4: the isochron (`isochron`)
 
@@ -512,12 +510,12 @@ would halve the mesh per period without any sign of it.
 ## 4. Exact and approximated
 
 **The linear approximation sets the phase error of every traced point.** Near the base
-point, $\Theta(\gamma_\theta + \delta) = \theta + Z(\theta)\cdot\delta + O(\vert\delta\vert^2)$.
-The segment ends at $\gamma_\theta + \eta d$, and phase is carried exactly along orbits,
+point, $\Theta(\gamma_{\Theta_0} + \delta) = \Theta_0 + Z(\Theta_0)\cdot\delta + O(\vert\delta\vert^2)$.
+The segment ends at $\gamma_{\Theta_0} + \eta d$, and phase is carried exactly along orbits,
 so the traced start point has the phase error
 
 $$
-\Delta\Theta = \eta\thinspace Z(\theta)\cdot d + O(\eta^2) \qquad [\text{deduced}].
+\Delta\Theta = \eta\thinspace Z(\Theta_0)\cdot d + O(\eta^2) \qquad [\text{deduced}].
 $$
 
 With $d = v_s$, the first-order term vanishes by §3.1, and the error is $O(\eta^2)$. With
@@ -548,8 +546,8 @@ that this is enough for FitzHugh–Nagumo. D6 keeps that resolution per period w
 
 **Phase is extremely sensitive near the source, which limits forward-time checks.**
 Integrating the coworker's points forward for four periods and comparing with the base
-point's orbit gives phase errors near $10^{-9}$ rad for points away from the source and
-up to 1 rad for points within $10^{-3}$ of it [code]. The isochrons accumulate near the
+point's orbit gives phase errors near $1.6\times 10^{-10}$ turns for points away from the source and
+up to 0.16 turns for points within $10^{-3}$ of it [code]. The isochrons accumulate near the
 source (Langfield et al. 2014, §IV), so there a small error in the stored position or
 in the integration becomes a large error in phase, and this check cannot yet tell
 AUTO's error from its own (§5) [deduced].
@@ -562,12 +560,12 @@ AUTO's error from its own (§5) [deduced].
 | O1's cycle | the period of stage 1 (11.2279; Langfield et al. 2014, §III), and the orbit of stage 2 against O1's flow | AUTO's correction tolerance against O1's shooting tolerance |
 | The Hopf route (runs 0–1) | O1's cycle by an independent method (decision 12) | the same |
 | O2's Floquet vectors | $Jw$ parallel to `floquet(cycle).vectors` at the points `x0s` | the angle at the accuracy of O2's vectors |
-| The closed forms of Bautin and Winfree | `nf.phase(point)` $= \theta$ along every traced isochron, with phase 0 at $(1, 0)$ (decision 14) | $O(\eta^2)$ plus collocation error, since the end direction is $v_s$ |
+| The closed forms of Bautin and Winfree | `nf.phase(point)` $= \Theta$, the requested phase, along every traced isochron, with phase 0 at $(1, 0)$ (decision 14) | $O(\eta^2)$ plus collocation error, since the end direction is $v_s$ |
 | Forward integration | for traced points farther than a set distance from the phaseless set, the phase after $k$ periods against the base point's orbit | scaled by the local phase sensitivity; points near the source are excluded |
-| The bundle's scale | $w\cdot F$ constant along the cycle, since $Z\cdot F = 2\pi/T$ ($1/T$ in turns; amended 2026-10-30) | round-off times the condition of the bundle |
+| The bundle's scale | $w\cdot F$ constant along the cycle, since $Z\cdot F = 1/T$ | round-off times the condition of the bundle |
 
-O3's phase field and O4's $Z(\theta)$ add two more oracles when they exist: the phase
-field is constant along every AUTO isochron, and $w$ is parallel to $Z(\theta)$.
+O3's phase field and O4's $Z(\Theta)$ add two more oracles when they exist: the phase
+field is constant along every AUTO isochron, and $w$ is parallel to $Z(\Theta)$.
 
 **The tests that pin them**, by step:
 
@@ -604,7 +602,7 @@ field is constant along every AUTO isochron, and $w$ is parallel to $Z(\theta)$.
   0.19 apart; resampling by arclength is a follow-up if a consumer needs even spacing.
 - **No parameter sweeps.** Following a family of cycles in a parameter is not part of
   O7; the Hopf-route test of decision 12 is its starting point.
-- **The bundle and O4.** Replacing the bundle stage by O4's $Z(\theta)$ is deferred to
+- **The bundle and O4.** Replacing the bundle stage by O4's $Z(\Theta)$ is deferred to
   O4 (decision 11).
 
 ## Acknowledgments

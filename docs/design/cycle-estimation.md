@@ -39,19 +39,19 @@ settling time *from* a cycle, so E1 cannot assume one).
 ### 1.1 The shared object: `Cycle`
 
 
-A planar limit cycle is represented by a closed curve as a truncated Fourier series in a
-phase $\varphi \in [0, 2\pi)$,
+A planar limit cycle is represented by a closed curve as a truncated Fourier series in
+the angle $2\pi\varphi$ of a phase $\varphi \in [0, 1)$,
 
 $$
-\gamma(\varphi) = c + \sum_{k=1}^{K} a_k \cos k\varphi + b_k \sin k\varphi ,
+\gamma(\varphi) = c + \sum_{k=1}^{K} a_k \cos 2\pi k\varphi + b_k \sin 2\pi k\varphi ,
 $$
 
 with its period $T$, and the **convention that $\varphi$ advances uniformly in time**
-along the cycle, $\varphi(t) = \varphi_0 + 2\pi t / T$. *Amended 2026-10-30 (ADR-0020): `Cycle`'s phase is a
-fraction of the period, $\varphi \in [0, 1)$ with $\varphi(t) = \varphi_0 + t/T$, and the
-series is evaluated at the angle $2\pi\varphi$; the angle $\varphi$ of this section is the
-series' argument. The protophase, the density step and the period estimate (§3, steps 3–5)
-stay in radians, and `estimate_cycle` hands $\varphi/2\pi$ to the fit.* On the cycle this makes $\varphi$
+along the cycle, $\varphi(t) = \varphi_0 + t/T \bmod 1$: the phase is a fraction of the
+period. The convention changed on 2026-10-30 under ADR-0020; before, $\varphi$ was an angle
+in $[0, 2\pi)$. The protophase, the density step and the period estimate (§3, steps 3–5)
+work with angles in radians, and `estimate_cycle` hands $\varphi_{\rm angle}/2\pi$ to the
+fit (step 6). On the cycle this makes $\varphi$
 the asymptotic phase up to an additive constant (the asymptotic phase is defined by
 uniform advance along the orbit; design document `normal-forms.md` §2, §4), so a point
 of the cycle and its phase are interchangeable and a learned phase can be compared
@@ -99,7 +99,8 @@ $$
 $$
 
   that is, the cumulative density rescaled to $2\pi$. Our `phase_from_protophase` is this
-  formula with the $k \ne 0$ sum written as $2\thinspace\mathrm{Re}\sum_{k \ge 1}$.
+  formula with the $k \ne 0$ sum written as $2\thinspace\mathrm{Re}\sum_{k \ge 1}$; its
+  $\varphi$, an angle, is the $\varphi_{\rm angle}$ of §3, step 4.
 - **Gengel & Pikovsky 2022**, *Phase reconstruction from oscillatory data with
   iterated Hilbert transform embeddings* (arXiv:2111.10300; the Springer chapter
   Gengel & Pikovsky 2021 is the earlier paper). *Cited*: the state of the art for protophases from a *scalar* signal;
@@ -153,25 +154,27 @@ The input is trajectories `ys (N, T, 2)` (or one, `(T, 2)`) on a common grid `ts
    one period sample per completed revolution per trajectory, pooled into
    `period_samples` — a per-revolution diagnostic (their spread is the noise level of a
    two-sample estimator; their drift, a transient).
-4. **Density and phase.** $F_k$, $k = 1..K_\rho$, is the **time average** of $e^{-ik\psi}$
+4. **Density and angle.** $F_k$, $k = 1..K_\rho$, is the **time average** of $e^{-ik\psi}$
    over exactly `tail_periods` revolutions per trajectory, by the trapezoid rule with the
    window's start interpolated in time, pooled over trajectories weighted by duration;
-   then $\varphi = \psi + 2\thinspace\mathrm{Re}\sum_k F_k (e^{ik\psi} - 1)/(ik)$ on the
-   unwrapped $\psi$ (the correction is $2\pi$-periodic in $\psi$, so this is the unwrapped
-   $\varphi$). *Deduced, and the reason the average is an integral and not a sample mean*:
+   then the angle $\varphi_{\rm angle} = \psi + 2\thinspace\mathrm{Re}\sum_k F_k (e^{ik\psi} - 1)/(ik)$
+   on the unwrapped $\psi$ (the correction is $2\pi$-periodic in $\psi$, so this is the
+   unwrapped $\varphi_{\rm angle}$). Wrapped to $[0, 2\pi)$ and divided by $2\pi$, it is the
+   `Cycle`'s phase $\varphi$ of step 6. *Deduced, and the reason the average is an integral
+   and not a sample mean*:
    over an integer number of revolutions the density is exact; a window whose sample count
    is off by one at the edge (which happens whenever the grid is commensurate with the
-   period) biases every $F_k$ by $1/n$, which with $n \approx 300$ is a phase error of
-   $\approx 3\cdot10^{-3}$ — we measured exactly this before switching to the integral
-   (the Bautin phase error went from $5\cdot10^{-3}$ to $2\cdot10^{-7}$).
+   period) biases every $F_k$ by $1/n$, which with $n \approx 300$ is an angle error of
+   $\approx 3\cdot10^{-3}$ rad — we measured exactly this before switching to the integral
+   (the Bautin angle error went from $5\cdot10^{-3}$ to $2\cdot10^{-7}$ rad).
 5. **Period.** $T = 2\pi / \hat\omega$ with $\hat\omega$ the least-squares slope of the
-   unwrapped $\varphi$ against $t$ over the tail, one intercept per trajectory (pooled
+   unwrapped angle $\varphi_{\rm angle}$ against $t$ over the tail, one intercept per trajectory (pooled
    numerator and denominator). Every sample contributes, so measurement noise averages
    out as $\sigma / (\sqrt{n}\thinspace\mathrm{std}(t))$ — on the Bautin test with
    $\sigma = 0.05$ and 16 trajectories the period error is $2\cdot10^{-5}$ where the
    crossing-interval median gave $3\cdot10^{-3}$.
-6. **Curve.** `Cycle.from_points(φ, tail points, T, harmonics)` — the least-squares
-   Fourier series.
+6. **Curve.** `Cycle.from_points(φ, tail points, T, harmonics)` at the phases
+   $\varphi = \varphi_{\rm angle}/2\pi$ — the least-squares Fourier series.
 7. **Check.** The curve fitted to the **last revolution alone** is the reference. Its RMS
    misfit on those samples is `residual_last` (the noise floor); the RMS misfit of the
    *earlier* tail revolutions to it is `residual_earlier`. `converged` is
@@ -201,12 +204,12 @@ transient, which `converged` reports (step 7) and §6 leaves to E2.
 
 | Test | Pins down |
 |---|---|
-| Bautin $(a, b, \omega_1, \omega_0) = (1, 0.5, 2, 1)$ and Hopf $(1, 1.5, 0.7)$, 6 trajectories from an annulus $r \in [0.3, 2.5]$, 8 periods at 100 samples per period | radius 1 and center 0 to $2\cdot10^{-3}$ (achieved $10^{-8}$); period `nf.period()` to $10^{-6}$ relative (achieved $10^{-8}$); the recovered phase equals the polar angle up to one constant (spread $< 2\cdot10^{-2}$; achieved $2\cdot10^{-7}$); `winding = +1`; `converged` |
-| the same trajectories through a fixed affine map | the image curve, with the phase *still* the original polar angle up to a constant (over $2\pi$, in turns; amended 2026-10-30) — the PTP step is what makes this true, since the polar angle about the image center is not uniform in time |
+| Bautin $(a, b, \omega_1, \omega_0) = (1, 0.5, 2, 1)$ and Hopf $(1, 1.5, 0.7)$, 6 trajectories from an annulus $r \in [0.3, 2.5]$, 8 periods at 100 samples per period | radius 1 and center 0 to $2\cdot10^{-3}$ (achieved $10^{-8}$); period `nf.period()` to $10^{-6}$ relative (achieved $10^{-8}$); the recovered phase equals the polar angle over $2\pi$ up to one constant (spread $< 3\cdot10^{-3}$, the pinned `TOL["cycle_phase"]`; achieved $3\cdot10^{-8}$); `winding = +1`; `converged` |
+| the same trajectories through a fixed affine map | the image curve, with the phase *still* the original polar angle over $2\pi$ up to a constant — the PTP step is what makes this true, since the polar angle about the image center is not uniform in time |
 | one trajectory vs the pooled four | the same period and curve; `period_samples` has one entry per completed tail revolution |
 | Gaussian measurement noise $\sigma = 0.05$ on 4 and on 16 trajectories | both converge; the curve residual is the noise level ($\sigma\sqrt 2$ within a factor 2); the curve's radial error is below $10\thinspace\sigma\sqrt{(2K+1)/n}$ and *shrinks* by at least 0.8 when the sample is quadrupled (achieved 0.018 → 0.0077) |
 | Bautin with $a = 0.1$ ($\kappa = -0.2$, the deviation halves per period), 5 periods from $r \in [0.2, 0.5]$ | `converged` is `False`; the same system over 40 periods converges |
-| Bautin with $\omega_1, \omega_0 < 0$ | `winding = -1`, the period is $\vert 2\pi/\omega_1 \vert$ (the normal forms' `period()` is signed, design document §2), and the curve runs clockwise (negative signed area) |
+| Bautin with $\omega_1, \omega_0 < 0$ | `winding = -1`, the period is $2\pi/\lvert\omega_1\rvert$, the normal forms' `period()`, and the curve runs clockwise (negative signed area) |
 | FitzHugh–Nagumo (slow), 8 trajectories from the box $[-3, 3]^2$, 120 time units at the `fhn` config's step | period $11.2279 \pm 2\cdot10^{-3}$ (Langfield et al.; achieved $11.22792$), clockwise, converged; residual $< 10^{-2}$ with `harmonics=24` (11 harmonics leave $3\cdot10^{-2}$ on the relaxation jumps) |
 | `phase_from_protophase`, `density_coefficients` | the identity on a uniform protophase; recovers $\varphi$ from $\psi = \varphi + 0.05\sin(\varphi - 0.4)$ up to a constant; the integral estimator equals the sample mean over a closed period and ignores samples outside its window |
 | input checks | fewer than `tail_periods` revolutions, `tail_periods < 1`, too few points for the harmonics |
@@ -231,4 +234,4 @@ Tolerances are entries of `tests/helpers.TOL` (`cycle_query`, `cycle_period`,
 - **Harmonics.** 11 (Revzen & Guckenheimer) suits a normal form; FitzHugh–Nagumo's
   relaxation jumps want about 24. The density order defaults to $2K + 2$ because it is
   cheap and its truncation is the phase's error (a 2.5 : 1 affine image of the circle
-  needs 24 density terms for a $2\cdot10^{-6}$ phase; 11 leave $3\cdot10^{-3}$).
+  needs 24 density terms for a $2\cdot10^{-6}$ rad angle error; 11 leave $3\cdot10^{-3}$ rad).
