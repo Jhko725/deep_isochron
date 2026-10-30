@@ -16,6 +16,16 @@ factor or anisotropy as the fill. The design is the Project document
 
 ## Files
 
+- `src/deep_isochron/plotting/deformation.py` (**new**) — `Sheet` with `map`,
+  `build_sheet`, `CellValues` and `cell_values`, `stage_sheets`, `stage_labels` and
+  `sheet_limits`: the geometry of the deformation figures.
+- `tests/test_plotting.py` — seven tests of the geometry: the identity, a linear map
+  against NumPy's SVD of the matrix, the folded-cell error, the stages in both
+  directions, the labels and the padded limits.
+- `tests/helpers.py` — the `TOL` entry `cell_values_affine`.
+- `tests/strategies.py` — `planar_matrices`, orientation-preserving `2×2` matrices
+  with bounded entries and determinant.
+
 ## Design
 
 The ledger of the change, in the order the commits will follow. Each item becomes a
@@ -48,3 +58,7 @@ Pending.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
+| `src/deep_isochron/plotting/deformation.py` — the geometry: `Sheet`, `build_sheet`, `cell_values`, `stage_sheets`, `stage_labels`, `sheet_limits` | | |
+| `tests/test_plotting.py` — the seven geometry tests | | |
+| `tests/helpers.py` — `TOL["cell_values_affine"]` | | |
+| `tests/strategies.py` — `planar_matrices` | | |

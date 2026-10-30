@@ -117,6 +117,11 @@ TOL = {
     # O3: the phase at the coworker's FitzHugh–Nagumo isochron points within
     # GOLDEN_NEAR_CYCLE of the cycle, against the file's phase, in turns; measured 7e-10
     "golden_phase": 1e-8,
+    # ``plotting.deformation``: a cell's log area factor and log anisotropy under an
+    # affine map, against the matrix's determinant and singular values; the shoelace
+    # area and the least-squares affine fit are exact on an affine map, so only
+    # round-off remains
+    "cell_values_affine": 1e-12,
 }
 
 

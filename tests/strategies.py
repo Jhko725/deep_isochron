@@ -33,6 +33,7 @@ from deep_isochron.model.invertible import (
 )
 from hypothesis import strategies as st
 from hypothesis.extra import numpy as hnp
+from jaxtyping import Float
 
 from tests import registry
 
@@ -84,6 +85,18 @@ def point_batches(dim: int, n: int = BATCH) -> st.SearchStrategy[jax.Array]:
     generation toward 'interesting' values (0, the bounds, powers of two), which is
     how it finds knot/boundary bugs without being told about them."""
     return hnp.arrays(np.float64, (n, dim), elements=domain_points).map(jnp.asarray)
+
+
+def planar_matrices(
+    bound: float, min_det: float
+) -> st.SearchStrategy[Float[np.ndarray, "2 2"]]:
+    """A NumPy ``2×2`` matrix with entries in ``[-bound, bound]`` and determinant at
+    least `min_det`: an orientation-preserving linear map of the plane whose condition
+    number stays at most ``4 bound² / min_det``, so that round-off in its singular
+    values stays bounded."""
+    return hnp.arrays(np.float64, (2, 2), elements=floats_in(-bound, bound)).filter(
+        lambda matrix: np.linalg.det(matrix) >= min_det
+    )
 
 
 # ------------------------------------------------------------- dependent draws ----

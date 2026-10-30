@@ -2,6 +2,12 @@
 and a model conjugate to the same normal form by the identity, with the expected
 panels and the numbers they report; nothing is compared pixel by pixel, so that an API
 change breaks the figure here and not in a notebook.
+
+The geometry of ``plotting.deformation`` is pinned by laws: a sheet mapped by the
+identity is itself, the cell values of the identity are zero, the cell values of a
+linear map are the logarithms of its determinant and condition number by NumPy's SVD of
+the matrix, a folded cell raises with the count, the stages of a two-layer model end at
+the model's own map in both directions, and the limits are the padded union box.
 """
 
 import jax
@@ -11,15 +17,31 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from deep_isochron.model import ConjugateLatentDynamics
-from deep_isochron.model.invertible import BiLipschitzLinear
+from deep_isochron.model.invertible import (
+    BiLipschitzLinear,
+    CouplingFlow,
+    MonotonicRQSpline,
+    SequentialINN,
+)
 from deep_isochron.plotting import (
     plot_isochron_hairpins,
     plot_isochron_match,
     plot_phase_comparison,
     plot_phase_field,
 )
+from deep_isochron.plotting.deformation import (
+    build_sheet,
+    cell_values,
+    Sheet,
+    sheet_limits,
+    stage_labels,
+    stage_sheets,
+)
+from hypothesis import given
+from jaxtyping import Float
 
 from .helpers import hand_foliation, HAND_FOLIATION_FORM, TOL
+from .strategies import perturb, planar_matrices
 
 
 matplotlib.use("Agg")
@@ -126,3 +148,128 @@ def test_isochron_log_polar_and_hairpins(foliation):
         stop=iso.stop,
     )
     assert list(bent.hairpins(np.zeros(2))) == [19]
+
+
+@pytest.fixture(scope="module")
+def square_sheet() -> Sheet:
+    """A sheet of 8×8 cells on $[-1, 1]^2$ with two synthetic curves, a spiral arc and
+    a straight segment."""
+    t = np.linspace(0.0, 1.0, 50)
+    spiral = 0.8 * t[:, None] * np.stack([np.cos(6 * t), np.sin(6 * t)], axis=-1)
+    segment = np.stack([t - 0.5, 0.5 * t - 0.9], axis=-1)
+    return build_sheet(
+        np.array([-1.0, -1.0]),
+        np.array([1.0, 1.0]),
+        np.stack([spiral, segment]),
+        cells=8,
+    )
+
+
+@pytest.fixture(scope="module")
+def layers() -> tuple[BiLipschitzLinear, CouplingFlow]:
+    """The two layers of ``configs/model/conjugacy.yaml``, perturbed by `perturb` so
+    that neither is the identity it is at initialization."""
+    k_linear, k_coupling, k_perturb = jax.random.split(jax.random.key(3), 3)
+    linear = BiLipschitzLinear(dim=2, max_lipschitz=2.0, key=k_linear)
+    coupling = CouplingFlow(
+        dim=2,
+        bijection=MonotonicRQSpline(num_bins=9, xy_range=(-4.0, 4.0)),
+        key=k_coupling,
+    )
+    k_a, k_b = jax.random.split(k_perturb)
+    return perturb(linear, k_a), perturb(coupling, k_b)
+
+
+def _assert_sheets_close(actual: Sheet, desired: Sheet, tol: float) -> None:
+    """Every field of `actual` within `tol` of the same field of `desired`."""
+    for name in ("nodes", "fill_nodes", "lines", "circles", "curves"):
+        np.testing.assert_allclose(
+            getattr(actual, name),
+            getattr(desired, name),
+            rtol=tol,
+            atol=tol,
+            err_msg=name,
+        )
+
+
+def test_sheet_map_identity_is_the_sheet(square_sheet):
+    """The identity maps every field of a sheet to itself, exactly."""
+    mapped = square_sheet.map(lambda x: x)
+    _assert_sheets_close(mapped, square_sheet, 0.0)
+
+
+def test_cell_values_of_the_identity_are_zero(square_sheet):
+    """Under the identity every cell keeps its area and its shape, exactly."""
+    values = cell_values(square_sheet, square_sheet.map(lambda x: x))
+    assert np.all(values.log_area == 0.0)
+    assert np.all(values.log_anisotropy == 0.0)
+
+
+@given(matrix=planar_matrices(bound=2.0, min_det=0.1))
+def test_cell_values_of_a_linear_map_are_its_determinant_and_condition(
+    square_sheet, matrix: Float[np.ndarray, "2 2"]
+):
+    r"""Under $x \mapsto A x$ every cell has log area $\log \det A$ and log
+    anisotropy $\log(\sigma_{\max} / \sigma_{\min})$, against NumPy's determinant and
+    SVD of $A$."""
+    a = jnp.asarray(matrix)
+    values = cell_values(square_sheet, square_sheet.map(lambda x: a @ x))
+    singular = np.linalg.svd(matrix, compute_uv=False)
+    tol = TOL["cell_values_affine"]
+    np.testing.assert_allclose(
+        values.log_area, np.log(np.linalg.det(matrix)), rtol=0.0, atol=tol
+    )
+    np.testing.assert_allclose(
+        values.log_anisotropy, np.log(singular[0] / singular[1]), rtol=0.0, atol=tol
+    )
+
+
+def test_cell_values_raise_on_a_folded_cell():
+    r"""$(x, y) \mapsto (x^2, y)$ reverses every cell left of $x = 0$, and the error
+    names their count: half of the $4 \times 4$ cells."""
+    sheet = build_sheet(
+        np.array([-1.0, -1.0]), np.array([1.0, 1.0]), np.zeros((1, 2, 2)), cells=4
+    )
+    folded = sheet.map(lambda x: jnp.stack([x[0] ** 2, x[1]]))
+    with pytest.raises(ValueError, match=r"\b8\b"):
+        cell_values(sheet, folded)
+
+
+def test_stage_sheets_count_and_endpoints(square_sheet, layers):
+    """In both directions: one sheet per layer plus the start, the start unchanged, and
+    the last equal to the sheet mapped by the composed model, or by its inverse, which
+    moves the sheet."""
+    model = SequentialINN(layers)
+    for inverse, whole in [(False, model), (True, model.inverse)]:
+        stages = stage_sheets(layers, square_sheet, inverse=inverse)
+        assert len(stages) == len(layers) + 1
+        assert stages[0] is square_sheet
+        _assert_sheets_close(stages[-1], square_sheet.map(whole), TOL["jit_eager"])
+        assert not np.allclose(stages[-1].nodes, square_sheet.nodes)
+
+
+def test_stage_labels(layers):
+    """The identity first, then each layer's class in the order applied."""
+    assert stage_labels(layers) == (
+        "stage 0 / 2 — identity",
+        "stage 1 / 2 — BiLipschitzLinear (layer 1)",
+        "stage 2 / 2 — CouplingFlow (layer 2)",
+    )
+    assert stage_labels(layers, inverse=True) == (
+        "stage 0 / 2 — identity",
+        "stage 1 / 2 — CouplingFlow (layer 1)",
+        "stage 2 / 2 — BiLipschitzLinear (layer 2)",
+    )
+
+
+def test_sheet_limits_pad_the_union(square_sheet):
+    r"""A sheet and its translate by $(3, -1)$ span $[-1, 4] \times [-2, 1]$, padded by
+    5 % of that extent on each side."""
+    shifted = square_sheet.map(lambda x: x + jnp.array([3.0, -1.0]))
+    lo, hi = sheet_limits([square_sheet, shifted])
+    np.testing.assert_allclose(
+        lo, [-1.0 - 0.25, -2.0 - 0.15], rtol=0.0, atol=TOL["identity"]
+    )
+    np.testing.assert_allclose(
+        hi, [4.0 + 0.25, 1.0 + 0.15], rtol=0.0, atol=TOL["identity"]
+    )
