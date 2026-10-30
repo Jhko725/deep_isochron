@@ -25,6 +25,12 @@ factor or anisotropy as the fill. The design is the Project document
 - `tests/helpers.py` — the `TOL` entry `cell_values_affine`.
 - `tests/strategies.py` — `planar_matrices`, orientation-preserving `2×2` matrices
   with bounded entries and determinant.
+- `src/deep_isochron/plotting/deformation.py` — `FillScale`, `area_scale` and
+  `anisotropy_scale`, `SheetStyle`, the private `_draw_sheet` and `plot_deformation`:
+  the fill scale and the domain | image pair.
+- `tests/test_plotting.py` — four tests of the pair: the symmetric area scale and its
+  ticks, the zeros left out of the anisotropy pool, the percentile check, and the
+  pair figure's panels.
 
 ## Design
 
@@ -34,7 +40,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 1. `plotting/deformation.py`: `Sheet` with `map`, `build_sheet`, `CellValues` and
    `cell_values`, `stage_sheets`, `stage_labels`, `sheet_limits`; their law tests.
 2. `plotting/deformation.py`: `FillScale`, `area_scale`, `anisotropy_scale`,
-   `SheetStyle`, `plot_deformation`; the smoke test.
+   `SheetStyle`, `plot_deformation`; the smoke test — done.
 3. `plotting/deformation.py`: `plot_deformation_strip`, `animate_deformation`; the
    exports in `plotting/__init__.py`; the smoke tests.
 
@@ -62,3 +68,5 @@ Pending.
 | `tests/test_plotting.py` — the seven geometry tests | | |
 | `tests/helpers.py` — `TOL["cell_values_affine"]` | | |
 | `tests/strategies.py` — `planar_matrices` | | |
+| `src/deep_isochron/plotting/deformation.py` — the fill scale and the pair: `FillScale`, `area_scale`, `anisotropy_scale`, `SheetStyle`, `_draw_sheet`, `plot_deformation` | | |
+| `tests/test_plotting.py` — the four tests of the scales and the pair | | |

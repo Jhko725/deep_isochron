@@ -7,7 +7,8 @@ The geometry of ``plotting.deformation`` is pinned by laws: a sheet mapped by th
 identity is itself, the cell values of the identity are zero, the cell values of a
 linear map are the logarithms of its determinant and condition number by NumPy's SVD of
 the matrix, a folded cell raises with the count, the stages of a two-layer model end at
-the model's own map in both directions, and the limits are the padded union box.
+the model's own map in both directions, and the limits are the padded union box. Its
+fill scales are pinned on hand-made cell values, and its pair figure by its panels.
 """
 
 import jax
@@ -30,8 +31,12 @@ from deep_isochron.plotting import (
     plot_phase_field,
 )
 from deep_isochron.plotting.deformation import (
+    anisotropy_scale,
+    area_scale,
     build_sheet,
     cell_values,
+    CellValues,
+    plot_deformation,
     Sheet,
     sheet_limits,
     stage_labels,
@@ -39,6 +44,7 @@ from deep_isochron.plotting.deformation import (
 )
 from hypothesis import given
 from jaxtyping import Float
+from matplotlib.collections import QuadMesh
 
 from .helpers import hand_foliation, HAND_FOLIATION_FORM, TOL
 from .strategies import perturb, planar_matrices
@@ -273,3 +279,49 @@ def test_sheet_limits_pad_the_union(square_sheet):
     np.testing.assert_allclose(
         hi, [4.0 + 0.25, 1.0 + 0.15], rtol=0.0, atol=TOL["identity"]
     )
+
+
+def test_area_scale_is_symmetric_and_ticks_lie_inside():
+    r"""On log areas spread over $[-2, 1]$ the norm is symmetric about 0, at the 98th
+    percentile of $|\log a|$ (about 1.94), so the factors 0.3, 1 and 3 are ticked and
+    0.1 and 10 are not."""
+    log_area = np.linspace(-2.0, 1.0, 25).reshape(5, 5)
+    scale = area_scale([CellValues(log_area, np.zeros_like(log_area))])
+    assert scale.norm.vmin == -scale.norm.vmax
+    assert all(scale.norm.vmin <= t <= scale.norm.vmax for t in scale.ticks)
+    assert scale.tick_labels == ("×0.3", "×1", "×3")
+
+
+def test_anisotropy_scale_excludes_zeros():
+    """Pooled over an identity stage and a stretched one, the scale spans the 2nd to
+    98th percentile of the stretched stage alone: the identity's zeros are left out."""
+    stretched = np.linspace(0.1, 1.5, 16).reshape(4, 4)
+    identity = CellValues(np.zeros((4, 4)), np.zeros((4, 4)))
+    scale = anisotropy_scale([identity, CellValues(np.zeros((4, 4)), stretched)])
+    assert scale.norm.vmin == np.percentile(stretched, 2)
+    assert scale.norm.vmax == np.percentile(stretched, 98)
+
+
+def test_scales_reject_a_bad_percentile():
+    """A percentile at or below 50 leaves no range between the two ends, in both
+    scales."""
+    values = CellValues(np.ones((2, 2)), np.ones((2, 2)))
+    for builder in (area_scale, anisotropy_scale):
+        with pytest.raises(ValueError, match="40"):
+            builder([values], percentile=40.0)
+
+
+def test_plot_deformation_draws_both_panels(square_sheet, layers):
+    """Two panels and a colorbar; the domain panel holds one fill and one halo'd line
+    per trajectory."""
+    deformed = square_sheet.map(SequentialINN(layers))
+    values = cell_values(square_sheet, deformed)
+    fig = plot_deformation(
+        square_sheet, deformed, values.log_area, area_scale([values])
+    )
+    assert len(fig.axes) == 3
+    domain = fig.axes[0]
+    assert len([c for c in domain.collections if isinstance(c, QuadMesh)]) == 1
+    halos = [line for line in domain.lines if line.get_path_effects()]
+    assert len(halos) == len(square_sheet.curves)
+    plt.close(fig)
