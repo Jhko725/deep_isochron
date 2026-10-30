@@ -42,7 +42,10 @@ def main(cfg: DictConfig) -> None:
     print(f"wrote {path}: {len(foliation.isochrons)} isochrons")
     if foliation.failures:
         for failure in foliation.failures:
-            print(f"failed phase {failure.phase:+.6f}: {failure.message}")
+            print(
+                f"failed phase {failure.phase:+.6f}: {failure.message}"
+                + (f" (files kept in {failure.workdir})" if failure.workdir else "")
+            )
         sys.exit(1)
 
 

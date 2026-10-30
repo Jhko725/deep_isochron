@@ -226,12 +226,15 @@ class IsochronFailure:
     - `message`: What went wrong.
     - `log_tail`: The last lines of AUTO's output (``runner.LOG_TAIL`` of them).
     - `constants`: The run constants of the failed run.
+    - `workdir`: The session's directory, kept with the generated files and AUTO's
+        output files for inspection; empty when no session ran for the phase.
     """
 
     phase: float
     message: str
     log_tail: str
     constants: dict[str, Any]
+    workdir: str
 
 
 @dataclass(frozen=True)

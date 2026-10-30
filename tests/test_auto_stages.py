@@ -7,10 +7,15 @@ oracles of ``docs/design/isochrons.md`` §5; every test but the stop reason runs
   period against O1's flow; ``Jw`` along O2's Floquet vector; ``w·F`` constant; each
   rotated base point at its phase on O1's cycle, phase ½ included; and, for the normal
   forms, ``w`` along the closed-form gradient of the phase.
+- The session's directory: deleted after a clean block, kept after a raise or on
+  request.
 - The coworker's Hopf route (his runs 0–1) against O1's cycle (decision 12).
 - Stage 4 on the Bautin and Winfree forms against their closed-form phase
   (decision 14) in turns, and the stop reason of a half by the box edge.
 """
+
+import shutil
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -40,6 +45,28 @@ J = np.array([[0.0, -1.0], [1.0, 0.0]])
 def _sine(a: Float[np.ndarray, "2"], b: Float[np.ndarray, "2"]) -> float:
     """The sine of the angle between the lines along `a` and `b`, accurate near 0."""
     return float(abs(a[0] * b[1] - a[1] * b[0]) / np.linalg.norm(a) / np.linalg.norm(b))
+
+
+# -------------------------------------------------------------- the session ----
+@pytest.mark.auto
+def test_session_keeps_its_directory_on_a_raise_or_on_request(auto):
+    """`auto_session` works in a directory of its own, deletes it after a block that
+    returns, and keeps it after one that raises or when `keep` is set."""
+    ode = PLANAR_SYSTEMS["hopf"][0]
+    before = Path.cwd()
+    with auto_session(ode) as run:
+        workdir = run.problem.workdir
+        assert Path.cwd() == workdir and (workdir / "c.isochron").exists()
+    assert Path.cwd() == before and not workdir.exists()
+    with pytest.raises(RuntimeError, match="planted"):
+        with auto_session(ode) as run:
+            raise RuntimeError("planted")
+    assert run.problem.workdir.exists() and Path.cwd() == before
+    shutil.rmtree(run.problem.workdir)
+    with auto_session(ode, keep=True) as run:
+        pass
+    assert run.problem.workdir.exists()
+    shutil.rmtree(run.problem.workdir)
 
 
 # ------------------------------------------------------------- stages 1–3 ----

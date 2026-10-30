@@ -77,7 +77,8 @@ def trace_isochron(
     """Stage 4 for one phase, in an AUTO session of its own.
 
     A failure is returned, not raised, so that the other phases of a foliation go on;
-    it carries the exception, AUTO's last lines and the run constants (decision G4).
+    it carries the exception, AUTO's last lines, the run constants and the session's
+    directory, which `auto_session` keeps when its block raises (decision G4).
 
     **Arguments:**
 
@@ -87,11 +88,16 @@ def trace_isochron(
 
     The `Isochron`, or the `IsochronFailure`.
     """
-    with auto_session(cycle.ode, tolerances=settings.tolerances) as run:
-        try:
+    run: Runner | None = None
+    try:
+        with auto_session(cycle.ode, tolerances=settings.tolerances) as run:
             return isochron(run, rotated, cycle, phase, settings, box)
-        except Exception as exc:
-            return IsochronFailure(phase, repr(exc), run.tail(), run.constants)
+    except Exception as exc:
+        if run is None:  # the session itself, not a run: AUTO missing, say
+            raise
+        return IsochronFailure(
+            phase, repr(exc), run.tail(), run.constants, str(run.problem.workdir)
+        )
 
 
 def _init_worker() -> None:
@@ -176,7 +182,7 @@ def isochron_foliation(
         len(rotated), len(wrapped), time.perf_counter() - start,
     )  # fmt: skip
     failures = [
-        IsochronFailure(theta, "no user point at this phase in stage 3", "", {})
+        IsochronFailure(theta, "no user point at this phase in stage 3", "", {}, "")
         for theta in wrapped
         if theta not in rotated
     ]
@@ -200,7 +206,7 @@ def isochron_foliation(
             outcome = (
                 f"stopped by {result.stop}"
                 if isinstance(result, Isochron)
-                else f"failed: {result.message}"
+                else f"failed: {result.message} (files kept in {result.workdir})"
             )
             logger.info(
                 "phase %+.6f %s (%d/%d, %.0f s)",

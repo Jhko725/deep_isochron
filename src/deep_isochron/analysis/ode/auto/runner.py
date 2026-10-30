@@ -1,11 +1,12 @@
 """Running AUTO-07p on a system's generated problem, from a session.
 
 ``auto_session(ode)`` loads AUTO, writes the problem files of `ode` into a temporary
-directory, makes that directory the working directory and yields a `Runner`, which
-runs AUTO on one thread with its output captured. Every stage of the pipeline goes
-through the runner, and every run passes the constants of `bvp`, because AUTO reloads
-the constants file on each run. An `AutoSolution` is an AUTO solution as plain arrays,
-the one shape that the stages exchange and that crosses a process boundary.
+directory (kept when the block raises), makes it the working directory and yields a
+`Runner`, which runs AUTO on one thread with its output captured. Every stage of the
+pipeline goes through the runner, and every run passes the constants of `bvp`,
+because AUTO reloads the constants file on each run. An `AutoSolution` is an AUTO
+solution as plain arrays, the one shape that the stages exchange and that crosses a
+process boundary.
 
 AUTO writes its files into the working directory, which belongs to the whole process,
 so a session is not thread-safe; the pipeline runs its sessions in processes.
@@ -17,6 +18,7 @@ import contextlib
 import io
 import logging
 import os
+import shutil
 import tempfile
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -155,11 +157,15 @@ def auto_session(
     ode,
     name: str = "isochron",
     tolerances: AutoTolerances = AutoTolerances(),
+    keep: bool = False,
 ) -> Generator[Runner]:
     """A `Runner` on the AUTO problem of `ode`, written into a temporary directory that
-    is the working directory for the duration of the block and deleted afterward. JAX
-    runs in float64 inside the block, whatever the calling process's setting, since
-    the stages integrate with O1's solver at its tolerances.
+    is the working directory for the duration of the block. The directory is deleted
+    afterward unless `keep` is set or the block raises, when it stays for inspection
+    (the generated files, AUTO's ``fort.*`` and its ``b.``, ``s.``, ``d.`` files) and
+    the runner's ``problem.workdir`` names it. JAX runs in float64 inside the block,
+    whatever the calling process's setting, since the stages integrate with O1's
+    solver at its tolerances.
 
     **Arguments:**
 
@@ -167,6 +173,7 @@ def auto_session(
     - `name`: The equation name of the generated files.
     - `tolerances`: AUTO's convergence tolerances, written into the constants file
         and so in force on every run of the session.
+    - `keep`: Keep the directory after a block that does not raise.
 
     **Raises:**
 
@@ -174,14 +181,19 @@ def auto_session(
     """
     auto = load_auto()
     previous = Path.cwd()
-    with tempfile.TemporaryDirectory(prefix="deep_isochron_auto_") as tmp:
-        problem = write_problem(ode, tmp, name=name, tolerances=tolerances)
-        os.chdir(tmp)
-        try:
-            with jax.enable_x64(True):
-                yield Runner(auto, problem)
-        finally:
-            os.chdir(previous)
+    tmp = tempfile.mkdtemp(prefix="deep_isochron_auto_")
+    problem = write_problem(ode, tmp, name=name, tolerances=tolerances)
+    os.chdir(tmp)
+    try:
+        with jax.enable_x64(True):
+            yield Runner(auto, problem)
+    except BaseException:
+        keep = True
+        raise
+    finally:
+        os.chdir(previous)
+        if not keep:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 @contextlib.contextmanager

@@ -359,7 +359,9 @@ def hand_foliation() -> IsochronFoliation:
                 stop=("eta", "box") if n == 5 else ("max_steps", "box"),
             )
         )
-    failure = IsochronFailure(-1.0, "a planted failure", "last line", {"NMX": 10})
+    failure = IsochronFailure(
+        -1.0, "a planted failure", "last line", {"NMX": 10}, "/tmp/kept"
+    )
     return IsochronFoliation(
         cycle,
         tuple(isochrons),

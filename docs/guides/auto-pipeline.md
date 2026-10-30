@@ -190,3 +190,9 @@ What the pipeline's constants mean, with the section of the AUTO-07p manual's ch
   keywords of the last run. A phase that fails in the foliation comes back as an
   `IsochronFailure` carrying both, so a failed run can be read without rerunning it.
 - `Runner.output` is every line AUTO printed in the session.
+- A session's directory, `deep_isochron_auto_*` under the system's temporary
+  directory, is deleted when its block returns and kept when the block raises, with
+  the generated files and AUTO's `fort.*`, `b.*`, `s.*` and `d.*` files; an
+  `IsochronFailure.workdir` names it, and the foliation's log line and
+  `compute_isochrons.py` print it. `auto_session(ode, keep=True)` keeps the
+  directory of a block that succeeds, for running AUTO on the files by hand.
