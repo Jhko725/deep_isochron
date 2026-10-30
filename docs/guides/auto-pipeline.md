@@ -39,6 +39,9 @@ equation name (`isochron` by default):
 | `indices.inc` | one `INTEGER, PARAMETER :: IP_<NAME> = <slot>` per pipeline slot | `internal_indices(n_params)` |
 | `c.isochron` | the base constants file that every run starts from | `constants_file` |
 
+`scripts/diagnostics/dump_auto_problem.py isochrons/fhn <dir>` writes the four files
+of a config into a directory and prints its slot table, without running AUTO.
+
 The equation file is the same for every system; the two includes carry everything
 system-specific, so a reader who wants to see what AUTO integrates reads `rhs.inc`, and
 one who wants to know which slot a `PAR(k)` in the Fortran refers to reads

@@ -222,7 +222,8 @@ scripts/                                        the command-line entry points (s
 ├── diagnostics/                                instruments for a run
 │   ├── bench_dataloader.py                     data-pipeline vs training-step benchmark
 │   │                                           (also --config <overrides>: a config's own run)
-│   └── find_nan.py                             first non-finite gradient of a run, with the latent extent
+│   ├── find_nan.py                             first non-finite gradient of a run, with the latent extent
+│   └── dump_auto_problem.py                    the AUTO files of an isochron config, into a directory, with the slot table
 └── checks/                                     the deterministic checks (prek.toml; docs/coding-standards.md)
     ├── check_md_math.py                        GitHub-safe Markdown math check
     ├── check_spelling.py                       the -ise families (American English)
