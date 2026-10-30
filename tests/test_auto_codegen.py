@@ -29,6 +29,7 @@ import pytest
 import sympy as sp
 from deep_isochron.analysis.ode.auto import (
     auto_pars,
+    AutoTolerances,
     codegen,
     generic_source,
     indices_block,
@@ -231,6 +232,17 @@ def test_write_problem_lays_down_the_files(tmp_path):
     constants = (tmp_path / "c.fhn").read_text()
     assert "NDIM = 2" in constants and "NPAR = 36" in constants
     assert "THL =  {11: 0.0, 12: 0.0, 13: 0.0}" in constants
+    assert "EPSL = 1e-10, EPSU = 1e-10, EPSS = 1e-09" in constants
+    tight = write_problem(
+        ode, tmp_path / "tight", tolerances=AutoTolerances(1e-12, 1e-12, 1e-12)
+    )
+    assert (
+        "EPSL = 1e-12, EPSU = 1e-12, EPSS = 1e-12"
+        in (tight.workdir / "c.isochron").read_text()
+    )
+    assert tight.fortran_sha == problem.fortran_sha  # the constants are not source
+    with pytest.raises(ValueError):
+        AutoTolerances(epss=0.0)
     again = write_problem(ode, tmp_path / "again", name="fhn")
     assert again.fortran_sha == problem.fortran_sha
     other = write_problem(BautinNormalForm(), tmp_path / "bautin")

@@ -32,10 +32,11 @@ def _config(name: str, *overrides: str) -> IsochronConfig:
     return isochron_config(compose(*overrides, config_name=f"isochrons/{name}"))
 
 
-SHIPPED_HASHES = {"fhn": "11305875", "fhn-easy": "fb823a3f"}
+SHIPPED_HASHES = {"fhn": "1d0ffe43", "fhn-easy": "defa5f18"}
 """The hashes of the shipped configs as of 2026-10-30: a change renames every saved
-foliation, so one here is deliberate. Repinned under ADR-0020: the phases are turns and
-every saved foliation is recomputed."""
+foliation, so one here is deliberate. Repinned under ADR-0020 (the phases are turns)
+and again on `auto-docs`, where the tolerances `epsl`, `epsu`, `epss` entered the
+settings and so the hash."""
 
 
 @pytest.mark.parametrize("name, data", [("fhn", "fhn"), ("fhn-easy", "fhn-easy")])

@@ -87,7 +87,7 @@ def trace_isochron(
 
     The `Isochron`, or the `IsochronFailure`.
     """
-    with auto_session(cycle.ode) as run:
+    with auto_session(cycle.ode, tolerances=settings.tolerances) as run:
         try:
             return isochron(run, rotated, cycle, phase, settings, box)
         except Exception as exc:
@@ -164,7 +164,7 @@ def isochron_foliation(
     if cycle.reverse_time:
         raise ValueError("isochrons are traced for attracting cycles only.")
     start = time.perf_counter()
-    with auto_session(cycle.ode) as run:
+    with auto_session(cycle.ode, tolerances=settings.tolerances) as run:
         wrapped = wrap_phases(phases)
         orbit = periodic_orbit(run, cycle)
         bundle = adjoint_bundle(run, orbit)

@@ -12,6 +12,7 @@ stages) and ``foliation`` (the driver, ``isochron_foliation``).
 from .codegen import (
     auto_pars as auto_pars,
     AutoProblem as AutoProblem,
+    AutoTolerances as AutoTolerances,
     constants_file as constants_file,
     generic_source as generic_source,
     Idx as Idx,

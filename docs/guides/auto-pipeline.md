@@ -99,9 +99,12 @@ Apart from `NDIM` and `NPAR` it is Andrus's `c.fncMultiSeg` line for line: the
 collocation mesh (`NTST`, `NCOL`, `IAD`), the Newton and convergence tolerances
 (`EPSL`, `EPSU`, `EPSS`, `ITMX`, `ITNW`, `NWTN`), the step-size bounds (`DSMIN`,
 `DSMAX`, `IADS`) and the zero weights `THL` on the three time slots, which keep the
-period and the segment times out of the continuation's arclength. The values `IPS`,
-`NDIM`, `NBC`, `NINT`, `ICP`, `DS`, `NMX` and `NPR` in the file are placeholders that
-every run overrides.
+period and the segment times out of the continuation's arclength. The three
+tolerances are the one part of the file a config sets: `IsochronSettings.epsl`,
+`epsu` and `epss` (`settings.epss=1e-12` on the command line) are written into the
+file through `auto_session(ode, tolerances=...)`, so they hold on every run of every
+stage and enter the foliation's hash. The values `IPS`, `NDIM`, `NBC`, `NINT`, `ICP`,
+`DS`, `NMX` and `NPR` in the file are placeholders that every run overrides.
 
 ## How a run is made
 
@@ -159,8 +162,8 @@ What the pipeline's constants mean, with the section of the AUTO-07p manual's ch
 | `JAC` | 0: AUTO differences the Jacobian; `rhs.inc` prints the exact `A(i,j)` for the adjoint equation, not for AUTO | § JAC |
 | `NTST`, `NCOL` | the collocation mesh: intervals and collocation points per interval | § NTST, § NCOL |
 | `IAD` | mesh adaptation every 3 steps | § IAD |
-| `EPSL`, `EPSU` | Newton's relative convergence criterion on the parameters and on the solution, $10^{-10}$ | § EPSL, § EPSU |
-| `EPSS` | the tolerance for locating special points such as user points, $10^{-9}$ | § EPSS |
+| `EPSL`, `EPSU` | Newton's relative convergence criterion on the parameters and on the solution, $10^{-10}$ by default (`IsochronSettings.epsl`, `epsu`) | § EPSL, § EPSU |
+| `EPSS` | the relative arclength criterion for locating special points such as user points, $10^{-9}$ by default (`IsochronSettings.epss`) | § EPSS |
 | `ITMX`, `NWTN`, `ITNW` | the Newton iterations allowed to locate a special point; the full-Newton steps before the Jacobian is frozen; the Newton–Chord iterations allowed to a correction before the step is halved | § ITMX, § NWTN, § ITNW |
 | `DS` | the first continuation step, with its sign the direction | § DS |
 | `DSMIN`, `DSMAX`, `IADS` | the step-size bounds and the adaptation period | § DSMIN, § DSMAX, § IADS |

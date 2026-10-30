@@ -219,3 +219,6 @@ another phase origin, listing every mismatch (L1).
 - 2026-10-30 (`phase-turns`, ADR-0020): phases in turns; the saved `phase` carries `units = "turns"`
   and `load` refuses a file without it; the shipped hashes repinned (`fhn`
   `d9ded7af → 11305875`, `fhn-easy` `b688cbfe → fb823a3f`).
+- 2026-10-30 (`auto-docs`): AUTO's `EPSL`, `EPSU`, `EPSS` are `IsochronSettings`
+  fields written into the constants file (defaults the coworker's), so they enter the
+  hash: `fhn` `11305875 → 1d0ffe43`, `fhn-easy` `fb823a3f → defa5f18`.

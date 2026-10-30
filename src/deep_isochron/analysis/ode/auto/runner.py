@@ -29,7 +29,7 @@ from jaxtyping import Float
 
 from ...errors import NotConvergedError
 from ._env import AutoHandle, load_auto
-from .codegen import AutoProblem, Idx, write_problem
+from .codegen import AutoProblem, AutoTolerances, Idx, write_problem
 
 
 logger = logging.getLogger(__name__)
@@ -151,11 +151,22 @@ class Runner:
 
 
 @contextlib.contextmanager
-def auto_session(ode, name: str = "isochron") -> Generator[Runner]:
+def auto_session(
+    ode,
+    name: str = "isochron",
+    tolerances: AutoTolerances = AutoTolerances(),
+) -> Generator[Runner]:
     """A `Runner` on the AUTO problem of `ode`, written into a temporary directory that
     is the working directory for the duration of the block and deleted afterward. JAX
     runs in float64 inside the block, whatever the calling process's setting, since
     the stages integrate with O1's solver at its tolerances.
+
+    **Arguments:**
+
+    - `ode`: The system, a symbolic ODE.
+    - `name`: The equation name of the generated files.
+    - `tolerances`: AUTO's convergence tolerances, written into the constants file
+        and so in force on every run of the session.
 
     **Raises:**
 
@@ -164,7 +175,7 @@ def auto_session(ode, name: str = "isochron") -> Generator[Runner]:
     auto = load_auto()
     previous = Path.cwd()
     with tempfile.TemporaryDirectory(prefix="deep_isochron_auto_") as tmp:
-        problem = write_problem(ode, tmp, name=name)
+        problem = write_problem(ode, tmp, name=name, tolerances=tolerances)
         os.chdir(tmp)
         try:
             with jax.enable_x64(True):

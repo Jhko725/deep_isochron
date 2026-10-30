@@ -34,8 +34,10 @@ Each config takes its system from the data config of the same name, so the isoch
 are those of the system a model is trained on, and its cycle from `configs/cycle/`
 (`x0`, `t_settle`, `m`, and the `anchor` that sets phase 0 and the Poincaré section),
 shared with every analysis that uses the same phase 0; it adds the phases (`count`,
-evenly spaced, or a list of `values`) and the `IsochronSettings`. The schema
-`experiment.IsochronConfig` validates the file and every override at composition.
+evenly spaced, or a list of `values`) and the `IsochronSettings`, among them AUTO's
+tolerances `epsl`, `epsu` and `epss` (`settings.epss=1e-12` on the command line sets
+one). The schema `experiment.IsochronConfig` validates the file and every override at
+composition.
 
 The file is `data/isochrons/<data name>-<hash>.nc`, the hash taken over everything that
 decides the result; when it exists, the script says so and exits, so delete it to

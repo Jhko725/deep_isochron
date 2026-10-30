@@ -46,6 +46,32 @@ MIN_NPAR = 36
 
 
 @dataclass(frozen=True)
+class AutoTolerances:
+    """AUTO's convergence tolerances, written into the constants file and so in force
+    on every run of a session. The defaults are the coworker's.
+
+    **Attributes:**
+
+    - `epsl`: Newton's relative convergence criterion on the parameters (``EPSL``).
+    - `epsu`: The same on the solution components (``EPSU``).
+    - `epss`: The relative arclength criterion for locating special points such as
+        user points (``EPSS``).
+
+    **Raises:**
+
+    `ValueError` for a tolerance that is not positive.
+    """
+
+    epsl: float = 1e-10
+    epsu: float = 1e-10
+    epss: float = 1e-9
+
+    def __post_init__(self):
+        if not (self.epsl > 0 and self.epsu > 0 and self.epss > 0):
+            raise ValueError("epsl, epsu and epss must be positive.")
+
+
+@dataclass(frozen=True)
 class Idx:
     r"""The pipeline's parameter slots by name. The Fortran file sees them as
     ``IP_<NAME>`` through ``indices.inc``; the Python side uses the attributes.
@@ -222,15 +248,14 @@ def indices_block(idx: Idx, indent: str = "        ") -> str:
     )
 
 
-def constants_file(sym: SymbolicODE, idx: Idx) -> str:
+def constants_file(sym: SymbolicODE, idx: Idx, tolerances: AutoTolerances) -> str:
     """The text of the base constants file ``c.<name>``.
 
-    It carries the discretization and tolerances of the coworker's reproduction
-    (``NTST`` 300, ``NCOL`` 5, ``EPSL`` and ``EPSU`` 1e-10, ``EPSS`` 1e-9), ``NDIM``
-    from `sym`, ``NPAR`` covering the slot block of `idx`, and ``THL`` zero-weighting
-    the time slots. The constants specific to a run, such as ``IPS``, ``ICP`` and
-    ``UZSTOP``, are passed per ``run``; ``docs/guides/auto-pipeline.md`` lists the
-    file and what each stage passes.
+    It carries the discretization of the coworker's reproduction (``NTST`` 300,
+    ``NCOL`` 5), the `tolerances`, ``NDIM`` from `sym`, ``NPAR`` covering the slot
+    block of `idx`, and ``THL`` zero-weighting the time slots. The constants specific
+    to a run, such as ``IPS``, ``ICP`` and ``UZSTOP``, are passed per ``run``;
+    ``docs/guides/auto-pipeline.md`` lists the file and what each stage passes.
     """
     thl = ", ".join(f"{k}: 0.0" for k in (idx.period, idx.seg1, idx.seg2))
     return (
@@ -240,7 +265,8 @@ def constants_file(sym: SymbolicODE, idx: Idx) -> str:
         "NBC= 0, NINT= 0\n"
         "NMX  = 1000, NPR= 100, MXBF=   0, IID =   2, ITMX= 10, ITNW= 5, "
         "NWTN= 3, JAC= 0\n"
-        "EPSL = 1e-10, EPSU = 1e-10, EPSS = 1e-9\n"
+        f"EPSL = {tolerances.epsl:g}, EPSU = {tolerances.epsu:g}, "
+        f"EPSS = {tolerances.epss:g}\n"
         "DS   = 1.0, DSMIN= 1e-13, DSMAX= 1e-1, IADS=   1\n"
         f"NPAR = {max(idx.last, MIN_NPAR)}, THL =  {{{thl}}}, THU =  {{}}\n"
     )
@@ -290,7 +316,10 @@ class AutoProblem:
 
 
 def write_problem(
-    ode: AbstractSymbolicODE, workdir: str | Path, name: str = "isochron"
+    ode: AbstractSymbolicODE,
+    workdir: str | Path,
+    name: str = "isochron",
+    tolerances: AutoTolerances = AutoTolerances(),
 ) -> AutoProblem:
     """Write the AUTO problem for `ode` into `workdir`, creating the directory if
     needed.
@@ -300,6 +329,7 @@ def write_problem(
     - `ode`: The system; its ``symbolic()`` view is validated first.
     - `workdir`: Where the four files go.
     - `name`: The equation name, ``"isochron"`` by default.
+    - `tolerances`: The convergence tolerances written into the constants file.
 
     **Returns:**
 
@@ -324,7 +354,7 @@ def write_problem(
         f"{name}.f90": generic_source(),
         "rhs.inc": rhs_block(sym),
         "indices.inc": indices_block(idx),
-        f"c.{name}": constants_file(sym, idx),
+        f"c.{name}": constants_file(sym, idx, tolerances),
     }
     for filename, text in texts.items():
         (workdir / filename).write_text(text)
@@ -343,6 +373,7 @@ def write_problem(
 
 __all__ = [
     "AutoProblem",
+    "AutoTolerances",
     "GENERIC_SOURCE",
     "Idx",
     "auto_pars",

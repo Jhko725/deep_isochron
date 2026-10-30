@@ -27,6 +27,9 @@ settings:                 # IsochronSettings; a field left out takes the code's 
   max_workers: null       # the allocated cores; not part of the file's hash
   max_steps: 8000
   ds: 1.0e-5
+  epsl: 1.0e-10         # AUTO's EPSL, EPSU, EPSS, in force on every run; 1e-12 is
+  epsu: 1.0e-10         # the coworker's preference (docs/guides/auto-pipeline.md)
+  epss: 1.0e-9
 
 hydra:
   run:

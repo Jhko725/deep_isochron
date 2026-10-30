@@ -24,6 +24,7 @@ from jaxtyping import Float, Int
 
 from ....data.dataset import ENGINE
 from ..limit_cycle import LimitCycle
+from .codegen import AutoTolerances
 
 
 STOP_REASONS = ("eta", "box", "max_steps")
@@ -49,6 +50,8 @@ class IsochronSettings:
         ``os.process_cpu_count()``, the cores this process may use.
     - `max_steps`: The bound on the continuation steps of a half (AUTO's ``NMX``).
     - `ds`: The first continuation step in $\eta$ (AUTO's ``DS``).
+    - `epsl`, `epsu`, `epss`: AUTO's convergence tolerances (`AutoTolerances`), in
+        force on every run of every stage; the defaults are the coworker's.
     """
 
     n_periods: int = 5
@@ -58,18 +61,27 @@ class IsochronSettings:
     max_workers: int | None = None
     max_steps: int = 8000
     ds: float = 1e-5
+    epsl: float = AutoTolerances.epsl
+    epsu: float = AutoTolerances.epsu
+    epss: float = AutoTolerances.epss
 
     def __post_init__(self):
         if self.n_periods < 1:
             raise ValueError("n_periods must be at least 1.")
         if not (self.eta_stop > 0 and self.box_scale > 1 and self.ds > 0):
             raise ValueError("eta_stop and ds must be positive, box_scale above 1.")
+        self.tolerances  # validates the three tolerances
         if self.ntst is not None and self.ntst < 1:
             raise ValueError("ntst must be positive.")
         if self.max_workers is not None and self.max_workers < 1:
             raise ValueError("max_workers must be positive.")
         if self.max_steps < 1:
             raise ValueError("max_steps must be positive.")
+
+    @property
+    def tolerances(self) -> AutoTolerances:
+        """`epsl`, `epsu` and `epss` as the `AutoTolerances` a session takes."""
+        return AutoTolerances(self.epsl, self.epsu, self.epss)
 
     @property
     def mesh_intervals(self) -> int:

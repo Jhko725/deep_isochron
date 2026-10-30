@@ -26,7 +26,12 @@ from deep_isochron.analysis.ode import (
     LimitCycle,
     reanchor,
 )
-from deep_isochron.analysis.ode.auto import _env, STOP_REASONS, wrap_phases
+from deep_isochron.analysis.ode.auto import (
+    _env,
+    AutoTolerances,
+    STOP_REASONS,
+    wrap_phases,
+)
 from deep_isochron.data.dataset import ENGINE
 from deep_isochron.systems.normal_forms import HopfNormalForm
 from deep_isochron.utils.numerics import arclength
@@ -67,6 +72,9 @@ def _distance_to_curve(
         {"ntst": 0},
         {"max_workers": 0},
         {"max_steps": 0},
+        {"epsl": 0.0},
+        {"epsu": -1e-10},
+        {"epss": 0.0},
     ],
 )
 def test_settings_refuse_bad_values(kwargs):
@@ -82,6 +90,8 @@ def test_settings_defaults_scale_the_mesh_and_use_the_allowed_cores():
     assert IsochronSettings(n_periods=3, ntst=50).mesh_intervals == 50
     assert IsochronSettings().workers == os.process_cpu_count()
     assert IsochronSettings(max_workers=3).workers == 3
+    assert IsochronSettings().tolerances == AutoTolerances()
+    assert IsochronSettings(epss=1e-12).tolerances == AutoTolerances(epss=1e-12)
 
 
 def test_phases_are_wrapped_and_refused_when_not_finite_or_repeated():

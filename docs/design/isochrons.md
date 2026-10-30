@@ -542,7 +542,9 @@ a larger `n_periods` or Langfield's staged extension (D4).
 
 **Collocation and Newton set the accuracy of each solution.** The orbit, the bundle and
 the segments are piecewise polynomials on `NTST = 300` intervals of degree `NCOL = 5`,
-corrected to `EPSU = 1e-10`. The isochron segment winds $n$ times around the cycle on
+corrected to `EPSU = 1e-10` by default (`IsochronSettings.epsl`, `epsu` and `epss` set
+the three tolerances for every run; the coworker prefers $10^{-12}$). The isochron
+segment winds $n$ times around the cycle on
 the same number of intervals, so its mesh is $n$ times coarser per period than the
 orbit's; the adaptive mesh redistributes the intervals, and the coworker's results show
 that this is enough for FitzHugh–Nagumo. D6 keeps that resolution per period when
