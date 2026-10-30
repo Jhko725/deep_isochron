@@ -17,13 +17,6 @@ on:
 env:
   JAX_PLATFORMS: cpu
   PYTHONUNBUFFERED: "1"
-  # JAX's persistent compilation cache, kept by the `actions/cache` step of each job:
-  # the first example of every jitted law pays the XLA compile, about half of a test
-  # file's time. The key ends in the commit so that every run saves what it compiled,
-  # and the restore prefix takes the latest run under the same lock file. An absolute
-  # path, since the env block does not expand `~`.
-  JAX_COMPILATION_CACHE_DIR: /home/runner/.cache/jax
-  JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS: "0"
 
 jobs:
   checks:
@@ -36,9 +29,12 @@ jobs:
           enable-cache: true
       - run: uv python install 3.13
       - run: uv sync
+      # JAX's persistent compilation cache, which tests/conftest.py turns on at
+      # ~/.cache/jax: the key ends in the commit so that every run saves what it
+      # compiled, and the restore prefix takes the latest run under the same lock file.
       - uses: actions/cache@v4
         with:
-          path: /home/runner/.cache/jax
+          path: ~/.cache/jax
           key: jax-${{ github.job }}-${{ hashFiles('uv.lock') }}-${{ github.sha }}
           restore-keys: jax-${{ github.job }}-${{ hashFiles('uv.lock') }}-
       - run: uv run just check "uvx ty@latest"
@@ -59,7 +55,7 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y gfortran
       - uses: actions/cache@v4
         with:
-          path: /home/runner/.cache/jax
+          path: ~/.cache/jax
           key: jax-${{ github.job }}-${{ hashFiles('uv.lock') }}-${{ github.sha }}
           restore-keys: jax-${{ github.job }}-${{ hashFiles('uv.lock') }}-
       - run: uv run just test-slow ci
@@ -87,7 +83,7 @@ jobs:
       - run: uv run just install-auto
       - uses: actions/cache@v4
         with:
-          path: /home/runner/.cache/jax
+          path: ~/.cache/jax
           key: jax-${{ github.job }}-${{ hashFiles('uv.lock') }}-${{ github.sha }}
           restore-keys: jax-${{ github.job }}-${{ hashFiles('uv.lock') }}-
       # CI runs on pull requests and on master only, so it runs the full oracle suite

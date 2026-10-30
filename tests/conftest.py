@@ -7,7 +7,7 @@ holds test configurations.
 Hypothesis profiles (select with ``--hypothesis-profile=<name>``):
   dev      10 examples   pre-commit / quick local runs
   default  50 examples   plain ``pytest``
-  ci       100 examples  derandomized, for CI and nightly
+  ci       100 examples  derandomized, for CI
 
 Rationale for the settings (mirrors tensorflow_probability's ``tfp_hp_settings``):
   * deadline=None + too_slow suppressed: the first example of every test pays the
@@ -17,6 +17,9 @@ Rationale for the settings (mirrors tensorflow_probability's ``tfp_hp_settings``
     they keep exploring.
 """
 
+import os
+from pathlib import Path
+
 import jax
 import jaxtyping
 import pytest
@@ -25,6 +28,15 @@ from hypothesis import HealthCheck, settings
 
 jax.config.update("jax_enable_x64", True)
 jax.config.update("jax_platforms", "cpu")
+# JAX's persistent compilation cache, so that the XLA compile the first example of
+# every jitted law pays is paid once per machine: `just test default` takes about 15
+# minutes on two cores with it and over an hour without. Set here rather than in the
+# justfile so that every launcher of the tests gets it; CI caches the directory.
+jax.config.update(
+    "jax_compilation_cache_dir",
+    os.environ.get("JAX_COMPILATION_CACHE_DIR", str(Path.home() / ".cache" / "jax")),
+)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 
 # Run runtime shape checks during testing
 jaxtyping.install_import_hook("deep_isochron", "beartype.beartype")
