@@ -7,7 +7,7 @@ holds test configurations.
 Hypothesis profiles (select with ``--hypothesis-profile=<name>``):
   dev      10 examples   pre-commit / quick local runs
   default  50 examples   plain ``pytest``
-  ci       300 examples  derandomized, for CI and nightly
+  ci       100 examples  derandomized, for CI and nightly
 
 Rationale for the settings (mirrors tensorflow_probability's ``tfp_hp_settings``):
   * deadline=None + too_slow suppressed: the first example of every test pays the

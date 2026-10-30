@@ -388,10 +388,10 @@ ADR-0020's; the rest are this branch's.
 | `tests/test_phase.py` — the scalar-offset case of the difference | Confirmed. | None |
 | `src/deep_isochron/plotting/isochrons.py` — `PHASE_NORM` over $[0, 1)$, `norm` in place of `limit`, the gaps by `phase_difference`, colorbars in turns | Confirmed. | None |
 | `prototype_analysis.ipynb` — cells 7, 8, 9, 13, 15, 16 follow the API; outputs of the edited code cells cleared | Confirmed. | None |
-| `.github/workflows/ci.yml`, `tests/conftest.py` — the JAX cache in CI; `ci` at 100 examples | | |
-| `tests/conftest.py` — the autouse fixture that clears JAX's caches after every test | | |
-| `tests/helpers.py` — `CompileCounter` skips eager `jax.numpy` and `jax.lax` programs | | |
-| `docs/design/normal-forms.md`, `docs/design/phase-field.md`, `docs/design/isochrons.md`, `docs/design/cycle-estimation.md` — the dated amendments to turns | | |
-| `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`, `docs/decisions/0009-trainer-losses-schedules-checkpoints.md`, `docs/decisions/0013-normal-form-basins.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md` — amended sentences and History lines | | |
-| `docs/architecture.md`, `docs/roadmap.md` — the contract lines, the normalizations, the Done row | | |
-| `docs/changes/2026-10-30-phase-turns.md` — the documents commit's sections | | |
+| `.github/workflows/ci.yml`, `tests/conftest.py` — the JAX cache in CI; `ci` at 100 examples | `conftest.py`'s docs said that the ci run is still 300. | Module docstring fixed. |
+| `tests/conftest.py` — the autouse fixture that clears JAX's caches after every test | Confirmed. | None |
+| `tests/helpers.py` — `CompileCounter` skips eager `jax.numpy` and `jax.lax` programs | Confirmed. | None |
+| `docs/design/normal-forms.md`, `docs/design/phase-field.md`, `docs/design/isochrons.md`, `docs/design/cycle-estimation.md` — the dated amendments to turns | Writing in the old convention and adding amendents below (`isochrons.py` does this for eaxmple) make the reader constantly have to remember the rule and perform substitutions in the head. Better to convert to the new convention, unless there is a very good reason. | To be doscissed. |
+| `docs/decisions/0007-systems-hierarchy-and-flow-strategies.md`, `docs/decisions/0009-trainer-losses-schedules-checkpoints.md`, `docs/decisions/0013-normal-form-basins.md`, `docs/decisions/0017-isochrons-by-auto-continuation.md` — amended sentences and History lines | Confirmed. | None |
+| `docs/architecture.md`, `docs/roadmap.md` — the contract lines, the normalizations, the Done row | Confirmed. | None |
+| `docs/changes/2026-10-30-phase-turns.md` — the documents commit's sections | Confirmed. | None |
