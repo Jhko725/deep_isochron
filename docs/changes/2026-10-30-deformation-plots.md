@@ -80,15 +80,15 @@ Pending.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
-| `src/deep_isochron/plotting/deformation.py` — the geometry: `Sheet`, `build_sheet`, `cell_values`, `stage_sheets`, `stage_labels`, `sheet_limits` | | |
-| `tests/test_plotting.py` — the seven geometry tests | | |
-| `tests/helpers.py` — `TOL["cell_values_affine"]` | | |
-| `tests/strategies.py` — `planar_matrices` | | |
-| `src/deep_isochron/plotting/deformation.py` — the fill scale and the pair: `FillScale`, `area_scale`, `anisotropy_scale`, `SheetStyle`, `_draw_sheet`, `plot_deformation` | | |
-| `tests/test_plotting.py` — the four tests of the scales and the pair | | |
-| `src/deep_isochron/plotting/sheet.py` — the geometry moved from `deformation.py` | | |
-| `src/deep_isochron/plotting/deformation.py` — the geometry removed | | |
-| `tests/test_plotting.py` — the geometry imports from `plotting.sheet` | | |
-| `src/deep_isochron/plotting/deformation.py` — the strip, the animation, and the pair's titles and axis labels | | |
-| `src/deep_isochron/plotting/__init__.py` — the deformation exports | | |
-| `tests/test_plotting.py` — the three tests of the strip and the animation | | |
+| `src/deep_isochron/plotting/deformation.py` — the geometry: `Sheet`, `build_sheet`, `cell_values`, `stage_sheets`, `stage_labels`, `sheet_limits` | Not happy with the abstraction. <ul>The biggest problem is the api of the plotting functions. For example, `plot_deformation_strip` requires the user to pass sheets, values, scale, and labels, which must all be constructed from `build_sheet`, `stage_sheets`, `cell_values`, etc. This is too much complexity for the user. The function should have taken `transforms: Sqeuence[AbstractBijection]`, `trajectories`, some config object for the sheets (how many cells, circles, etc), some argument that specifies the metric (area change or log anisotropy), and plotting configuration data. The users' focus is on the abstractions regarding the numerics of the project. Placing a bunch of plotting-specific abstractions on top makes the plotting functions very hard to use. If any abstractions are required for plotting, they should be opt-into, for a greateer flexibility of plotting customization (ex. for using different metric for cell coloring). <li> `build_sheet` is essentially the constructor logic of `Sheet` since nobody is going to create the point coordinates for the circles (the right abstraction level is at circles; not the points used to render them). Why not attach it there? <li>`Sheet.map` is essentially just multiple applications of vmapped bijection operations. Why not just make `Sheet` into a equinox Module (it already interacts with JAX part of the code anyways) and use `jax.tree.map` with `eqx.filter_vmap`? If the number of axes to vmap differ for different components, this is easily addressed using `einops.wrap` and `unwrap`. <li> As discussed with Claude, shoelace formula to compute area change gives negative area change for cells at high distortion areas. Should switch to Jacobian determinant. <ul> | To be discussed with Claude. |
+| `tests/test_plotting.py` — the seven geometry tests | Skippig for now since the plotting functions will need a overhaul. | None for now. |
+| `tests/helpers.py` — `TOL["cell_values_affine"]` | Skippig for now since the plotting functions will need a overhaul. | None for now. |
+| `tests/strategies.py` — `planar_matrices` | Skippig for now since the plotting functions will need a overhaul. | None for now. |
+| `src/deep_isochron/plotting/deformation.py` — the fill scale and the pair: `FillScale`, `area_scale`, `anisotropy_scale`, `SheetStyle`, `_draw_sheet`, `plot_deformation` | See complaints above. Also, `area_scale` and `fill_scale` are mostly doing bad value check and percentile-based normalization. This is not related to the actual metric (no metric is being computed), so does not make sense to have as two functions. Further housekeeping like tick and ticklabel customization can just be done on the user side, or as a convenicence function on `FillScale`. `_set_limits` and `_add_colorbar` look like general utility functions for the plotting submodule. Also, it's annoying for the user to pass `np.arrays` for lo and hi. Instead just accept `Sequence[float]`s and verify inside `_set_limits`. | To be discussed. |
+| `tests/test_plotting.py` — the four tests of the scales and the pair | Skippig for now since the plotting functions will need a overhaul. | None for now. |
+| `src/deep_isochron/plotting/sheet.py` — the geometry moved from `deformation.py` | See complaints above. | To be discussed with Claude. |
+| `src/deep_isochron/plotting/deformation.py` — the geometry removed | Agree that long files should be split. How to split should be rediscussed after fixing the problems above. | To be discussed. |
+| `tests/test_plotting.py` — the geometry imports from `plotting.sheet` | Skippig for now since the plotting functions will need a overhaul. | None for now. |
+| `src/deep_isochron/plotting/deformation.py` — the strip, the animation, and the pair's titles and axis labels | See complaints above. | To be discussed. |
+| `src/deep_isochron/plotting/__init__.py` — the deformation exports | Simple change. | None |
+| `tests/test_plotting.py` — the three tests of the strip and the animation | Skippig for now since the plotting functions will need a overhaul. | None for now. |
