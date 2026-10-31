@@ -3,13 +3,12 @@ and a model conjugate to the same normal form by the identity, with the expected
 panels and the numbers they report; nothing is compared pixel by pixel, so that an API
 change breaks the figure here and not in a notebook.
 
-The geometry of ``plotting.sheet`` is pinned by laws: a sheet mapped by the
-identity is itself, the cell values of the identity are zero, the cell values of a
-linear map are the logarithms of its determinant and condition number by NumPy's SVD of
-the matrix, a folded cell raises with the count, the stages of a two-layer model end at
-the model's own map in both directions, and the limits are the padded union box. The
-fill scales of ``plotting.deformation`` are pinned on hand-made cell values, its pair
-figure and its strip by their panels, and its animation by the frames of a saved GIF.
+The data half of ``plotting.deformation`` is pinned by laws: a bad config raises, a
+sheet mapped by the identity is itself, the area and anisotropy metrics of the identity
+are zero and those of a linear map are the logarithms of its determinant and condition
+number by NumPy's SVD of the matrix, the stages and stage maps of a two-layer model end
+at the model's own map in both directions, and the limits are the padded union box.
+``plotting.scales.clipped_norm`` is pinned on hand-made values with literal ends.
 """
 
 import jax
@@ -32,26 +31,18 @@ from deep_isochron.plotting import (
     plot_phase_field,
 )
 from deep_isochron.plotting.deformation import (
-    animate_deformation,
-    anisotropy_scale,
-    area_scale,
-    plot_deformation,
-    plot_deformation_strip,
-)
-from deep_isochron.plotting.sheet import (
-    build_sheet,
-    cell_values,
-    CellValues,
+    ANISOTROPY,
+    AREA,
     Sheet,
     sheet_limits,
+    SheetConfig,
     stage_labels,
+    stage_maps,
     stage_sheets,
 )
+from deep_isochron.plotting.scales import clipped_norm
 from hypothesis import given
 from jaxtyping import Float
-from matplotlib.animation import PillowWriter
-from matplotlib.collections import QuadMesh
-from PIL import Image
 
 from .helpers import hand_foliation, HAND_FOLIATION_FORM, TOL
 from .strategies import perturb, planar_matrices
@@ -165,16 +156,19 @@ def test_isochron_log_polar_and_hairpins(foliation):
 
 @pytest.fixture(scope="module")
 def square_sheet() -> Sheet:
-    """A sheet of 8×8 cells on $[-1, 1]^2$ with two synthetic curves, a spiral arc and
-    a straight segment."""
+    """A sheet of 8×8 cells on $[-1, 1]^2$ with two synthetic trajectories, a spiral
+    arc and a straight segment, and one extra curve of another length, an arc of 30
+    samples."""
     t = np.linspace(0.0, 1.0, 50)
     spiral = 0.8 * t[:, None] * np.stack([np.cos(6 * t), np.sin(6 * t)], axis=-1)
     segment = np.stack([t - 0.5, 0.5 * t - 0.9], axis=-1)
-    return build_sheet(
-        np.array([-1.0, -1.0]),
-        np.array([1.0, 1.0]),
+    s = np.linspace(0.0, 2.0, 30)
+    arc = 0.6 * np.stack([np.cos(s), np.sin(s)], axis=-1)
+    return Sheet(
+        (-1.0, -1.0, 1.0, 1.0),
         np.stack([spiral, segment]),
-        cells=8,
+        curves=(arc,),
+        config=SheetConfig(cells=8),
     )
 
 
@@ -194,58 +188,87 @@ def layers() -> tuple[BiLipschitzLinear, CouplingFlow]:
 
 
 def _assert_sheets_close(actual: Sheet, desired: Sheet, tol: float) -> None:
-    """Every field of `actual` within `tol` of the same field of `desired`."""
-    for name in ("nodes", "fill_nodes", "lines", "circles", "curves"):
+    """Every array leaf of `actual`, the extra curves included, within `tol` of the
+    same leaf of `desired`, and the same config."""
+    assert actual.config == desired.config
+    actual_leaves, desired_leaves = jax.tree.leaves(actual), jax.tree.leaves(desired)
+    assert len(actual_leaves) == len(desired_leaves)
+    for index, (a, d) in enumerate(zip(actual_leaves, desired_leaves)):
         np.testing.assert_allclose(
-            getattr(actual, name),
-            getattr(desired, name),
-            rtol=tol,
-            atol=tol,
-            err_msg=name,
+            np.asarray(a), np.asarray(d), rtol=tol, atol=tol, err_msg=f"leaf {index}"
         )
 
 
+def test_sheet_config_rejects_bad_values():
+    """One value out of range per validated field raises and names the field."""
+    bad = {
+        "cells": 0,
+        "subdivisions": 0,
+        "line_samples": 1,
+        "circle_every": 0,
+        "circle_radius": 0.0,
+        "circle_samples": 2,
+        "box_pad": -0.1,
+    }
+    for name, value in bad.items():
+        with pytest.raises(ValueError, match=name):
+            SheetConfig(**{name: value})
+
+
+def test_sheet_rejects_a_bad_box():
+    """A box of three entries, or one empty along $x$ or along $y$, raises."""
+    trajectories = np.zeros((1, 2, 2))
+    for box in [(-1.0, -1.0, 1.0), (1.0, -1.0, 1.0, 1.0), (-1.0, 1.0, 1.0, 0.0)]:
+        with pytest.raises(ValueError):
+            Sheet(box, trajectories)
+
+
 def test_sheet_map_identity_is_the_sheet(square_sheet):
-    """The identity maps every field of a sheet to itself, exactly."""
+    """The identity maps every leaf of a sheet to itself exactly, the ragged extra
+    curve included, and carries the config."""
     mapped = square_sheet.map(lambda x: x)
+    assert len(mapped.curves) == 1
     _assert_sheets_close(mapped, square_sheet, 0.0)
 
 
-def test_cell_values_of_the_identity_are_zero(square_sheet):
+def test_area_and_anisotropy_of_the_identity_are_zero(square_sheet):
     """Under the identity every cell keeps its area and its shape, exactly."""
-    values = cell_values(square_sheet, square_sheet.map(lambda x: x))
-    assert np.all(values.log_area == 0.0)
-    assert np.all(values.log_anisotropy == 0.0)
+    for metric in (AREA, ANISOTROPY):
+        values = np.asarray(metric.fn(lambda x: x, square_sheet.centers))
+        assert values.shape == (8, 8)
+        assert np.all(values == 0.0), metric.label
 
 
 @given(matrix=planar_matrices(bound=2.0, min_det=0.1))
-def test_cell_values_of_a_linear_map_are_its_determinant_and_condition(
+def test_area_and_anisotropy_of_a_linear_map(
     square_sheet, matrix: Float[np.ndarray, "2 2"]
 ):
     r"""Under $x \mapsto A x$ every cell has log area $\log \det A$ and log
     anisotropy $\log(\sigma_{\max} / \sigma_{\min})$, against NumPy's determinant and
     SVD of $A$."""
     a = jnp.asarray(matrix)
-    values = cell_values(square_sheet, square_sheet.map(lambda x: a @ x))
+    log_area = AREA.fn(lambda x: a @ x, square_sheet.centers)
+    log_anisotropy = ANISOTROPY.fn(lambda x: a @ x, square_sheet.centers)
     singular = np.linalg.svd(matrix, compute_uv=False)
-    tol = TOL["cell_values_affine"]
+    tol = TOL["cell_metric_affine"]
     np.testing.assert_allclose(
-        values.log_area, np.log(np.linalg.det(matrix)), rtol=0.0, atol=tol
+        log_area, np.log(np.linalg.det(matrix)), rtol=0.0, atol=tol
     )
     np.testing.assert_allclose(
-        values.log_anisotropy, np.log(singular[0] / singular[1]), rtol=0.0, atol=tol
+        log_anisotropy, np.log(singular[0] / singular[1]), rtol=0.0, atol=tol
     )
 
 
-def test_cell_values_raise_on_a_folded_cell():
-    r"""$(x, y) \mapsto (x^2, y)$ reverses every cell left of $x = 0$, and the error
-    names their count: half of the $4 \times 4$ cells."""
-    sheet = build_sheet(
-        np.array([-1.0, -1.0]), np.array([1.0, 1.0]), np.zeros((1, 2, 2)), cells=4
-    )
-    folded = sheet.map(lambda x: jnp.stack([x[0] ** 2, x[1]]))
-    with pytest.raises(ValueError, match=r"\b8\b"):
-        cell_values(sheet, folded)
+def test_area_and_anisotropy_of_a_reflection_are_zero(square_sheet):
+    r"""The reflection $\operatorname{diag}(1, -1)$ reverses orientation and keeps every
+    area and shape: log area 0 from $|\det J| = 1$, and log anisotropy 0."""
+    reflection = jnp.diag(jnp.array([1.0, -1.0]))
+    tol = TOL["cell_metric_affine"]
+    for metric in (AREA, ANISOTROPY):
+        values = metric.fn(lambda x: reflection @ x, square_sheet.centers)
+        np.testing.assert_allclose(
+            values, 0.0, rtol=0.0, atol=tol, err_msg=metric.label
+        )
 
 
 def test_stage_sheets_count_and_endpoints(square_sheet, layers):
@@ -261,8 +284,20 @@ def test_stage_sheets_count_and_endpoints(square_sheet, layers):
         assert not np.allclose(stages[-1].nodes, square_sheet.nodes)
 
 
+def test_stage_maps_match_stage_sheets(square_sheet, layers):
+    """In both directions, the sheet mapped by stage map `k` is stage sheet `k`, for
+    every stage of a two-layer model."""
+    for inverse in (False, True):
+        maps = stage_maps(layers, inverse=inverse)
+        stages = stage_sheets(layers, square_sheet, inverse=inverse)
+        assert len(maps) == len(stages) == 3
+        for k in range(3):
+            _assert_sheets_close(square_sheet.map(maps[k]), stages[k], TOL["jit_eager"])
+
+
 def test_stage_labels(layers):
-    """The identity first, then each layer's class in the order applied."""
+    """The identity first, then each layer's class in the order applied, marked
+    inverted when the stages run backward."""
     assert stage_labels(layers) == (
         "stage 0 / 2 — identity",
         "stage 1 / 2 — BiLipschitzLinear (layer 1)",
@@ -270,116 +305,45 @@ def test_stage_labels(layers):
     )
     assert stage_labels(layers, inverse=True) == (
         "stage 0 / 2 — identity",
-        "stage 1 / 2 — CouplingFlow (layer 1)",
-        "stage 2 / 2 — BiLipschitzLinear (layer 2)",
+        "stage 1 / 2 — CouplingFlow⁻¹ (layer 1)",
+        "stage 2 / 2 — BiLipschitzLinear⁻¹ (layer 2)",
     )
 
 
 def test_sheet_limits_pad_the_union(square_sheet):
     r"""A sheet and its translate by $(3, -1)$ span $[-1, 4] \times [-2, 1]$, padded by
-    5 % of that extent on each side."""
+    5 % of that extent on each side, as four floats."""
     shifted = square_sheet.map(lambda x: x + jnp.array([3.0, -1.0]))
-    lo, hi = sheet_limits([square_sheet, shifted])
+    limits = sheet_limits([square_sheet, shifted])
+    assert len(limits) == 4 and all(isinstance(v, float) for v in limits)
     np.testing.assert_allclose(
-        lo, [-1.0 - 0.25, -2.0 - 0.15], rtol=0.0, atol=TOL["identity"]
+        limits,
+        [-1.0 - 0.25, -2.0 - 0.15, 4.0 + 0.25, 1.0 + 0.15],
+        rtol=0.0,
+        atol=TOL["identity"],
     )
-    np.testing.assert_allclose(
-        hi, [4.0 + 0.25, 1.0 + 0.15], rtol=0.0, atol=TOL["identity"]
-    )
 
 
-def test_area_scale_is_symmetric_and_ticks_lie_inside():
-    r"""On log areas spread over $[-2, 1]$ the norm is symmetric about 0, at the 98th
-    percentile of $|\log a|$ (about 1.94), so the factors 0.3, 1 and 3 are ticked and
-    0.1 and 10 are not."""
-    log_area = np.linspace(-2.0, 1.0, 25).reshape(5, 5)
-    scale = area_scale([CellValues(log_area, np.zeros_like(log_area))])
-    assert scale.norm.vmin == -scale.norm.vmax
-    assert all(scale.norm.vmin <= t <= scale.norm.vmax for t in scale.ticks)
-    assert scale.tick_labels == ("×0.3", "×1", "×3")
-
-
-def test_anisotropy_scale_excludes_zeros():
-    """Pooled over an identity stage and a stretched one, the scale spans the 2nd to
-    98th percentile of the stretched stage alone: the identity's zeros are left out."""
+def test_clipped_norm_symmetric_and_excludes_zeros():
+    """At quantile 1 the range is the extreme of the pooled entries, with an identity
+    stage's zeros left out: symmetric about 0 at the largest magnitude, otherwise the
+    smallest and largest entry; an empty pool gives the default range."""
+    zeros = np.zeros((4, 4))
+    spread = jnp.linspace(-2.0, 1.0, 16).reshape(4, 4)
+    symmetric = clipped_norm([zeros, spread], 1.0, symmetric=True)
+    assert (symmetric.vmin, symmetric.vmax) == (-2.0, 2.0) and symmetric.clip
     stretched = np.linspace(0.1, 1.5, 16).reshape(4, 4)
-    identity = CellValues(np.zeros((4, 4)), np.zeros((4, 4)))
-    scale = anisotropy_scale([identity, CellValues(np.zeros((4, 4)), stretched)])
-    assert scale.norm.vmin == np.percentile(stretched, 2)
-    assert scale.norm.vmax == np.percentile(stretched, 98)
+    sequential = clipped_norm([zeros, stretched], 1.0, symmetric=False)
+    assert (sequential.vmin, sequential.vmax) == (0.1, 1.5) and sequential.clip
+    empty_symmetric = clipped_norm(zeros, 0.98, symmetric=True)
+    assert (empty_symmetric.vmin, empty_symmetric.vmax) == (-1.0, 1.0)
+    empty = clipped_norm(zeros, 0.98, symmetric=False)
+    assert (empty.vmin, empty.vmax) == (0.0, 1.0)
 
 
-def test_scales_reject_a_bad_percentile():
-    """A percentile at or below 50 leaves no range between the two ends, in both
-    scales."""
-    values = CellValues(np.ones((2, 2)), np.ones((2, 2)))
-    for builder in (area_scale, anisotropy_scale):
-        with pytest.raises(ValueError, match="40"):
-            builder([values], percentile=40.0)
-
-
-def test_plot_deformation_draws_both_panels(square_sheet, layers):
-    """Two panels and a colorbar; the domain panel holds one fill and one halo'd line
-    per trajectory."""
-    deformed = square_sheet.map(SequentialINN(layers))
-    values = cell_values(square_sheet, deformed)
-    fig = plot_deformation(
-        square_sheet, deformed, values.log_area, area_scale([values])
-    )
-    assert len(fig.axes) == 3
-    domain = fig.axes[0]
-    assert len([c for c in domain.collections if isinstance(c, QuadMesh)]) == 1
-    halos = [line for line in domain.lines if line.get_path_effects()]
-    assert len(halos) == len(square_sheet.curves)
-    plt.close(fig)
-
-
-def test_plot_deformation_strip_has_one_panel_per_stage(square_sheet, layers):
-    """Three stages give three panels and a colorbar, each panel at the given limits."""
-    sheets = stage_sheets(layers, square_sheet)
-    values = [cell_values(sheets[0], s) for s in sheets]
-    lo, hi = sheet_limits(sheets)
-    fig = plot_deformation_strip(
-        sheets,
-        [v.log_area for v in values],
-        area_scale(values),
-        stage_labels(layers),
-        limits=(lo, hi),
-    )
-    assert len(fig.axes) == len(sheets) + 1
-    for ax in fig.axes[: len(sheets)]:
-        assert ax.get_xlim() == (lo[0], hi[0])
-        assert ax.get_ylim() == (lo[1], hi[1])
-    plt.close(fig)
-
-
-def test_animate_deformation_writes_every_frame(square_sheet, layers, tmp_path):
-    """The animation saved as a GIF has one frame per stage."""
-    sheets = stage_sheets(layers, square_sheet)
-    values = [cell_values(sheets[0], s) for s in sheets]
-    animation = animate_deformation(
-        sheets,
-        [v.log_area for v in values],
-        area_scale(values),
-        stage_labels(layers),
-        limits=sheet_limits(sheets),
-    )
-    path = tmp_path / "flipbook.gif"
-    animation.save(path, writer=PillowWriter(fps=2))
-    plt.close("all")
-    with Image.open(path) as gif:
-        assert gif.n_frames == len(sheets)
-
-
-def test_strip_rejects_mismatched_lengths(square_sheet, layers):
-    """Two sheets with three labels raise."""
-    sheets = stage_sheets(layers[:1], square_sheet)
-    values = [cell_values(sheets[0], s) for s in sheets]
-    with pytest.raises(ValueError, match="3"):
-        plot_deformation_strip(
-            sheets,
-            [v.log_area for v in values],
-            area_scale(values),
-            stage_labels(layers),
-            limits=sheet_limits(sheets),
-        )
+def test_clipped_norm_rejects_a_bad_quantile():
+    """A quantile at or below 0.5 leaves no range between the two ends, and one above
+    1 is no quantile."""
+    for quantile in (0.4, 1.5):
+        with pytest.raises(ValueError, match=str(quantile)):
+            clipped_norm(np.ones((2, 2)), quantile, symmetric=False)

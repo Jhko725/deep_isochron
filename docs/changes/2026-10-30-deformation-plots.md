@@ -46,6 +46,28 @@ factor or anisotropy as the fill. The design is the Project document
   `plotting.deformation` exported.
 - `tests/test_plotting.py` — three tests: the strip's panels and limits, the
   animation's frame count through a GIF, and the length check.
+- `src/deep_isochron/plotting/deformation/sheet.py` (**new**) — `SheetConfig`,
+  `Sheet` as an `eqx.Module` built by its constructor with `map` as a tree map,
+  `stage_sheets`, `stage_maps`, `stage_labels` with the `⁻¹` marker, `cell_jacobians`
+  and `sheet_limits` as four floats.
+- `src/deep_isochron/plotting/deformation/metrics.py` (**new**) — `CellMetric` and its
+  instances `AREA` and `ANISOTROPY`, from the Jacobian at the cell centers.
+- `src/deep_isochron/plotting/deformation/__init__.py` (**new**) — the subpackage's
+  docstring and the re-exports of its ten names.
+- `src/deep_isochron/plotting/scales.py` (**new**) — `clipped_norm`, the quantile
+  clipping of a color range.
+- `src/deep_isochron/plotting/sheet.py` (**deleted**) — replaced by
+  `plotting/deformation/sheet.py`.
+- `src/deep_isochron/plotting/deformation.py` (**deleted**) — shadowed by the
+  subpackage; the figure functions return on the new API in the next commit.
+- `src/deep_isochron/plotting/__init__.py` — the two old import blocks replaced by the
+  subpackage's names and `clipped_norm`.
+- `tests/test_plotting.py` — the geometry, scale and figure tests replaced by twelve
+  tests of the config and box checks, the identity map, the two metrics on the
+  identity, on a linear map and on a reflection, the stages and stage maps, the labels,
+  the limits and the clipped norm.
+- `tests/helpers.py` — `TOL["cell_values_affine"]` renamed `TOL["cell_metric_affine"]`,
+  with its reason reworded.
 
 ## Design
 
@@ -59,6 +81,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 3. `plotting/deformation.py`: `plot_deformation_strip`, `animate_deformation`; the
    exports in `plotting/__init__.py`; the smoke tests — done.
 4. `plotting/sheet.py`: the geometry of item 1 moved out of `deformation.py`, which had reached the 600-line module limit at item 2 (decided 2026-10-30). — done.
+5. `plotting/deformation/sheet.py`, `metrics.py`, `plotting/scales.py`: the rewrite of items 1–2 after the review of 2026-10-31 — `Sheet` an `eqx.Module` built by its constructor, the fill from the Jacobian at the cell centers through a `CellMetric`, `clipped_norm` as a utility; both old modules deleted, the figures return in item 6 — done.
 
 The decisions and their rejected alternatives are written in the documents commit.
 
@@ -92,3 +115,12 @@ Pending.
 | `src/deep_isochron/plotting/deformation.py` — the strip, the animation, and the pair's titles and axis labels | See complaints above. | To be discussed. |
 | `src/deep_isochron/plotting/__init__.py` — the deformation exports | Simple change. | None |
 | `tests/test_plotting.py` — the three tests of the strip and the animation | Skippig for now since the plotting functions will need a overhaul. | None for now. |
+| `src/deep_isochron/plotting/deformation/sheet.py` — `SheetConfig`, `Sheet`, the stages, `cell_jacobians`, `sheet_limits` | | |
+| `src/deep_isochron/plotting/deformation/metrics.py` — `CellMetric`, `AREA`, `ANISOTROPY` | | |
+| `src/deep_isochron/plotting/deformation/__init__.py` — the subpackage docstring and re-exports | | |
+| `src/deep_isochron/plotting/scales.py` — `clipped_norm` | | |
+| `src/deep_isochron/plotting/sheet.py` — deleted | | |
+| `src/deep_isochron/plotting/deformation.py` — deleted | | |
+| `src/deep_isochron/plotting/__init__.py` — the subpackage exports and `clipped_norm` | | |
+| `tests/test_plotting.py` — the twelve tests of the sheet, metrics, stages and clipped norm | | |
+| `tests/helpers.py` — `TOL["cell_metric_affine"]` | | |
