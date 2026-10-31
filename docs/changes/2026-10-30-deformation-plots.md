@@ -68,6 +68,24 @@ factor or anisotropy as the fill. The design is the Project document
   the limits and the clipped norm.
 - `tests/helpers.py` — `TOL["cell_values_affine"]` renamed `TOL["cell_metric_affine"]`,
   with its reason reworded.
+- `src/deep_isochron/plotting/deformation/figures.py` (**new**) — `SheetStyle` with
+  `color_limit_quantile` and the figure sizes, the public `draw_sheet`, and
+  `plot_deformation`, `plot_deformation_strip` and `animate_deformation` on the
+  bijection's layers and the trajectories.
+- `src/deep_isochron/plotting/style.py` — `set_limits` and `add_colorbar`, the panel's
+  box and format and the ticked colorbar, as shared helpers.
+- `src/deep_isochron/plotting/deformation/__init__.py` — the re-exports of the figure
+  names.
+- `src/deep_isochron/plotting/__init__.py` — the figure names, `set_limits` and
+  `add_colorbar` exported.
+- `tests/test_plotting.py` — five tests: the pair's panels, the strip's stage selection
+  and range check, the animation's frame count through a GIF, a custom metric through
+  `draw_sheet`, and the limits check.
+- `prototype_analysis.ipynb` — the three cells that called the old API call
+  `plot_deformation` and `plot_deformation_strip`; the five cells of the shoelace
+  investigation deleted.
+- `src/deep_isochron/plotting/deformation/metrics.py` — `AREA` ticks at 0.5 and 2 as
+  well, so that a narrow color range still carries ticks besides ×1.
 
 ## Design
 
@@ -82,6 +100,7 @@ The ledger of the change, in the order the commits will follow. Each item become
    exports in `plotting/__init__.py`; the smoke tests — done.
 4. `plotting/sheet.py`: the geometry of item 1 moved out of `deformation.py`, which had reached the 600-line module limit at item 2 (decided 2026-10-30). — done.
 5. `plotting/deformation/sheet.py`, `metrics.py`, `plotting/scales.py`: the rewrite of items 1–2 after the review of 2026-10-31 — `Sheet` an `eqx.Module` built by its constructor, the fill from the Jacobian at the cell centers through a `CellMetric`, `clipped_norm` as a utility; both old modules deleted, the figures return in item 6 — done.
+6. `plotting/deformation/figures.py`, `plotting/style.py`: the figures on the new API — `plot_deformation`, `plot_deformation_strip`, `animate_deformation` on `transforms` and `trajectories`, public `draw_sheet`, `SheetStyle` with `color_limit_quantile`, `set_limits` and `add_colorbar` as shared helpers; the notebook cells follow — done.
 
 The decisions and their rejected alternatives are written in the documents commit.
 
@@ -124,3 +143,10 @@ Pending.
 | `src/deep_isochron/plotting/__init__.py` — the subpackage exports and `clipped_norm` | | |
 | `tests/test_plotting.py` — the twelve tests of the sheet, metrics, stages and clipped norm | | |
 | `tests/helpers.py` — `TOL["cell_metric_affine"]` | | |
+| `src/deep_isochron/plotting/deformation/figures.py` — `SheetStyle`, `draw_sheet` and the three figures on `transforms` and `trajectories` | | |
+| `src/deep_isochron/plotting/style.py` — `set_limits` and `add_colorbar` | | |
+| `src/deep_isochron/plotting/deformation/__init__.py` — the figure re-exports | | |
+| `src/deep_isochron/plotting/__init__.py` — the figure names and the two helpers exported | | |
+| `tests/test_plotting.py` — the five figure and helper tests | | |
+| `prototype_analysis.ipynb` — the three cells on the new API | | |
+| `src/deep_isochron/plotting/deformation/metrics.py` — the `AREA` ticks | | |

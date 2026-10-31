@@ -8,9 +8,15 @@ sheet mapped by the identity is itself, the area and anisotropy metrics of the i
 are zero and those of a linear map are the logarithms of its determinant and condition
 number by NumPy's SVD of the matrix, the stages and stage maps of a two-layer model end
 at the model's own map in both directions, and the limits are the padded union box.
-``plotting.scales.clipped_norm`` is pinned on hand-made values with literal ends.
+``plotting.scales.clipped_norm`` is pinned on hand-made values with literal ends. The
+deformation figures are pinned by their panels, the strip's stage selection and range
+check, the animation's frames through a saved GIF, and ``draw_sheet`` by a custom
+metric's fill; ``plotting.style.set_limits`` by its length check.
 """
 
+from collections.abc import Callable
+
+import colorcet as cc
 import jax
 import jax.numpy as jnp
 import matplotlib
@@ -29,10 +35,16 @@ from deep_isochron.plotting import (
     plot_isochron_match,
     plot_phase_comparison,
     plot_phase_field,
+    set_limits,
 )
 from deep_isochron.plotting.deformation import (
+    animate_deformation,
     ANISOTROPY,
     AREA,
+    CellMetric,
+    draw_sheet,
+    plot_deformation,
+    plot_deformation_strip,
     Sheet,
     sheet_limits,
     SheetConfig,
@@ -42,7 +54,10 @@ from deep_isochron.plotting.deformation import (
 )
 from deep_isochron.plotting.scales import clipped_norm
 from hypothesis import given
-from jaxtyping import Float
+from jaxtyping import Array, Float
+from matplotlib.animation import PillowWriter
+from matplotlib.collections import LineCollection, QuadMesh
+from PIL import Image
 
 from .helpers import hand_foliation, HAND_FOLIATION_FORM, TOL
 from .strategies import perturb, planar_matrices
@@ -155,18 +170,24 @@ def test_isochron_log_polar_and_hairpins(foliation):
 
 
 @pytest.fixture(scope="module")
-def square_sheet() -> Sheet:
-    """A sheet of 8×8 cells on $[-1, 1]^2$ with two synthetic trajectories, a spiral
-    arc and a straight segment, and one extra curve of another length, an arc of 30
-    samples."""
+def trajectories() -> Float[np.ndarray, "2 50 2"]:
+    """Two synthetic trajectories in $[-1, 1]^2$: a spiral arc and a straight
+    segment."""
     t = np.linspace(0.0, 1.0, 50)
     spiral = 0.8 * t[:, None] * np.stack([np.cos(6 * t), np.sin(6 * t)], axis=-1)
     segment = np.stack([t - 0.5, 0.5 * t - 0.9], axis=-1)
+    return np.stack([spiral, segment])
+
+
+@pytest.fixture(scope="module")
+def square_sheet(trajectories: Float[np.ndarray, "2 50 2"]) -> Sheet:
+    """A sheet of 8×8 cells on $[-1, 1]^2$ with the two trajectories and one extra
+    curve of another length, an arc of 30 samples."""
     s = np.linspace(0.0, 2.0, 30)
     arc = 0.6 * np.stack([np.cos(s), np.sin(s)], axis=-1)
     return Sheet(
         (-1.0, -1.0, 1.0, 1.0),
-        np.stack([spiral, segment]),
+        trajectories,
         curves=(arc,),
         config=SheetConfig(cells=8),
     )
@@ -347,3 +368,87 @@ def test_clipped_norm_rejects_a_bad_quantile():
     for quantile in (0.4, 1.5):
         with pytest.raises(ValueError, match=str(quantile)):
             clipped_norm(np.ones((2, 2)), quantile, symmetric=False)
+
+
+def test_plot_deformation_draws_both_panels(layers, trajectories):
+    """At the default keywords: the domain and image panels and a colorbar, the domain
+    panel holding one fill and one halo'd line per trajectory."""
+    fig = plot_deformation(layers, trajectories)
+    assert len(fig.axes) == 3
+    domain, image = fig.axes[:2]
+    assert (domain.get_title(), image.get_title()) == ("domain", "image")
+    assert len([c for c in domain.collections if isinstance(c, QuadMesh)]) == 1
+    halos = [line for line in domain.lines if line.get_path_effects()]
+    assert len(halos) == len(trajectories)
+    plt.close(fig)
+
+
+def test_plot_deformation_strip_stages(layers, trajectories):
+    """Two selected stages give two panels titled by their stage labels and a colorbar;
+    a stage past the last layer raises with its index."""
+    fig = plot_deformation_strip(layers, trajectories, stages=(0, 2))
+    assert len(fig.axes) == 3
+    titles = [ax.get_title() for ax in fig.axes[:2]]
+    labels = stage_labels(layers)
+    assert titles == [labels[k].replace(" — ", "\n", 1) for k in (0, 2)]
+    plt.close(fig)
+    with pytest.raises(ValueError, match="5"):
+        plot_deformation_strip(layers, trajectories, stages=(0, 5))
+    plt.close("all")
+
+
+def test_animate_deformation_writes_every_frame(layers, trajectories, tmp_path):
+    """The animation saved as a GIF has one frame per stage, the start included."""
+    animation = animate_deformation(layers, trajectories)
+    path = tmp_path / "flipbook.gif"
+    animation.save(path, writer=PillowWriter(fps=2))
+    plt.close("all")
+    with Image.open(path) as gif:
+        assert gif.n_frames == len(layers) + 1
+
+
+def _center_x(
+    f: Callable[[Float[Array, " 2"]], Float[Array, " 2"]],
+    centers: Float[Array, "c c 2"],
+) -> Float[Array, "c c"]:
+    """The $x$-coordinate of each cell center's image under `f`."""
+    return jax.vmap(jax.vmap(f))(centers)[..., 0]
+
+
+def test_draw_sheet_with_a_custom_metric(square_sheet):
+    """A metric defined outside the package fills each cell with its value, repeated
+    over the cell's sub-quads, in the metric's colormap blended over white; the mesh,
+    the circles and the extra curve are one line collection each."""
+    metric = CellMetric(
+        fn=_center_x,
+        cmap=cc.cm.CET_L17,
+        symmetric=False,
+        label="$x$",
+        tick_values=(),
+    )
+    values = np.asarray(metric.fn(lambda x: x, square_sheet.centers))
+    fig, ax = plt.subplots()
+    norm = clipped_norm(values, 1.0, symmetric=False)
+    fill = draw_sheet(ax, square_sheet, values, norm, metric)
+    fine = np.asarray(fill.get_array()).reshape(32, 32)
+    np.testing.assert_array_equal(fine[::4, ::4], values)
+    alpha = 0.25  # SheetStyle's default fill_alpha
+    np.testing.assert_allclose(
+        fill.cmap(1.0)[:3],
+        1.0 - alpha * (1.0 - np.asarray(metric.cmap(1.0)[:3])),
+        rtol=0.0,
+        atol=TOL["identity"],
+    )
+    assert len([c for c in ax.collections if isinstance(c, LineCollection)]) == 3
+    plt.close(fig)
+
+
+def test_set_limits_rejects_three_floats():
+    """Three limits raise; four set the box at equal aspect."""
+    fig, ax = plt.subplots()
+    with pytest.raises(ValueError, match="3"):
+        set_limits(ax, (0.0, 1.0, 2.0))
+    set_limits(ax, (0.0, -1.0, 2.0, 3.0))
+    assert ax.get_xlim() == (0.0, 2.0) and ax.get_ylim() == (-1.0, 3.0)
+    assert ax.get_aspect() == 1.0
+    plt.close(fig)

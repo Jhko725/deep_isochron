@@ -6,6 +6,13 @@ its fill shows, from the map at the cell's center; the figures draw the stages w
 fill.
 """
 
+from .figures import (
+    animate_deformation as animate_deformation,
+    draw_sheet as draw_sheet,
+    plot_deformation as plot_deformation,
+    plot_deformation_strip as plot_deformation_strip,
+    SheetStyle as SheetStyle,
+)
 from .metrics import (
     ANISOTROPY as ANISOTROPY,
     AREA as AREA,

@@ -81,7 +81,7 @@ AREA = CellMetric(
     cmap=cc.cm.CET_D1A,
     symmetric=True,
     label="area factor",
-    tick_values=(0.1, 0.3, 1.0, 3.0, 10.0),
+    tick_values=(0.1, 0.3, 0.5, 1.0, 2.0, 3.0, 10.0),
 )
 
 ANISOTROPY = CellMetric(
