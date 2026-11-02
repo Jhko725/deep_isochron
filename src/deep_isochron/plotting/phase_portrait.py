@@ -5,8 +5,12 @@ of a point on the limit cycle, with a delay or an advance depending on the kick.
 Every drawn object comes from the normal form itself: its closed-form `flow`, `phase`,
 `limit_cycle`, `period` and `in_basin`. `PortraitStyle` holds the drawing constants, a
 frozen dataclass changed one field at a time with `copy.replace`. Time is labeled in
-units of the period, as in `t = 1.25T`, and the phase-plane panel has no ticks, since
-the coordinates mean nothing to the audience.
+units of the period, as in `t = 1.25T`, and the phase-plane panel has no tick marks or
+tick labels, since the coordinates mean nothing to the audience.
+
+The figures draw under the style that the caller activates, such as
+`configure_rcparams`, and override neither its grid nor its spines: the phase plane
+keeps its tick positions so that a grid has lines to draw.
 
 The design and its decisions are in `docs/changes/2026-11-02-ksiam-animations.md`.
 """
@@ -38,6 +42,13 @@ MINUS = "\N{MINUS SIGN}"
 
 _SAMPLES_PER_FRAME = 10
 """Trajectory samples per frame, so that traces and tails show no corners on a slide."""
+
+_MARGINS = (0.15, 0.35, 0.5, 0.15)
+"""The figure margins left, right, bottom and top, in inches: the bottom one holds the
+time axis's tick labels, and the right one the half of its last label past the axis."""
+
+_PANEL_GAP = 0.4
+"""The gap between the phase plane and the time axis, in inches."""
 
 
 @dataclass(frozen=True)
@@ -84,8 +95,8 @@ class PortraitStyle:
     kick_pause_seconds: float = 1.5
     tail_periods: float = 0.5
     kick_arrow_frames: int = 3
-    box: float = 2.4
-    font_size: float = 14.0
+    box: float = 1.8
+    font_size: float = 18.0
     annotation_font_size: float = 20.0
     cycle_width: float = 3.0
     isochron_width: float = 1.0
@@ -101,22 +112,39 @@ class PortraitStyle:
 
 # ------------------------------------------------------------ shared helpers ------
 def _portrait_figure(style: PortraitStyle) -> tuple[Figure, Axes, Axes]:
-    """A figure with a white opaque background, a square phase-plane axis without
-    ticks on the left, spanning `±style.box`, and a time axis on the right.
+    """A figure with a white opaque background, a square phase-plane axis on the left,
+    spanning `±style.box` without tick marks or tick labels, and a time axis on the
+    right with the same top and bottom edges.
+
+    The axes are placed in inches from `style.figsize`, `_MARGINS` and `_PANEL_GAP`:
+    the plane's side is the figure's height less the bottom and top margins, and the
+    time axis takes the remaining width. Both axes draw their grid and ticks at zorder
+    0.5, below the limit cycle at zorder 1 and every other artist.
 
     **Returns:**
 
     The figure, the phase-plane axis and the time axis.
     """
-    fig = plt.figure(
-        figsize=style.figsize, dpi=style.dpi, facecolor="white", layout="constrained"
+    width, height = style.figsize
+    left, right, bottom, top = _MARGINS
+    side = height - bottom - top
+    time_left = left + side + _PANEL_GAP
+    fig = plt.figure(figsize=style.figsize, dpi=style.dpi, facecolor="white")
+    plane = fig.add_axes((left / width, bottom / height, side / width, side / height))
+    time = fig.add_axes(
+        (
+            time_left / width,
+            bottom / height,
+            (width - right - time_left) / width,
+            side / height,
+        )
     )
-    plane, time = fig.subplots(1, 2, width_ratios=(1.0, 1.6))
     plane.set_xlim(-style.box, style.box)
     plane.set_ylim(-style.box, style.box)
     plane.set_aspect("equal")
-    plane.set_xticks([])
-    plane.set_yticks([])
+    plane.tick_params(length=0, labelbottom=False, labelleft=False)
+    for ax in (plane, time):  # a grid of the active style below every drawn artist
+        ax.set_axisbelow(True)
     return fig, plane, time
 
 
@@ -172,13 +200,14 @@ def _time_axis(
     ax: Axes, n_periods: int, y_limits: tuple[float, float], style: PortraitStyle
 ) -> None:
     """Set up `ax` as the time axis over `n_periods` periods: x ticks at
-    `0, T, 2T, …`, no y ticks, and the y-limits `y_limits`, fixed over the run."""
+    `0, T, 2T, …`, no y tick marks or tick labels, and the y-limits `y_limits`, fixed
+    over the run."""
     ax.set_xlim(0.0, n_periods)
     ax.set_ylim(*y_limits)
     ax.set_xticks(range(n_periods + 1))
     ax.set_xticklabels(["0", "T"] + [f"{m}T" for m in range(2, n_periods + 1)])
-    ax.set_yticks([])
-    ax.tick_params(labelsize=style.font_size)
+    ax.tick_params(axis="x", labelsize=style.font_size)
+    ax.tick_params(axis="y", length=0, labelleft=False)
 
 
 def _frame_sequence(
@@ -344,8 +373,13 @@ def animate_kick(
     The peaks are where the phase is 0, since the cycle's point at phase 0 is the one
     of largest horizontal coordinate (`AbstractNormalForm.limit_cycle`).
 
-    The caller saves the animation, as a GIF with `PillowWriter(fps=style.fps)` or as
-    an MP4 with the recipe of `animate_deformation`'s docstring and `fps=style.fps`.
+    The caller activates the plot style, such as `configure_rcparams`, and saves the
+    animation, as a GIF with
+    `animation.save(path, writer=PillowWriter(fps=style.fps), dpi=style.dpi)` or as an
+    MP4 with the recipe of `animate_deformation`'s docstring, `fps=style.fps` and
+    `dpi=style.dpi`. The explicit `dpi` keeps the size of `style.figsize` and
+    `style.dpi`, since `FuncAnimation.save` otherwise takes `savefig.dpi`, which the
+    project style sets to 600.
 
     **Arguments:**
 

@@ -32,6 +32,14 @@ is the Project document `claude/ksiam-animations-handoff-2026-11-02.md`.
   samples per frame; `_frame_sequence` takes the paused frames and their seconds.
 - `tests/test_phase_portrait.py` — the GIF's summed frame durations include the kick
   pause and the longer hold.
+- `src/deep_isochron/plotting/phase_portrait.py` — after the second review of A1: the
+  figures draw under the style that the caller activates, the phase plane hides its
+  tick marks and tick labels but keeps its tick positions for the grid, the grid lies
+  below every drawn artist, both panels share their top and bottom edges with a square
+  plane placed in inches from `_MARGINS` and `_PANEL_GAP`, `font_size` 18, `box` 1.8,
+  and the docstring's save example passes `dpi=style.dpi`.
+- `tests/test_phase_portrait.py` — the frame count runs under `configure_rcparams` and
+  saves at `dpi=style.dpi`; `test_panels_share_top_and_bottom` checks the panel edges.
 
 ## Design
 
@@ -72,3 +80,5 @@ Pending.
 | `tests/helpers.py` — `TOL["relaxed_phase"]` | | |
 | `src/deep_isochron/plotting/phase_portrait.py` — slower A1, the kick pause, the longer hold, larger Δφ labels, finer traces | | |
 | `tests/test_phase_portrait.py` — the frame durations with the kick pause and the longer hold | | |
+| `src/deep_isochron/plotting/phase_portrait.py` — A1 under the project style, equal panel heights, larger text, zoomed plane | | |
+| `tests/test_phase_portrait.py` — the frame count under the project style, the panel edges | | |

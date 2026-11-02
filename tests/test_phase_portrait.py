@@ -2,16 +2,18 @@
 
 The phase shift that `animate_kick` labels is pinned against an independent oracle: the
 polar angle of each kicked copy twelve periods after the kick, when the kick has relaxed
-onto the cycle. The animation is pinned by the frames of a saved GIF, and its arguments
-by the four errors it raises.
+onto the cycle. The animation is pinned by the frames of a saved GIF, its layout by
+the edges of its two panels, and its arguments by the four errors it raises. The figure
+tests run under the project style, as the notebooks do.
 """
 
 from pathlib import Path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-from deep_isochron.plotting import animate_kick
+from deep_isochron.plotting import animate_kick, configure_rcparams, PortraitStyle
 from deep_isochron.plotting.phase_portrait import _kick_scene
 from deep_isochron.systems.normal_forms import (
     AbstractNormalForm,
@@ -52,17 +54,35 @@ def test_kick_phase_shift_matches_relaxed_angles():
 
 
 def test_animate_kick_writes_every_frame(tmp_path: Path):
-    """The animation saved as a GIF plays 4 × 40 + 1 frames, the 30 frames of the
-    1.5-second kick pause and the 60 frames of the 3-second final hold. Pillow merges
-    identical consecutive frames into one of longer duration, so the frames are counted
-    by duration, 50 ms each at 20 fps."""
-    animation = animate_kick(PANEL_2, kick_phase=0.83, kicks=KICKS, n_periods=4)
+    """The animation saved as a GIF under the project style plays 4 × 40 + 1 frames,
+    the 30 frames of the 1.5-second kick pause and the 60 frames of the 3-second final
+    hold. Pillow merges identical consecutive frames into one of longer duration, so the
+    frames are counted by duration, 50 ms each at 20 fps."""
     path = tmp_path / "kick.gif"
-    animation.save(path, writer=PillowWriter(fps=20))
-    plt.close("all")
+    with matplotlib.rc_context():
+        configure_rcparams()
+        animation = animate_kick(PANEL_2, kick_phase=0.83, kicks=KICKS, n_periods=4)
+        animation.save(path, writer=PillowWriter(fps=20), dpi=PortraitStyle().dpi)
+        plt.close("all")
     with Image.open(path) as gif:
         durations = [frame.info["duration"] for frame in ImageSequence.Iterator(gif)]
     assert sum(durations) == (4 * 40 + 1 + round(1.5 * 20) + round(3.0 * 20)) * 50
+
+
+def test_panels_share_top_and_bottom():
+    """Under the project style, the drawn phase plane is square and its top and bottom
+    edges are those of the time axis, to within one pixel."""
+    with matplotlib.rc_context():
+        configure_rcparams()
+        animation = animate_kick(PANEL_2, kick_phase=0.83, kicks=KICKS, n_periods=4)
+        fig = plt.gcf()  # the figure that animate_kick has just created
+        fig.canvas.draw()  # also renders the first frame of the animation
+        plane, time = (ax.get_window_extent() for ax in fig.axes)
+        plt.close("all")
+    del animation
+    assert abs(plane.width - plane.height) <= 1.0
+    assert abs(plane.y0 - time.y0) <= 1.0
+    assert abs(plane.y1 - time.y1) <= 1.0
 
 
 @pytest.mark.parametrize(
