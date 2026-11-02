@@ -16,6 +16,16 @@ is the Project document `claude/ksiam-animations-handoff-2026-11-02.md`.
 
 ## Files
 
+- `src/deep_isochron/plotting/phase_portrait.py` (**new**) — `PortraitStyle`, the
+  shared drawing helpers, `_KickScene` and `_kick_scene`, and `animate_kick`, which
+  animates a point on the cycle and its kicked copies and labels each copy's Δφ.
+- `src/deep_isochron/plotting/__init__.py` — exports `PortraitStyle` and
+  `animate_kick`; the module docstring names the animations.
+- `tests/test_phase_portrait.py` (**new**) — the Δφ oracle against the polar angles
+  twelve periods after the kick, the GIF's frames counted by duration, and the four
+  errors of `animate_kick`.
+- `tests/helpers.py` — the `TOL` entry `relaxed_phase`.
+
 ## Design
 
 The ledger of the change, in the order the commits will follow. Each item becomes a
@@ -23,7 +33,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 
 1. `plotting/phase_portrait.py`: `PortraitStyle`, the shared drawing helpers,
    `_kick_scene` and `animate_kick`; the exports; `tests/test_phase_portrait.py` with
-   the Δφ oracle, the frame count and the errors; `TOL["relaxed_phase"]`.
+   the Δφ oracle, the frame count and the errors; `TOL["relaxed_phase"]` — done.
 2. `plotting/phase_portrait.py`: `_sync_scene` and `animate_isochron_sync`; the export;
    the seeded-phase, frame-count and error tests.
 3. `ksiam_animations.ipynb`: the A1 and A2 cells, the GIF and MP4 exports, and the
@@ -49,3 +59,7 @@ Pending.
 
 | Change | Thoughts | Modifications |
 |---|---|---|
+| `src/deep_isochron/plotting/phase_portrait.py` — `PortraitStyle`, the shared helpers, `_kick_scene`, `animate_kick` | | |
+| `src/deep_isochron/plotting/__init__.py` — the exports of `PortraitStyle` and `animate_kick` | | |
+| `tests/test_phase_portrait.py` — the Δφ oracle, the frame count, the errors | | |
+| `tests/helpers.py` — `TOL["relaxed_phase"]` | | |

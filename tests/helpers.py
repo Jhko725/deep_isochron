@@ -121,6 +121,11 @@ TOL = {
     # affine map, against the matrix's determinant and singular values; the Jacobian
     # of an affine map is the matrix, so only round-off remains
     "cell_metric_affine": 1e-12,
+    # ``plotting.phase_portrait``: the polar angle of a kicked point twelve periods
+    # after the kick, against its asymptotic phase, in turns; after 12 periods,
+    # μ¹² ≈ 6e-6 of the kick remains, so the polar angle equals the asymptotic phase to
+    # well within this
+    "relaxed_phase": 1e-4,
 }
 
 

@@ -1,6 +1,7 @@
 """Plotting: the project's matplotlib style, a color scale utility, a trajectory plot,
-the phase-field and isochron figures of a reference and a trained model, and the
-deformation figures of a planar map."""
+the phase-field and isochron figures of a reference and a trained model, the
+deformation figures of a planar map, and the animations of a normal form's oscillator
+for a talk."""
 
 from .deformation import (
     animate_deformation as animate_deformation,
@@ -26,6 +27,10 @@ from .isochrons import (
     plot_isochron_match as plot_isochron_match,
     plot_phase_comparison as plot_phase_comparison,
     plot_phase_field as plot_phase_field,
+)
+from .phase_portrait import (
+    animate_kick as animate_kick,
+    PortraitStyle as PortraitStyle,
 )
 from .scales import clipped_norm as clipped_norm
 from .style import (
