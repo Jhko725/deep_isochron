@@ -1,18 +1,33 @@
 ---
 type: change
-status: in progress (unit 1 of 3 next)
-updated: 2026-10-30
+status: landed 2026-11-02 (units 1–3, the review of 2026-10-31, units 5–8, the documents); review of units 5–8 and the documents pending
+updated: 2026-11-02
 ---
 
 # `deformation-plots` — rubber-sheet figures of a planar bijection
 
 ## Summary
 
-Pending: written in the documents commit. The branch adds `plotting/deformation.py`,
-which draws how any map of the plane stretches a mesh and a batch of trajectories, as a
-domain | image pair, a strip of stages and a flipbook animation, with the per-cell area
-factor or anisotropy as the fill. The design is the Project document
-`claude/deformation-plots-handoff-2026-10-30.md`.
+The branch adds the deformation figures: how a bijection of the plane — the
+conjugacy's INN, layer by layer — stretches a mesh and a batch of trajectories, as a
+domain | image pair (`plot_deformation`), a strip of stages
+(`plot_deformation_strip`) and a flipbook animation (`animate_deformation`), with the
+area factor or the anisotropy of the map at each cell as the fill. The three figure
+functions take the bijection's layers and the trajectories and default everything
+else; the sheet, the metric and the drawing function are public for a custom figure.
+The package is `plotting/deformation/` (`sheet`, `metrics`, `style`, `figures`) with
+`clipped_norm` in `plotting/scales.py` and two axes helpers in `plotting/style.py`.
+
+The work ran in two rounds. The first (units 1–4, Project document
+`claude/deformation-plots-handoff-2026-10-30.md`) landed a lower-level API; Joon's
+review of 2026-10-31 (the first twelve review rows) rejected its shape, and the second
+round (units 5–8, `claude/deformation-plots-handoff-2-2026-10-31.md`) rewrote it on the
+same branch, then folded in a coworker's review of the FHN flipbook and a style
+comparison. The first round's commits stay in the history; nothing of their code
+survives.
+
+Reversible: one `git revert` per commit; no data, hash or checkpoint changes. The
+`video` extra adds an optional dependency only.
 
 ## Files
 
@@ -138,7 +153,62 @@ The ledger of the change, in the order the commits will follow. Each item become
 7. Coworker's review of the FHN flipbook (2026-11-02): colorbar ticks by a 1–3–10 / 1–2–5 rule with a tunable layout; `inverse=True` plays the forward sequence backward from the deformed sheet; MP4 export at 24 fps with `imageio-ffmpeg` as the `video` extra — done.
 8. `curve_colors` as one color, a sequence or a `ListedColormap`; defaults `fill_alpha=0.5`, `curve_colors="0.1"` (Joon's pick of the style experiment, 2026-11-02); `SheetStyle` moved to `deformation/style.py` for the module limit — done.
 
-The decisions and their rejected alternatives are written in the documents commit.
+The decisions, each with the alternative that was rejected:
+
+- **The figure functions take the numerics' objects.** `plot_deformation(transforms,
+  trajectories)` and its two siblings build the sheet, the stages, the fill and the
+  color scale themselves. Rejected: the first round's API, where the caller composed
+  `build_sheet`, `stage_sheets`, `cell_values`, `area_scale` and the renderer by hand
+  (review row 1: "too much complexity for the user"). The composition is one place, and
+  the pieces stay public as the opt-in layer.
+- **`Sheet` is an `eqx.Module` whose constructor builds its point sets.** It passes
+  through `vmap`, which the container rule (`coding-standards.md` § Containers) makes a
+  pytree, and `Sheet.map` is a `jax.tree.map` over its leaves. Rejected: a frozen
+  NumPy dataclass with a free `build_sheet` (round 1), which misread both the
+  container rule and the `build_*` convention — the latter exists so that `model/` and
+  `training/` never see configs, not for constructors.
+- **The fill is the metric of the map at the cell center.** `cell_jacobians` evaluates
+  `jax.jacfwd` there; `AREA` is log|det J| and `ANISOTROPY` log σ_max/σ_min. Rejected:
+  the shoelace area of the four corner images and the affine fit to them (round 1).
+  On the FHN model that area went negative in one cell at 24² and two at 48², because
+  a straight-sided quad cannot represent a cell whose image bends inside it, while a
+  diffeomorphism's Jacobian is defined and non-singular everywhere. The sub-quad fill,
+  the mesh polylines and the circles are still mapped points, so the drawn geometry is
+  exact; only the color comes from the center.
+- **The metric is a value, `CellMetric(fn, cmap, symmetric, label, log_scale)`.** A
+  notebook defines a third metric as an instance. Rejected: a `Literal["area",
+  "anisotropy"]` selector with an `if` per metric in the renderer, and a `CellValues`
+  record carrying both scalars.
+- **`clipped_norm` is a utility in `plotting/scales.py`; the quantile is
+  `SheetStyle.color_limit_quantile`.** Rejected: `area_scale`/`anisotropy_scale`, two
+  functions that shared the clipping and differed only in the metric's constants
+  (review row 5), and a required `scale` argument on every renderer.
+- **Colorbar ticks come from the norm's range** by the 1–3–10 series, then 1–2–5, then
+  a rounded locator; `log_scale=False` keeps matplotlib's ticks. Rejected: a tick list
+  on the metric (unit 7's `tick_values`), which crowded at log spacing once the list
+  mixed the two series.
+- **`inverse=True` plays the forward sequence backward**: the sheet starts deformed
+  and the inverse layers peel off last-first until the mesh is regular, with the fill
+  relative to the deformed start (a coworker's request, 2026-11-02). Rejected: a
+  regular mesh laid in the base plane and pulled back, which is the isochron picture
+  and stays available through `Sheet` on a base-plane box with `stage_sheets(...,
+  inverse=True)`.
+- **A tinted mesh is drawn opaque with the colormap pre-blended over white**, never
+  with `alpha=`: under a real alpha the pixels on shared sub-quad edges are painted
+  twice and show as seams.
+- **Style defaults are the bold fill with neutral curves** (`fill_alpha=0.5`,
+  `curve_colors="0.1"`), Joon's pick from three variants rendered on the prototype
+  scene on 2026-11-02; `curve_colors` also takes a sequence or a `ListedColormap`, so
+  the earlier look is `SheetStyle(fill_alpha=0.25, curve_colors=cc.cm.glasbey_dark)`.
+- **A flipbook, not a tween.** The animation shows the stages themselves, one per
+  second, and the MP4 is written at 24 fps by duplicating frames (`-r 24`) because
+  players handle a 1 fps stream badly. Rejected for now: a convex interpolation
+  between stages, which is not a diffeomorphism and can fold.
+- **Subpackage `plotting/deformation/`** of four modules, each under the 600-line
+  limit, split by what serves what; `clipped_norm` in `plotting/scales.py` rather than
+  a `utils` module.
+
+None of these meets the ADR test: every one is a revert away.
 
 ## Bugs fixed
 
@@ -146,13 +216,60 @@ None.
 
 ## Tests
 
-Pending: the fast tier of `tests/test_plotting.py` runs before each commit; the full
-tier runs once before the documents commit. At `913c52e` (the branch point)
-`uv run just test dev tests/test_plotting.py` is `5 passed`.
+- `uv run just check`: clean on every commit of the branch.
+- The full tier, `uv run just test default` at `4107760` (two cores, 7 GB, JAX's
+  persistent compilation cache on): `684 passed, 10 skipped, 1 xfailed in 1396 s`. The
+  skips are the `auto` tests without an AUTO-07p tree; the `xfail` is the pinned
+  `sinh` second-derivative case of `tests/test_analytic.py`, unrelated. The branch
+  point `913c52e` was last recorded at `673 passed, 1 xfailed`
+  (`2026-10-30-phase-turns.md`); the eleven new passes are this branch's.
+- `tests/test_plotting.py` at the `dev` profile: `26 passed` (5 isochron tests from
+  before the branch, 21 of this branch). Per unit, before its commit: unit 1 `12`, unit
+  2 `16`, units 3a–3b `16`/`19`, unit 5 `17`, unit 6 `22`, unit 7 `25`, unit 8 `26`.
+- What the branch's tests pin: `SheetConfig` and `Sheet` reject bad values and boxes;
+  `Sheet.map` of the identity is the sheet, extra curves included; `AREA` and
+  `ANISOTROPY` are zero on the identity and on a reflection, and equal NumPy's
+  determinant and singular-value ratio on a linear map (Hypothesis over
+  `planar_matrices`, to `TOL["cell_metric_affine"]`); `stage_sheets` has
+  `len(layers) + 1` entries ending at `sheet.map(model)` in both directions, and
+  `stage_maps` agrees with it stage by stage; the labels; the padded limits;
+  `clipped_norm`'s symmetric range, zero exclusion and quantile check; the colorbar
+  tick rule on three ranges; the inverse sequence equals the forward sheets reversed
+  with the negated area fill; `curve_colors` in its three forms; and Agg smoke tests of
+  the pair, the strip (stage selection and range check), the animation (frame count
+  through a GIF), `draw_sheet` with a custom metric, `set_limits` and the colorbar
+  label placement.
+- Not covered by a test: the rendered pictures. Each unit's figures were rendered on
+  the prototype scene (an untracked eight-layer INN at random initialization, seed 7,
+  with twelve FHN trajectories) and viewed by the orchestrator against the prototype
+  images before the unit was accepted; the MP4 was probed (`h264`, 1280×720,
+  `yuv420p`, 24 fps).
 
 ## Open issues
 
-Pending.
+- A tween between stages (the convex interpolation of the drawn points) is deferred:
+  it is not a diffeomorphism and can fold; the flipbook is the honest sequence. Open
+  until Joon has used the flipbook in a talk.
+- The dense Jacobian views (a log|det J| heatmap on a fine grid, Tissot ellipses by
+  linearization, the stretch-direction field) are a separate figure family, not
+  started; `cell_jacobians` is the building block.
+- The isochron pullback picture (a regular mesh in the base plane pulled back through
+  the inverse layers) is reachable only through `Sheet` and `stage_sheets` by hand; a
+  figure function for it waits for the isochron work to ask.
+- The quantile clipping saturates on a trained map: the FHN flipbook's shrinking
+  corners all read as the color limit from stage 6 on. `color_limit_quantile` is the
+  knob; whether a per-stage range reads better is untried.
+- Two gaps of the first handoff, recorded for the next one: a test fixture of freshly
+  built layers is the identity (`BiLipschitzLinear` defaults to `init="identity"`,
+  `CouplingFlow` zeroes its conditioner's final layer), so an endpoint test on it
+  cannot fail — the fixture is perturbed with `tests/strategies.perturb`; and a
+  container that passes through `vmap` is an `eqx.Module` by the rule even when
+  matplotlib consumes it afterwards. The `build_*` convention of the `code-conventions`
+  skill reads as if it covered every constructor; it covers construction from a
+  config, and a proposal to narrow its wording goes to Joon with this branch.
+- `eqx.filter_jit(layer)` on a module instance raises `TypeError: __name__ must be set`
+  in the pinned equinox; `stage_sheets` jits the bound `__call__`. Worth a line in
+  `coding-standards.md` if it recurs.
 
 ## Review notes
 

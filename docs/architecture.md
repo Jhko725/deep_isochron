@@ -192,13 +192,26 @@ deep_isochron
 │                            create refuses an existing run, resume is explicit);
 │                            Experiment.from_config(cfg, run_dir); train = Experiment.from_config().train();
 │                            load_run / load_model (template= for hand-built models)
-├── plotting/                matplotlib style (configure_rcparams), colored_curve;
+├── plotting/                matplotlib style (configure_rcparams), colored_curve,
+│   │                        set_limits, add_colorbar (style.py); clipped_norm (scales.py)
 │   ├── trajectories.py      plot_source_trajectories
-│   └── isochrons.py         plot_phase_field (a field panel, isochrons as white curves);
-│                            plot_phase_comparison (reference, learned, aligned residual);
-│                            plot_isochron_match (reference colored by phase, learned
-│                            dashed); plot_isochron_hairpins (one isochron into the
-│                            phaseless point, plane and log-polar, matched to the model)
+│   ├── isochrons.py         plot_phase_field (a field panel, isochrons as white curves);
+│   │                        plot_phase_comparison (reference, learned, aligned residual);
+│   │                        plot_isochron_match (reference colored by phase, learned
+│   │                        dashed); plot_isochron_hairpins (one isochron into the
+│   │                        phaseless point, plane and log-polar, matched to the model)
+│   └── deformation/         how a bijection stretches a mesh and trajectories
+│       ├── sheet.py         SheetConfig; Sheet (eqx.Module: mesh, sub-quad fill nodes,
+│       │                    polylines, circles, trajectories, curves) · map(f);
+│       │                    stage_sheets / stage_maps / stage_labels; cell_jacobians;
+│       │                    sheet_limits
+│       ├── metrics.py       CellMetric(fn, cmap, symmetric, label, log_scale); AREA
+│       │                    (log|det J|), ANISOTROPY (log σmax/σmin)
+│       ├── style.py         SheetStyle (fill, mesh, curves, colorbar, figure sizes,
+│       │                    color_limit_quantile)
+│       └── figures.py       draw_sheet; plot_deformation (domain | image),
+│                            plot_deformation_strip (stages), animate_deformation
+│                            (flipbook; MP4 save call in the docstring)
 └── utils/                   shared helpers
     ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian, wrap_phase
     │                        (constraints, normal forms, analysis)
