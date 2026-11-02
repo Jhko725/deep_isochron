@@ -97,3 +97,4 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `merge-conflict-check` | [`2026-10-29-merge-conflict-check.md`](changes/2026-10-29-merge-conflict-check.md) |
 | `phase-turns` | [`2026-10-30-phase-turns.md`](changes/2026-10-30-phase-turns.md) |
 | `deformation-plots` | [`2026-10-30-deformation-plots.md`](changes/2026-10-30-deformation-plots.md) |
+| `ksiam-animations` | [`2026-11-02-ksiam-animations.md`](changes/2026-11-02-ksiam-animations.md) |
