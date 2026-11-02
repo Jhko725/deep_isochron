@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from deep_isochron.plotting import animate_kick, configure_rcparams, PortraitStyle
-from deep_isochron.plotting.phase_portrait import _kick_scene
+from deep_isochron.plotting.phase_portrait.kick import _kick_scene
 from deep_isochron.systems.normal_forms import (
     AbstractNormalForm,
     BautinNormalForm,

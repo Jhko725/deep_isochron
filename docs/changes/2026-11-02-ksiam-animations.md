@@ -40,6 +40,19 @@ is the Project document `claude/ksiam-animations-handoff-2026-11-02.md`.
   and the docstring's save example passes `dpi=style.dpi`.
 - `tests/test_phase_portrait.py` — the frame count runs under `configure_rcparams` and
   saves at `dpi=style.dpi`; `test_panels_share_top_and_bottom` checks the panel edges.
+- `src/deep_isochron/plotting/phase_portrait.py` (**deleted**) — the module becomes a
+  subpackage, because A2 would take it past the 600-line limit; nothing changes in
+  behavior.
+- `src/deep_isochron/plotting/phase_portrait/__init__.py` (**new**) — the subpackage
+  docstring and the exports of `PortraitStyle` and `animate_kick`.
+- `src/deep_isochron/plotting/phase_portrait/style.py` (**new**) — `PortraitStyle`,
+  moved unchanged.
+- `src/deep_isochron/plotting/phase_portrait/drawing.py` (**new**) — the shared
+  private helpers and constants, moved unchanged.
+- `src/deep_isochron/plotting/phase_portrait/kick.py` (**new**) — `MINUS`,
+  `_KickScene`, `_kick_scene`, `_shift_label` and `animate_kick`, moved unchanged.
+- `tests/test_phase_portrait.py` — the import of `_kick_scene` comes from
+  `phase_portrait.kick`.
 
 ## Design
 
@@ -82,3 +95,9 @@ Pending.
 | `tests/test_phase_portrait.py` — the frame durations with the kick pause and the longer hold | | |
 | `src/deep_isochron/plotting/phase_portrait.py` — A1 under the project style, equal panel heights, larger text, zoomed plane | | |
 | `tests/test_phase_portrait.py` — the frame count under the project style, the panel edges | | |
+| `src/deep_isochron/plotting/phase_portrait.py` — deleted; its content moves to the subpackage below | | |
+| `src/deep_isochron/plotting/phase_portrait/__init__.py` — the subpackage docstring and the exports of `PortraitStyle` and `animate_kick` | | |
+| `src/deep_isochron/plotting/phase_portrait/style.py` — `PortraitStyle`, moved unchanged | | |
+| `src/deep_isochron/plotting/phase_portrait/drawing.py` — the shared private helpers and constants, moved unchanged | | |
+| `src/deep_isochron/plotting/phase_portrait/kick.py` — `MINUS`, `_KickScene`, `_kick_scene`, `_shift_label`, `animate_kick`, moved unchanged | | |
+| `tests/test_phase_portrait.py` — the import of `_kick_scene` from `phase_portrait.kick` | | |

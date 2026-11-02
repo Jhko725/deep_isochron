@@ -1,248 +1,45 @@
-"""Animations of a normal form for a talk: the phase plane on the left, the horizontal
-coordinate against time on the right. `animate_kick` shows that a kick shifts the phase
-of a point on the limit cycle, with a delay or an advance depending on the kick.
+"""The kick animation: `animate_kick` shows that a kick shifts the phase of a point on
+the limit cycle, with a delay or an advance depending on the kick. The phase plane is on
+the left and the horizontal coordinate against time on the right.
 
 Every drawn object comes from the normal form itself: its closed-form `flow`, `phase`,
-`limit_cycle`, `period` and `in_basin`. `PortraitStyle` holds the drawing constants, a
-frozen dataclass changed one field at a time with `copy.replace`. Time is labeled in
-units of the period, as in `t = 1.25T`, and the phase-plane panel has no tick marks or
-tick labels, since the coordinates mean nothing to the audience.
-
-The figures draw under the style that the caller activates, such as
-`configure_rcparams`, and override neither its grid nor its spines: the phase plane
-keeps its tick positions so that a grid has lines to draw.
+`limit_cycle`, `period` and `in_basin`. `_kick_scene` computes the trajectories and the
+phase shifts, and `animate_kick` draws them with the helpers of `drawing.py`.
 
 The design and its decisions are in `docs/changes/2026-11-02-ksiam-animations.md`.
 """
 
 import math
-from dataclasses import dataclass
 from typing import cast
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Array, ArrayLike, Float
 from matplotlib.animation import FuncAnimation
-from matplotlib.axes import Axes
-from matplotlib.collections import LineCollection
-from matplotlib.colors import to_rgba
-from matplotlib.figure import Figure
 from matplotlib.patches import FancyArrowPatch
-from matplotlib.text import Text
 
-from ..systems.normal_forms.base import AbstractNormalForm
-from ..utils.numerics import phase_difference
+from ...systems.normal_forms.base import AbstractNormalForm
+from ...utils.numerics import phase_difference
+from .drawing import (
+    _clock,
+    _clock_label,
+    _draw_cycle,
+    _fading_tail,
+    _frame_sequence,
+    _portrait_figure,
+    _SAMPLES_PER_FRAME,
+    _set_tail,
+    _time_axis,
+)
+from .style import PortraitStyle
 
 
 MINUS = "\N{MINUS SIGN}"
 """The minus sign of the phase-shift labels, wider than a hyphen."""
 
-_SAMPLES_PER_FRAME = 10
-"""Trajectory samples per frame, so that traces and tails show no corners on a slide."""
 
-_MARGINS = (0.15, 0.35, 0.5, 0.15)
-"""The figure margins left, right, bottom and top, in inches: the bottom one holds the
-time axis's tick labels, and the right one the half of its last label past the axis."""
-
-_PANEL_GAP = 0.4
-"""The gap between the phase plane and the time axis, in inches."""
-
-
-@dataclass(frozen=True)
-class PortraitStyle:
-    """The drawing constants of the phase-portrait animations; `copy.replace` changes
-    one.
-
-    **Attributes:**
-
-    - `figsize`, `dpi`: The figure size in inches and its resolution. The defaults give
-        1920 × 800 pixels, even in both dimensions as the `yuv420p` pixel format of an
-        MP4 requires.
-    - `frames_per_period`: The frames drawn per period of the cycle; with `fps`, one
-        period plays in 2 s.
-    - `fps`: The playback rate in frames per second.
-    - `hold_seconds`: How long the last frame is held, in seconds, with the Δφ labels
-        of `animate_kick` shown.
-    - `kick_pause_seconds`: How long `animate_kick` freezes on the first frame after
-        the kick, in seconds, with the kick arrows shown.
-    - `tail_periods`: The length of the fading tail behind each point in the phase
-        plane, in periods.
-    - `kick_arrow_frames`: The number of frames after the kick pause for which the kick
-        arrows stay drawn.
-    - `box`: The half-width of the square phase-plane view.
-    - `font_size`: The size of all text, in points; the minimum readable on a slide.
-    - `annotation_font_size`: The size of the Δφ labels of `animate_kick`, in points.
-    - `cycle_width`, `isochron_width`: The line widths of the limit cycle and of the
-        isochrons.
-    - `trace_width`: The line width of the tails and of the time series.
-    - `point_size`: The marker size of each moving point.
-    - `cycle_color`: The limit cycle.
-    - `reference_color`: The unkicked reference point.
-    - `delay_color`, `advance_color`: A kicked copy whose phase falls behind the
-        reference's, and one whose phase moves ahead or stays level.
-    - `group_colors`: The points seeded on the first and on the second isochron.
-    - `isochron_color`: The isochrons drawn for orientation only.
-    """
-
-    figsize: tuple[float, float] = (12.0, 5.0)
-    dpi: int = 160
-    frames_per_period: int = 40
-    fps: int = 20
-    hold_seconds: float = 3.0
-    kick_pause_seconds: float = 1.5
-    tail_periods: float = 0.5
-    kick_arrow_frames: int = 3
-    box: float = 1.8
-    font_size: float = 18.0
-    annotation_font_size: float = 20.0
-    cycle_width: float = 3.0
-    isochron_width: float = 1.0
-    trace_width: float = 2.0
-    point_size: float = 9.0
-    cycle_color: str = "black"
-    reference_color: str = "#0072B2"
-    delay_color: str = "#D55E00"
-    advance_color: str = "#009E73"
-    group_colors: tuple[str, str] = ("#0072B2", "#D55E00")
-    isochron_color: str = "0.85"
-
-
-# ------------------------------------------------------------ shared helpers ------
-def _portrait_figure(style: PortraitStyle) -> tuple[Figure, Axes, Axes]:
-    """A figure with a white opaque background, a square phase-plane axis on the left,
-    spanning `±style.box` without tick marks or tick labels, and a time axis on the
-    right with the same top and bottom edges.
-
-    The axes are placed in inches from `style.figsize`, `_MARGINS` and `_PANEL_GAP`:
-    the plane's side is the figure's height less the bottom and top margins, and the
-    time axis takes the remaining width. Both axes draw their grid and ticks at zorder
-    0.5, below the limit cycle at zorder 1 and every other artist.
-
-    **Returns:**
-
-    The figure, the phase-plane axis and the time axis.
-    """
-    width, height = style.figsize
-    left, right, bottom, top = _MARGINS
-    side = height - bottom - top
-    time_left = left + side + _PANEL_GAP
-    fig = plt.figure(figsize=style.figsize, dpi=style.dpi, facecolor="white")
-    plane = fig.add_axes((left / width, bottom / height, side / width, side / height))
-    time = fig.add_axes(
-        (
-            time_left / width,
-            bottom / height,
-            (width - right - time_left) / width,
-            side / height,
-        )
-    )
-    plane.set_xlim(-style.box, style.box)
-    plane.set_ylim(-style.box, style.box)
-    plane.set_aspect("equal")
-    plane.tick_params(length=0, labelbottom=False, labelleft=False)
-    for ax in (plane, time):  # a grid of the active style below every drawn artist
-        ax.set_axisbelow(True)
-    return fig, plane, time
-
-
-def _draw_cycle(ax: Axes, system: AbstractNormalForm, style: PortraitStyle) -> None:
-    """Draw the limit cycle of `system` on `ax` as a thick closed curve."""
-    points = np.asarray(system.limit_cycle(jnp.linspace(0.0, 1.0, 256, endpoint=False)))
-    closed = np.concatenate((points, points[:1]))
-    ax.plot(*closed.T, color=style.cycle_color, lw=style.cycle_width, zorder=1)
-
-
-def _fading_tail(ax: Axes, style: PortraitStyle) -> LineCollection:
-    """An empty line collection on `ax` for a fading tail, filled by `_set_tail`."""
-    tail = LineCollection([], linewidths=style.trace_width, capstyle="round", zorder=3)
-    ax.add_collection(tail)
-    return tail
-
-
-def _set_tail(
-    tail: LineCollection, points: Float[np.ndarray, "n 2"], color: str
-) -> None:
-    """Draw `points`, oldest first, as the segments of `tail` in `color`, its opacity
-    rising linearly from 0 at the oldest segment to 1 at the newest."""
-    segments = np.stack((points[:-1], points[1:]), axis=1)
-    red, green, blue, _ = to_rgba(color)
-    n = len(segments)
-    tail.set_segments(list(segments))
-    tail.set_color([(red, green, blue, (i + 1) / n) for i in range(n)])
-
-
-def _clock(ax: Axes, style: PortraitStyle) -> Text:
-    """The clock text at the top left of `ax`, in a monospace font so that its digits
-    do not jitter; `_clock_label` gives its string."""
-    return ax.text(
-        0.03,
-        0.97,
-        "",
-        transform=ax.transAxes,
-        family="monospace",
-        fontsize=style.font_size,
-        ha="left",
-        va="top",
-        zorder=10,
-    )
-
-
-def _clock_label(frame: int, frames_per_period: int) -> str:
-    """The clock's string at `frame`, the time in periods to two decimals, as in
-    `t = 1.25T`."""
-    return f"t = {frame / frames_per_period:.2f}T"
-
-
-def _time_axis(
-    ax: Axes, n_periods: int, y_limits: tuple[float, float], style: PortraitStyle
-) -> None:
-    """Set up `ax` as the time axis over `n_periods` periods: x ticks at
-    `0, T, 2T, …`, no y tick marks or tick labels, and the y-limits `y_limits`, fixed
-    over the run."""
-    ax.set_xlim(0.0, n_periods)
-    ax.set_ylim(*y_limits)
-    ax.set_xticks(range(n_periods + 1))
-    ax.set_xticklabels(["0", "T"] + [f"{m}T" for m in range(2, n_periods + 1)])
-    ax.tick_params(axis="x", labelsize=style.font_size)
-    ax.tick_params(axis="y", length=0, labelleft=False)
-
-
-def _frame_sequence(
-    n_scene_frames: int, pauses: dict[int, float], fps: int
-) -> list[tuple[int, bool]]:
-    """The frames of an animation over a scene of `n_scene_frames` frames: each scene
-    frame once, and each frame `j` of `pauses` then repeated `round(pauses[j] × fps)`
-    times, so that the clock stops while it is shown.
-
-    **Arguments:**
-
-    - `n_scene_frames`: The number of frames of the scene.
-    - `pauses`: The seconds for which each paused scene frame is held, the final hold
-        included as the entry of the last frame.
-    - `fps`: The playback rate in frames per second.
-
-    **Returns:**
-
-    Pairs `(scene frame, repeat)`, with `repeat` true for the repeats of a pause.
-
-    **Raises:**
-
-    `ValueError` when a key of `pauses` is not a frame of the scene.
-    """
-    outside = [j for j in pauses if not 0 <= j < n_scene_frames]
-    if outside:
-        raise ValueError(f"pauses at frames {outside} are outside the scene.")
-    sequence = []
-    for j in range(n_scene_frames):
-        sequence.append((j, False))
-        sequence.extend([(j, True)] * round(pauses.get(j, 0.0) * fps))
-    return sequence
-
-
-# ------------------------------------------------------------------ the kick -------
 class _KickScene(eqx.Module):
     """The trajectories of `animate_kick`: a reference point on the cycle and its
     copies, kicked at `t = T`, sampled `_SAMPLES_PER_FRAME` times per frame.
