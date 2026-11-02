@@ -83,12 +83,16 @@ def add_colorbar(
     mappable: ScalarMappable,
     *,
     label: str,
-    ticks: Sequence[float],
-    tick_labels: Sequence[str],
-    shrink: float = 0.85,
+    ticks: Sequence[float] | None,
+    tick_labels: Sequence[str] | None,
+    shrink: float,
+    aspect: float,
+    pad: float,
+    tick_fontsize: float,
+    label_above: bool,
 ) -> None:
-    """Add one colorbar of `mappable` at the right of `axes`, with the given ticks and
-    no minor ticks.
+    """Add one colorbar of `mappable` at the right of `axes`, with the given ticks, no
+    tick marks and no minor ticks.
 
     **Arguments:**
 
@@ -97,12 +101,39 @@ def add_colorbar(
     - `mappable`: The artist whose colormap and norm the colorbar shows, such as the
         fill that `draw_sheet` returns.
     - `label`: The colorbar's label.
-    - `ticks`: The tick positions, in the units of the mappable's norm.
-    - `tick_labels`: The text of each tick.
+    - `ticks`: The tick positions, in the units of the mappable's norm; `None` keeps
+        matplotlib's default ticks.
+    - `tick_labels`: The text of each tick; `None` exactly when `ticks` is `None`.
     - `shrink`: The colorbar's length as a fraction of the panels' height.
+    - `aspect`: The ratio of the colorbar's length to its width.
+    - `pad`: The gap between the panels and the colorbar, as a fraction of the panels'
+        width.
+    - `tick_fontsize`: The font size of the tick labels, in points.
+    - `label_above`: Whether the label is the colorbar's title, horizontal above the
+        bar and aligned to its right edge; otherwise it is the rotated label at the
+        bar's side.
+
+    **Raises:**
+
+    `ValueError` if only one of `ticks` and `tick_labels` is `None`.
     """
+    if (ticks is None) != (tick_labels is None):
+        raise ValueError("ticks and tick_labels must both be given or both be None.")
     bar = fig.colorbar(
-        mappable, ax=list(axes), location="right", shrink=shrink, label=label
+        mappable,
+        ax=list(axes),
+        location="right",
+        shrink=shrink,
+        aspect=aspect,
+        pad=pad,
     )
-    bar.set_ticks(list(ticks), labels=list(tick_labels))
+    if label_above:
+        # Right-aligned, so a title wider than the bar extends over the gap to the
+        # panels rather than past the figure's edge.
+        bar.ax.set_title(label, loc="right")
+    else:
+        bar.set_label(label)
+    if ticks is not None and tick_labels is not None:
+        bar.set_ticks(list(ticks), labels=list(tick_labels))
     bar.ax.yaxis.set_minor_locator(NullLocator())
+    bar.ax.tick_params(length=0, labelsize=tick_fontsize)

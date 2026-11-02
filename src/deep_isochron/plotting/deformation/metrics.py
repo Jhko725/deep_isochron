@@ -1,15 +1,16 @@
 r"""The per-cell metrics that color a deformation figure: what each cell's fill shows.
 
 A `CellMetric` holds a function from a map of one point and the cell centers to one
-value per cell, with the colormap, the range convention, the colorbar label and the
-ticks that go with it. `AREA` is the log area factor, $\log |\det J|$, and `ANISOTROPY`
+value per cell, with the colormap, the range convention and the colorbar label that go
+with it. `AREA` is the log area factor, $\log |\det J|$, and `ANISOTROPY`
 the log ratio of the singular values of $J$, both from the Jacobian $J$ of the map at
 the cell centers by `sheet.cell_jacobians`. A notebook defines a third metric as one
 more value, for instance the phase of a model at the image of each cell center:
 
     PHASE = CellMetric(
         fn=lambda f, c: jax.vmap(jax.vmap(lambda x: model.phase(f(x))))(c),
-        cmap=colorcet.cm.CET_C6, symmetric=False, label="phase", tick_values=(),
+        cmap=colorcet.cm.CET_C6, symmetric=False, label="phase",
+        log_scale=False,
     )
 
 The design and its decisions are in `docs/changes/2026-10-30-deformation-plots.md`.
@@ -39,8 +40,8 @@ class CellMetric:
         a factor that is 1 where the map changes nothing; otherwise the range runs from
         a low to a high quantile of the values.
     - `label`: The colorbar's label.
-    - `tick_values`: The factors or ratios that the colorbar may tick, at their
-        logarithms.
+    - `log_scale`: Whether `fn` returns a logarithm, so the colorbar is labeled by the
+        exponentiated factor.
     """
 
     fn: Callable[
@@ -50,7 +51,7 @@ class CellMetric:
     cmap: Colormap
     symmetric: bool
     label: str
-    tick_values: tuple[float, ...]
+    log_scale: bool = True
 
 
 def _log_area(
@@ -81,7 +82,7 @@ AREA = CellMetric(
     cmap=cc.cm.CET_D1A,
     symmetric=True,
     label="area factor",
-    tick_values=(0.1, 0.3, 0.5, 1.0, 2.0, 3.0, 10.0),
+    log_scale=True,
 )
 
 ANISOTROPY = CellMetric(
@@ -89,5 +90,5 @@ ANISOTROPY = CellMetric(
     cmap=cc.cm.CET_L17,
     symmetric=False,
     label=r"$\sigma_{\max} / \sigma_{\min}$",
-    tick_values=(1.0, 1.5, 2.0, 3.0, 5.0, 10.0),
+    log_scale=True,
 )

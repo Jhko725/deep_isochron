@@ -31,6 +31,7 @@ from deep_isochron.model.invertible import (
     SequentialINN,
 )
 from deep_isochron.plotting import (
+    add_colorbar,
     plot_isochron_hairpins,
     plot_isochron_match,
     plot_phase_comparison,
@@ -52,11 +53,14 @@ from deep_isochron.plotting.deformation import (
     stage_maps,
     stage_sheets,
 )
+from deep_isochron.plotting.deformation.figures import _factor_ticks
+from deep_isochron.plotting.deformation.sheet import _stage_sequence
 from deep_isochron.plotting.scales import clipped_norm
 from hypothesis import given
 from jaxtyping import Array, Float
 from matplotlib.animation import PillowWriter
 from matplotlib.collections import LineCollection, QuadMesh
+from matplotlib.colors import Normalize
 from PIL import Image
 
 from .helpers import hand_foliation, HAND_FOLIATION_FORM, TOL
@@ -380,7 +384,74 @@ def test_plot_deformation_draws_both_panels(layers, trajectories):
     assert len([c for c in domain.collections if isinstance(c, QuadMesh)]) == 1
     halos = [line for line in domain.lines if line.get_path_effects()]
     assert len(halos) == len(trajectories)
+    assert fig.axes[2].get_title(loc="right") == AREA.label
     plt.close(fig)
+
+
+def test_add_colorbar_label_placement():
+    """With `label_above` the label is the colorbar's horizontal title, aligned to its
+    right edge; without it, the rotated label at the bar's side, and the title is
+    empty."""
+    for label_above in (True, False):
+        fig, ax = plt.subplots()
+        image = ax.imshow(np.zeros((2, 2)))
+        add_colorbar(
+            fig,
+            [ax],
+            image,
+            label="metric",
+            ticks=[0.0],
+            tick_labels=["0"],
+            shrink=0.7,
+            aspect=25.0,
+            pad=0.02,
+            tick_fontsize=9.0,
+            label_above=label_above,
+        )
+        bar = fig.axes[-1]
+        expected = ("metric", "") if label_above else ("", "metric")
+        assert (bar.get_title(loc="right"), bar.get_ylabel()) == expected
+        plt.close(fig)
+
+
+def test_factor_ticks_rule():
+    """A wide range is ticked by the 1–3–10 series, a range with fewer than three of
+    those by the 1–2–5 series, and a range with fewer than two of those by at least two
+    located ticks inside it; each tick sits at its factor's logarithm, labeled with a
+    `×` only for a symmetric metric."""
+    ticks, labels = _factor_ticks(Normalize(-2.5, 2.5), symmetric=True)
+    assert labels == ("×0.1", "×0.3", "×1", "×3", "×10")
+    np.testing.assert_allclose(
+        ticks, np.log([0.1, 0.3, 1.0, 3.0, 10.0]), rtol=0.0, atol=TOL["identity"]
+    )
+    ticks, labels = _factor_ticks(Normalize(-0.8, 0.8), symmetric=True)
+    assert labels == ("×0.5", "×1", "×2")
+    _, labels = _factor_ticks(Normalize(-0.8, 0.8), symmetric=False)
+    assert labels == ("0.5", "1", "2")
+    ticks, labels = _factor_ticks(Normalize(-0.2, 0.2), symmetric=True)
+    assert len(ticks) >= 2 and len(labels) == len(ticks)
+    assert all(-0.2 <= t <= 0.2 for t in ticks)
+
+
+def test_inverse_sequence_is_the_forward_reversed(square_sheet, layers):
+    """Inverted, the stage sequence is the forward sheets in reverse order, leaf by
+    leaf, and the area metric at its last stage, evaluated at the deformed sheet's
+    centers, is the negated forward metric of the same cells: the log area factor of an
+    inverse is the negative."""
+    forward, forward_maps, _ = _stage_sequence(layers, square_sheet, inverse=False)
+    sheets, maps, labels = _stage_sequence(layers, square_sheet, inverse=True)
+    assert len(sheets) == len(forward) == len(labels) == len(layers) + 1
+    for actual, desired in zip(sheets, stage_sheets(layers, square_sheet)[::-1]):
+        for a, d in zip(jax.tree.leaves(actual), jax.tree.leaves(desired), strict=True):
+            np.testing.assert_array_equal(a, d)
+    assert labels == stage_labels(layers, inverse=True)
+    n = len(layers)
+    np.testing.assert_allclose(
+        AREA.fn(maps[n], sheets[0].centers),
+        -AREA.fn(forward_maps[n], square_sheet.centers),
+        rtol=0.0,
+        atol=TOL["cell_metric_affine"],
+    )
 
 
 def test_plot_deformation_strip_stages(layers, trajectories):
@@ -424,7 +495,6 @@ def test_draw_sheet_with_a_custom_metric(square_sheet):
         cmap=cc.cm.CET_L17,
         symmetric=False,
         label="$x$",
-        tick_values=(),
     )
     values = np.asarray(metric.fn(lambda x: x, square_sheet.centers))
     fig, ax = plt.subplots()

@@ -6,12 +6,15 @@ and the trajectories and default the rest: the box from the trajectories, the `A
 metric, a `SheetConfig` and a `SheetStyle`. Each builds the `Sheet`, maps it through the
 stages, evaluates the metric from each stage's composed map at the cell centers and
 pools the drawn stages into one `clipped_norm`, so every panel of a figure shares one
-colorbar. `draw_sheet` draws one sheet on an axes, for a custom figure or a metric
-defined outside the package; a `SheetStyle` holds the drawing constants.
+colorbar, ticked from the range by a 1–3–10 or 1–2–5 rule. With `inverse=True` each
+figure plays the forward stages backward, from the deformed sheet to the regular mesh.
+`draw_sheet` draws one sheet on an axes, for a custom figure or a metric defined
+outside the package; a `SheetStyle` holds the drawing constants.
 
 The design and its decisions are in `docs/changes/2026-10-30-deformation-plots.md`.
 """
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -25,20 +28,14 @@ from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection, QuadMesh
 from matplotlib.colors import ListedColormap, Normalize
 from matplotlib.markers import MarkerStyle
+from matplotlib.ticker import MaxNLocator
 from matplotlib.transforms import Affine2D
 
 from ...model.invertible import AbstractBijection
 from ..scales import clipped_norm
 from ..style import add_colorbar, set_limits
 from .metrics import AREA, CellMetric
-from .sheet import (
-    Sheet,
-    sheet_limits,
-    SheetConfig,
-    stage_labels,
-    stage_maps,
-    stage_sheets,
-)
+from .sheet import _stage_sequence, Sheet, sheet_limits, SheetConfig
 
 
 @dataclass(frozen=True)
@@ -62,6 +59,13 @@ class SheetStyle:
     - `figsize_frame`: The size in inches of a flipbook frame.
     - `strip_panel_width`: The width in inches of each panel of a strip.
     - `strip_height`: The height in inches of a strip.
+    - `colorbar_shrink`: The colorbar's length as a fraction of the panels' height.
+    - `colorbar_aspect`: The ratio of the colorbar's length to its width.
+    - `colorbar_pad`: The gap between the panels and the colorbar, as a fraction of
+        the panels' width.
+    - `colorbar_tick_fontsize`: The font size of the colorbar's tick labels, in points.
+    - `colorbar_label_above`: Whether the metric's label is the colorbar's title,
+        horizontal above the bar; otherwise it is the rotated label at the bar's side.
     """
 
     fill_alpha: float = 0.25
@@ -78,6 +82,11 @@ class SheetStyle:
     figsize_frame: tuple[float, float] = (8.0, 4.5)
     strip_panel_width: float = 3.2
     strip_height: float = 3.8
+    colorbar_shrink: float = 0.7
+    colorbar_aspect: float = 25.0
+    colorbar_pad: float = 0.02
+    colorbar_tick_fontsize: float = 9.0
+    colorbar_label_above: bool = True
 
 
 def draw_sheet(
@@ -209,8 +218,9 @@ def _stages(
     at each stage in `stages` and the color range pooled over them.
 
     With `box` `None`, the box is the bounding box of `trajectories` padded by
-    `config.box_pad` of its extent on each side. The value of stage `k` is the metric
-    of the composed map `stage_maps(layers, inverse)[k]` at the cell centers.
+    `config.box_pad` of its extent on each side. The sequence of stages is
+    `_stage_sequence(layers, sheet, inverse)`, and the value of stage `k` is the metric
+    of its composed map `k` at the cell centers of its stage 0.
 
     **Returns:**
 
@@ -234,10 +244,8 @@ def _stages(
         (x_lo, y_lo), (x_hi, y_hi) = lo - margin, hi + margin
         box = (float(x_lo), float(y_lo), float(x_hi), float(y_hi))
     sheet = Sheet(box, trajectories, curves=curves, config=config)
-    sheets = stage_sheets(layers, sheet, inverse=inverse)
-    maps = stage_maps(layers, inverse=inverse)
-    labels = stage_labels(layers, inverse=inverse)
-    values = tuple(np.asarray(metric.fn(maps[k], sheet.centers)) for k in stages)
+    sheets, maps, labels = _stage_sequence(layers, sheet, inverse)
+    values = tuple(np.asarray(metric.fn(maps[k], sheets[0].centers)) for k in stages)
     norm = clipped_norm(values, style.color_limit_quantile, metric.symmetric)
     return (
         tuple(sheets[k] for k in stages),
@@ -247,27 +255,79 @@ def _stages(
     )
 
 
+def _factor_ticks(
+    norm: Normalize, symmetric: bool
+) -> tuple[tuple[float, ...], tuple[str, ...]]:
+    r"""Choose the colorbar ticks of a metric that is the logarithm of a factor or a
+    ratio, from the range of `norm`.
+
+    The ticks are the factors of the 1–3–10 series ($10^k$ and $3 \cdot 10^k$ for
+    integer $k$) whose logarithms lie in `[norm.vmin, norm.vmax]`. If fewer than three
+    qualify, they are those of the 1–2–5 series instead; if fewer than two of those
+    qualify, they are the ticks of `MaxNLocator(5)` on the logarithmic axis inside the
+    range, labeled to two significant digits. Each tick sits at the logarithm of its
+    factor `v` and is labeled `×v` for a symmetric metric and `v` otherwise.
+
+    **Returns:**
+
+    The tick positions, in the units of `norm`, and their labels.
+
+    **Raises:**
+
+    `ValueError` if `norm` lacks an end.
+    """
+    lo, hi = norm.vmin, norm.vmax
+    if lo is None or hi is None:
+        raise ValueError(f"norm must have both ends set, got ({lo}, {hi}).")
+    decades = range(math.floor(lo / math.log(10)) - 1, math.ceil(hi / math.log(10)) + 2)
+    factors: list[float] = []
+    digits = "g"
+    for mantissas, minimum in (((1.0, 3.0), 3), ((1.0, 2.0, 5.0), 2)):
+        factors = [
+            m * 10.0**k
+            for k in decades
+            for m in mantissas
+            if lo <= math.log(m * 10.0**k) <= hi
+        ]
+        if len(factors) >= minimum:
+            break
+    else:
+        located = MaxNLocator(5).tick_values(lo, hi)
+        factors = [math.exp(t) for t in located if lo <= t <= hi]
+        digits = ".2g"
+    prefix = "×" if symmetric else ""
+    return (
+        tuple(math.log(v) for v in factors),
+        tuple(f"{prefix}{v:{digits}}" for v in factors),
+    )
+
+
 def _colorbar(
     fig: plt.Figure,
     axes: Sequence[Axes],
     fill: QuadMesh,
     norm: Normalize,
     metric: CellMetric,
+    style: SheetStyle,
 ) -> None:
-    """Add one colorbar of `fill` at the right of `axes`, ticked at the logarithms of
-    the metric's `tick_values` that lie inside `norm`: labeled `×v` for a symmetric
-    metric's factors and `v` otherwise. Raises `ValueError` if `norm` lacks an end."""
-    lo, hi = norm.vmin, norm.vmax
-    if lo is None or hi is None:
-        raise ValueError(f"norm must have both ends set, got ({lo}, {hi}).")
-    shown = [v for v in metric.tick_values if lo <= np.log(v) <= hi]
+    """Add one colorbar of `fill` at the right of `axes`, laid out by the colorbar
+    fields of `style`: ticked by `_factor_ticks` for a `log_scale` metric, and by
+    matplotlib's default ticks and labels otherwise."""
+    ticks, tick_labels = (
+        _factor_ticks(norm, metric.symmetric) if metric.log_scale else (None, None)
+    )
     add_colorbar(
         fig,
         axes,
         fill,
         label=metric.label,
-        ticks=[float(np.log(v)) for v in shown],
-        tick_labels=[f"×{v:g}" if metric.symmetric else f"{v:g}" for v in shown],
+        ticks=ticks,
+        tick_labels=tick_labels,
+        shrink=style.colorbar_shrink,
+        aspect=style.colorbar_aspect,
+        pad=style.colorbar_pad,
+        tick_fontsize=style.colorbar_tick_fontsize,
+        label_above=style.colorbar_label_above,
     )
 
 
@@ -285,9 +345,17 @@ def plot_deformation(
     """Draw the domain | image pair of a bijection: the sheet on the left, its image
     under every layer on the right, both filled by the metric of the whole map.
 
-    The domain panel spans the box and the image panel the image's `sheet_limits`, both
-    at equal aspect. The panels are titled `"domain"` and `"image"`, with axes $x$, $y$
-    and $u$, $v$. One colorbar at the right shows the metric.
+    Forward, the domain panel spans the box and the image panel the image's
+    `sheet_limits`, with axes $x$, $y$ and $u$, $v$. With `inverse`, the pair is the
+    forward pair reversed: the domain panel holds the deformed sheet over its
+    `sheet_limits`, with axes $u$, $v$, and the image panel the regular mesh over the
+    box, with axes $x$, $y$; the fill is the metric of the inverse map at the deformed
+    sheet. Both panels are at equal aspect and titled `"domain"` and `"image"`. One
+    colorbar at the right shows the metric.
+
+    The inverse pair does not draw the pullback of a regular mesh in the image (base)
+    plane. That figure is built by hand: `sheet = Sheet(base_box, trajectories)`, then
+    `stage_sheets(layers, sheet, inverse=True)`, each stage drawn by `draw_sheet`.
 
     **Arguments:**
 
@@ -295,7 +363,8 @@ def plot_deformation(
         them, such as the `transforms` of a `SequentialINN`.
     - `trajectories`: The trajectories to draw, each a polyline of `q` samples.
     - `metric`: The value that fills each cell.
-    - `inverse`: Whether to draw the inverse map, last layer first.
+    - `inverse`: Whether to play the forward stages backward: from the deformed sheet,
+        through the inverse layers last layer first, to the regular mesh on the box.
     - `box`: The box `(x_lo, y_lo, x_hi, y_hi)` of the domain; if `None`, the
         trajectories' bounding box padded by `config.box_pad`.
     - `curves`: Extra polylines to draw, such as isochrons.
@@ -322,16 +391,20 @@ def plot_deformation(
     domain, image = axes
     fill = draw_sheet(domain, reference, values, norm, metric, style)
     draw_sheet(image, deformed, values, norm, metric, style)
-    set_limits(domain, sheet_limits([reference], pad=0.0))
-    set_limits(image, sheet_limits([deformed]))
+    # The regular mesh fills its box exactly; the deformed sheet gets the default pad.
+    set_limits(domain, sheet_limits([reference], pad=0.05 if inverse else 0.0))
+    set_limits(image, sheet_limits([deformed], pad=0.0 if inverse else 0.05))
+    data_axes, image_axes = ("$x$", "$y$"), ("$u$", "$v$")
+    if inverse:
+        data_axes, image_axes = image_axes, data_axes
     for ax, title, (xlabel, ylabel) in [
-        (domain, "domain", ("$x$", "$y$")),
-        (image, "image", ("$u$", "$v$")),
+        (domain, "domain", data_axes),
+        (image, "image", image_axes),
     ]:
         ax.set_title(title)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
-    _colorbar(fig, list(axes), fill, norm, metric)
+    _colorbar(fig, list(axes), fill, norm, metric, style)
     return fig
 
 
@@ -352,8 +425,9 @@ def plot_deformation_strip(
 
     Every panel spans the `sheet_limits` of the drawn stages at equal aspect and is
     titled by its `stage_labels` entry, broken onto two lines at its first `" — "`;
-    only the leftmost carries the axis labels $x$, $y$. The color range is pooled over
-    the drawn stages, and one colorbar at the right shows it.
+    only the leftmost carries the axis labels, $x$, $y$ forward and $u$, $v$ with
+    `inverse`, where stage 0 is the deformed sheet. The color range is pooled over the
+    drawn stages, and one colorbar at the right shows it.
 
     **Arguments:**
 
@@ -363,7 +437,8 @@ def plot_deformation_strip(
     - `stages`: The stages to draw, from left to right, each in `0, …, len(layers)`;
         every stage if `None`.
     - `metric`, `inverse`, `box`, `curves`, `config`, `style`: As in
-        `plot_deformation`.
+        `plot_deformation`; with `inverse`, stage `k` is forward stage `n − k` and the
+        pullback is drawn by hand as there.
 
     **Returns:**
 
@@ -404,9 +479,9 @@ def plot_deformation_strip(
     for ax, label in zip(panels, labels, strict=True):
         set_limits(ax, limits)
         ax.set_title(label.replace(" — ", "\n", 1), fontsize=10)
-    panels[0].set_xlabel("$x$")
-    panels[0].set_ylabel("$y$")
-    _colorbar(fig, panels, fills[0], norm, metric)
+    panels[0].set_xlabel("$u$" if inverse else "$x$")
+    panels[0].set_ylabel("$v$" if inverse else "$y$")
+    _colorbar(fig, panels, fills[0], norm, metric, style)
     return fig
 
 
@@ -423,17 +498,32 @@ def animate_deformation(
     style: SheetStyle = SheetStyle(),
 ) -> FuncAnimation:
     """Animate the stages of a bijection as a flipbook: one frame per stage on a single
-    panel, the domain first.
+    panel, stage 0 first.
 
     Each frame clears the panel and redraws its stage over the `sheet_limits` of every
     stage, with the stage's label in a white box at the upper left. The colorbar at the
     right of the panel is created once, from a color range pooled over every stage.
 
-    The caller saves the animation with the writer of their choice:
-    `FFMpegWriter(fps=1000 // interval_ms, codec="libx264", extra_args=["-pix_fmt",
-    "yuv420p"])` for an MP4 that a slide deck plays, or `PillowWriter` for a GIF. The
-    `yuv420p` pixel format needs `figsize_frame × dpi` to be even in both dimensions:
-    the default `style.figsize_frame` at `dpi=160` gives 1280×720.
+    The caller saves the animation with the writer of their choice, such as a GIF by
+    `PillowWriter`. An MP4 that a slide deck plays, at the default `interval_ms`, is
+
+        animation.save(
+            "flipbook.mp4",
+            dpi=160,
+            writer=FFMpegWriter(
+                fps=1,
+                codec="libx264",
+                extra_args=["-pix_fmt", "yuv420p", "-r", "24"],
+            ),
+        )
+
+    The output rate `-r 24` makes ffmpeg repeat each frame up to 24 frames per second,
+    because video players handle a 1 fps stream badly. The `yuv420p` pixel format
+    needs `figsize_frame × dpi` to be even in both dimensions: the default
+    `style.figsize_frame` at `dpi=160` gives 1280×720. Without an `ffmpeg` on `PATH`,
+    the `video` extra (`uv sync --extra video`) installs `imageio-ffmpeg`, and
+    `matplotlib.rcParams["animation.ffmpeg_path"] = imageio_ffmpeg.get_ffmpeg_exe()`
+    points matplotlib at its binary.
 
     **Arguments:**
 
@@ -442,7 +532,8 @@ def animate_deformation(
     - `trajectories`: The trajectories to draw.
     - `interval_ms`: The time each frame is shown, in milliseconds.
     - `metric`, `inverse`, `box`, `curves`, `config`, `style`: As in
-        `plot_deformation`.
+        `plot_deformation`; with `inverse`, the flipbook plays the forward one backward
+        and the pullback is drawn by hand as there.
 
     **Returns:**
 
@@ -483,7 +574,7 @@ def animate_deformation(
         )
         return fill
 
-    _colorbar(fig, [ax], draw(0), norm, metric)
+    _colorbar(fig, [ax], draw(0), norm, metric, style)
     return FuncAnimation(
         fig,
         lambda k: (draw(k),),

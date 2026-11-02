@@ -10,7 +10,8 @@ the map if it wants. `stage_sheets` maps a sheet through a sequence of layers,
 `stage_maps` gives the composed map of each stage, and `stage_labels` names the
 stages. `cell_jacobians` evaluates a map's Jacobian at the cell centers, which is what
 the metrics of `metrics.py` color the cells by, and `sheet_limits` gives the box that
-every stage fits in.
+every stage fits in. The private `_stage_sequence` gives the figures their stages,
+played backward when inverted.
 
 The design and its decisions are in `docs/changes/2026-10-30-deformation-plots.md`.
 """
@@ -291,6 +292,38 @@ def stage_labels(
             for k, layer in enumerate(applied, start=1)
         ),
     )
+
+
+def _stage_sequence(
+    layers: Sequence[AbstractBijection], sheet: Sheet, inverse: bool
+) -> tuple[
+    tuple[Sheet, ...],
+    tuple[Callable[[Float[Array, " 2"]], Float[Array, " 2"]], ...],
+    tuple[str, ...],
+]:
+    """The sheets, the composed maps from stage 0 and the labels of every stage that a
+    figure draws, for `sheet` on the data box.
+
+    Forward, the stages are `stage_sheets(layers, sheet)` with their `stage_maps` and
+    `stage_labels`. Inverted, they are the forward stages played backward: stage `k` is
+    forward stage `n − k` for `n` layers, so the sequence starts from the deformed sheet
+    and ends on `sheet`. Its maps are `stage_maps(layers, inverse=True)`, which take the
+    deformed sheet to each stage, so a metric evaluated at the deformed sheet's centers
+    is relative to the deformed start: a cell that the forward map compresses ×0.1
+    reads ×10 at the end of the inverse sequence.
+
+    **Returns:**
+
+    `len(layers) + 1` sheets, maps and labels.
+    """
+    forward = stage_sheets(layers, sheet)
+    if inverse:
+        return (
+            forward[::-1],
+            stage_maps(layers, inverse=True),
+            stage_labels(layers, inverse=True),
+        )
+    return forward, stage_maps(layers), stage_labels(layers)
 
 
 def cell_jacobians(

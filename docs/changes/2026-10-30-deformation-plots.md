@@ -86,6 +86,29 @@ factor or anisotropy as the fill. The design is the Project document
   investigation deleted.
 - `src/deep_isochron/plotting/deformation/metrics.py` — `AREA` ticks at 0.5 and 2 as
   well, so that a narrow color range still carries ticks besides ×1.
+- `src/deep_isochron/plotting/deformation/figures.py` — the private `_factor_ticks`,
+  which ticks the colorbar from the norm's range by the 1–3–10 series with the 1–2–5
+  series and `MaxNLocator` as fallbacks; the colorbar layout fields of `SheetStyle`;
+  `inverse=True` plays the forward stages backward from the deformed sheet in all
+  three figures; the MP4 save call at 24 fps in `animate_deformation`'s docstring.
+- `src/deep_isochron/plotting/deformation/sheet.py` — the private `_stage_sequence`,
+  the sheets, maps and labels of the stages that a figure draws: the forward stages,
+  or the forward stages reversed with the inverse maps and labels; in this module
+  rather than `figures.py`, which it would push over the 600-line limit.
+- `src/deep_isochron/plotting/deformation/metrics.py` — `CellMetric.tick_values`
+  removed, with its values in `AREA` and `ANISOTROPY`; `CellMetric.log_scale`, which
+  decides whether the colorbar is ticked by the factor rule or by matplotlib's default
+  ticks.
+- `src/deep_isochron/plotting/style.py` — `add_colorbar` takes the shrink, aspect,
+  pad, tick font size and label placement as keyword arguments, aligns the title to
+  the bar's right edge, keeps matplotlib's ticks when given none, and draws no tick
+  marks.
+- `tests/test_plotting.py` — three tests: the tick rule on three ranges, the inverse
+  sequence against the reversed forward sheets with the negated area fill, and the
+  colorbar label placement; the pair test checks the colorbar title.
+- `pyproject.toml` — the optional `video` dependency group with `imageio-ffmpeg`.
+- `uv.lock` — changed by `uv add` for the new optional `video` group only.
+- `CLAUDE.md` — the repository fact on MP4 export and `ffmpeg`.
 
 ## Design
 
@@ -101,6 +124,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 4. `plotting/sheet.py`: the geometry of item 1 moved out of `deformation.py`, which had reached the 600-line module limit at item 2 (decided 2026-10-30). — done.
 5. `plotting/deformation/sheet.py`, `metrics.py`, `plotting/scales.py`: the rewrite of items 1–2 after the review of 2026-10-31 — `Sheet` an `eqx.Module` built by its constructor, the fill from the Jacobian at the cell centers through a `CellMetric`, `clipped_norm` as a utility; both old modules deleted, the figures return in item 6 — done.
 6. `plotting/deformation/figures.py`, `plotting/style.py`: the figures on the new API — `plot_deformation`, `plot_deformation_strip`, `animate_deformation` on `transforms` and `trajectories`, public `draw_sheet`, `SheetStyle` with `color_limit_quantile`, `set_limits` and `add_colorbar` as shared helpers; the notebook cells follow — done.
+7. Coworker's review of the FHN flipbook (2026-11-02): colorbar ticks by a 1–3–10 / 1–2–5 rule with a tunable layout; `inverse=True` plays the forward sequence backward from the deformed sheet; MP4 export at 24 fps with `imageio-ffmpeg` as the `video` extra — done.
 
 The decisions and their rejected alternatives are written in the documents commit.
 
@@ -150,3 +174,11 @@ Pending.
 | `tests/test_plotting.py` — the five figure and helper tests | | |
 | `prototype_analysis.ipynb` — the three cells on the new API | | |
 | `src/deep_isochron/plotting/deformation/metrics.py` — the `AREA` ticks | | |
+| `src/deep_isochron/plotting/deformation/figures.py` — the tick rule, the colorbar layout fields, the inverse played backward, the MP4 save call | | |
+| `src/deep_isochron/plotting/deformation/sheet.py` — `_stage_sequence` | | |
+| `src/deep_isochron/plotting/deformation/metrics.py` — `tick_values` removed, `log_scale` | | |
+| `src/deep_isochron/plotting/style.py` — the `add_colorbar` layout arguments | | |
+| `tests/test_plotting.py` — the tick, inverse and colorbar label tests | | |
+| `pyproject.toml` — the `video` extra | | |
+| `uv.lock` — the `video` extra | | |
+| `CLAUDE.md` — the MP4 export fact | | |
