@@ -8,13 +8,14 @@ tests run under the project style, as the notebooks do.
 
 The points of `animate_isochron_sync` are pinned by the closed-form phase: it equals the
 seeded phase at the start and the phase of the group's drawn isochron at every frame.
-Its animation is pinned by the frames of a saved GIF, and its arguments by the four
-errors it raises.
+Its animation is pinned by the frames of a saved GIF, its φ labels by their distance
+from the foreground curves, and its arguments by the four errors it raises.
 """
 
 from pathlib import Path
 
 import jax
+import jax.numpy as jnp
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,16 +26,25 @@ from deep_isochron.plotting import (
     configure_rcparams,
     PortraitStyle,
 )
-from deep_isochron.plotting.phase_portrait.drawing import _SAMPLES_PER_FRAME
+from deep_isochron.plotting.phase_portrait.drawing import (
+    _SAMPLES_PER_FRAME,
+    _TEXT_BOX_PAD,
+)
 from deep_isochron.plotting.phase_portrait.kick import _kick_scene
-from deep_isochron.plotting.phase_portrait.sync import _sync_scene
+from deep_isochron.plotting.phase_portrait.sync import (
+    _INNER_RADIUS,
+    _MIN_LABEL_CLEARANCE_PX,
+    _sync_scene,
+)
 from deep_isochron.systems.normal_forms import (
     AbstractNormalForm,
     BautinNormalForm,
     WinfreeNormalForm,
 )
 from deep_isochron.utils.numerics import phase_difference
+from jaxtyping import Float
 from matplotlib.animation import PillowWriter
+from matplotlib.transforms import Bbox
 from PIL import Image, ImageSequence
 
 from .helpers import TOL
@@ -186,6 +196,77 @@ def test_animate_isochron_sync_writes_every_frame(tmp_path: Path):
     with Image.open(path) as gif:
         durations = [frame.info["duration"] for frame in ImageSequence.Iterator(gif)]
     assert sum(durations) == (5 * 40 + 1 + round(1.5 * 20) + round(3.0 * 20)) * 50
+
+
+def _box_gap(box: Bbox, points: Float[np.ndarray, "k 2"]) -> Float[np.ndarray, " k"]:
+    """The distance in pixels from each display point of `points` to the box `box`,
+    zero for a point inside it."""
+    dx = np.maximum(np.maximum(box.x0 - points[:, 0], points[:, 0] - box.x1), 0.0)
+    dy = np.maximum(np.maximum(box.y0 - points[:, 1], points[:, 1] - box.y1), 0.0)
+    return np.hypot(dx, dy)
+
+
+def test_sync_labels_clear_the_foreground():
+    """In the final hold of the default scene under the project style, each φ label's
+    white box lies inside the phase plane, touches neither the clock's box nor the
+    other label's, and keeps `_MIN_LABEL_CLEARANCE_PX` from the foreground: the cycle
+    and the two seeded isochrons sampled densely from the closed form, and the point
+    markers, each measured with its drawn width."""
+    style = PortraitStyle()
+    n_periods = 5
+    with matplotlib.rc_context():
+        configure_rcparams()
+        animation = animate_isochron_sync(
+            PANEL_2, phases=PHASES, radii=RADII, n_periods=n_periods, style=style
+        )
+        fig = plt.gcf()  # the figure that animate_isochron_sync has just created
+        # a canvas draw would otherwise start the animation and redraw its first frame
+        fig.canvas.mpl_disconnect(animation._first_draw_id)
+        animation._func((n_periods * style.frames_per_period, True))
+        fig.canvas.draw()
+        plane = fig.axes[0]
+        pad = _TEXT_BOX_PAD * style.dpi / 72
+        px = style.dpi / 72  # pixels per point
+        labels = [
+            t.get_window_extent().padded(pad)
+            for t in plane.texts
+            if t.get_zorder() == 6
+        ]
+        (clock,) = [
+            t.get_window_extent().padded(pad)
+            for t in plane.texts
+            if t.get_zorder() == 10
+        ]
+        to_display = plane.transData.transform
+        cycle = to_display(
+            np.asarray(PANEL_2.limit_cycle(jnp.linspace(0.0, 1.0, 20000)))
+        )
+        radii = jnp.linspace(_INNER_RADIUS, style.box * np.sqrt(2), 200000)
+        isochrons = [
+            to_display(np.asarray(PANEL_2.isochron(phase, radii))) for phase in PHASES
+        ]
+        markers = to_display(
+            np.concatenate(
+                [line.get_xydata() for line in plane.lines if line.get_zorder() == 5]
+            )
+        )
+        plane_box = plane.get_window_extent()
+        plt.close("all")
+    assert len(labels) == len(PHASES)
+    for i, box in enumerate(labels):
+        assert plane_box.x0 <= box.x0 and box.x1 <= plane_box.x1
+        assert plane_box.y0 <= box.y0 and box.y1 <= plane_box.y1
+        assert not box.overlaps(clock)
+        assert not any(box.overlaps(other) for j, other in enumerate(labels) if j != i)
+        clearance = min(
+            float(_box_gap(box, cycle).min()) - style.cycle_width * px / 2,
+            *(
+                float(_box_gap(box, c).min()) - style.trace_width * px / 2
+                for c in isochrons
+            ),
+            float(_box_gap(box, markers).min()) - style.point_size * px / 2,
+        )
+        assert clearance >= _MIN_LABEL_CLEARANCE_PX
 
 
 @pytest.mark.parametrize(

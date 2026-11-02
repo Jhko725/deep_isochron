@@ -19,6 +19,7 @@ from matplotlib.axes import Axes
 from matplotlib.collections import LineCollection
 from matplotlib.colors import to_rgba
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 from matplotlib.text import Text
 
 from ...systems.normal_forms.base import AbstractNormalForm
@@ -34,6 +35,13 @@ time axis's tick labels, and the right one the half of its last label past the a
 
 _PANEL_GAP = 0.4
 """The gap between the phase plane and the time axis, in inches."""
+
+_TEXT_BOX_PAD = 3.0
+"""The margin of the white box around the clock and the φ labels, in points."""
+
+_TEXT_BOX = dict(facecolor="white", alpha=0.85, edgecolor="none", pad=_TEXT_BOX_PAD)
+"""The white box behind the clock and the φ labels of `animate_isochron_sync`, so that
+they read over the curves that pass behind them."""
 
 
 # ------------------------------------------------------------ shared helpers ------
@@ -74,11 +82,15 @@ def _portrait_figure(style: PortraitStyle) -> tuple[Figure, Axes, Axes]:
     return fig, plane, time
 
 
-def _draw_cycle(ax: Axes, system: AbstractNormalForm, style: PortraitStyle) -> None:
-    """Draw the limit cycle of `system` on `ax` as a thick closed curve."""
+def _draw_cycle(ax: Axes, system: AbstractNormalForm, style: PortraitStyle) -> Line2D:
+    """Draw the limit cycle of `system` on `ax` as a thick closed curve, and return
+    the drawn line."""
     points = np.asarray(system.limit_cycle(jnp.linspace(0.0, 1.0, 256, endpoint=False)))
     closed = np.concatenate((points, points[:1]))
-    ax.plot(*closed.T, color=style.cycle_color, lw=style.cycle_width, zorder=1)
+    (line,) = ax.plot(
+        *closed.T, color=style.cycle_color, lw=style.cycle_width, zorder=1
+    )
+    return line
 
 
 def _fading_tail(ax: Axes, style: PortraitStyle) -> LineCollection:
@@ -102,7 +114,8 @@ def _set_tail(
 
 def _clock(ax: Axes, style: PortraitStyle) -> Text:
     """The clock text at the top left of `ax`, in a monospace font so that its digits
-    do not jitter; `_clock_label` gives its string."""
+    do not jitter, in the white box `_TEXT_BOX` above every curve; `_clock_label`
+    gives its string."""
     return ax.text(
         0.03,
         0.97,
@@ -112,6 +125,7 @@ def _clock(ax: Axes, style: PortraitStyle) -> Text:
         fontsize=style.font_size,
         ha="left",
         va="top",
+        bbox=_TEXT_BOX,
         zorder=10,
     )
 

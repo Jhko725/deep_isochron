@@ -68,6 +68,16 @@ is the Project document `claude/ksiam-animations-handoff-2026-11-02.md`.
 - `tests/test_phase_portrait.py` — the seeded phases, the points on their moving
   isochron at every frame, the GIF's frames counted by duration, and the four errors
   of `animate_isochron_sync`.
+- `src/deep_isochron/plotting/phase_portrait/drawing.py` — after the review of the A2
+  variants: the clock sits in the white box `_TEXT_BOX`, which A1 shares, and
+  `_draw_cycle` returns its line.
+- `src/deep_isochron/plotting/phase_portrait/sync.py` — the φ labels sit in the same
+  white box, at the position that `_place_labels` searches on the final frame: every
+  45° around the landing point at offsets up to 1.2, inside the plane, off the clock and
+  the other label, with the largest clearance from the cycle, the highlighted isochrons
+  and the points, and at least `_MIN_LABEL_CLEARANCE_PX` when such a position exists.
+- `tests/test_phase_portrait.py` — `test_sync_labels_clear_the_foreground` checks each
+  label's box against the plane, the clock, the other label and the foreground curves.
 
 ## Design
 
@@ -122,3 +132,6 @@ Pending.
 | `src/deep_isochron/plotting/phase_portrait/__init__.py` — the export of `animate_isochron_sync` | | |
 | `src/deep_isochron/plotting/__init__.py` — the export of `animate_isochron_sync` | | |
 | `tests/test_phase_portrait.py` — the seeded phases, the moving isochron, the frame count, the errors of `animate_isochron_sync` | | |
+| `src/deep_isochron/plotting/phase_portrait/drawing.py` — the clock in a white box; `_draw_cycle` returns its line | | |
+| `src/deep_isochron/plotting/phase_portrait/sync.py` — φ labels in a white box, placed by `_place_labels` clear of the foreground | | |
+| `tests/test_phase_portrait.py` — `test_sync_labels_clear_the_foreground` | | |
