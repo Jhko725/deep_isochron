@@ -11,7 +11,6 @@ from .figures import (
     draw_sheet as draw_sheet,
     plot_deformation as plot_deformation,
     plot_deformation_strip as plot_deformation_strip,
-    SheetStyle as SheetStyle,
 )
 from .metrics import (
     ANISOTROPY as ANISOTROPY,
@@ -27,3 +26,4 @@ from .sheet import (
     stage_maps as stage_maps,
     stage_sheets as stage_sheets,
 )
+from .style import SheetStyle as SheetStyle

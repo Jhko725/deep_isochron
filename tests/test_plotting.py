@@ -49,12 +49,14 @@ from deep_isochron.plotting.deformation import (
     Sheet,
     sheet_limits,
     SheetConfig,
+    SheetStyle,
     stage_labels,
     stage_maps,
     stage_sheets,
 )
 from deep_isochron.plotting.deformation.figures import _factor_ticks
 from deep_isochron.plotting.deformation.sheet import _stage_sequence
+from deep_isochron.plotting.deformation.style import _curve_colors
 from deep_isochron.plotting.scales import clipped_norm
 from hypothesis import given
 from jaxtyping import Array, Float
@@ -499,10 +501,12 @@ def test_draw_sheet_with_a_custom_metric(square_sheet):
     values = np.asarray(metric.fn(lambda x: x, square_sheet.centers))
     fig, ax = plt.subplots()
     norm = clipped_norm(values, 1.0, symmetric=False)
-    fill = draw_sheet(ax, square_sheet, values, norm, metric)
+    alpha = 0.25
+    fill = draw_sheet(
+        ax, square_sheet, values, norm, metric, SheetStyle(fill_alpha=alpha)
+    )
     fine = np.asarray(fill.get_array()).reshape(32, 32)
     np.testing.assert_array_equal(fine[::4, ::4], values)
-    alpha = 0.25  # SheetStyle's default fill_alpha
     np.testing.assert_allclose(
         fill.cmap(1.0)[:3],
         1.0 - alpha * (1.0 - np.asarray(metric.cmap(1.0)[:3])),
@@ -511,6 +515,22 @@ def test_draw_sheet_with_a_custom_metric(square_sheet):
     )
     assert len([c for c in ax.collections if isinstance(c, LineCollection)]) == 3
     plt.close(fig)
+
+
+def test_curve_colors_forms():
+    """One color is repeated, a sequence and a listed colormap are cycled from their
+    first entry, and a value that is none of the three raises `ValueError`."""
+    n = 5
+    for curve_colors, first in [
+        ("k", "k"),
+        (("r", "g"), "r"),
+        (cc.cm.glasbey_dark, cc.cm.glasbey_dark.colors[0]),
+    ]:
+        colors = _curve_colors(curve_colors, n)
+        assert len(colors) == n
+        assert colors[0] == first
+    with pytest.raises(ValueError):
+        _curve_colors(object(), n)
 
 
 def test_set_limits_rejects_three_floats():
