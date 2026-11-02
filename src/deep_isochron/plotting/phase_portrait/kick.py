@@ -155,7 +155,7 @@ def animate_kick(
     The point starts on the cycle at phase `kick_phase` and runs for one period. Then
     each row of `kicks` is added to its state to give one copy, while the reference
     continues unkicked. The animation freezes on the first frame after the kick for
-    `style.kick_pause_seconds`, with an arrow from the point before the kick to each
+    `style.pause_seconds`, with an arrow from the point before the kick to each
     copy, and the arrows stay for `style.kick_arrow_frames` frames after that. Each
     copy is colored by the sign of its phase shift Δφ: `style.advance_color` when it
     is ahead of the reference or level with it, `style.delay_color` when it is behind.
@@ -192,7 +192,7 @@ def animate_kick(
     **Returns:**
 
     The animation: `n_periods × style.frames_per_period + 1` frames, the kick pause of
-    `round(style.kick_pause_seconds × style.fps)` frames and the final hold of
+    `round(style.pause_seconds × style.fps)` frames and the final hold of
     `round(style.hold_seconds × style.fps)` frames. Its figure stays open until the
     caller closes it.
 
@@ -327,7 +327,7 @@ def animate_kick(
 
     sequence = _frame_sequence(
         last_frame + 1,
-        {per_period: style.kick_pause_seconds, last_frame: style.hold_seconds},
+        {per_period: style.pause_seconds, last_frame: style.hold_seconds},
         style.fps,
     )
     draw(sequence[0])

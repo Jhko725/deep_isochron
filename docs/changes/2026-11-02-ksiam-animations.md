@@ -53,6 +53,21 @@ is the Project document `claude/ksiam-animations-handoff-2026-11-02.md`.
   `_KickScene`, `_kick_scene`, `_shift_label` and `animate_kick`, moved unchanged.
 - `tests/test_phase_portrait.py` — the import of `_kick_scene` comes from
   `phase_portrait.kick`.
+- `src/deep_isochron/plotting/phase_portrait/sync.py` (**new**) — `_SyncScene`,
+  `_sync_scene` and `animate_isochron_sync`, which animates points seeded on chosen
+  isochrons, redraws each group's isochron at the phase `(θ₀ + t/T) mod 1` at every
+  frame, pauses on the start and labels each group's phase in the final hold.
+- `src/deep_isochron/plotting/phase_portrait/style.py` — `kick_pause_seconds` becomes
+  `pause_seconds`, the pause at the key instant of either animation; `group_colors`
+  becomes blue and reddish purple.
+- `src/deep_isochron/plotting/phase_portrait/kick.py` — `animate_kick` reads
+  `pause_seconds`.
+- `src/deep_isochron/plotting/phase_portrait/__init__.py` — exports
+  `animate_isochron_sync`; the docstring names `sync.py`.
+- `src/deep_isochron/plotting/__init__.py` — exports `animate_isochron_sync`.
+- `tests/test_phase_portrait.py` — the seeded phases, the points on their moving
+  isochron at every frame, the GIF's frames counted by duration, and the four errors
+  of `animate_isochron_sync`.
 
 ## Design
 
@@ -63,7 +78,7 @@ The ledger of the change, in the order the commits will follow. Each item become
    `_kick_scene` and `animate_kick`; the exports; `tests/test_phase_portrait.py` with
    the Δφ oracle, the frame count and the errors; `TOL["relaxed_phase"]` — done.
 2. `plotting/phase_portrait.py`: `_sync_scene` and `animate_isochron_sync`; the export;
-   the seeded-phase, frame-count and error tests.
+   the seeded-phase, frame-count and error tests — done.
 3. `ksiam_animations.ipynb`: the A1 and A2 cells, the GIF and MP4 exports, and the
    static strips.
 
@@ -101,3 +116,9 @@ Pending.
 | `src/deep_isochron/plotting/phase_portrait/drawing.py` — the shared private helpers and constants, moved unchanged | | |
 | `src/deep_isochron/plotting/phase_portrait/kick.py` — `MINUS`, `_KickScene`, `_kick_scene`, `_shift_label`, `animate_kick`, moved unchanged | | |
 | `tests/test_phase_portrait.py` — the import of `_kick_scene` from `phase_portrait.kick` | | |
+| `src/deep_isochron/plotting/phase_portrait/sync.py` — `_SyncScene`, `_sync_scene`, `animate_isochron_sync` with moving isochrons | | |
+| `src/deep_isochron/plotting/phase_portrait/style.py` — `pause_seconds` for `kick_pause_seconds`; new `group_colors` | | |
+| `src/deep_isochron/plotting/phase_portrait/kick.py` — reads `pause_seconds` | | |
+| `src/deep_isochron/plotting/phase_portrait/__init__.py` — the export of `animate_isochron_sync` | | |
+| `src/deep_isochron/plotting/__init__.py` — the export of `animate_isochron_sync` | | |
+| `tests/test_phase_portrait.py` — the seeded phases, the moving isochron, the frame count, the errors of `animate_isochron_sync` | | |

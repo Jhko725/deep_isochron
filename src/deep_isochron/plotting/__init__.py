@@ -29,6 +29,7 @@ from .isochrons import (
     plot_phase_field as plot_phase_field,
 )
 from .phase_portrait import (
+    animate_isochron_sync as animate_isochron_sync,
     animate_kick as animate_kick,
     PortraitStyle as PortraitStyle,
 )

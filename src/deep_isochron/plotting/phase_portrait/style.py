@@ -21,16 +21,18 @@ class PortraitStyle:
         period plays in 2 s.
     - `fps`: The playback rate in frames per second.
     - `hold_seconds`: How long the last frame is held, in seconds, with the Δφ labels
-        of `animate_kick` shown.
-    - `kick_pause_seconds`: How long `animate_kick` freezes on the first frame after
-        the kick, in seconds, with the kick arrows shown.
+        of `animate_kick` or the φ labels of `animate_isochron_sync` shown.
+    - `pause_seconds`: How long an animation freezes at its key instant, in seconds:
+        on the first frame after the kick in `animate_kick`, with the kick arrows
+        shown, and on the start in `animate_isochron_sync`.
     - `tail_periods`: The length of the fading tail behind each point in the phase
         plane, in periods.
     - `kick_arrow_frames`: The number of frames after the kick pause for which the kick
         arrows stay drawn.
     - `box`: The half-width of the square phase-plane view.
     - `font_size`: The size of all text, in points; the minimum readable on a slide.
-    - `annotation_font_size`: The size of the Δφ labels of `animate_kick`, in points.
+    - `annotation_font_size`: The size of the Δφ labels of `animate_kick` and of the φ
+        labels of `animate_isochron_sync`, in points.
     - `cycle_width`, `isochron_width`: The line widths of the limit cycle and of the
         isochrons.
     - `trace_width`: The line width of the tails and of the time series.
@@ -39,7 +41,8 @@ class PortraitStyle:
     - `reference_color`: The unkicked reference point.
     - `delay_color`, `advance_color`: A kicked copy whose phase falls behind the
         reference's, and one whose phase moves ahead or stays level.
-    - `group_colors`: The points seeded on the first and on the second isochron.
+    - `group_colors`: The points seeded on the first and on the second isochron of
+        `animate_isochron_sync`, with their isochrons and time series.
     - `isochron_color`: The isochrons drawn for orientation only.
     """
 
@@ -48,7 +51,7 @@ class PortraitStyle:
     frames_per_period: int = 40
     fps: int = 20
     hold_seconds: float = 3.0
-    kick_pause_seconds: float = 1.5
+    pause_seconds: float = 1.5
     tail_periods: float = 0.5
     kick_arrow_frames: int = 3
     box: float = 1.8
@@ -62,5 +65,5 @@ class PortraitStyle:
     reference_color: str = "#0072B2"
     delay_color: str = "#D55E00"
     advance_color: str = "#009E73"
-    group_colors: tuple[str, str] = ("#0072B2", "#D55E00")
+    group_colors: tuple[str, str] = ("#0072B2", "#CC79A7")
     isochron_color: str = "0.85"
