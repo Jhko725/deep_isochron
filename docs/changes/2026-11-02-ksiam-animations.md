@@ -25,6 +25,13 @@ is the Project document `claude/ksiam-animations-handoff-2026-11-02.md`.
   twelve periods after the kick, the GIF's frames counted by duration, and the four
   errors of `animate_kick`.
 - `tests/helpers.py` — the `TOL` entry `relaxed_phase`.
+- `src/deep_isochron/plotting/phase_portrait.py` — after the review of the first A1
+  render: 40 frames per period, a kick pause of `kick_pause_seconds` with both kick
+  arrows, a 3 s final hold, Δφ labels at `annotation_font_size` with thicker arrows
+  and more space between them, and traces and tails drawn from `_SAMPLES_PER_FRAME`
+  samples per frame; `_frame_sequence` takes the paused frames and their seconds.
+- `tests/test_phase_portrait.py` — the GIF's summed frame durations include the kick
+  pause and the longer hold.
 
 ## Design
 
@@ -63,3 +70,5 @@ Pending.
 | `src/deep_isochron/plotting/__init__.py` — the exports of `PortraitStyle` and `animate_kick` | | |
 | `tests/test_phase_portrait.py` — the Δφ oracle, the frame count, the errors | | |
 | `tests/helpers.py` — `TOL["relaxed_phase"]` | | |
+| `src/deep_isochron/plotting/phase_portrait.py` — slower A1, the kick pause, the longer hold, larger Δφ labels, finer traces | | |
+| `tests/test_phase_portrait.py` — the frame durations with the kick pause and the longer hold | | |

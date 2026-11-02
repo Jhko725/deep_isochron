@@ -52,16 +52,17 @@ def test_kick_phase_shift_matches_relaxed_angles():
 
 
 def test_animate_kick_writes_every_frame(tmp_path: Path):
-    """The animation saved as a GIF plays 4 × 20 + 1 frames and the 20 frames of the
-    one-second hold. Pillow merges identical consecutive frames into one of longer
-    duration, so the frames are counted by duration, 50 ms each at 20 fps."""
+    """The animation saved as a GIF plays 4 × 40 + 1 frames, the 30 frames of the
+    1.5-second kick pause and the 60 frames of the 3-second final hold. Pillow merges
+    identical consecutive frames into one of longer duration, so the frames are counted
+    by duration, 50 ms each at 20 fps."""
     animation = animate_kick(PANEL_2, kick_phase=0.83, kicks=KICKS, n_periods=4)
     path = tmp_path / "kick.gif"
     animation.save(path, writer=PillowWriter(fps=20))
     plt.close("all")
     with Image.open(path) as gif:
         durations = [frame.info["duration"] for frame in ImageSequence.Iterator(gif)]
-    assert sum(durations) == (4 * 20 + 1 + 20) * 50
+    assert sum(durations) == (4 * 40 + 1 + round(1.5 * 20) + round(3.0 * 20)) * 50
 
 
 @pytest.mark.parametrize(

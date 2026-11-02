@@ -36,6 +36,9 @@ from ..utils.numerics import phase_difference
 MINUS = "\N{MINUS SIGN}"
 """The minus sign of the phase-shift labels, wider than a hyphen."""
 
+_SAMPLES_PER_FRAME = 10
+"""Trajectory samples per frame, so that traces and tails show no corners on a slide."""
+
 
 @dataclass(frozen=True)
 class PortraitStyle:
@@ -47,14 +50,20 @@ class PortraitStyle:
     - `figsize`, `dpi`: The figure size in inches and its resolution. The defaults give
         1920 × 800 pixels, even in both dimensions as the `yuv420p` pixel format of an
         MP4 requires.
-    - `frames_per_period`: The frames drawn per period of the cycle.
+    - `frames_per_period`: The frames drawn per period of the cycle; with `fps`, one
+        period plays in 2 s.
     - `fps`: The playback rate in frames per second.
-    - `hold_seconds`: How long the last frame is held, in seconds.
+    - `hold_seconds`: How long the last frame is held, in seconds, with the Δφ labels
+        of `animate_kick` shown.
+    - `kick_pause_seconds`: How long `animate_kick` freezes on the first frame after
+        the kick, in seconds, with the kick arrows shown.
     - `tail_periods`: The length of the fading tail behind each point in the phase
         plane, in periods.
-    - `kick_arrow_frames`: The number of frames for which the kick arrow is drawn.
+    - `kick_arrow_frames`: The number of frames after the kick pause for which the kick
+        arrows stay drawn.
     - `box`: The half-width of the square phase-plane view.
     - `font_size`: The size of all text, in points; the minimum readable on a slide.
+    - `annotation_font_size`: The size of the Δφ labels of `animate_kick`, in points.
     - `cycle_width`, `isochron_width`: The line widths of the limit cycle and of the
         isochrons.
     - `trace_width`: The line width of the tails and of the time series.
@@ -69,13 +78,15 @@ class PortraitStyle:
 
     figsize: tuple[float, float] = (12.0, 5.0)
     dpi: int = 160
-    frames_per_period: int = 20
+    frames_per_period: int = 40
     fps: int = 20
-    hold_seconds: float = 1.0
+    hold_seconds: float = 3.0
+    kick_pause_seconds: float = 1.5
     tail_periods: float = 0.5
     kick_arrow_frames: int = 3
     box: float = 2.4
     font_size: float = 14.0
+    annotation_font_size: float = 20.0
     cycle_width: float = 3.0
     isochron_width: float = 1.0
     trace_width: float = 2.0
@@ -171,41 +182,57 @@ def _time_axis(
 
 
 def _frame_sequence(
-    n_scene_frames: int, style: PortraitStyle
+    n_scene_frames: int, pauses: dict[int, float], fps: int
 ) -> list[tuple[int, bool]]:
     """The frames of an animation over a scene of `n_scene_frames` frames: each scene
-    frame once, then the last one repeated `round(style.hold_seconds × style.fps)`
-    times.
+    frame once, and each frame `j` of `pauses` then repeated `round(pauses[j] × fps)`
+    times, so that the clock stops while it is shown.
+
+    **Arguments:**
+
+    - `n_scene_frames`: The number of frames of the scene.
+    - `pauses`: The seconds for which each paused scene frame is held, the final hold
+        included as the entry of the last frame.
+    - `fps`: The playback rate in frames per second.
 
     **Returns:**
 
-    Pairs `(scene frame, holding)`, with `holding` true for the repeats of the hold.
+    Pairs `(scene frame, repeat)`, with `repeat` true for the repeats of a pause.
+
+    **Raises:**
+
+    `ValueError` when a key of `pauses` is not a frame of the scene.
     """
-    hold = round(style.hold_seconds * style.fps)
-    return [(j, False) for j in range(n_scene_frames)] + [
-        (n_scene_frames - 1, True)
-    ] * hold
+    outside = [j for j in pauses if not 0 <= j < n_scene_frames]
+    if outside:
+        raise ValueError(f"pauses at frames {outside} are outside the scene.")
+    sequence = []
+    for j in range(n_scene_frames):
+        sequence.append((j, False))
+        sequence.extend([(j, True)] * round(pauses.get(j, 0.0) * fps))
+    return sequence
 
 
 # ------------------------------------------------------------------ the kick -------
 class _KickScene(eqx.Module):
     """The trajectories of `animate_kick`: a reference point on the cycle and its
-    copies, kicked at `t = T`, sampled at every frame.
+    copies, kicked at `t = T`, sampled `_SAMPLES_PER_FRAME` times per frame.
 
     **Attributes:**
 
-    - `ts`: The frame times, shape `(frames,)`, from 0 in steps of
-        `T / frames_per_period`.
+    - `ts`: The sample times, shape `(samples,)`, from 0 in steps of
+        `T / (frames_per_period × _SAMPLES_PER_FRAME)`; every `_SAMPLES_PER_FRAME`-th
+        sample is a frame.
     - `phase_shifts`: The asymptotic phase shift Δφ of each copy against the reference,
         in turns in (−1/2, 1/2], positive when the copy is ahead; shape `(k,)`.
-    - `trajectories`: The reference first, then the copies, shape `(k + 1, frames, 2)`.
-        A copy equals the reference before the kick and is the kicked point from the
-        kick's frame on.
+    - `trajectories`: The reference first, then the copies, shape
+        `(k + 1, samples, 2)`. A copy equals the reference before the kick and is the
+        kicked point from the kick's sample on.
     """
 
-    ts: Float[Array, " frames"]
+    ts: Float[Array, " samples"]
     phase_shifts: Float[Array, " k"]
-    trajectories: Float[Array, "k+1 frames 2"]
+    trajectories: Float[Array, "k+1 samples 2"]
 
 
 def _kick_scene(
@@ -232,11 +259,13 @@ def _kick_scene(
     - `kicks`: The jumps added to the state, one copy per row.
     - `n_periods`: The length of the scene, in periods, the one-period lead-in
         included.
-    - `frames_per_period`: The frames per period.
+    - `frames_per_period`: The frames per period; the scene has `_SAMPLES_PER_FRAME`
+        samples per frame.
 
     **Returns:**
 
-    The `_KickScene`, with `n_periods × frames_per_period + 1` frames.
+    The `_KickScene`, with `n_periods × frames_per_period × _SAMPLES_PER_FRAME + 1`
+    samples, the last at `t = n_periods × T`.
 
     **Raises:**
 
@@ -253,25 +282,21 @@ def _kick_scene(
         raise ValueError(
             f"kicks must be of shape (k, 2) with k >= 1; got {kicks.shape}."
         )
-    n_frames = n_periods * frames_per_period + 1
-    ts = system.period() * jnp.arange(n_frames) / frames_per_period
+    per_period = frames_per_period * _SAMPLES_PER_FRAME
+    ts = system.period() * jnp.arange(n_periods * per_period + 1) / per_period
     # type-level only: ys is None only for a solve that saves nothing
     reference = cast(
         Array, system.flow(ts, system.limit_cycle(jnp.asarray(kick_phase))).ys
     )
-    before = reference[frames_per_period]
+    before = reference[per_period]
     kicked = before + kicks
     outside = np.flatnonzero(~np.asarray(jax.vmap(system.in_basin)(kicked)))
     if outside.size:
         raise ValueError(
             f"kicks {outside.tolist()} move the point outside the basin of the cycle."
         )
-    after = jax.vmap(lambda u: cast(Array, system.flow(ts[frames_per_period:], u).ys))(
-        kicked
-    )
-    lead_in = jnp.broadcast_to(
-        reference[:frames_per_period], (len(kicks), frames_per_period, 2)
-    )
+    after = jax.vmap(lambda u: cast(Array, system.flow(ts[per_period:], u).ys))(kicked)
+    lead_in = jnp.broadcast_to(reference[:per_period], (len(kicks), per_period, 2))
     copies = jnp.concatenate((lead_in, after), axis=1)
     phase_shifts = phase_difference(
         jax.vmap(system.phase)(kicked), system.phase(before)
@@ -302,16 +327,19 @@ def animate_kick(
     shifts the phase.
 
     The point starts on the cycle at phase `kick_phase` and runs for one period. Then
-    each row of `kicks` is added to its state to give one copy, drawn with an arrow
-    from the point before the kick to the point after it for
-    `style.kick_arrow_frames` frames, while the reference continues unkicked. Each
+    each row of `kicks` is added to its state to give one copy, while the reference
+    continues unkicked. The animation freezes on the first frame after the kick for
+    `style.kick_pause_seconds`, with an arrow from the point before the kick to each
+    copy, and the arrows stay for `style.kick_arrow_frames` frames after that. Each
     copy is colored by the sign of its phase shift Δφ: `style.advance_color` when it
     is ahead of the reference or level with it, `style.delay_color` when it is behind.
 
     The phase plane on the left shows the cycle, each point with a fading tail of
     `style.tail_periods` periods, and the clock. The time panel on the right shows the
-    horizontal coordinate of every point as a line that grows with time. During the
-    final hold it labels each copy's Δφ with a double arrow between the reference's
+    horizontal coordinate of every point as a line that grows with time. Tails and
+    lines are drawn from `_SAMPLES_PER_FRAME` samples per frame. During the final hold
+    of `style.hold_seconds` the time panel labels each copy's Δφ, at
+    `style.annotation_font_size`, with a double arrow between the reference's
     last peak and the copy's matching peak, `Δφ` periods earlier for a copy ahead.
     The peaks are where the phase is 0, since the cycle's point at phase 0 is the one
     of largest horizontal coordinate (`AbstractNormalForm.limit_cycle`).
@@ -332,8 +360,10 @@ def animate_kick(
 
     **Returns:**
 
-    The animation, `n_periods × style.frames_per_period + 1` frames and then the hold;
-    its figure stays open until the caller closes it.
+    The animation: `n_periods × style.frames_per_period + 1` frames, the kick pause of
+    `round(style.kick_pause_seconds × style.fps)` frames and the final hold of
+    `round(style.hold_seconds × style.fps)` frames. Its figure stays open until the
+    caller closes it.
 
     **Raises:**
 
@@ -352,9 +382,10 @@ def animate_kick(
     colors = [style.reference_color] + [
         style.delay_color if shift < 0 else style.advance_color for shift in shifts
     ]
-    n_frames = paths.shape[1]
-    times = np.arange(n_frames) / per_period  # in periods
-    tail_frames = round(style.tail_periods * per_period)
+    samples_per_period = per_period * _SAMPLES_PER_FRAME
+    kick = samples_per_period  # the sample of the kick, at t = T
+    times = np.arange(paths.shape[1]) / samples_per_period  # in periods
+    tail_samples = round(style.tail_periods * samples_per_period)
 
     fig, plane, time = _portrait_figure(style)
     _draw_cycle(plane, system, style)
@@ -366,8 +397,8 @@ def animate_kick(
     arrows = [
         plane.add_patch(
             FancyArrowPatch(
-                paths[0, per_period],
-                path[per_period],
+                paths[0, kick],
+                path[kick],
                 arrowstyle="-|>",
                 mutation_scale=22,
                 lw=style.trace_width,
@@ -380,9 +411,9 @@ def animate_kick(
     ]
     clock = _clock(plane, style)
 
-    rows = 1.2 + 0.3 * np.arange(len(shifts))  # heights of the Δφ arrows
+    rows = 1.35 + 0.55 * np.arange(len(shifts))  # heights of the Δφ arrows
     x = paths[..., 0]
-    y_limits = (float(x.min()) - 0.15, max(float(x.max()), float(rows[-1])) + 0.2)
+    y_limits = (float(x.min()) - 0.15, max(float(x.max()), float(rows[-1])) + 0.35)
     _time_axis(time, n_periods, y_limits, style)
     traces = [time.plot([], [], color=c, lw=style.trace_width)[0] for c in colors]
     heads = [
@@ -402,21 +433,28 @@ def animate_kick(
                     "",
                     xy=(ends[1], row),
                     xytext=(ends[0], row),
-                    arrowprops=dict(arrowstyle="<->", color=c, lw=style.trace_width),
+                    arrowprops=dict(
+                        arrowstyle="<->",
+                        color=c,
+                        lw=1.25 * style.trace_width,
+                        mutation_scale=12,
+                        shrinkA=0.0,
+                        shrinkB=0.0,
+                    ),
                 ),
                 *time.plot(
                     [ends[0], ends[0], np.nan, ends[1], ends[1]],
                     [1.0, row, np.nan, 1.0, row],
                     ":",
                     color=c,
-                    lw=1.0,
+                    lw=1.5,
                 ),
                 time.text(
-                    min(ends) - 0.05,
+                    min(ends) - 0.08,
                     row,
                     _shift_label(float(shift)),
                     color=c,
-                    fontsize=style.font_size,
+                    fontsize=style.annotation_font_size,
                     ha="right",
                     va="center",
                 ),
@@ -424,43 +462,43 @@ def animate_kick(
         )
     for artist in (a for group in labels for a in group):
         artist.set_visible(False)
+    last_frame = n_periods * per_period
 
     def draw(frame: tuple[int, bool]) -> tuple:
-        """Update every artist to `frame`, a pair (scene frame, holding), with the Δφ
-        labels while holding."""
-        j, holding = frame
-        kicked = j >= per_period
+        """Update every artist to `frame`, a pair (scene frame, repeat), with the Δφ
+        labels in the repeats of the last frame, the final hold."""
+        j, repeat = frame
+        s = j * _SAMPLES_PER_FRAME  # the sample of the frame
         for i, (path, c) in enumerate(zip(paths, colors)):
-            shown = i == 0 or kicked
-            start = max(j - tail_frames, per_period if i > 0 else 0)
-            _set_tail(tails[i], path[start : j + 1], c)
+            shown = i == 0 or j >= per_period
+            start = max(s - tail_samples, kick if i > 0 else 0)
+            _set_tail(tails[i], path[start : s + 1], c)
             tails[i].set_visible(shown)
-            points[i].set_data(path[j : j + 1, 0], path[j : j + 1, 1])
+            points[i].set_data(path[s : s + 1, 0], path[s : s + 1, 1])
             points[i].set_visible(shown)
             if i == 0:
-                trace_t, trace_x = times[: j + 1], path[: j + 1, 0]
+                trace_t, trace_x = times[: s + 1], path[: s + 1, 0]
             else:  # from the reference at the kick, so that the jump is vertical
-                trace_t = np.concatenate(
-                    (times[per_period : per_period + 1], times[per_period : j + 1])
-                )
+                trace_t = np.concatenate((times[kick : kick + 1], times[kick : s + 1]))
                 trace_x = np.concatenate(
-                    (
-                        paths[0, per_period : per_period + 1, 0],
-                        path[per_period : j + 1, 0],
-                    )
+                    (paths[0, kick : kick + 1, 0], path[kick : s + 1, 0])
                 )
             traces[i].set_data(trace_t, trace_x)
             traces[i].set_visible(shown)
-            heads[i].set_data(times[j : j + 1], path[j : j + 1, 0])
+            heads[i].set_data(times[s : s + 1], path[s : s + 1, 0])
             heads[i].set_visible(shown)
         for arrow in arrows:
-            arrow.set_visible(per_period <= j < per_period + style.kick_arrow_frames)
+            arrow.set_visible(per_period <= j <= per_period + style.kick_arrow_frames)
         for artist in (a for group in labels for a in group):
-            artist.set_visible(holding)
+            artist.set_visible(repeat and j == last_frame)
         clock.set_text(_clock_label(j, per_period))
         return (*tails, *points, *arrows, *traces, *heads, clock)
 
-    sequence = _frame_sequence(n_frames, style)
+    sequence = _frame_sequence(
+        last_frame + 1,
+        {per_period: style.kick_pause_seconds, last_frame: style.hold_seconds},
+        style.fps,
+    )
     draw(sequence[0])
     return FuncAnimation(
         fig,
