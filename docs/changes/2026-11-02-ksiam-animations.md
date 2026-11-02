@@ -78,6 +78,10 @@ is the Project document `claude/ksiam-animations-handoff-2026-11-02.md`.
   and the points, and at least `_MIN_LABEL_CLEARANCE_PX` when such a position exists.
 - `tests/test_phase_portrait.py` — `test_sync_labels_clear_the_foreground` checks each
   label's box against the plane, the clock, the other label and the foreground curves.
+- `ksiam_animations.ipynb` (**new**) — the notebook that writes `results/ksiam/`: the A1
+  and A2 animations as GIF and MP4, and the strips `a1_strip.png` and `a2_strip.png`,
+  whose frames are read from the saved GIFs by cumulative display time. The outputs are
+  not committed.
 
 ## Design
 
@@ -90,7 +94,7 @@ The ledger of the change, in the order the commits will follow. Each item become
 2. `plotting/phase_portrait.py`: `_sync_scene` and `animate_isochron_sync`; the export;
    the seeded-phase, frame-count and error tests — done.
 3. `ksiam_animations.ipynb`: the A1 and A2 cells, the GIF and MP4 exports, and the
-   static strips.
+   static strips — done.
 
 The decisions and their rejected alternatives are written in the documents commit.
 
@@ -135,3 +139,4 @@ Pending.
 | `src/deep_isochron/plotting/phase_portrait/drawing.py` — the clock in a white box; `_draw_cycle` returns its line | | |
 | `src/deep_isochron/plotting/phase_portrait/sync.py` — φ labels in a white box, placed by `_place_labels` clear of the foreground | | |
 | `tests/test_phase_portrait.py` — `test_sync_labels_clear_the_foreground` | | |
+| `ksiam_animations.ipynb` — the A1 and A2 cells, the GIF and MP4 exports, the strips | | |
