@@ -200,18 +200,26 @@ deep_isochron
 │   │                        plot_isochron_match (reference colored by phase, learned
 │   │                        dashed); plot_isochron_hairpins (one isochron into the
 │   │                        phaseless point, plane and log-polar, matched to the model)
-│   └── deformation/         how a bijection stretches a mesh and trajectories
-│       ├── sheet.py         SheetConfig; Sheet (eqx.Module: mesh, sub-quad fill nodes,
-│       │                    polylines, circles, trajectories, curves) · map(f);
-│       │                    stage_sheets / stage_maps / stage_labels; cell_jacobians;
-│       │                    sheet_limits
-│       ├── metrics.py       CellMetric(fn, cmap, symmetric, label, log_scale); AREA
-│       │                    (log|det J|), ANISOTROPY (log σmax/σmin)
-│       ├── style.py         SheetStyle (fill, mesh, curves, colorbar, figure sizes,
-│       │                    color_limit_quantile)
-│       └── figures.py       draw_sheet; plot_deformation (domain | image),
-│                            plot_deformation_strip (stages), animate_deformation
-│                            (flipbook; MP4 save call in the docstring)
+│   ├── deformation/         how a bijection stretches a mesh and trajectories
+│   │   ├── sheet.py         SheetConfig; Sheet (eqx.Module: mesh, sub-quad fill nodes,
+│   │   │                    polylines, circles, trajectories, curves) · map(f);
+│   │   │                    stage_sheets / stage_maps / stage_labels; cell_jacobians;
+│   │   │                    sheet_limits
+│   │   ├── metrics.py       CellMetric(fn, cmap, symmetric, label, log_scale); AREA
+│   │   │                    (log|det J|), ANISOTROPY (log σmax/σmin)
+│   │   ├── style.py         SheetStyle (fill, mesh, curves, colorbar, figure sizes,
+│   │   │                    color_limit_quantile)
+│   │   └── figures.py       draw_sheet; plot_deformation (domain | image),
+│   │                        plot_deformation_strip (stages), animate_deformation
+│   │                        (flipbook; MP4 save call in the docstring)
+│   └── phase_portrait/      animations of a known planar oscillator: phase plane | time
+│       ├── style.py         PortraitStyle (timing, pauses, sizes, fonts, Okabe–Ito colors)
+│       ├── drawing.py       the shared figure (square plane, equal-height time axis placed
+│       │                    in inches), cycle, fading tails, boxed clock, frame sequence
+│       ├── kick.py          animate_kick: a point on the cycle and its kicked copies, Δφ
+│       │                    per copy (phase_difference) labeled in the final hold
+│       └── sync.py          animate_isochron_sync: points seeded on isochrons that turn
+│                            with the cycle; φ labels placed clear of the curves
 └── utils/                   shared helpers
     ├── numerics.py          inv_softplus, squashed_exp, polar ↔ cartesian, wrap_phase
     │                        (constraints, normal forms, analysis)
