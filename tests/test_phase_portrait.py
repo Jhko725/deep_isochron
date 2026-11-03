@@ -10,6 +10,11 @@ The points of `animate_isochron_sync` are pinned by the closed-form phase: it eq
 seeded phase at the start and the phase of the group's drawn isochron at every frame.
 Its animation is pinned by the frames of a saved GIF, its φ labels by their distance
 from the foreground curves, and its arguments by the four errors it raises.
+
+The bands that `animate_phase_field` paints are pinned by the isostable coordinate and
+the panel's known Floquet multiplier e^{-1}, its lap-1 sweep by the closed-form phase of
+the moving point, its animation by the frames of a saved GIF, and its arguments by the
+three errors it raises.
 """
 
 from pathlib import Path
@@ -23,12 +28,19 @@ import pytest
 from deep_isochron.plotting import (
     animate_isochron_sync,
     animate_kick,
+    animate_phase_field,
     configure_rcparams,
     PortraitStyle,
 )
 from deep_isochron.plotting.phase_portrait.drawing import (
     _SAMPLES_PER_FRAME,
     _TEXT_BOX_PAD,
+)
+from deep_isochron.plotting.phase_portrait.field import (
+    _FADE_FRAMES,
+    _FIELD_RESOLUTION,
+    _field_scene,
+    _STEP_SECONDS,
 )
 from deep_isochron.plotting.phase_portrait.kick import _kick_scene
 from deep_isochron.plotting.phase_portrait.labels import _MIN_LABEL_CLEARANCE_PX
@@ -289,3 +301,106 @@ def test_animate_isochron_sync_raises(
     defaults = dict(phases=PHASES, radii=RADII, n_periods=5)
     with pytest.raises(ValueError, match=message):
         animate_isochron_sync(system, **(defaults | arguments))
+
+
+def _field_grid() -> Float[np.ndarray, " n"]:
+    """The grid of each axis that `animate_phase_field` paints in the default style."""
+    box = PortraitStyle().box
+    return np.linspace(-box, box, _FIELD_RESOLUTION)
+
+
+def test_field_scene_masks_match_the_closed_form():
+    """After each backward step n the painted band is `|Ψ| ≤ tolerance · e^n` pixel for
+    pixel, since the panel's Floquet multiplier is e^{-1}, and the lap-1 band with the
+    point at phase 0.6 is `(|Ψ| ≤ tolerance) & (Θ ≤ 0.6)`; Θ and Ψ are the closed-form
+    phase–amplitude coordinates of each grid point."""
+    tolerance, n_periods = 0.05, 6
+    grid = _field_grid()
+    scene = _field_scene(PANEL_2, tolerance=tolerance, n_periods=n_periods, grid=grid)
+    xs, ys = np.meshgrid(grid, grid)
+    points = jnp.asarray(np.stack((xs.ravel(), ys.ravel()), axis=1))
+    theta, psi = np.asarray(jax.vmap(PANEL_2.to_phase_amplitude)(points)).T
+    theta, psi = theta.reshape(xs.shape), psi.reshape(xs.shape)
+    for n in range(n_periods + 1):
+        expected = np.abs(psi) <= tolerance * np.exp(n)
+        np.testing.assert_array_equal(np.asarray(scene.step_mask(n)), expected)
+    np.testing.assert_array_equal(
+        np.asarray(scene.lap_mask(0.6)), (np.abs(psi) <= tolerance) & (theta <= 0.6)
+    )
+
+
+def test_field_lap_colors_follow_the_clock():
+    """At every frame of lap 1, the point sits on the cycle at the clock's phase, by the
+    closed-form phase, and the painted pixel nearest it is behind it: its phase is at
+    most the clock's, and it lies within one grid diagonal of the point."""
+    frames_per_period = PortraitStyle().frames_per_period
+    grid = _field_grid()
+    scene = _field_scene(PANEL_2, tolerance=0.05, n_periods=1, grid=grid)
+    xs, ys = np.meshgrid(grid, grid)
+    phase = np.asarray(scene.phase)
+    diagonal = np.sqrt(2) * (grid[1] - grid[0])
+    for j in range(1, frames_per_period + 1):
+        clock = j / frames_per_period
+        point = PANEL_2.limit_cycle(jnp.asarray(clock))
+        np.testing.assert_allclose(
+            phase_difference(PANEL_2.phase(point), clock),
+            0.0,
+            rtol=0.0,
+            atol=TOL["closed_form"],
+        )
+        x, y = np.asarray(point)
+        distance = np.where(
+            np.asarray(scene.lap_mask(clock)), np.hypot(xs - x, ys - y), np.inf
+        )
+        nearest = np.unravel_index(np.argmin(distance), distance.shape)
+        assert distance[nearest] <= diagonal
+        assert phase[nearest] <= clock
+
+
+def test_animate_phase_field_writes_every_frame(tmp_path: Path):
+    """The animation saved as a GIF under the project style plays two laps of 40 frames
+    and their first frame, the reset and six steps of `_FADE_FRAMES` frames each, and
+    the final frame; with the 1.5-second start pause, the holds of `_STEP_SECONDS`
+    after lap 2, after the reset and after each step, and the 3-second final hold,
+    counted by duration as in `test_animate_kick_writes_every_frame`."""
+    path = tmp_path / "field.gif"
+    style = PortraitStyle()
+    n_periods = 6
+    with matplotlib.rc_context():
+        configure_rcparams()
+        animation = animate_phase_field(
+            PANEL_2, tolerance=0.05, n_periods=n_periods, style=style
+        )
+        animation.save(path, writer=PillowWriter(fps=style.fps), dpi=style.dpi)
+        plt.close("all")
+    with Image.open(path) as gif:
+        size = gif.size
+        durations = [frame.info["duration"] for frame in ImageSequence.Iterator(gif)]
+    frames = (
+        2 * style.frames_per_period
+        + 1
+        + (n_periods + 1) * _FADE_FRAMES
+        + 1
+        + round(style.pause_seconds * style.fps)
+        + (n_periods + 2) * round(_STEP_SECONDS * style.fps)
+        + round(style.hold_seconds * style.fps)
+    )
+    assert sum(durations) == frames * 1000 // style.fps
+    assert size == (960, 960)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (dict(tolerance=0.0), "tolerance"),
+        (dict(n_periods=0), "n_periods"),
+        (dict(style=PortraitStyle(figsize_square=(6.0, 5.0))), "not square"),
+    ],
+    ids=["tolerance", "n_periods", "figsize_square"],
+)
+def test_animate_phase_field_raises(arguments: dict[str, object], message: str):
+    """A tolerance that is not positive, no backward step, and a figure that is not
+    square each raise `ValueError`."""
+    defaults = dict(tolerance=0.05, n_periods=6)
+    with pytest.raises(ValueError, match=message):
+        animate_phase_field(PANEL_2, **(defaults | arguments))

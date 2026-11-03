@@ -32,12 +32,9 @@ from .drawing import (
     _SAMPLES_PER_FRAME,
     _set_tail,
     _time_axis,
+    MINUS,
 )
 from .style import PortraitStyle
-
-
-MINUS = "\N{MINUS SIGN}"
-"""The minus sign of the phase-shift labels, wider than a hyphen."""
 
 
 class _KickScene(eqx.Module):

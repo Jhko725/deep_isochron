@@ -1,8 +1,8 @@
 """The helpers that the phase-portrait animations share: the figure with its phase-plane
-and time axes, the limit cycle, the fading tail, the clock, the time axis and the frame
-sequence with its pauses. The time is labeled in units of the period, as in `t = 1.25T`,
-and the phase-plane panel has no tick marks or tick labels, since the coordinates mean
-nothing to the audience.
+and time axes, the one-panel square figure, the limit cycle, the fading tail, the clock,
+the time axis and the frame sequence with its pauses. The time is labeled in units of
+the period, as in `t = 1.25T` or `t = −2.00T`, and the phase-plane panel has no tick
+marks or tick labels, since the coordinates mean nothing to the audience.
 
 The figures draw under the style that the caller activates, such as
 `configure_rcparams`, and override neither its grid nor its spines: the phase plane
@@ -26,12 +26,21 @@ from ...systems.normal_forms.base import AbstractNormalForm
 from .style import PortraitStyle
 
 
+MINUS = "\N{MINUS SIGN}"
+"""The minus sign of the negative clock times and the phase-shift labels, wider than a
+hyphen."""
+
 _SAMPLES_PER_FRAME = 10
 """Trajectory samples per frame, so that traces and tails show no corners on a slide."""
 
 _MARGINS = (0.15, 0.35, 0.5, 0.15)
 """The figure margins left, right, bottom and top, in inches: the bottom one holds the
 time axis's tick labels, and the right one the half of its last label past the axis."""
+
+_SQUARE_MARGIN = 0.325
+"""The margin of `_square_figure` on every side, in inches: half the sum of the bottom
+and top margins of `_MARGINS`, so the plane is centered with the vertical extent that
+those margins leave."""
 
 _PANEL_GAP = 0.4
 """The gap between the phase plane and the time axis, in inches."""
@@ -45,10 +54,27 @@ they read over the curves that pass behind them."""
 
 
 # ------------------------------------------------------------ shared helpers ------
+def _plane_axis(
+    fig: Figure, rect: tuple[float, float, float], style: PortraitStyle
+) -> Axes:
+    """Add a square phase-plane axis to `fig` at `rect`, its left edge, bottom edge and
+    side in inches, spanning `±style.box` without tick marks or tick labels, with its
+    grid and ticks below every drawn artist."""
+    left, bottom, side = rect
+    width, height = fig.get_size_inches()
+    plane = fig.add_axes((left / width, bottom / height, side / width, side / height))
+    plane.set_xlim(-style.box, style.box)
+    plane.set_ylim(-style.box, style.box)
+    plane.set_aspect("equal")
+    plane.tick_params(length=0, labelbottom=False, labelleft=False)
+    plane.set_axisbelow(True)  # a grid of the active style below every drawn artist
+    return plane
+
+
 def _portrait_figure(style: PortraitStyle) -> tuple[Figure, Axes, Axes]:
-    """A figure with a white opaque background, a square phase-plane axis on the left,
-    spanning `±style.box` without tick marks or tick labels, and a time axis on the
-    right with the same top and bottom edges.
+    """A figure with a white opaque background, a square phase-plane axis on the left
+    from `_plane_axis`, and a time axis on the right with the same top and bottom
+    edges.
 
     The axes are placed in inches from `style.figsize`, `_MARGINS` and `_PANEL_GAP`:
     the plane's side is the figure's height less the bottom and top margins, and the
@@ -64,7 +90,7 @@ def _portrait_figure(style: PortraitStyle) -> tuple[Figure, Axes, Axes]:
     side = height - bottom - top
     time_left = left + side + _PANEL_GAP
     fig = plt.figure(figsize=style.figsize, dpi=style.dpi, facecolor="white")
-    plane = fig.add_axes((left / width, bottom / height, side / width, side / height))
+    plane = _plane_axis(fig, (left, bottom, side), style)
     time = fig.add_axes(
         (
             time_left / width,
@@ -73,13 +99,25 @@ def _portrait_figure(style: PortraitStyle) -> tuple[Figure, Axes, Axes]:
             side / height,
         )
     )
-    plane.set_xlim(-style.box, style.box)
-    plane.set_ylim(-style.box, style.box)
-    plane.set_aspect("equal")
-    plane.tick_params(length=0, labelbottom=False, labelleft=False)
-    for ax in (plane, time):  # a grid of the active style below every drawn artist
-        ax.set_axisbelow(True)
+    time.set_axisbelow(True)  # a grid of the active style below every drawn artist
     return fig, plane, time
+
+
+def _square_figure(style: PortraitStyle) -> tuple[Figure, Axes]:
+    """A figure of `style.figsize_square` with a white opaque background and one
+    phase-plane axis from `_plane_axis`, the one-panel sibling of `_portrait_figure`.
+
+    The plane is centered, `_SQUARE_MARGIN` from every edge of the figure, so its side
+    is the figure's width less two margins. It does not share `_MARGINS`, whose bottom
+    and right margins hold the time axis's tick labels, which this figure does not have.
+
+    **Returns:**
+
+    The figure and the phase-plane axis.
+    """
+    side = style.figsize_square[0] - 2 * _SQUARE_MARGIN
+    fig = plt.figure(figsize=style.figsize_square, dpi=style.dpi, facecolor="white")
+    return fig, _plane_axis(fig, (_SQUARE_MARGIN, _SQUARE_MARGIN, side), style)
 
 
 def _draw_cycle(ax: Axes, system: AbstractNormalForm, style: PortraitStyle) -> Line2D:
@@ -132,8 +170,9 @@ def _clock(ax: Axes, style: PortraitStyle) -> Text:
 
 def _clock_label(frame: int, frames_per_period: int) -> str:
     """The clock's string at `frame`, the time in periods to two decimals, as in
-    `t = 1.25T`."""
-    return f"t = {frame / frames_per_period:.2f}T"
+    `t = 1.25T`, and with a Unicode minus before a negative time, as in `t = −2.00T`."""
+    sign = MINUS if frame < 0 else ""
+    return f"t = {sign}{abs(frame) / frames_per_period:.2f}T"
 
 
 def _time_axis(

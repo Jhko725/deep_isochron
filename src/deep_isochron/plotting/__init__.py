@@ -31,6 +31,7 @@ from .isochrons import (
 from .phase_portrait import (
     animate_isochron_sync as animate_isochron_sync,
     animate_kick as animate_kick,
+    animate_phase_field as animate_phase_field,
     PortraitStyle as PortraitStyle,
 )
 from .scales import clipped_norm as clipped_norm

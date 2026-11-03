@@ -102,6 +102,22 @@ code are below.
   `labels.py`.
 - `tests/test_phase_portrait.py` — `_MIN_LABEL_CLEARANCE_PX` is imported from
   `phase_portrait.labels`.
+- `src/deep_isochron/plotting/phase_portrait/field.py` (**new**) — `_FieldScene`,
+  `_field_scene` and `animate_phase_field`: the phase colors laid on the cycle in two
+  laps, then painted backward in whole-period steps until a hole around the focus is
+  left, labeled `no phase`.
+- `src/deep_isochron/plotting/phase_portrait/drawing.py` — `_plane_axis` sets up the
+  phase-plane axis for `_portrait_figure` and the new one-panel `_square_figure`;
+  `MINUS` moves here from `kick.py`, and `_clock_label` writes a negative time with it.
+- `src/deep_isochron/plotting/phase_portrait/style.py` — `figsize_square`, 6 × 6 in.
+- `src/deep_isochron/plotting/phase_portrait/kick.py` — imports `MINUS` from
+  `drawing.py`.
+- `src/deep_isochron/plotting/phase_portrait/__init__.py` — the export of
+  `animate_phase_field`; the docstring names `field.py`.
+- `src/deep_isochron/plotting/__init__.py` — the export of `animate_phase_field`.
+- `tests/test_phase_portrait.py` — the masks of each step against the closed form, the
+  lap-1 sweep behind the point, the frame durations and the errors of
+  `animate_phase_field`.
 
 
 ## Design
@@ -274,3 +290,10 @@ None.
 | `src/deep_isochron/plotting/phase_portrait/sync.py` — imports the label search from `labels.py` | | |
 | `src/deep_isochron/plotting/phase_portrait/__init__.py` — the docstring names `labels.py` | | |
 | `tests/test_phase_portrait.py` — `_MIN_LABEL_CLEARANCE_PX` imported from `phase_portrait.labels` | | |
+| `src/deep_isochron/plotting/phase_portrait/field.py` — `_FieldScene`, `_field_scene`, `animate_phase_field` | | |
+| `src/deep_isochron/plotting/phase_portrait/drawing.py` — `_plane_axis`, `_square_figure`; `MINUS` and the negative clock | | |
+| `src/deep_isochron/plotting/phase_portrait/style.py` — `figsize_square` | | |
+| `src/deep_isochron/plotting/phase_portrait/kick.py` — imports `MINUS` from `drawing.py` | | |
+| `src/deep_isochron/plotting/phase_portrait/__init__.py` — the export of `animate_phase_field` | | |
+| `src/deep_isochron/plotting/__init__.py` — the export of `animate_phase_field` | | |
+| `tests/test_phase_portrait.py` — the masks, the lap-1 sweep, the frame count and the errors of `animate_phase_field` | | |

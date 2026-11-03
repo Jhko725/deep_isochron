@@ -17,6 +17,8 @@ class PortraitStyle:
     - `figsize`, `dpi`: The figure size in inches and its resolution. The defaults give
         1920 × 800 pixels, even in both dimensions as the `yuv420p` pixel format of an
         MP4 requires.
+    - `figsize_square`: The figure size in inches of the one-panel animation
+        `animate_phase_field`, square; 960 × 960 pixels at the default `dpi`.
     - `frames_per_period`: The frames drawn per period of the cycle; with `fps`, one
         period plays in 2 s.
     - `fps`: The playback rate in frames per second.
@@ -47,6 +49,7 @@ class PortraitStyle:
     """
 
     figsize: tuple[float, float] = (12.0, 5.0)
+    figsize_square: tuple[float, float] = (6.0, 6.0)
     dpi: int = 160
     frames_per_period: int = 40
     fps: int = 20
