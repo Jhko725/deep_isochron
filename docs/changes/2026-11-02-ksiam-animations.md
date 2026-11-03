@@ -92,6 +92,16 @@ code are below.
   with their rejected alternatives, the tests and the open issues.
 - `docs/architecture.md` — the `phase_portrait/` subtree under `plotting/`.
 - `docs/roadmap.md` — the branch appended to the *Done* ledger.
+- `src/deep_isochron/plotting/phase_portrait/labels.py` (**new**) — `_place_labels`,
+  `_box_extent`, `_foreground_samples`, `_anchor` and their four constants, moved
+  unchanged from `sync.py` so that a further animation can place labels with the same
+  search.
+- `src/deep_isochron/plotting/phase_portrait/sync.py` — the label search is removed and
+  imported from `labels.py`.
+- `src/deep_isochron/plotting/phase_portrait/__init__.py` — the docstring names
+  `labels.py`.
+- `tests/test_phase_portrait.py` — `_MIN_LABEL_CLEARANCE_PX` is imported from
+  `phase_portrait.labels`.
 
 
 ## Design
@@ -260,3 +270,7 @@ None.
 | `docs/changes/2026-11-02-ksiam-animations.md` — summary, design, tests, open issues | | |
 | `docs/architecture.md` — the `phase_portrait/` subtree | | |
 | `docs/roadmap.md` — the *Done* row | | |
+| `src/deep_isochron/plotting/phase_portrait/labels.py` — the label search, moved from `sync.py` | | |
+| `src/deep_isochron/plotting/phase_portrait/sync.py` — imports the label search from `labels.py` | | |
+| `src/deep_isochron/plotting/phase_portrait/__init__.py` — the docstring names `labels.py` | | |
+| `tests/test_phase_portrait.py` — `_MIN_LABEL_CLEARANCE_PX` imported from `phase_portrait.labels` | | |

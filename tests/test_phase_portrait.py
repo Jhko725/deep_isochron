@@ -31,11 +31,8 @@ from deep_isochron.plotting.phase_portrait.drawing import (
     _TEXT_BOX_PAD,
 )
 from deep_isochron.plotting.phase_portrait.kick import _kick_scene
-from deep_isochron.plotting.phase_portrait.sync import (
-    _INNER_RADIUS,
-    _MIN_LABEL_CLEARANCE_PX,
-    _sync_scene,
-)
+from deep_isochron.plotting.phase_portrait.labels import _MIN_LABEL_CLEARANCE_PX
+from deep_isochron.plotting.phase_portrait.sync import _INNER_RADIUS, _sync_scene
 from deep_isochron.systems.normal_forms import (
     AbstractNormalForm,
     BautinNormalForm,
