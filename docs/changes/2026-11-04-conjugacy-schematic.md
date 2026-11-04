@@ -30,6 +30,9 @@ checkpoint and a validation batch. The design was settled in the grilling round 
 - `src/deep_isochron/plotting/__init__.py` — exports `cycle_curve` and `curve_colors`.
 - `tests/test_plotting.py` — `test_curve_colors_forms` imports `curve_colors` from `deep_isochron.plotting.style`.
 - `docs/index.md` — a row for this change document.
+- `src/deep_isochron/plotting/schematic.py` — `SchematicLabels`, `SchematicStyle` and the four panel drawers `draw_data`, `draw_latent_initial`, `draw_latent_trajectories` and `draw_prediction`.
+- `src/deep_isochron/plotting/__init__.py` — exports `SchematicLabels`, `SchematicStyle` and the four drawers; the package docstring names the conjugacy schematic.
+- `tests/test_plotting.py` — the `schematic` section: start markers, line styles, the shape annotation and margin check, and `copy.replace` on the labels.
 
 ## Design
 
@@ -83,7 +86,7 @@ Ledger (one commit each):
 
 1. [x] `cycle_curve` moved to `trajectories.py` and `curve_colors` promoted to
    `plotting/style.py`, call sites updated.
-2. [ ] `SchematicStyle`, `SchematicLabels` and the four drawers, with their tests.
+2. [x] `SchematicStyle`, `SchematicLabels` and the four drawers, with their tests.
 3. [ ] `plot_conjugacy_schematic` with the geometry settled in the notebook, its test,
    the exports, the architecture line and the roadmap ledger. Waits for Joon's
    notebook prototype of the assembly.
@@ -120,3 +123,6 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/__init__.py` — the exports of `cycle_curve` and `curve_colors` | | |
 | `tests/test_plotting.py` — `test_curve_colors_forms` imports `curve_colors` | | |
 | `docs/index.md` — the `conjugacy-schematic` row | | |
+| `src/deep_isochron/plotting/schematic.py` — `SchematicLabels`, `SchematicStyle` and the four drawers | | |
+| `src/deep_isochron/plotting/__init__.py` — the exports of the schematic and the package docstring | | |
+| `tests/test_plotting.py` — the `schematic` section | | |

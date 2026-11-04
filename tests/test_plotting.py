@@ -11,14 +11,18 @@ at the model's own map in both directions, and the limits are the padded union b
 ``plotting.scales.clipped_norm`` is pinned on hand-made values with literal ends. The
 deformation figures are pinned by their panels, the strip's stage selection and range
 check, the animation's frames through a saved GIF, and ``draw_sheet`` by a custom
-metric's fill; ``plotting.style.set_limits`` by its length check.
+metric's fill; ``plotting.style.set_limits`` by its length check. The drawers of
+``plotting.schematic`` are pinned by their start markers' fill and their line styles,
+and its style and labels by a range check and ``copy.replace``.
 """
 
+import copy
 from collections.abc import Callable
 
 import colorcet as cc
 import jax
 import jax.numpy as jnp
+import jaxtyping
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,10 +36,16 @@ from deep_isochron.model.invertible import (
 )
 from deep_isochron.plotting import (
     add_colorbar,
+    draw_data,
+    draw_latent_initial,
+    draw_latent_trajectories,
+    draw_prediction,
     plot_isochron_hairpins,
     plot_isochron_match,
     plot_phase_comparison,
     plot_phase_field,
+    SchematicLabels,
+    SchematicStyle,
     set_limits,
 )
 from deep_isochron.plotting.deformation import (
@@ -62,7 +72,8 @@ from hypothesis import given
 from jaxtyping import Array, Float
 from matplotlib.animation import PillowWriter
 from matplotlib.collections import LineCollection, QuadMesh
-from matplotlib.colors import Normalize
+from matplotlib.colors import Normalize, to_rgba
+from matplotlib.lines import Line2D
 from PIL import Image
 
 from .helpers import hand_foliation, HAND_FOLIATION_FORM, TOL
@@ -542,3 +553,104 @@ def test_set_limits_rejects_three_floats():
     assert ax.get_xlim() == (0.0, 2.0) and ax.get_ylim() == (-1.0, 3.0)
     assert ax.get_aspect() == 1.0
     plt.close(fig)
+
+
+# --- schematic ---
+
+
+@pytest.fixture(scope="module")
+def schematic_inputs(
+    model,
+) -> tuple[
+    Float[np.ndarray, "2 20 2"],
+    Float[np.ndarray, "2 20 2"],
+    Float[np.ndarray, "65 2"],
+    Float[np.ndarray, " 2"],
+]:
+    """Two windows of the model from $(1.5, 0)$ and $(0, -1.2)$ over 20 times in
+    $[0, 1]$: `(xt, yt, cycle_points, equilibrium)`, the cycle closed by repeating its
+    first point."""
+    ts = jnp.linspace(0, 1, 20)
+    x0s = jnp.array([[1.5, 0.0], [0.0, -1.2]])
+    xt, yt = jax.vmap(model, in_axes=(None, 0))(ts, x0s)
+    cycle = np.asarray(
+        HAND_FOLIATION_FORM.limit_cycle(jnp.linspace(0, 1, 64, endpoint=False))
+    )
+    cycle_points = np.vstack([cycle, cycle[:1]])
+    return (
+        np.asarray(xt),
+        np.asarray(yt),
+        cycle_points,
+        np.asarray(model.equilibrium()),
+    )
+
+
+def _start_marker_faces(ax, style: SchematicStyle) -> list[tuple[float, ...]]:
+    """The face colors, as RGBA, of the single-point markers on `ax` other than the
+    equilibrium marker, which is edged in `style.cycle_color`."""
+    return [
+        to_rgba(line.get_markerfacecolor())
+        for line in ax.lines
+        if isinstance(line, Line2D)
+        and len(line.get_xdata()) == 1
+        and line.get_marker() != "None"
+        and to_rgba(line.get_markeredgecolor()) != to_rgba(style.cycle_color)
+    ]
+
+
+def test_schematic_drawers_mark_each_start(schematic_inputs):
+    """Each drawer adds one start marker per window: filled with the window's color
+    in the data space and white in the latent space."""
+    xt, yt, cycle_points, equilibrium = schematic_inputs
+    style = SchematicStyle()
+    colors = [to_rgba(c) for c in curve_colors(style.curve_colors, len(xt))]
+    white = [to_rgba("white")] * len(xt)
+    for draw, expected in [
+        (lambda ax: draw_data(ax, xt, cycle_points, equilibrium, style), colors),
+        (lambda ax: draw_latent_initial(ax, yt[:, 0], cycle_points, style), white),
+        (lambda ax: draw_latent_trajectories(ax, yt, cycle_points, style), white),
+        (
+            lambda ax: draw_prediction(ax, xt, xt, cycle_points, equilibrium, style),
+            colors,
+        ),
+    ]:
+        fig, ax = plt.subplots()
+        draw(ax)
+        assert _start_marker_faces(ax, style) == expected
+        plt.close(fig)
+
+
+def test_schematic_curves_dashed_in_latent_space_solid_in_data(schematic_inputs):
+    """The latent trajectories are dashed and the data windows solid."""
+    xt, yt, cycle_points, equilibrium = schematic_inputs
+    style = SchematicStyle()
+    for draw, dashed in [
+        (lambda ax: draw_latent_trajectories(ax, yt, cycle_points, style), True),
+        (lambda ax: draw_data(ax, xt, cycle_points, equilibrium, style), False),
+    ]:
+        fig, ax = plt.subplots()
+        draw(ax)
+        curves = [line for line in ax.lines if len(line.get_xdata()) == xt.shape[1]]
+        assert len(curves) == len(xt)
+        assert all((line.get_linestyle() != "-") == dashed for line in curves)
+        plt.close(fig)
+
+
+def test_schematic_rejects_bad_values(schematic_inputs):
+    """Predictions of another window count fail the shape annotation under the
+    jaxtyping hook, and a negative margin raises `ValueError`."""
+    xt, _, cycle_points, equilibrium = schematic_inputs
+    fig, ax = plt.subplots()
+    with pytest.raises(jaxtyping.TypeCheckError):
+        draw_prediction(ax, xt, xt[:1], cycle_points, equilibrium)
+    plt.close(fig)
+    with pytest.raises(ValueError, match="margin"):
+        SchematicStyle(margin=-0.1)
+
+
+def test_schematic_labels_replace_one_field():
+    """`copy.replace` changes the loss and keeps every other default."""
+    default = SchematicLabels()
+    labels = copy.replace(default, loss="L")
+    assert labels.loss == "L"
+    assert copy.replace(labels, loss=default.loss) == default

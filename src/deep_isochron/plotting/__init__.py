@@ -1,7 +1,7 @@
 """Plotting: the project's matplotlib style, a color scale utility, a trajectory plot,
 the phase-field and isochron figures of a reference and a trained model, the
-deformation figures of a planar map, and the animations of a normal form's oscillator
-for a talk."""
+deformation figures of a planar map, the animations of a normal form's oscillator for
+a talk, and the conjugacy schematic."""
 
 from .deformation import (
     animate_deformation as animate_deformation,
@@ -35,6 +35,14 @@ from .phase_portrait import (
     PortraitStyle as PortraitStyle,
 )
 from .scales import clipped_norm as clipped_norm
+from .schematic import (
+    draw_data as draw_data,
+    draw_latent_initial as draw_latent_initial,
+    draw_latent_trajectories as draw_latent_trajectories,
+    draw_prediction as draw_prediction,
+    SchematicLabels as SchematicLabels,
+    SchematicStyle as SchematicStyle,
+)
 from .style import (
     add_colorbar as add_colorbar,
     colored_curve as colored_curve,
