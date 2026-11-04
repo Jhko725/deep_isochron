@@ -64,18 +64,21 @@ def schematic_affine_coupling(
 def schematic_spline_coupling(
     num_bins: int = 9,
     xy_range: tuple[float, float] = (-1.0, 1.0),
-    width_raw: float = 0.7,
-    derivative_raws: tuple[float, float] = (0.4, 0.8),
+    x_width_raw: float = 0.26,
+    y_width_raw: float = 2.6,
+    derivative_raws: tuple[float, float] = (0.5, 0.9),
     x1_slope: float = 0.3,
 ) -> CouplingFlow[MonotonicRQSpline]:
     r"""The spline coupling layer of the figure: a `MonotonicRQSpline` warp of $x_2$
     that is gentle everywhere and steep in one band, which narrows as $x_1$ grows.
 
     The conditioner returns a raw vector that is zero except at four entries of the
-    middle bin: its x-width raw is `-width_raw` and its y-width raw is `width_raw`, so
-    the bin is narrow and tall, and the raws of the interior derivatives at its two
-    ends are `derivative_raws`, positive so that the slope there exceeds 1. The other
-    bins share the remaining width and height, so their slope is below 1. The vector
+    middle bin. Its x-width raw `x_width_raw` sets the band's width, and its y-width
+    raw `y_width_raw`, much larger, makes the bin take most of the range's height
+    from the other bins, so that the band is steep. The raws of the interior
+    derivatives at its two ends, `derivative_raws`, are positive so that the slope
+    there exceeds 1 and the band joins its neighbors smoothly. The other bins share
+    the remaining width and height, so their slope is below 1. The vector
     is scaled by $1 + c\, x_1$, $c$ = `x1_slope`. Since the nonzero widths are those
     of the middle bin, the band stays centered at the range's midpoint; unequal
     derivative raws move its steepest point off center by an amount that changes with
@@ -85,7 +88,8 @@ def schematic_spline_coupling(
 
     - `num_bins`: The number of bins, odd so that there is a middle bin, at least 3.
     - `xy_range`: The range of the spline; the identity outside it.
-    - `width_raw`: The magnitude of the middle bin's two width raws.
+    - `x_width_raw`: The raw of the middle bin's x-width.
+    - `y_width_raw`: The raw of the middle bin's y-width.
     - `derivative_raws`: The raws of the derivatives at the middle bin's lower and
         upper knot.
     - `x1_slope`: The relative change of the raw vector per unit of $x_1$.
@@ -105,8 +109,8 @@ def schematic_spline_coupling(
     raw = np.zeros(template.num_params)
     # The layout of `MonotonicRQSpline.raw`: K x-widths, K y-widths, K - 1 interior
     # derivatives, of which entry j is the derivative at knot j + 1.
-    raw[middle] = -width_raw
-    raw[num_bins + middle] = width_raw
+    raw[middle] = x_width_raw
+    raw[num_bins + middle] = y_width_raw
     raw[2 * num_bins + middle - 1 : 2 * num_bins + middle + 1] = derivative_raws
 
     def conditioner(x_const: Float[Array, " 1"]) -> Float[Array, " raw"]:

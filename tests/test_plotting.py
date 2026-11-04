@@ -688,14 +688,14 @@ def test_schematic_couplings_are_hand_set(warp_layers):
 
 
 def test_spline_warp_is_steep_in_one_band(warp_layers):
-    """At $x_1 = 0$ the spline warp's largest slope is at least three times its slope
+    """At $x_1 = 0$ the spline warp's largest slope is at least five times its slope
     at either end of the box, where the boundary derivatives are 1."""
     _, spline = warp_layers
     bijection = jax.tree.map(lambda a: a[0], spline.make_bijection(jnp.array([0.0])))
     lo, hi = spline.template.xy_range
     slope = jax.grad(bijection)
     largest = jnp.max(jax.vmap(slope)(jnp.linspace(lo, hi, 2001)))
-    assert float(largest) >= 3 * max(float(slope(lo)), float(slope(hi)))
+    assert float(largest) >= 5 * max(float(slope(lo)), float(slope(hi)))
 
 
 def _knot_markers(ax) -> list[Line2D]:
