@@ -56,8 +56,8 @@ from deep_isochron.plotting.deformation import (
 )
 from deep_isochron.plotting.deformation.figures import _factor_ticks
 from deep_isochron.plotting.deformation.sheet import _stage_sequence
-from deep_isochron.plotting.deformation.style import _curve_colors
 from deep_isochron.plotting.scales import clipped_norm
+from deep_isochron.plotting.style import curve_colors
 from hypothesis import given
 from jaxtyping import Array, Float
 from matplotlib.animation import PillowWriter
@@ -521,16 +521,16 @@ def test_curve_colors_forms():
     """One color is repeated, a sequence and a listed colormap are cycled from their
     first entry, and a value that is none of the three raises `ValueError`."""
     n = 5
-    for curve_colors, first in [
+    for spec, first in [
         ("k", "k"),
         (("r", "g"), "r"),
         (cc.cm.glasbey_dark, cc.cm.glasbey_dark.colors[0]),
     ]:
-        colors = _curve_colors(curve_colors, n)
+        colors = curve_colors(spec, n)
         assert len(colors) == n
         assert colors[0] == first
     with pytest.raises(ValueError):
-        _curve_colors(object(), n)
+        curve_colors(object(), n)
 
 
 def test_set_limits_rejects_three_floats():

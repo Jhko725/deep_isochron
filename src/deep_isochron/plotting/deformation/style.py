@@ -1,17 +1,16 @@
 """The drawing constants of the deformation figures: `SheetStyle`, which every figure
-takes, and `_curve_colors`, which turns its `curve_colors` into one color per
-trajectory. A style is a frozen dataclass of Python values, changed one field at a time
+takes. A style is a frozen dataclass of Python values, changed one field at a time
 with `copy.replace`; `curve_colors` is one matplotlib color, a sequence of colors or a
-`ListedColormap`.
+`ListedColormap`, which `plotting.style.curve_colors` turns into one color per
+trajectory.
 
 The design and its decisions are in `docs/changes/2026-10-30-deformation-plots.md`.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import cast
 
-from matplotlib.colors import ListedColormap, to_rgba
+from matplotlib.colors import ListedColormap
 from matplotlib.typing import ColorType
 
 
@@ -64,25 +63,3 @@ class SheetStyle:
     colorbar_pad: float = 0.02
     colorbar_tick_fontsize: float = 9.0
     colorbar_label_above: bool = True
-
-
-def _curve_colors(colors: object, n: int) -> list:
-    """The colors of `n` trajectories from `colors`, a `SheetStyle.curve_colors`: one
-    color repeated, or the colors of a sequence or a `ListedColormap` cycled;
-    `ValueError` otherwise."""
-    if isinstance(colors, ListedColormap):
-        # type-level only: the stubs type `colors` as `ArrayLike`; it is a list here.
-        colors = list(cast(Sequence[ColorType], colors.colors))
-    else:
-        try:
-            # type-level only: the trial is what decides whether `colors` is one color.
-            to_rgba(cast(ColorType, colors))
-            return [colors] * n
-        except (ValueError, TypeError):  # a sequence of colors raises one or the other
-            if (
-                isinstance(colors, str)
-                or not isinstance(colors, Sequence)
-                or not colors
-            ):
-                raise ValueError(f"curve_colors={colors!r} is not a color") from None
-    return [colors[i % len(colors)] for i in range(n)]

@@ -1,8 +1,30 @@
-"""A phase-plane plot of the trajectories of a dataset."""
+"""A phase-plane plot of the trajectories of a dataset, and `cycle_curve`, the closed
+polyline of a limit cycle that the phase-plane figures draw."""
 
 import matplotlib.pyplot as plt
+import numpy as np
+from jaxtyping import Float
 
+from ..analysis.ode import LimitCycle
 from ..data import TimeSeriesDataSource
+
+
+def cycle_curve(cycle: LimitCycle, n_points: int = 512) -> Float[np.ndarray, "n 2"]:
+    """Sample `cycle` at `n_points` evenly spaced phases and close the curve.
+
+    **Arguments:**
+
+    - `cycle`: The limit cycle.
+    - `n_points`: The number of samples before closing.
+
+    **Returns:**
+
+    The sampled cycle of `n_points` points, closed by repeating the first, so the
+    array has `n_points + 1` rows.
+    """
+    _, points = cycle.sample(n_points)
+    points = np.asarray(points)
+    return np.vstack([points, points[:1]])
 
 
 def plot_source_trajectories(

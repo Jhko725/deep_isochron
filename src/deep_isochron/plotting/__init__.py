@@ -39,6 +39,10 @@ from .style import (
     add_colorbar as add_colorbar,
     colored_curve as colored_curve,
     configure_rcparams as configure_rcparams,
+    curve_colors as curve_colors,
     set_limits as set_limits,
 )
-from .trajectories import plot_source_trajectories as plot_source_trajectories
+from .trajectories import (
+    cycle_curve as cycle_curve,
+    plot_source_trajectories as plot_source_trajectories,
+)

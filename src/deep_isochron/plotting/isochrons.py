@@ -36,6 +36,7 @@ from ..model.conjugacy import ConjugateLatentDynamics
 from ..training.evaluation import align_phases, PhaseAlignment
 from ..utils.numerics import phase_difference, wrap_phase
 from .style import colored_curve
+from .trajectories import cycle_curve
 
 
 PHASE_CMAP: Colormap = cc.cm.CET_C6
@@ -43,13 +44,6 @@ PHASE_CMAP: Colormap = cc.cm.CET_C6
 PHASE_NORM = Normalize(0.0, 1.0)
 MASKED_COLOR = "0.6"
 """The background of a field panel: the color of a masked point."""
-
-
-def _cycle_curve(cycle: LimitCycle, n_points: int = 512) -> Float[np.ndarray, "n 2"]:
-    """The sampled cycle, closed."""
-    _, points = cycle.sample(n_points)
-    points = np.asarray(points)
-    return np.vstack([points, points[:1]])
 
 
 def _learned_curve(
@@ -96,7 +90,7 @@ def plot_phase_field(
     image = ax.pcolormesh(xs, ys, field, cmap=cmap, norm=norm, shading="nearest")
     for iso in isochrons[::every]:
         ax.plot(*iso.points.T, color="w", lw=0.6)
-    ax.plot(*_cycle_curve(cycle).T, color="k", lw=1.2)
+    ax.plot(*cycle_curve(cycle).T, color="k", lw=1.2)
     ax.plot(*np.asarray(cycle.x0s[0]), "ko")
     ax.set(xlabel="$x$", ylabel="$y$", aspect="equal")
     ax.set(xlim=(xs[0], xs[-1]), ylim=(ys[0], ys[-1]))
@@ -231,7 +225,7 @@ def plot_isochron_match(
     """
     cycle = foliation.cycle
     fig, ax = plt.subplots(figsize=(5.5, 5), constrained_layout=True)
-    ax.plot(*_cycle_curve(cycle).T, color="k", lw=1.5)
+    ax.plot(*cycle_curve(cycle).T, color="k", lw=1.5)
     points = np.concatenate([iso.points for iso in foliation.isochrons])
     lo, hi = points.min(axis=0), points.max(axis=0)
     gaps: list[float] = []
@@ -340,7 +334,7 @@ def plot_isochron_hairpins(
     centroid.
     """
     cycle = foliation.cycle
-    centroid = _cycle_curve(cycle)[:-1].mean(axis=0)
+    centroid = cycle_curve(cycle)[:-1].mean(axis=0)
     q_array, converged = find_equilibrium(cycle.ode, jnp.asarray(centroid))
     if not bool(converged):
         raise ValueError(f"no equilibrium by Newton from the centroid {centroid}.")
@@ -378,7 +372,7 @@ def plot_isochron_hairpins(
     ax_phi = fig.add_subplot(grid[1, 1], sharex=ax_rho)
     ax_err = fig.add_subplot(grid[2, 1], sharex=ax_rho)
 
-    curve = _cycle_curve(cycle)
+    curve = cycle_curve(cycle)
     span = max(np.ptp(iso.points[:, 0]), np.ptp(iso.points[:, 1])) / 2
     full_center = iso.points.mean(axis=0)
     half = zoom_half_width or (

@@ -1,7 +1,9 @@
 """The project's matplotlib style, and the drawing helpers the figures share: a curve
-colored by a value, a panel's box and format, and a colorbar with chosen ticks."""
+colored by a value, one color per curve from a color, a sequence or a colormap, a
+panel's box and format, and a colorbar with chosen ticks."""
 
 from collections.abc import Sequence
+from typing import cast
 
 import colorcet as cc
 import matplotlib.pyplot as plt
@@ -11,8 +13,9 @@ from jaxtyping import Float
 from matplotlib.axes import Axes
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import LineCollection
-from matplotlib.colors import Colormap, Normalize
+from matplotlib.colors import Colormap, ListedColormap, Normalize, to_rgba
 from matplotlib.ticker import MaxNLocator, NullLocator
+from matplotlib.typing import ColorType
 
 
 def configure_rcparams():
@@ -137,3 +140,38 @@ def add_colorbar(
         bar.set_ticks(list(ticks), labels=list(tick_labels))
     bar.ax.yaxis.set_minor_locator(NullLocator())
     bar.ax.tick_params(length=0, labelsize=tick_fontsize)
+
+
+def curve_colors(colors: object, n: int) -> list:
+    """Turn `colors` into a list of `n` colors, one per curve.
+
+    **Arguments:**
+
+    - `colors`: One matplotlib color, a sequence of colors, or a `ListedColormap`.
+    - `n`: The number of curves.
+
+    **Returns:**
+
+    A list of `n` colors: the one color repeated, or the colors of the sequence or the
+    colormap cycled in order.
+
+    **Raises:**
+
+    `ValueError` if `colors` is none of these.
+    """
+    if isinstance(colors, ListedColormap):
+        # type-level only: the stubs type `colors` as `ArrayLike`; it is a list here.
+        colors = list(cast(Sequence[ColorType], colors.colors))
+    else:
+        try:
+            # type-level only: the trial is what decides whether `colors` is one color.
+            to_rgba(cast(ColorType, colors))
+            return [colors] * n
+        except (ValueError, TypeError):  # a sequence of colors raises one or the other
+            if (
+                isinstance(colors, str)
+                or not isinstance(colors, Sequence)
+                or not colors
+            ):
+                raise ValueError(f"curve_colors={colors!r} is not a color") from None
+    return [colors[i % len(colors)] for i in range(n)]

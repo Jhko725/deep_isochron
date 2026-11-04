@@ -31,10 +31,10 @@ from matplotlib.transforms import Affine2D
 
 from ...model.invertible import AbstractBijection
 from ..scales import clipped_norm
-from ..style import add_colorbar, set_limits
+from ..style import add_colorbar, curve_colors, set_limits
 from .metrics import AREA, CellMetric
 from .sheet import _stage_sequence, Sheet, sheet_limits, SheetConfig
-from .style import _curve_colors, SheetStyle
+from .style import SheetStyle
 
 
 def draw_sheet(
@@ -117,7 +117,7 @@ def draw_sheet(
     halo = [pe.withStroke(linewidth=style.halo_width, foreground="white")]
     trajectories = np.asarray(sheet.trajectories)
     for trajectory, color in zip(
-        trajectories, _curve_colors(style.curve_colors, len(trajectories)), strict=True
+        trajectories, curve_colors(style.curve_colors, len(trajectories)), strict=True
     ):
         ax.plot(
             *trajectory.T,
