@@ -1,8 +1,9 @@
 """Plotting: the project's matplotlib style, a color scale utility, a trajectory plot,
 the phase-field and isochron figures of a reference and a trained model, the
 deformation figures of a planar map, the animations of a normal form's oscillator for
-a talk, the conjugacy schematic, and the coupling-warp figure of a spline coupling
-layer beside an affine one."""
+a talk, the conjugacy schematic, the coupling-warp figure of a spline coupling layer
+beside an affine one, and the network figure of the invertible network as a chain of
+linear and coupling layers."""
 
 from .coupling_warp import (
     draw_warp_curve as draw_warp_curve,
@@ -29,6 +30,12 @@ from .deformation import (
     stage_labels as stage_labels,
     stage_maps as stage_maps,
     stage_sheets as stage_sheets,
+)
+from .inn_stack import (
+    plot_inn_stack as plot_inn_stack,
+    schematic_linear as schematic_linear,
+    StackLabels as StackLabels,
+    StackStyle as StackStyle,
 )
 from .isochrons import (
     HairpinMatch as HairpinMatch,

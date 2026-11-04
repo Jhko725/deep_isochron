@@ -16,7 +16,10 @@ metric's fill; ``plotting.style.set_limits`` by its length check. The drawers of
 and its style and labels by a range check and ``copy.replace``. The hand-set layers
 of ``plotting.coupling_warp`` are pinned by their round trip and the spline's steep
 band, its drawers by the knot markers and the fixed grid lines staying vertical, its
-style and labels as the schematic's, and its figure by its panels and headers.
+style and labels as the schematic's, and its figure by its panels and headers. The
+hand-set linear layer of ``plotting.inn_stack`` is pinned by NumPy's SVD of its matrix
+and its round trip, its style and labels as the schematic's, and its figure by its
+blocks, arrows, labels and inset axes.
 """
 
 import copy
@@ -46,15 +49,19 @@ from deep_isochron.plotting import (
     draw_warp_curve,
     draw_warped_grid,
     plot_coupling_warps,
+    plot_inn_stack,
     plot_isochron_hairpins,
     plot_isochron_match,
     plot_phase_comparison,
     plot_phase_field,
     schematic_affine_coupling,
+    schematic_linear,
     schematic_spline_coupling,
     SchematicLabels,
     SchematicStyle,
     set_limits,
+    StackLabels,
+    StackStyle,
     WarpLabels,
     WarpStyle,
 )
@@ -84,6 +91,8 @@ from matplotlib.animation import PillowWriter
 from matplotlib.collections import LineCollection, QuadMesh
 from matplotlib.colors import Normalize, to_rgba
 from matplotlib.lines import Line2D
+from matplotlib.patches import ArrowStyle, FancyArrowPatch, FancyBboxPatch
+from matplotlib.text import Text
 from PIL import Image
 
 from .helpers import hand_foliation, HAND_FOLIATION_FORM, TOL
@@ -767,4 +776,84 @@ def test_plot_coupling_warps_draws_four_panels(warp_layers):
     labels = WarpLabels()
     titles = {ax.get_title() for ax in axes}
     assert {labels.affine_header, labels.spline_header} <= titles
+    plt.close(fig)
+
+
+# --- inn_stack ---
+
+
+def test_schematic_linear_rotates_and_stretches():
+    """The hand-set linear layer has a positive determinant, singular values (by
+    NumPy's SVD) a factor above 1.5 apart, a matrix that is not symmetric, so not a
+    pure stretch, and an inverse that round-trips a few points."""
+    layer = schematic_linear()
+    weight = np.asarray(layer.weight)
+    assert np.linalg.det(weight) > 0
+    singular_values = np.linalg.svd(weight, compute_uv=False)
+    assert singular_values[0] > 1.5 * singular_values[1]
+    assert abs(weight[0, 1] - weight[1, 0]) > 0.1
+    points = jnp.array([[0.3, -0.2], [-0.7, 0.05], [0.9, 0.6]])
+    np.testing.assert_allclose(
+        jax.vmap(layer.inverse)(jax.vmap(layer)(points)),
+        points,
+        rtol=0,
+        atol=TOL["closed_form"],
+    )
+
+
+def test_stack_labels_replace_one_field():
+    """`copy.replace` changes the forward label and keeps every other default, and
+    five block labels raise `ValueError`."""
+    default = StackLabels()
+    labels = copy.replace(default, forward="F")
+    assert labels.forward == "F"
+    assert copy.replace(labels, forward=default.forward) == default
+    with pytest.raises(ValueError, match="blocks"):
+        StackLabels(blocks=default.blocks[:5])
+
+
+def test_stack_style_rejects_bad_values():
+    """A negative inset margin, a zero size, gap or font size, and an ellipsis gap
+    below the block gap each raise `ValueError` naming the field."""
+    for field, value in [
+        ("inset_margin", -0.1),
+        ("block_size", (0.0, 0.6)),
+        ("block_gap", 0.0),
+        ("inset_size", 0.0),
+        ("arrow_label_size", 0.0),
+        ("figsize", (12.0, 0.0)),
+        ("ellipsis_gap", 0.1),
+    ]:
+        with pytest.raises(ValueError, match=field):
+            StackStyle(**{field: value})
+
+
+def test_plot_inn_stack_blocks_and_arrows():
+    """The overlay axes carries six blocks and seven arrows, five between blocks and
+    the two long ones; every default label is a text of the figure; and four inset
+    axes follow the overlay."""
+    fig = plot_inn_stack(schematic_linear(), schematic_spline_coupling())
+    overlay, *insets = fig.get_axes()
+    blocks = [p for p in overlay.patches if isinstance(p, FancyBboxPatch)]
+    arrows = [p for p in overlay.patches if isinstance(p, FancyArrowPatch)]
+    assert len(blocks) == 6
+    assert len(arrows) == 7
+    double_headed = [
+        a for a in arrows if isinstance(a.get_arrowstyle(), ArrowStyle.CurveAB)
+    ]
+    assert len(double_headed) == 5
+    labels = StackLabels()
+    expected = {
+        *labels.blocks,
+        labels.ellipsis,
+        labels.forward,
+        labels.inverse,
+        labels.input,
+        labels.output,
+        labels.linear,
+        labels.coupling,
+    }
+    texts = {t.get_text() for t in fig.findobj(Text)}
+    assert expected <= texts
+    assert len(insets) == 4
     plt.close(fig)

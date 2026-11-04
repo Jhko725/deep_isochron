@@ -28,6 +28,14 @@ code would ask about are in *Design*, written when the branch lands.
 - `tests/test_plotting.py` — a `coupling_warp` section: the layers round-trip and
   move points, the spline band is steep, knots are marked only for splines, fixed
   grid lines stay vertical, the style and labels, and the four panels.
+- `src/deep_isochron/plotting/inn_stack.py` — new: the slide-9a figure, with the
+  hand-set linear layer `schematic_linear`, `plot_inn_stack`, `StackLabels` and
+  `StackStyle`.
+- `src/deep_isochron/plotting/__init__.py` — exports the four names of `inn_stack`
+  and names the figure in the package docstring.
+- `tests/test_plotting.py` — an `inn_stack` section: the linear layer rotates and
+  stretches with a positive determinant, the labels and style, and the figure's
+  blocks, arrows, labels and inset axes.
 
 ## Design
 
@@ -37,7 +45,7 @@ Ledger (one commit each):
 
 1. [x] `plotting/coupling_warp.py`: the hand-set coupling constructors, the warp-curve
    and warped-grid drawers, `plot_coupling_warps`, labels and style, tests.
-2. [ ] `plotting/inn_stack.py`: `schematic_linear`, the chain with its insets,
+2. [x] `plotting/inn_stack.py`: `schematic_linear`, the chain with its insets,
    `plot_inn_stack`, labels and style, tests.
 3. [ ] `ksiam_schematics.ipynb` rendering both figures to `results/ksiam/`.
 
@@ -67,3 +75,6 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/coupling_warp.py` — the slide-9b figure | | |
 | `src/deep_isochron/plotting/__init__.py` — the `coupling_warp` exports | | |
 | `tests/test_plotting.py` — the `coupling_warp` section | | |
+| `src/deep_isochron/plotting/inn_stack.py` — the slide-9a figure | | |
+| `src/deep_isochron/plotting/__init__.py` — the `inn_stack` exports | | |
+| `tests/test_plotting.py` — the `inn_stack` section | | |
