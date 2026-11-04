@@ -100,6 +100,13 @@ code would ask about are in *Design*, written when the branch lands.
   start triangle draw whole.
 - `tests/test_plotting.py` — the clip box is the box widened by `clip_pad`, and a
   negative `clip_pad` raises.
+- `src/deep_isochron/plotting/schematic_layers.py` — `schematic_affine_coupling` takes
+  a raw log-scale `log_scale_offset + scale_amplitude · sin(π x₁)` and a shift
+  `shift_curvature · x₁²`, so its image lines curve and fan while every column keeps
+  equal spacing; the module docstring names spacing within a column as the contrast.
+- `tests/test_plotting.py` — the affine image keeps equal spacing within each column,
+  differs between columns and bends a line of constant $x_2$; a negative amplitude
+  raises; the map that leaves the box uses `log_scale_offset=2.0`.
 
 ## Design
 
@@ -167,3 +174,5 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `tests/test_plotting.py` — the `schematic_layers` section | | |
 | `src/deep_isochron/plotting/coupling_warp.py` — the clip rectangle padded by `clip_pad` | | |
 | `tests/test_plotting.py` — the padded clip box and the `clip_pad` check | | |
+| `src/deep_isochron/plotting/schematic_layers.py` — the affine conditioner nonlinear in $x_1$ | | |
+| `tests/test_plotting.py` — uniform spacing per affine column | | |

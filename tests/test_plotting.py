@@ -734,6 +734,33 @@ def test_schematic_couplings_are_hand_set(warp_layers):
         assert float(jnp.max(jnp.abs(images - points))) > 0.01
 
 
+def test_affine_coupling_keeps_uniform_spacing_per_column(warp_layers):
+    """At $x_1 = -0.5, 0, 0.5$ the default affine layer maps equally spaced $x_2$ to
+    equally spaced images, with a spacing that differs between the three columns; and
+    the images of $x_2 = 0.5$ at $x_1 = -1, 0, 1$ are not collinear, so a line of
+    constant $x_2$ bends."""
+    affine, _ = warp_layers
+    x2s = jnp.linspace(-1.0, 1.0, 9)
+    spacings = []
+    for x1 in (-0.5, 0.0, 0.5):
+        points = jnp.stack([jnp.full_like(x2s, x1), x2s], axis=-1)
+        differences = jnp.diff(jax.vmap(affine)(points)[:, 1])
+        np.testing.assert_allclose(
+            differences, differences[0], rtol=0, atol=TOL["closed_form"]
+        )
+        spacings.append(float(differences[0]))
+    assert float(np.min(np.diff(np.sort(spacings)))) > 0.05
+    line = jax.vmap(affine)(jnp.array([[-1.0, 0.5], [0.0, 0.5], [1.0, 0.5]]))
+    first, second = line[1] - line[0], line[2] - line[0]
+    assert abs(float(first[0] * second[1] - first[1] * second[0])) > 0.1
+
+
+def test_affine_coupling_rejects_a_negative_amplitude():
+    """A negative `scale_amplitude` raises `ValueError` naming it."""
+    with pytest.raises(ValueError, match="scale_amplitude"):
+        schematic_affine_coupling(scale_amplitude=-0.1)
+
+
 def _warp_slopes(
     spline: CouplingFlow, x1: float, x2s: Float[Array, " n"]
 ) -> Float[Array, " n"]:
@@ -908,12 +935,13 @@ def test_grid_sheet_draws_trajectories(warp_layers, warp_trajectories):
 
 
 def test_grid_sheet_keeps_limits_for_a_map_that_leaves_the_box(warp_trajectories):
-    """The sheet's image under an affine layer of raw log-scale 2, which leaves the
-    box several times over, is drawn at the box widened by the default margin,
-    (-1.3, 1.3), once the figure is drawn, and every line collection and line of the
-    axes is clipped to the box widened by the default `clip_pad`, not to the axes."""
+    """The sheet's image under an affine layer of raw log-scale offset 2, a scale
+    above 4 at $x_1 = 0$, which leaves the box several times over, is drawn at the
+    box widened by the default margin, (-1.3, 1.3), once the figure is drawn, and
+    every line collection and line of the axes is clipped to the box widened by the
+    default `clip_pad`, not to the axes."""
     box = (-1.0, 1.0)
-    layer = schematic_affine_coupling(log_slope=2.0)
+    layer = schematic_affine_coupling(log_scale_offset=2.0)
     image = schematic_sheet(box, warp_trajectories).map(eqx.filter_jit(layer))
     assert float(jnp.max(jnp.abs(image.lines))) > 2
     fig, ax = plt.subplots()

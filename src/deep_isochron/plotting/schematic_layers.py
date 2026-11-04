@@ -7,12 +7,15 @@ is drawn for by design rather than by training.
 layers of `coupling_warp`, the spline one also drawn by `inn_stack`, as `CouplingFlow`s
 whose conditioners are hand-set functions of $x_1$. Every one of these layers is the
 identity at `raw = 0`, so the nonzero raw entries are all that the picture costs. The
+affine conditioner is nonlinear in $x_1$, so the affine image grid curves as well, and
+the contrast with the spline is the spacing of the lines within one column. The
 spline's conditioner does not set raws one by one: it builds a desired knot layout from
 $x_1$, a steep band whose center moves with $x_1$ and a pinched region fixed in $x_2$,
 and maps the layout back to raws through the inverses of the spline's constraints, so
-that the warp shows a step and a plateau and its image grid bends in a way no affine
-layer can. `schematic_trajectories` builds trajectories of the Bautin normal form fitted
-into a square box, and `schematic_sheet` the regular grid on that box that carries them.
+that the warp shows a step and a plateau and its image grid spaces the lines of one
+column unevenly, which no affine layer can. `schematic_trajectories` builds
+trajectories of the Bautin normal form fitted into a square box, and `schematic_sheet`
+the regular grid on that box that carries them.
 
 The design and its decisions are in `docs/changes/2026-11-04-inn-schematics.md`.
 """
@@ -65,29 +68,51 @@ def schematic_linear(
 
 
 def schematic_affine_coupling(
-    log_slope: float = 0.5, x1_slope: float = 0.3
+    log_scale_offset: float = 0.3,
+    scale_amplitude: float = 0.3,
+    shift_curvature: float = 0.25,
 ) -> CouplingFlow[Affine]:
-    r"""The affine coupling layer of the figure: $x_2 \mapsto a(x_1)\, x_2$, a slope
-    that varies mildly with $x_1$.
+    r"""The affine coupling layer of the figure: $x_2 \mapsto a(x_1)\, x_2 + b(x_1)$,
+    with a scale and a shift that are nonlinear in $x_1$.
 
-    The conditioner returns the raw `Affine` parameters `(loc, log_scale)` $= (0,\,
-    \lambda)\,(1 + c\, x_1)$, with $\lambda$ = `log_slope` and $c$ = `x1_slope`, so
-    the slope at $x_1 = 0$ is the scale of `Affine` at raw `log_slope`.
+    The conditioner returns the raw `Affine` parameters `(loc, log_scale)` $=
+    (\kappa\, x_1^2,\ \lambda + A \sin \pi x_1)$, with $\lambda$ =
+    `log_scale_offset`, $A$ = `scale_amplitude` and $\kappa$ = `shift_curvature`. So
+    the shift is $b(x_1) = \kappa\, x_1^2$, and the scale is `Affine`'s soft clamp of
+    the raw log-scale at its default bound 2, $a(x_1) = \exp(2 \tanh((\lambda + A \sin
+    \pi x_1) / 2))$. At $x_1 = 0$ the layer is the pure scale $\exp(2 \tanh(\lambda /
+    2))$, so the warp drawn at the middle column is a line through the origin, steeper
+    than the identity for a positive $\lambda$.
+
+    The conditioner is nonlinear in $x_1$ so that the image's lines of constant $x_2$
+    curve and fan, as a trained affine layer's do. Within one column of constant $x_1$
+    the layer is still affine, so the images of equally spaced lines stay equally
+    spaced there; varying that spacing within a column is what the spline layer does
+    and an affine layer cannot.
 
     **Arguments:**
 
-    - `log_slope`: The raw log-scale at $x_1 = 0$.
-    - `x1_slope`: The relative change of the raw parameters per unit of $x_1$.
+    - `log_scale_offset`: The raw log-scale $\lambda$ at $x_1 = 0$.
+    - `scale_amplitude`: The amplitude $A$ of the raw log-scale's sinusoid in $x_1$,
+        nonnegative.
+    - `shift_curvature`: The coefficient $\kappa$ of the quadratic shift.
 
     **Returns:**
 
     A `CouplingFlow` of dimension 2 that keeps $x_1$ and maps $x_2$.
+
+    **Raises:**
+
+    `ValueError` if `scale_amplitude` is negative.
     """
-    raw = np.array([0.0, log_slope])
+    if scale_amplitude < 0:
+        raise ValueError(f"scale_amplitude must be nonnegative, got {scale_amplitude}.")
 
     def conditioner(x_const: Float[Array, " 1"]) -> Float[Array, " 2"]:
-        """The raw parameters for `x_const`, scaled linearly in $x_1$."""
-        return jnp.asarray(raw) * (1 + x1_slope * x_const[0])
+        """The raw `(loc, log_scale)` at `x_const`."""
+        x1 = x_const[0]
+        log_scale = log_scale_offset + scale_amplitude * jnp.sin(jnp.pi * x1)
+        return jnp.stack([shift_curvature * x1**2, log_scale])
 
     return CouplingFlow(dim=2, bijection=Affine(), conditioner=conditioner)
 
