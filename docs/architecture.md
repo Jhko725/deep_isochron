@@ -195,6 +195,17 @@ deep_isochron
 ├── plotting/                matplotlib style (configure_rcparams), colored_curve,
 │   │                        set_limits, add_colorbar (style.py); clipped_norm (scales.py)
 │   ├── trajectories.py      plot_source_trajectories
+│   ├── schematic_layers.py  hand-set layers for the talk's schematics: schematic_linear,
+│   │                        schematic_affine_coupling, schematic_spline_coupling (a knot
+│   │                        layout: a band moving with x1, a pinch), schematic_trajectories
+│   │                        (Bautin, scaled into a box), schematic_sheet
+│   ├── coupling_warp.py     slide 9b: WarpLabels, WarpStyle; draw_identity_warp,
+│   │                        draw_warp_curve (knots marked for splines), draw_grid_sheet
+│   │                        (any Sheet, clipped to the box); plot_coupling_warps (2 × 3:
+│   │                        none | affine | spline, warp above, image of the grid below)
+│   ├── inn_stack.py         slide 9a: StackLabels, StackStyle; plot_inn_stack (six blocks
+│   │                        h_1 … h_N with H and H^-1 arrows, before/after sheet insets
+│   │                        framed in the block color)
 │   ├── isochrons.py         plot_phase_field (a field panel, isochrons as white curves);
 │   │                        plot_phase_comparison (reference, learned, aligned residual);
 │   │                        plot_isochron_match (reference colored by phase, learned
