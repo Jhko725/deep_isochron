@@ -20,6 +20,14 @@ code would ask about are in *Design*, written when the branch lands.
 
 - `docs/changes/2026-11-04-inn-schematics.md` — this document.
 - `docs/index.md` — a row for this change document.
+- `src/deep_isochron/plotting/coupling_warp.py` — new: the slide-9b figure, with the
+  hand-set affine and spline coupling layers, the warp-curve and warped-grid drawers,
+  `plot_coupling_warps`, `WarpLabels` and `WarpStyle`.
+- `src/deep_isochron/plotting/__init__.py` — exports the seven names of
+  `coupling_warp` and names the figure in the package docstring.
+- `tests/test_plotting.py` — a `coupling_warp` section: the layers round-trip and
+  move points, the spline band is steep, knots are marked only for splines, fixed
+  grid lines stay vertical, the style and labels, and the four panels.
 
 ## Design
 
@@ -27,7 +35,7 @@ Written in the documents commit, from the handoff's decisions table.
 
 Ledger (one commit each):
 
-1. [ ] `plotting/coupling_warp.py`: the hand-set coupling constructors, the warp-curve
+1. [x] `plotting/coupling_warp.py`: the hand-set coupling constructors, the warp-curve
    and warped-grid drawers, `plot_coupling_warps`, labels and style, tests.
 2. [ ] `plotting/inn_stack.py`: `schematic_linear`, the chain with its insets,
    `plot_inn_stack`, labels and style, tests.
@@ -56,3 +64,6 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 |---|---|---|
 | `docs/changes/2026-11-04-inn-schematics.md` — this document | | |
 | `docs/index.md` — the `inn-schematics` row | | |
+| `src/deep_isochron/plotting/coupling_warp.py` — the slide-9b figure | | |
+| `src/deep_isochron/plotting/__init__.py` — the `coupling_warp` exports | | |
+| `tests/test_plotting.py` — the `coupling_warp` section | | |

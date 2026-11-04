@@ -13,7 +13,10 @@ deformation figures are pinned by their panels, the strip's stage selection and 
 check, the animation's frames through a saved GIF, and ``draw_sheet`` by a custom
 metric's fill; ``plotting.style.set_limits`` by its length check. The drawers of
 ``plotting.schematic`` are pinned by their start markers' fill and their line styles,
-and its style and labels by a range check and ``copy.replace``.
+and its style and labels by a range check and ``copy.replace``. The hand-set layers
+of ``plotting.coupling_warp`` are pinned by their round trip and the spline's steep
+band, its drawers by the knot markers and the fixed grid lines staying vertical, its
+style and labels as the schematic's, and its figure by its panels and headers.
 """
 
 import copy
@@ -40,13 +43,20 @@ from deep_isochron.plotting import (
     draw_latent_initial,
     draw_latent_trajectories,
     draw_prediction,
+    draw_warp_curve,
+    draw_warped_grid,
+    plot_coupling_warps,
     plot_isochron_hairpins,
     plot_isochron_match,
     plot_phase_comparison,
     plot_phase_field,
+    schematic_affine_coupling,
+    schematic_spline_coupling,
     SchematicLabels,
     SchematicStyle,
     set_limits,
+    WarpLabels,
+    WarpStyle,
 )
 from deep_isochron.plotting.deformation import (
     animate_deformation,
@@ -654,3 +664,107 @@ def test_schematic_labels_replace_one_field():
     labels = copy.replace(default, loss="L")
     assert labels.loss == "L"
     assert copy.replace(labels, loss=default.loss) == default
+
+
+# --- coupling_warp ---
+
+
+@pytest.fixture(scope="module")
+def warp_layers() -> tuple[CouplingFlow, CouplingFlow]:
+    """The hand-set affine and spline coupling layers at their defaults."""
+    return schematic_affine_coupling(), schematic_spline_coupling()
+
+
+def test_schematic_couplings_are_hand_set(warp_layers):
+    """Both hand-set layers invert to round-off on a few points of the box and move
+    them, so neither is the identity."""
+    points = jnp.array([[0.3, -0.2], [-0.7, 0.05], [0.9, 0.6], [-0.4, -0.8]])
+    for layer in warp_layers:
+        images = jax.vmap(layer)(points)
+        np.testing.assert_allclose(
+            jax.vmap(layer.inverse)(images), points, rtol=0, atol=TOL["closed_form"]
+        )
+        assert float(jnp.max(jnp.abs(images - points))) > 0.01
+
+
+def test_spline_warp_is_steep_in_one_band(warp_layers):
+    """At $x_1 = 0$ the spline warp's largest slope is at least three times its slope
+    at either end of the box, where the boundary derivatives are 1."""
+    _, spline = warp_layers
+    bijection = jax.tree.map(lambda a: a[0], spline.make_bijection(jnp.array([0.0])))
+    lo, hi = spline.template.xy_range
+    slope = jax.grad(bijection)
+    largest = jnp.max(jax.vmap(slope)(jnp.linspace(lo, hi, 2001)))
+    assert float(largest) >= 3 * max(float(slope(lo)), float(slope(hi)))
+
+
+def _knot_markers(ax) -> list[Line2D]:
+    """The lines on `ax` drawn as markers without a connecting line."""
+    return [
+        line
+        for line in ax.lines
+        if line.get_linestyle() == "None" and line.get_marker() != "None"
+    ]
+
+
+def test_warp_curve_marks_knots_only_for_splines(warp_layers):
+    """The spline's warp carries one marker line at its `num_bins + 1` knots; the
+    affine warp carries none."""
+    affine, spline = warp_layers
+    for layer, expected in [(affine, []), (spline, [spline.template.num_bins + 1])]:
+        fig, ax = plt.subplots()
+        draw_warp_curve(ax, layer, (-1.0, 1.0), 0.0)
+        assert [len(line.get_xdata()) for line in _knot_markers(ax)] == expected
+        plt.close(fig)
+
+
+def test_warped_grid_fixed_lines_stay_vertical(warp_layers):
+    """The grid image is two collections: `cells + 1` fixed lines in the fixed color,
+    each at one $x$ to round-off, below `rows + 1` moved lines in the moved color."""
+    style = WarpStyle()
+    for layer in warp_layers:
+        fig, ax = plt.subplots()
+        draw_warped_grid(ax, layer, (-1.0, 1.0), style)
+        fixed, moved = (c for c in ax.collections if isinstance(c, LineCollection))
+        assert len(fixed.get_segments()) == style.cells + 1
+        assert len(moved.get_segments()) == style.rows + 1
+        for line in fixed.get_segments():
+            assert np.ptp(line[:, 0]) <= TOL["identity"]
+        assert to_rgba(fixed.get_colors()[0]) == to_rgba(style.fixed_color)
+        assert to_rgba(moved.get_colors()[0]) == to_rgba(style.moved_color)
+        assert fixed.get_zorder() < moved.get_zorder()
+        plt.close(fig)
+
+
+def test_warp_style_rejects_bad_values():
+    """A negative margin, a zero width or figure size, no cells and a single sample
+    each raise `ValueError` naming the field."""
+    for field, value in [
+        ("margin", -0.1),
+        ("curve_width", 0.0),
+        ("figsize", (0.0, 5.6)),
+        ("cells", 0),
+        ("rows", 0),
+        ("line_samples", 1),
+    ]:
+        with pytest.raises(ValueError, match=field):
+            WarpStyle(**{field: value})
+
+
+def test_warp_labels_replace_one_field():
+    """`copy.replace` changes the spline header and keeps every other default."""
+    default = WarpLabels()
+    labels = copy.replace(default, spline_header="spline")
+    assert labels.spline_header == "spline"
+    assert copy.replace(labels, spline_header=default.spline_header) == default
+
+
+def test_plot_coupling_warps_draws_four_panels(warp_layers):
+    """The figure has four panels, and the top row's titles are the default headers."""
+    fig = plot_coupling_warps(*warp_layers)
+    axes = fig.get_axes()
+    assert len(axes) == 4
+    labels = WarpLabels()
+    titles = {ax.get_title() for ax in axes}
+    assert {labels.affine_header, labels.spline_header} <= titles
+    plt.close(fig)

@@ -1,8 +1,18 @@
 """Plotting: the project's matplotlib style, a color scale utility, a trajectory plot,
 the phase-field and isochron figures of a reference and a trained model, the
 deformation figures of a planar map, the animations of a normal form's oscillator for
-a talk, and the conjugacy schematic."""
+a talk, the conjugacy schematic, and the coupling-warp figure of a spline coupling
+layer beside an affine one."""
 
+from .coupling_warp import (
+    draw_warp_curve as draw_warp_curve,
+    draw_warped_grid as draw_warped_grid,
+    plot_coupling_warps as plot_coupling_warps,
+    schematic_affine_coupling as schematic_affine_coupling,
+    schematic_spline_coupling as schematic_spline_coupling,
+    WarpLabels as WarpLabels,
+    WarpStyle as WarpStyle,
+)
 from .deformation import (
     animate_deformation as animate_deformation,
     ANISOTROPY as ANISOTROPY,
