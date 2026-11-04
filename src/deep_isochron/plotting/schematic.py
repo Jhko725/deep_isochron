@@ -95,8 +95,8 @@ class SchematicStyle:
     - `panel_title_size`: The font size of the panel titles, in points.
     - `block_title_size`: The font size of the block names, in points.
     - `block_formula_size`: The font size of the block formulas, in points.
-    - `annotation_size`: The font size of the flow label, the loss and the shared-weights
-        note, in points.
+    - `annotation_size`: The font size of the flow label, the loss and the
+        shared-weights note, in points.
     - `legend_size`: The font size of the legend line, in points.
     - `figsize`: The size of the figure, in inches.
     - `panel_edge`: The edge of each square panel, in inches.
