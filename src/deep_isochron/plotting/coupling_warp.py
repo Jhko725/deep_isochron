@@ -19,9 +19,8 @@ assembles the figure.
 The design and its decisions are in `docs/changes/2026-11-04-inn-schematics.md`.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-import colorcet as cc
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -222,7 +221,9 @@ class WarpStyle:
     - `fixed_color`: The color of what the layer keeps: the box, the identity diagonal
         and the grid lines of constant $x_1$.
     - `sheet`: The style of the trajectories on the grid sheets; its `curve_colors`,
-        `curve_width`, `halo_width` and `marker_size` are used.
+        `curve_width`, `halo_width` and `marker_size` are used. The default colors are
+        the Okabe–Ito blue, reddish purple, orange and sky blue, cycled, so that no
+        trajectory takes the green of `moved_color` or the vermilion accent.
     - `curve_width`: The width of the warp curve, in points; the box and the diagonal
         are drawn at half of it.
     - `grid_width`: The width of the grid lines, in points.
@@ -246,14 +247,11 @@ class WarpStyle:
     labels: WarpLabels = WarpLabels()
     moved_color: str = "#009E73"
     fixed_color: str = "0.65"
-    # A factory, since a colormap defines `__eq__` and so is unhashable to dataclasses.
-    sheet: SheetStyle = field(
-        default_factory=lambda: SheetStyle(
-            curve_colors=cc.cm.glasbey_dark,
-            curve_width=1.6,
-            halo_width=3.0,
-            marker_size=6.0,
-        )
+    sheet: SheetStyle = SheetStyle(
+        curve_colors=("#0072B2", "#CC79A7", "#E69F00", "#56B4E9"),
+        curve_width=1.6,
+        halo_width=3.0,
+        marker_size=6.0,
     )
     curve_width: float = 2.2
     grid_width: float = 1.0

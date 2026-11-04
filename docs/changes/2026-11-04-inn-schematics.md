@@ -56,6 +56,9 @@ code would ask about are in *Design*, written when the branch lands.
   lines and triangles, and the six panels with equal limits.
 - `ksiam_schematics.ipynb` — the 9b cell passes `schematic_trajectories((-1.0, 1.0))`
   and its heading names the three columns.
+- `src/deep_isochron/plotting/coupling_warp.py` — the trajectories of `WarpStyle.sheet`
+  take four Okabe–Ito colors, blue, reddish purple, orange and sky blue, so none is
+  the green or vermilion accent.
 
 ## Design
 
@@ -106,3 +109,4 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/__init__.py` — the new `coupling_warp` and `draw_trajectories` exports | | |
 | `tests/test_plotting.py` — the reworked `coupling_warp` tests and `draw_trajectories` | | |
 | `ksiam_schematics.ipynb` — the 9b cell passes the trajectories | | |
+| `src/deep_isochron/plotting/coupling_warp.py` — trajectory colors avoid the accents | | |
