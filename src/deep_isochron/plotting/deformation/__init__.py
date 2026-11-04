@@ -9,6 +9,7 @@ fill.
 from .figures import (
     animate_deformation as animate_deformation,
     draw_sheet as draw_sheet,
+    draw_trajectories as draw_trajectories,
     plot_deformation as plot_deformation,
     plot_deformation_strip as plot_deformation_strip,
 )

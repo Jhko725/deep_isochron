@@ -8,7 +8,7 @@ and the inverse $H^{-1}$ below it, and the words at its ends name the two spaces
 Under the first linear block an inset pair shows a chiral glyph before and after the
 linear layer, so a rotation and a stretch without a flip are seen; under the first
 coupling block an inset pair shows a regular grid before and after the coupling
-layer, drawn by `coupling_warp.draw_warped_grid`. `schematic_linear` builds the linear
+layer, drawn by `coupling_warp.draw_grid_sheet`. `schematic_linear` builds the linear
 layer of the inset as a real `BiLipschitzLinear` with hand-set leaves. `StackLabels`
 holds every string of the figure and `StackStyle` its drawing constants, with the
 geometry in inches; `plot_inn_stack` draws the figure on an overlay axes whose data
@@ -25,13 +25,12 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-from jaxtyping import Array, Float
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.patches import FancyArrow, FancyArrowPatch, FancyBboxPatch, Polygon
 
 from ..model.invertible import BiLipschitzLinear, CouplingFlow, MonotonicRQSpline
-from .coupling_warp import draw_warped_grid, WarpStyle
+from .coupling_warp import draw_grid_sheet, schematic_sheet, WarpStyle
 
 
 _NUM_BLOCKS = 6
@@ -258,26 +257,6 @@ def _draw_glyph_pair(
         _format_inset(ax, (-half, half))
 
 
-def _identity_coupling(
-    coupling: CouplingFlow[MonotonicRQSpline],
-) -> CouplingFlow[MonotonicRQSpline]:
-    """The coupling layer of `coupling`'s template and split whose conditioner returns
-    zeros, so that the layer is the identity."""
-    num_raw = coupling.template.num_params * coupling.dim_coupled
-
-    def conditioner(x_const: Float[Array, " dim_const"]) -> Float[Array, " raw"]:
-        """The zero raw vector, the identity of the template."""
-        return jnp.zeros(num_raw, dtype=x_const.dtype)
-
-    return CouplingFlow(
-        dim=coupling.dim,
-        bijection=coupling.template,
-        split_idx=coupling.split_idx,
-        flip=coupling.flip,
-        conditioner=conditioner,
-    )
-
-
 def plot_inn_stack(
     linear: BiLipschitzLinear,
     coupling: CouplingFlow[MonotonicRQSpline],
@@ -458,8 +437,6 @@ def plot_inn_stack(
         moved_color=style.coupling_color,
         grid_width=style.inset_line_width,
         margin=style.inset_margin,
-        cells=6,
-        rows=8,
     )
     box = coupling.template.xy_range
     inset_y = y(0.5 * (inset_top + inset_bottom))
@@ -468,8 +445,9 @@ def plot_inn_stack(
         before = inset(pair_left)
         pairs.append((before, inset(pair_left + style.inset_size + style.inset_gap)))
     _draw_glyph_pair(*pairs[0], linear, style)
-    draw_warped_grid(pairs[1][0], _identity_coupling(coupling), box, warp_style)
-    draw_warped_grid(pairs[1][1], coupling, box, warp_style)
+    sheet = schematic_sheet(box, np.zeros((0, 2, 2)), cells=8)
+    draw_grid_sheet(pairs[1][0], sheet, box, warp_style)
+    draw_grid_sheet(pairs[1][1], sheet.map(eqx.filter_jit(coupling)), box, warp_style)
 
     head = 0.5 * style.arrow_head / 72
     for pair_left, name, color in [

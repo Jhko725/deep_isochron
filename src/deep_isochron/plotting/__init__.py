@@ -6,11 +6,14 @@ beside an affine one, and the network figure of the invertible network as a chai
 linear and coupling layers."""
 
 from .coupling_warp import (
+    draw_grid_sheet as draw_grid_sheet,
+    draw_identity_warp as draw_identity_warp,
     draw_warp_curve as draw_warp_curve,
-    draw_warped_grid as draw_warped_grid,
     plot_coupling_warps as plot_coupling_warps,
     schematic_affine_coupling as schematic_affine_coupling,
+    schematic_sheet as schematic_sheet,
     schematic_spline_coupling as schematic_spline_coupling,
+    schematic_trajectories as schematic_trajectories,
     WarpLabels as WarpLabels,
     WarpStyle as WarpStyle,
 )
@@ -21,6 +24,7 @@ from .deformation import (
     cell_jacobians as cell_jacobians,
     CellMetric as CellMetric,
     draw_sheet as draw_sheet,
+    draw_trajectories as draw_trajectories,
     plot_deformation as plot_deformation,
     plot_deformation_strip as plot_deformation_strip,
     Sheet as Sheet,

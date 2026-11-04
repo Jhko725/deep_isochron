@@ -37,6 +37,25 @@ code would ask about are in *Design*, written when the branch lands.
   stretches with a positive determinant, the labels and style, and the figure's
   blocks, arrows, labels and inset axes.
 - `ksiam_schematics.ipynb` — the notebook that renders both schematics to `results/ksiam/` (new; unexecuted, since the cloud session has no notebook executor; the orchestrator ran the same code as a script).
+- `src/deep_isochron/plotting/deformation/figures.py` — `draw_trajectories`, the
+  trajectory block of `draw_sheet` factored out for the grid panels of
+  `coupling_warp`; `draw_sheet` calls it.
+- `src/deep_isochron/plotting/deformation/__init__.py` — exports `draw_trajectories`.
+- `src/deep_isochron/plotting/coupling_warp.py` — the figure as 2 × 3: the identity
+  warp in the first column, a lower row of one `schematic_sheet` with Bautin
+  trajectories (`schematic_trajectories`) before and after each layer, drawn by
+  `draw_grid_sheet` in place of `draw_warped_grid`; one set of limits on all six
+  panels, rcParams spines on the warp panels, Okabe–Ito green as the moved color.
+- `src/deep_isochron/plotting/inn_stack.py` — the coupling inset draws one
+  `schematic_sheet` and its image with `draw_grid_sheet`; `_identity_coupling` goes.
+- `src/deep_isochron/plotting/__init__.py` — exports `draw_grid_sheet`,
+  `draw_identity_warp`, `schematic_sheet`, `schematic_trajectories` and
+  `draw_trajectories`, and drops `draw_warped_grid`.
+- `tests/test_plotting.py` — `draw_trajectories`' start triangles, the trajectories
+  fitting the box, the warp panels' spines and ticks, the grid sheet's vertical fixed
+  lines and triangles, and the six panels with equal limits.
+- `ksiam_schematics.ipynb` — the 9b cell passes `schematic_trajectories((-1.0, 1.0))`
+  and its heading names the three columns.
 
 ## Design
 
@@ -80,3 +99,10 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/__init__.py` — the `inn_stack` exports | | |
 | `tests/test_plotting.py` — the `inn_stack` section | | |
 | `ksiam_schematics.ipynb` — renders both schematics | | |
+| `src/deep_isochron/plotting/deformation/figures.py` — `draw_trajectories` factored out | | |
+| `src/deep_isochron/plotting/deformation/__init__.py` — the `draw_trajectories` export | | |
+| `src/deep_isochron/plotting/coupling_warp.py` — the 2 × 3 figure with a before panel and trajectories | | |
+| `src/deep_isochron/plotting/inn_stack.py` — the coupling inset through `draw_grid_sheet` | | |
+| `src/deep_isochron/plotting/__init__.py` — the new `coupling_warp` and `draw_trajectories` exports | | |
+| `tests/test_plotting.py` — the reworked `coupling_warp` tests and `draw_trajectories` | | |
+| `ksiam_schematics.ipynb` — the 9b cell passes the trajectories | | |

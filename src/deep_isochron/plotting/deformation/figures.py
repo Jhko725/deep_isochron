@@ -9,7 +9,8 @@ pools the drawn stages into one `clipped_norm`, so every panel of a figure share
 colorbar, ticked from the range by a 1–3–10 or 1–2–5 rule. With `inverse=True` each
 figure plays the forward stages backward, from the deformed sheet to the regular mesh.
 `draw_sheet` draws one sheet on an axes, for a custom figure or a metric defined
-outside the package; a `SheetStyle` holds the drawing constants.
+outside the package, and `draw_trajectories` its trajectories alone; a `SheetStyle`
+holds the drawing constants.
 
 The design and its decisions are in `docs/changes/2026-10-30-deformation-plots.md`.
 """
@@ -114,8 +115,29 @@ def draw_sheet(
                 zorder=2.5,
             )
         )
+    draw_trajectories(ax, np.asarray(sheet.trajectories), style)
+    return fill
+
+
+def draw_trajectories(
+    ax: Axes,
+    trajectories: Float[np.ndarray, "t q 2"],
+    style: SheetStyle = SheetStyle(),
+) -> None:
+    """Draw `trajectories` on `ax` with a white halo, and a black triangle at the start
+    of each, pointing along its first segment in this panel's coordinates.
+
+    `draw_sheet` draws a sheet's trajectories with it, and `coupling_warp`'s grid
+    panels draw theirs. The curves are at z-order 3 and the triangles at 5.
+
+    **Arguments:**
+
+    - `ax`: The axes to draw on.
+    - `trajectories`: The trajectories, each a polyline of `q` samples, `q` at least 2.
+    - `style`: The drawing constants; `curve_colors`, `curve_width`, `halo_width` and
+        `marker_size` are used.
+    """
     halo = [pe.withStroke(linewidth=style.halo_width, foreground="white")]
-    trajectories = np.asarray(sheet.trajectories)
     for trajectory, color in zip(
         trajectories, curve_colors(style.curve_colors, len(trajectories)), strict=True
     ):
@@ -139,7 +161,6 @@ def draw_sheet(
             linestyle="none",
             zorder=5,
         )
-    return fill
 
 
 def _layers(

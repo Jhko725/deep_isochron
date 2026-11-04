@@ -15,8 +15,11 @@ metric's fill; ``plotting.style.set_limits`` by its length check. The drawers of
 ``plotting.schematic`` are pinned by their start markers' fill and their line styles,
 and its style and labels by a range check and ``copy.replace``. The hand-set layers
 of ``plotting.coupling_warp`` are pinned by their round trip and the spline's steep
-band, its drawers by the knot markers and the fixed grid lines staying vertical, its
-style and labels as the schematic's, and its figure by its panels and headers. The
+band, its trajectories by fitting the box, its drawers by the knot markers, the warp
+panels' spines and ticks, the fixed grid lines staying vertical and one start triangle
+per trajectory, its style and labels as the schematic's, and its figure by its six
+panels, their shared limits and the headers. ``draw_trajectories`` is pinned by one
+start triangle per trajectory. The
 hand-set linear layer of ``plotting.inn_stack`` is pinned by NumPy's SVD of its matrix
 and its round trip, its style and labels as the schematic's, and its figure by its
 blocks, arrows, labels and inset axes.
@@ -26,6 +29,7 @@ import copy
 from collections.abc import Callable
 
 import colorcet as cc
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jaxtyping
@@ -43,11 +47,12 @@ from deep_isochron.model.invertible import (
 from deep_isochron.plotting import (
     add_colorbar,
     draw_data,
+    draw_grid_sheet,
+    draw_identity_warp,
     draw_latent_initial,
     draw_latent_trajectories,
     draw_prediction,
     draw_warp_curve,
-    draw_warped_grid,
     plot_coupling_warps,
     plot_inn_stack,
     plot_isochron_hairpins,
@@ -56,7 +61,9 @@ from deep_isochron.plotting import (
     plot_phase_field,
     schematic_affine_coupling,
     schematic_linear,
+    schematic_sheet,
     schematic_spline_coupling,
+    schematic_trajectories,
     SchematicLabels,
     SchematicStyle,
     set_limits,
@@ -71,6 +78,7 @@ from deep_isochron.plotting.deformation import (
     AREA,
     CellMetric,
     draw_sheet,
+    draw_trajectories,
     plot_deformation,
     plot_deformation_strip,
     Sheet,
@@ -547,6 +555,33 @@ def test_draw_sheet_with_a_custom_metric(square_sheet):
     plt.close(fig)
 
 
+def _start_markers(ax) -> list[Line2D]:
+    """The lines on `ax` drawn as markers without a connecting line."""
+    return [
+        line
+        for line in ax.lines
+        if line.get_linestyle() == "None" and line.get_marker() != "None"
+    ]
+
+
+def test_draw_trajectories_marks_each_start(trajectories):
+    """Each trajectory gets one curve and one start triangle, a single black marker at
+    its first sample."""
+    trajectories = np.asarray(trajectories)
+    fig, ax = plt.subplots()
+    draw_trajectories(ax, trajectories)
+    markers = _start_markers(ax)
+    assert len(markers) == len(trajectories)
+    assert len(ax.lines) == 2 * len(trajectories)
+    for marker, trajectory in zip(markers, trajectories, strict=True):
+        assert len(marker.get_xdata()) == 1
+        assert to_rgba(marker.get_color()) == to_rgba("black")
+        np.testing.assert_array_equal(
+            np.ravel([marker.get_xdata(), marker.get_ydata()]), trajectory[0]
+        )
+    plt.close(fig)
+
+
 def test_curve_colors_forms():
     """One color is repeated, a sequence and a listed colormap are cycled from their
     first entry, and a value that is none of the three raises `ValueError`."""
@@ -707,15 +742,6 @@ def test_spline_warp_is_steep_in_one_band(warp_layers):
     assert float(largest) >= 5 * max(float(slope(lo)), float(slope(hi)))
 
 
-def _knot_markers(ax) -> list[Line2D]:
-    """The lines on `ax` drawn as markers without a connecting line."""
-    return [
-        line
-        for line in ax.lines
-        if line.get_linestyle() == "None" and line.get_marker() != "None"
-    ]
-
-
 def test_warp_curve_marks_knots_only_for_splines(warp_layers):
     """The spline's warp carries one marker line at its `num_bins + 1` knots; the
     affine warp carries none."""
@@ -723,37 +749,104 @@ def test_warp_curve_marks_knots_only_for_splines(warp_layers):
     for layer, expected in [(affine, []), (spline, [spline.template.num_bins + 1])]:
         fig, ax = plt.subplots()
         draw_warp_curve(ax, layer, (-1.0, 1.0), 0.0)
-        assert [len(line.get_xdata()) for line in _knot_markers(ax)] == expected
+        assert [len(line.get_xdata()) for line in _start_markers(ax)] == expected
         plt.close(fig)
 
 
-def test_warped_grid_fixed_lines_stay_vertical(warp_layers):
-    """The grid image is two collections: `cells + 1` fixed lines in the fixed color,
-    each at one $x$ to round-off, below `rows + 1` moved lines in the moved color."""
+def test_warp_panels_keep_left_and_bottom_spines(warp_layers):
+    """Under the rcParams of `configure_rcparams` the identity, affine and spline warp
+    panels keep the left and bottom spines and the grid, and are ticked only at the
+    box's ends."""
+    box = (-1.0, 1.0)
+    affine, spline = warp_layers
+    drawers = [
+        lambda ax: draw_identity_warp(ax, box),
+        lambda ax: draw_warp_curve(ax, affine, box, 0.0),
+        lambda ax: draw_warp_curve(ax, spline, box, 0.0),
+    ]
+    rc = {"axes.spines.top": False, "axes.spines.right": False, "axes.grid": True}
+    with plt.rc_context(rc):
+        for draw in drawers:
+            fig, ax = plt.subplots()
+            draw(ax)
+            visible = {name for name, spine in ax.spines.items() if spine.get_visible()}
+            assert visible == {"left", "bottom"}
+            assert any(line.get_visible() for line in ax.get_xgridlines())
+            assert list(ax.get_xticks()) == list(box)
+            assert list(ax.get_yticks()) == list(box)
+            plt.close(fig)
+
+
+@pytest.fixture(scope="module")
+def warp_trajectories() -> Float[np.ndarray, "t q 2"]:
+    """Three short schematic trajectories in the unit box."""
+    return schematic_trajectories((-1.0, 1.0), n=3, samples=20)
+
+
+@pytest.mark.parametrize("box", [(-1.0, 1.0), (2.0, 5.0)])
+def test_schematic_trajectories_fit_the_box(box):
+    """The default four trajectories of 200 samples lie strictly inside the box and
+    span more than half its width."""
+    trajectories = schematic_trajectories(box)
+    assert trajectories.shape == (4, 200, 2)
+    lo, hi = box
+    assert np.all((trajectories > lo) & (trajectories < hi))
+    assert np.ptp(trajectories[..., 0]) > 0.5 * (hi - lo)
+
+
+def test_grid_sheet_fixed_lines_stay_vertical(warp_layers):
+    """The grid of the default 16-cell sheet, unmapped or mapped by either layer, is
+    two collections: 9 of its 17 lines of constant $x_1$ in the fixed color, each at
+    one $x$ to round-off, below 17 moved lines in the moved color; the panel has no
+    spines and no ticks."""
     style = WarpStyle()
-    for layer in warp_layers:
+    box = (-1.0, 1.0)
+    sheet = schematic_sheet(box, np.zeros((0, 2, 2)))
+    for image in [sheet, *(sheet.map(eqx.filter_jit(layer)) for layer in warp_layers)]:
         fig, ax = plt.subplots()
-        draw_warped_grid(ax, layer, (-1.0, 1.0), style)
+        draw_grid_sheet(ax, image, box, style)
         fixed, moved = (c for c in ax.collections if isinstance(c, LineCollection))
-        assert len(fixed.get_segments()) == style.cells + 1
-        assert len(moved.get_segments()) == style.rows + 1
+        assert len(fixed.get_segments()) == 9
+        assert len(moved.get_segments()) == 17
         for line in fixed.get_segments():
             assert np.ptp(line[:, 0]) <= TOL["identity"]
         assert to_rgba(fixed.get_colors()[0]) == to_rgba(style.fixed_color)
         assert to_rgba(moved.get_colors()[0]) == to_rgba(style.moved_color)
         assert fixed.get_zorder() < moved.get_zorder()
+        assert not any(spine.get_visible() for spine in ax.spines.values())
+        assert len(ax.get_xticks()) == 0 and len(ax.get_yticks()) == 0
         plt.close(fig)
 
 
+def test_grid_sheet_draws_trajectories(warp_layers, warp_trajectories):
+    """The sheet's image under the spline layer carries one start triangle per
+    trajectory, at the image of its first sample."""
+    box = (-1.0, 1.0)
+    _, spline = warp_layers
+    image = schematic_sheet(box, warp_trajectories).map(eqx.filter_jit(spline))
+    fig, ax = plt.subplots()
+    draw_grid_sheet(ax, image, box)
+    markers = _start_markers(ax)
+    assert len(markers) == len(warp_trajectories)
+    starts = np.asarray(jax.vmap(spline)(jnp.asarray(warp_trajectories[:, 0])))
+    for marker, start in zip(markers, starts, strict=True):
+        np.testing.assert_allclose(
+            np.ravel([marker.get_xdata(), marker.get_ydata()]),
+            start,
+            rtol=0,
+            atol=TOL["closed_form"],
+        )
+    plt.close(fig)
+
+
 def test_warp_style_rejects_bad_values():
-    """A negative margin, a zero width or figure size, no cells and a single sample
-    each raise `ValueError` naming the field."""
+    """A negative margin, a zero width or figure size, a zero line spacing and a
+    single sample each raise `ValueError` naming the field."""
     for field, value in [
         ("margin", -0.1),
         ("curve_width", 0.0),
         ("figsize", (0.0, 5.6)),
-        ("cells", 0),
-        ("rows", 0),
+        ("fixed_every", 0),
         ("line_samples", 1),
     ]:
         with pytest.raises(ValueError, match=field):
@@ -768,14 +861,22 @@ def test_warp_labels_replace_one_field():
     assert copy.replace(labels, spline_header=default.spline_header) == default
 
 
-def test_plot_coupling_warps_draws_four_panels(warp_layers):
-    """The figure has four panels, and the top row's titles are the default headers."""
-    fig = plot_coupling_warps(*warp_layers)
+def test_plot_coupling_warps_draws_six_panels(warp_layers, warp_trajectories):
+    """The figure has six panels with identical limits, and the top row's titles are
+    the three default headers."""
+    fig = plot_coupling_warps(*warp_layers, warp_trajectories)
     axes = fig.get_axes()
-    assert len(axes) == 4
+    assert len(axes) == 6
+    assert len({ax.get_xlim() for ax in axes}) == 1
+    assert len({ax.get_ylim() for ax in axes}) == 1
+    assert axes[0].get_xlim() == axes[0].get_ylim()
     labels = WarpLabels()
-    titles = {ax.get_title() for ax in axes}
-    assert {labels.affine_header, labels.spline_header} <= titles
+    titles = [ax.get_title() for ax in axes[:3]]
+    assert titles == [
+        labels.identity_header,
+        labels.affine_header,
+        labels.spline_header,
+    ]
     plt.close(fig)
 
 
