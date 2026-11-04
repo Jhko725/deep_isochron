@@ -69,6 +69,14 @@ code would ask about are in *Design*, written when the branch lands.
 - `tests/test_plotting.py` — the insets' start triangles and the after-panels' block
   colors, the coupling color equal to the warp figure's, and `inset_cells` checked.
 - `ksiam_schematics.ipynb` — the 9a cell passes `schematic_trajectories((-1.0, 1.0))`.
+- `src/deep_isochron/plotting/coupling_warp.py` — `WarpStyle` draws the grids and
+  warp curves in two grays, `moved_color = "0.3"` and `fixed_color = "0.75"`, so the
+  colored trajectories stand out.
+- `src/deep_isochron/plotting/inn_stack.py` — the insets take the gray `WarpStyle`;
+  a frame of `StackStyle.frame_width` in the block's color surrounds each
+  after-panel; `coupling_color` is the literal Okabe–Ito bluish green.
+- `tests/test_plotting.py` — the after-panels carry a frame in the block color and
+  the before-panels none, the moved lines are gray, and the accent test is deleted.
 
 ## Design
 
@@ -124,3 +132,6 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/coupling_warp.py` — layers jitted through the bound `__call__` | | |
 | `tests/test_plotting.py` — the inset and accent tests of `inn_stack` | | |
 | `ksiam_schematics.ipynb` — the 9a cell passes the trajectories | | |
+| `src/deep_isochron/plotting/coupling_warp.py` — gray grids and warp curves | | |
+| `src/deep_isochron/plotting/inn_stack.py` — the after-panel frames in the block colors | | |
+| `tests/test_plotting.py` — the frame and gray-grid tests of `inn_stack` | | |

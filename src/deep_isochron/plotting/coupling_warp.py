@@ -216,14 +216,15 @@ class WarpStyle:
 
     - `labels`: The strings of the figure.
     - `moved_color`: The color of what the layer moves: the warp curve, its knots and
-        the grid lines of constant $x_2$; Okabe–Ito bluish green, the color of the
-        coupling block in `inn_stack`.
+        the grid lines of constant $x_2$; a dark gray, so that the colored
+        trajectories stand out over the grid.
     - `fixed_color`: The color of what the layer keeps: the box, the identity diagonal
-        and the grid lines of constant $x_1$.
+        and the grid lines of constant $x_1$; a light gray.
     - `sheet`: The style of the trajectories on the grid sheets; its `curve_colors`,
         `curve_width`, `halo_width` and `marker_size` are used. The default colors are
         the Okabe–Ito blue, reddish purple, orange and sky blue, cycled, so that no
-        trajectory takes the green of `moved_color` or the vermilion accent.
+        trajectory takes the bluish green or the vermilion of the blocks in
+        `inn_stack`.
     - `curve_width`: The width of the warp curve, in points; the box and the diagonal
         are drawn at half of it.
     - `grid_width`: The width of the grid lines, in points.
@@ -245,8 +246,8 @@ class WarpStyle:
     """
 
     labels: WarpLabels = WarpLabels()
-    moved_color: str = "#009E73"
-    fixed_color: str = "0.65"
+    moved_color: str = "0.3"
+    fixed_color: str = "0.75"
     sheet: SheetStyle = SheetStyle(
         curve_colors=("#0072B2", "#CC79A7", "#E69F00", "#56B4E9"),
         curve_width=1.6,

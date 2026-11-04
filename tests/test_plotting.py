@@ -101,7 +101,7 @@ from matplotlib.animation import PillowWriter
 from matplotlib.collections import LineCollection, QuadMesh
 from matplotlib.colors import Normalize, to_rgba
 from matplotlib.lines import Line2D
-from matplotlib.patches import ArrowStyle, FancyArrowPatch, FancyBboxPatch
+from matplotlib.patches import ArrowStyle, FancyArrowPatch, FancyBboxPatch, Rectangle
 from matplotlib.text import Text
 from PIL import Image
 
@@ -932,11 +932,6 @@ def test_stack_style_rejects_bad_values():
             StackStyle(**{field: value})
 
 
-def test_stack_style_defaults_match_warp_accent():
-    """The coupling blocks take the moved-line color of the warp figure."""
-    assert StackStyle().coupling_color == WarpStyle().moved_color
-
-
 def test_plot_inn_stack_blocks_and_arrows(warp_trajectories):
     """The overlay axes carries six blocks and seven arrows, five between blocks and
     the two long ones; every default label is a text of the figure; and four inset
@@ -971,8 +966,10 @@ def test_plot_inn_stack_blocks_and_arrows(warp_trajectories):
 
 
 def test_inn_stack_insets_map_the_sheet(warp_trajectories):
-    """Each of the four inset axes carries one start triangle per trajectory, and the
-    lines of constant $x_2$ in the after-panel of each pair take its block's color."""
+    """Each of the four inset axes carries one start triangle per trajectory and lines
+    of constant $x_2$ in the neutral `WarpStyle.moved_color`; the after-panel of each
+    pair carries one frame, a `Rectangle` in its block's color, and the before-panels
+    carry none."""
     style = StackStyle()
     fig = plot_inn_stack(
         schematic_linear(), schematic_spline_coupling(), warp_trajectories, style
@@ -980,10 +977,19 @@ def test_inn_stack_insets_map_the_sheet(warp_trajectories):
     _, *insets = fig.get_axes()
     for ax in insets:
         assert len(_start_markers(ax)) == len(warp_trajectories)
+        _, moved = (c for c in ax.collections if isinstance(c, LineCollection))
+        assert to_rgba(moved.get_colors()[0]) == to_rgba(WarpStyle().moved_color)
     for ax, color in [
+        (insets[0], None),
         (insets[1], style.linear_color),
+        (insets[2], None),
         (insets[3], style.coupling_color),
     ]:
-        _, moved = (c for c in ax.collections if isinstance(c, LineCollection))
-        assert to_rgba(moved.get_colors()[0]) == to_rgba(color)
+        frames = [p for p in ax.patches if isinstance(p, Rectangle)]
+        if color is None:
+            assert frames == []
+        else:
+            (frame,) = frames
+            assert to_rgba(frame.get_edgecolor()) == to_rgba(color)
+            assert frame.get_linewidth() == style.frame_width
     plt.close(fig)

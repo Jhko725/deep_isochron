@@ -7,13 +7,13 @@ Double-headed arrows join consecutive blocks, the forward map $H$ runs above the
 and the inverse $H^{-1}$ below it, and the words at its ends name the two spaces.
 Under the first linear block and under the first coupling block an inset pair shows
 one sheet before and after that layer: a regular grid on a square carrying
-trajectories of the Bautin normal form, drawn by `coupling_warp.draw_grid_sheet`. The
-start triangles turn the same way in both panels, which shows that neither layer
-flips the plane. `schematic_linear` builds the linear layer of the inset as a real
-`BiLipschitzLinear` with hand-set leaves. `StackLabels`
-holds every string of the figure and `StackStyle` its drawing constants, with the
-geometry in inches; `plot_inn_stack` draws the figure on an overlay axes whose data
-units are inches.
+trajectories of the Bautin normal form, drawn by `coupling_warp.draw_grid_sheet` in
+the neutral grays of `WarpStyle`, with a frame in the layer's color around the
+after-panel. The start triangles turn the same way in both panels, which shows that
+neither layer flips the plane. `schematic_linear` builds the linear layer of the inset
+as a real `BiLipschitzLinear` with hand-set leaves. `StackLabels` holds every string
+of the figure and `StackStyle` its drawing constants, with the geometry in inches;
+`plot_inn_stack` draws the figure on an overlay axes whose data units are inches.
 
 The design and its decisions are in `docs/changes/2026-11-04-inn-schematics.md`.
 """
@@ -29,7 +29,7 @@ import numpy as np
 from jaxtyping import Float
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from matplotlib.patches import FancyArrow, FancyArrowPatch, FancyBboxPatch
+from matplotlib.patches import FancyArrow, FancyArrowPatch, FancyBboxPatch, Rectangle
 
 from ..model.invertible import BiLipschitzLinear, CouplingFlow, MonotonicRQSpline
 from .coupling_warp import draw_grid_sheet, schematic_sheet, WarpStyle
@@ -121,12 +121,10 @@ class StackStyle:
     **Attributes:**
 
     - `labels`: The strings of the figure.
-    - `linear_color`: The color of the linear blocks, their type name and the grid
-        lines of constant $x_2$ in the linear inset pair; Okabe–Ito vermilion.
+    - `linear_color`: The color of the linear blocks, their type name and the frame
+        of the linear after-panel; Okabe–Ito vermilion.
     - `coupling_color`: The color of the coupling blocks, their type name and the
-        grid lines of constant $x_2$ in the coupling inset pair; the default is
-        `WarpStyle.moved_color`, Okabe–Ito bluish green, so that the moved lines of
-        slide 9b have the same color.
+        frame of the coupling after-panel; Okabe–Ito bluish green.
     - `block_text_color`: The color of the block labels, drawn on the block fill.
     - `arrow_color`: The color of every arrow and of the ellipsis.
     - `block_size`: The width and height of each block, in inches.
@@ -149,6 +147,7 @@ class StackStyle:
     - `inset_halo_width`: The width of the white stroke under each trajectory of the
         insets, in points.
     - `inset_marker_size`: The size of the start triangles of the insets, in points.
+    - `frame_width`: The line width of the frame around each after-panel, in points.
     - `arrow_width`: The line width of the arrows, in points.
     - `arrow_head`: The size of the arrow heads, in points.
     - `block_label_size`: The font size of the block labels and the ellipsis, in
@@ -170,7 +169,7 @@ class StackStyle:
 
     labels: StackLabels = StackLabels()
     linear_color: str = "#D55E00"
-    coupling_color: str = WarpStyle.moved_color
+    coupling_color: str = "#009E73"
     block_text_color: str = "white"
     arrow_color: str = "0.2"
     block_size: tuple[float, float] = (0.9, 1.6)
@@ -187,6 +186,7 @@ class StackStyle:
     inset_curve_width: float = 1.1
     inset_halo_width: float = 2.2
     inset_marker_size: float = 4.5
+    frame_width: float = 2.0
     arrow_width: float = 1.2
     arrow_head: float = 12.0
     block_label_size: float = 15.0
@@ -214,6 +214,7 @@ class StackStyle:
             "inset_curve_width",
             "inset_halo_width",
             "inset_marker_size",
+            "frame_width",
             "arrow_width",
             "arrow_head",
             "block_label_size",
@@ -239,13 +240,12 @@ def _text_height(size: float) -> float:
     return 1.2 * size / 72
 
 
-def _inset_style(color: str, style: StackStyle) -> WarpStyle:
-    """The `WarpStyle` of an inset pair: `color` for the grid lines of constant $x_2$,
-    every line of constant $x_1$ drawn, and the inset's margin and line sizes."""
+def _inset_style(style: StackStyle) -> WarpStyle:
+    """The `WarpStyle` of the inset panels: the default grays, every line of constant
+    $x_1$ drawn, and the inset's margin and line sizes."""
     default = WarpStyle()
     return copy.replace(
         default,
-        moved_color=color,
         margin=style.inset_margin,
         grid_width=style.inset_line_width,
         fixed_every=1,
@@ -275,8 +275,9 @@ def plot_inn_stack(
     centered under its block and moved outward when the two pairs would come closer
     than `style.inset_separation`. Both pairs draw one `schematic_sheet` of
     `style.inset_cells` cells on the spline's range, carrying `trajectories`, before and
-    after their layer, with `draw_grid_sheet`; the grid lines of constant $x_2$ take the
-    block's color.
+    after their layer, with `draw_grid_sheet` in the grays of `WarpStyle`. A rectangle
+    of `style.frame_width` points in the block's color frames the after-panel of each
+    pair, on the edges of its axes; the before-panels have no frame.
 
     **Arguments:**
 
@@ -442,17 +443,28 @@ def plot_inn_stack(
     box = coupling.template.xy_range
     inset_y = y(0.5 * (inset_top + inset_bottom))
     sheet = schematic_sheet(box, trajectories, cells=style.inset_cells)
+    warp_style = _inset_style(style)
     for pair_left, layer, color in [
         (pair_lefts[0], linear, style.linear_color),
         (pair_lefts[1], coupling, style.coupling_color),
     ]:
-        warp_style = _inset_style(color, style)
         draw_grid_sheet(inset(pair_left), sheet, box, warp_style)
+        after = inset(pair_left + style.inset_size + style.inset_gap)
         draw_grid_sheet(
-            inset(pair_left + style.inset_size + style.inset_gap),
-            sheet.map(eqx.filter_jit(layer.__call__)),
-            box,
-            warp_style,
+            after, sheet.map(eqx.filter_jit(layer.__call__)), box, warp_style
+        )
+        after.add_patch(
+            Rectangle(
+                (0.0, 0.0),
+                1.0,
+                1.0,
+                transform=after.transAxes,
+                fill=False,
+                edgecolor=color,
+                linewidth=style.frame_width,
+                clip_on=False,
+                zorder=6,
+            )
         )
 
     head = 0.5 * style.arrow_head / 72
