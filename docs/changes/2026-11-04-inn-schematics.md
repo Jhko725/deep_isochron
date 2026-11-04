@@ -36,6 +36,7 @@ code would ask about are in *Design*, written when the branch lands.
 - `tests/test_plotting.py` — an `inn_stack` section: the linear layer rotates and
   stretches with a positive determinant, the labels and style, and the figure's
   blocks, arrows, labels and inset axes.
+- `ksiam_schematics.ipynb` — the notebook that renders both schematics to `results/ksiam/` (new; unexecuted, since the cloud session has no notebook executor; the orchestrator ran the same code as a script).
 
 ## Design
 
@@ -47,7 +48,7 @@ Ledger (one commit each):
    and warped-grid drawers, `plot_coupling_warps`, labels and style, tests.
 2. [x] `plotting/inn_stack.py`: `schematic_linear`, the chain with its insets,
    `plot_inn_stack`, labels and style, tests.
-3. [ ] `ksiam_schematics.ipynb` rendering both figures to `results/ksiam/`.
+3. [x] `ksiam_schematics.ipynb` rendering both figures to `results/ksiam/`.
 
 ## Bugs fixed
 
@@ -78,3 +79,4 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/inn_stack.py` — the slide-9a figure | | |
 | `src/deep_isochron/plotting/__init__.py` — the `inn_stack` exports | | |
 | `tests/test_plotting.py` — the `inn_stack` section | | |
+| `ksiam_schematics.ipynb` — renders both schematics | | |
