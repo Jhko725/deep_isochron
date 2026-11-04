@@ -36,7 +36,8 @@ the brief does not give is a gap in the brief, not a decision for you to make.
 ## Before and after
 
 - Run only the test files the brief names, at the `dev` profile, before and after.
-- Every commit passes `uv run just check`.
+- Every commit passes `uv run just check`, run after `git add` of every new file: the
+  check skips untracked files, so an unstaged new module is unchecked.
 - Commit on the branch the brief names, with the brief's message and the attribution
   lines the harness supplies to your session. Do not push.
 
