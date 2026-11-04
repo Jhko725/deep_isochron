@@ -1,6 +1,6 @@
 ---
 type: change
-status: in progress
+status: in progress; commits 1–2 landed, commit 3 waits for the notebook
 updated: 2026-11-04
 ---
 
@@ -99,8 +99,10 @@ None.
 
 Per Joon's rule for plotting work (2026-11-04), only `tests/test_plotting.py` runs on
 this branch, at the `dev` profile, before and after each commit; the full tier is not
-run. Baseline on `a88fb03`: 26 passed in 62 s on two workers. Counts after each
-commit are pending until that commit's run.
+run. Baseline on `a88fb03`: 26 passed in 62 s on two workers. After commit 1 (`eff7ae6`):
+26 passed. After commit 2 (`90435c0`): 30 passed in 20 s, the four new tests being
+the start markers' fill per drawer, solid versus dashed curves, the shape and style
+errors, and `copy.replace` on `SchematicLabels`. The count after commit 3 is pending.
 
 ## Open issues
 
