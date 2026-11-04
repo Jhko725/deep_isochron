@@ -84,6 +84,17 @@ code would ask about are in *Design*, written when the branch lands.
 - `tests/test_plotting.py` — the six panels' limits after drawing, the limits and clip
   box of a map that leaves the box, the spline's band and pinch, the band moving with $x_1$, and the
   layout's range checks.
+- `src/deep_isochron/plotting/schematic_layers.py` — new: `schematic_linear`,
+  `schematic_affine_coupling`, `schematic_spline_coupling`, `schematic_trajectories`
+  and `schematic_sheet`, moved unchanged from the two figure modules.
+- `src/deep_isochron/plotting/coupling_warp.py` — the four schematic builders move
+  out; the module docstring says where the layers come from.
+- `src/deep_isochron/plotting/inn_stack.py` — `schematic_linear` moves out; the module
+  docstring says where the layers come from.
+- `src/deep_isochron/plotting/__init__.py` — the five builders are exported from
+  `schematic_layers`.
+- `tests/test_plotting.py` — the tests of the builders move into a `schematic_layers`
+  section, unchanged.
 
 ## Design
 
@@ -144,3 +155,8 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `tests/test_plotting.py` — the frame and gray-grid tests of `inn_stack` | | |
 | `src/deep_isochron/plotting/coupling_warp.py` — grid panels clipped to the box; a moving band and a pinch in the spline | | |
 | `tests/test_plotting.py` — limits and clipping after drawing, band and pinch | | |
+| `src/deep_isochron/plotting/schematic_layers.py` — the hand-set layers and the sheet | | |
+| `src/deep_isochron/plotting/coupling_warp.py` — the builders move out | | |
+| `src/deep_isochron/plotting/inn_stack.py` — `schematic_linear` moves out | | |
+| `src/deep_isochron/plotting/__init__.py` — the builders from `schematic_layers` | | |
+| `tests/test_plotting.py` — the `schematic_layers` section | | |

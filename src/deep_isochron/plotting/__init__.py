@@ -10,10 +10,6 @@ from .coupling_warp import (
     draw_identity_warp as draw_identity_warp,
     draw_warp_curve as draw_warp_curve,
     plot_coupling_warps as plot_coupling_warps,
-    schematic_affine_coupling as schematic_affine_coupling,
-    schematic_sheet as schematic_sheet,
-    schematic_spline_coupling as schematic_spline_coupling,
-    schematic_trajectories as schematic_trajectories,
     WarpLabels as WarpLabels,
     WarpStyle as WarpStyle,
 )
@@ -37,7 +33,6 @@ from .deformation import (
 )
 from .inn_stack import (
     plot_inn_stack as plot_inn_stack,
-    schematic_linear as schematic_linear,
     StackLabels as StackLabels,
     StackStyle as StackStyle,
 )
@@ -63,6 +58,13 @@ from .schematic import (
     draw_prediction as draw_prediction,
     SchematicLabels as SchematicLabels,
     SchematicStyle as SchematicStyle,
+)
+from .schematic_layers import (
+    schematic_affine_coupling as schematic_affine_coupling,
+    schematic_linear as schematic_linear,
+    schematic_sheet as schematic_sheet,
+    schematic_spline_coupling as schematic_spline_coupling,
+    schematic_trajectories as schematic_trajectories,
 )
 from .style import (
     add_colorbar as add_colorbar,

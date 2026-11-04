@@ -10,8 +10,8 @@ one sheet before and after that layer: a regular grid on a square carrying
 trajectories of the Bautin normal form, drawn by `coupling_warp.draw_grid_sheet` in
 the neutral grays of `WarpStyle`, with a frame in the layer's color around the
 after-panel. The start triangles turn the same way in both panels, which shows that
-neither layer flips the plane. `schematic_linear` builds the linear layer of the inset
-as a real `BiLipschitzLinear` with hand-set leaves. `StackLabels` holds every string
+neither layer flips the plane. The layers and the sheet of the insets come from
+`schematic_layers`. `StackLabels` holds every string
 of the figure and `StackStyle` its drawing constants, with the geometry in inches;
 `plot_inn_stack` draws the figure on an overlay axes whose data units are inches.
 
@@ -22,8 +22,6 @@ import copy
 from dataclasses import dataclass
 
 import equinox as eqx
-import jax
-import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 from jaxtyping import Float
@@ -32,41 +30,12 @@ from matplotlib.figure import Figure
 from matplotlib.patches import FancyArrow, FancyArrowPatch, FancyBboxPatch, Rectangle
 
 from ..model.invertible import BiLipschitzLinear, CouplingFlow, MonotonicRQSpline
-from .coupling_warp import draw_grid_sheet, schematic_sheet, WarpStyle
+from .coupling_warp import draw_grid_sheet, WarpStyle
+from .schematic_layers import schematic_sheet
 
 
 _NUM_BLOCKS = 6
 """The blocks of the chain: four from the start, two at the end."""
-
-
-def schematic_linear(
-    angle_raw: float = 0.3, stretch_raw: float = 1.0, max_lipschitz: float = 3.0
-) -> BiLipschitzLinear:
-    r"""The linear layer of the figure: a rotation followed by a bounded stretch along
-    one axis and a matching squeeze along the other.
-
-    The layer is the identity `BiLipschitzLinear` of dimension 2 without bias, with
-    `raw_U[1, 0]` set to `angle_raw` and `raw_s` to `(stretch_raw, -stretch_raw)`. So
-    `U` is the rotation by $-2 \arctan$ `angle_raw`, `V` is the identity, and the
-    singular values are the images of $\pm$ `stretch_raw` in $(1/L, L)$. Their
-    product is 1 for the defaults, and $\det W > 0$ for every value.
-
-    **Arguments:**
-
-    - `angle_raw`: The raw generator of the rotation `U`.
-    - `stretch_raw`: The raw of the first singular value; the second is its negative.
-    - `max_lipschitz`: $L > 1$, the bound of the singular values.
-
-    **Returns:**
-
-    A `BiLipschitzLinear` of dimension 2 without bias.
-    """
-    identity = BiLipschitzLinear(
-        2, max_lipschitz, use_bias=False, key=jax.random.PRNGKey(0)
-    )
-    raw_U = jnp.zeros((2, 2)).at[1, 0].set(angle_raw)
-    raw_s = jnp.array([stretch_raw, -stretch_raw])
-    return eqx.tree_at(lambda m: (m.raw_U, m.raw_s), identity, (raw_U, raw_s))
 
 
 @dataclass(frozen=True)

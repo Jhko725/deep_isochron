@@ -13,18 +13,19 @@ deformation figures are pinned by their panels, the strip's stage selection and 
 check, the animation's frames through a saved GIF, and ``draw_sheet`` by a custom
 metric's fill; ``plotting.style.set_limits`` by its length check. The drawers of
 ``plotting.schematic`` are pinned by their start markers' fill and their line styles,
-and its style and labels by a range check and ``copy.replace``. The hand-set layers
-of ``plotting.coupling_warp`` are pinned by their round trip, the spline's band and
-pinch, its band moving with $x_1$ and its layout's range checks, its trajectories by
-fitting the box, its drawers by the knot markers, the warp panels' spines and ticks, the
-fixed grid lines staying vertical, one start triangle per trajectory and the limits of a
-map that leaves the box, its style and labels as the schematic's, and its figure by its
-six panels, their shared limits after drawing and the headers. ``draw_trajectories``
-is pinned by one start triangle per trajectory. The hand-set linear layer of
-``plotting.inn_stack`` is pinned by NumPy's SVD of its matrix and its round trip, its
-style and labels as the schematic's with its coupling color equal to the warp figure's,
-and its figure by its blocks, arrows, labels and inset axes, each inset carrying one
-start triangle per trajectory and each after-panel the block's color.
+and its style and labels by a range check and ``copy.replace``. The hand-set layers of
+``plotting.schematic_layers`` are pinned by the couplings' round trip, the spline's band
+and pinch, its band moving with $x_1$ and its layout's range checks, the trajectories by
+fitting the box, and the linear layer by NumPy's SVD of its matrix and its round trip.
+The drawers of ``plotting.coupling_warp`` are pinned by the knot markers, the warp
+panels' spines and ticks, the fixed grid lines staying vertical, one start triangle per
+trajectory, and the limits and clipping of a map that leaves the box; its style and
+labels as the schematic's, and its figure by its six panels, their shared limits after
+drawing and the headers. ``draw_trajectories`` is pinned by one start triangle per
+trajectory. The style and labels of ``plotting.inn_stack`` are pinned as the
+schematic's, with its coupling color equal to the warp figure's, and its figure by its
+blocks, arrows, labels and inset axes, each inset carrying one start triangle per
+trajectory and each after-panel the block's color.
 """
 
 import copy
@@ -712,7 +713,7 @@ def test_schematic_labels_replace_one_field():
     assert copy.replace(labels, loss=default.loss) == default
 
 
-# --- coupling_warp ---
+# --- schematic_layers ---
 
 
 @pytest.fixture(scope="module")
@@ -787,6 +788,39 @@ def test_spline_coupling_rejects_bad_layouts():
             schematic_spline_coupling(**kwargs)
 
 
+@pytest.mark.parametrize("box", [(-1.0, 1.0), (2.0, 5.0)])
+def test_schematic_trajectories_fit_the_box(box):
+    """The default four trajectories of 200 samples lie strictly inside the box and
+    span more than half its width."""
+    trajectories = schematic_trajectories(box)
+    assert trajectories.shape == (4, 200, 2)
+    lo, hi = box
+    assert np.all((trajectories > lo) & (trajectories < hi))
+    assert np.ptp(trajectories[..., 0]) > 0.5 * (hi - lo)
+
+
+def test_schematic_linear_rotates_and_stretches():
+    """The hand-set linear layer has a positive determinant, singular values (by
+    NumPy's SVD) a factor above 1.5 apart, a matrix that is not symmetric, so not a
+    pure stretch, and an inverse that round-trips a few points."""
+    layer = schematic_linear()
+    weight = np.asarray(layer.weight)
+    assert np.linalg.det(weight) > 0
+    singular_values = np.linalg.svd(weight, compute_uv=False)
+    assert singular_values[0] > 1.5 * singular_values[1]
+    assert abs(weight[0, 1] - weight[1, 0]) > 0.1
+    points = jnp.array([[0.3, -0.2], [-0.7, 0.05], [0.9, 0.6]])
+    np.testing.assert_allclose(
+        jax.vmap(layer.inverse)(jax.vmap(layer)(points)),
+        points,
+        rtol=0,
+        atol=TOL["closed_form"],
+    )
+
+
+# --- coupling_warp ---
+
+
 def test_warp_curve_marks_knots_only_for_splines(warp_layers):
     """The spline's warp carries one marker line at its `num_bins + 1` knots; the
     affine warp carries none."""
@@ -826,17 +860,6 @@ def test_warp_panels_keep_left_and_bottom_spines(warp_layers):
 def warp_trajectories() -> Float[np.ndarray, "t q 2"]:
     """Three short schematic trajectories in the unit box."""
     return schematic_trajectories((-1.0, 1.0), n=3, samples=20)
-
-
-@pytest.mark.parametrize("box", [(-1.0, 1.0), (2.0, 5.0)])
-def test_schematic_trajectories_fit_the_box(box):
-    """The default four trajectories of 200 samples lie strictly inside the box and
-    span more than half its width."""
-    trajectories = schematic_trajectories(box)
-    assert trajectories.shape == (4, 200, 2)
-    lo, hi = box
-    assert np.all((trajectories > lo) & (trajectories < hi))
-    assert np.ptp(trajectories[..., 0]) > 0.5 * (hi - lo)
 
 
 def test_grid_sheet_fixed_lines_stay_vertical(warp_layers):
@@ -961,25 +984,6 @@ def test_plot_coupling_warps_draws_six_panels(warp_layers, warp_trajectories):
 
 
 # --- inn_stack ---
-
-
-def test_schematic_linear_rotates_and_stretches():
-    """The hand-set linear layer has a positive determinant, singular values (by
-    NumPy's SVD) a factor above 1.5 apart, a matrix that is not symmetric, so not a
-    pure stretch, and an inverse that round-trips a few points."""
-    layer = schematic_linear()
-    weight = np.asarray(layer.weight)
-    assert np.linalg.det(weight) > 0
-    singular_values = np.linalg.svd(weight, compute_uv=False)
-    assert singular_values[0] > 1.5 * singular_values[1]
-    assert abs(weight[0, 1] - weight[1, 0]) > 0.1
-    points = jnp.array([[0.3, -0.2], [-0.7, 0.05], [0.9, 0.6]])
-    np.testing.assert_allclose(
-        jax.vmap(layer.inverse)(jax.vmap(layer)(points)),
-        points,
-        rtol=0,
-        atol=TOL["closed_form"],
-    )
 
 
 def test_stack_labels_replace_one_field():
