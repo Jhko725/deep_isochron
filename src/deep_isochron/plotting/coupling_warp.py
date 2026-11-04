@@ -81,6 +81,9 @@ class WarpStyle:
     - `label_size`: The font size of the row labels, in points.
     - `margin`: The fraction of the box's width added on each side of every panel, so
         that a warp leaving the box stays in view.
+    - `clip_pad`: The fraction of the box's width added on each side of the rectangle
+        that clips the grid panels, so that the edge lines and the start triangles on
+        the box's edge draw whole.
     - `figsize`: The size of the figure, in inches.
     - `fixed_every`: The spacing of the drawn lines of constant $x_1$, in sheet lines:
         the lines `0, fixed_every, …` of the sheet's `cells + 1` are drawn.
@@ -88,9 +91,9 @@ class WarpStyle:
 
     **Raises:**
 
-    `ValueError` naming the field if `margin` is negative, a width, size or `figsize`
-    entry is not positive, `fixed_every` is less than 1, or `line_samples` is less
-    than 2.
+    `ValueError` naming the field if `margin` or `clip_pad` is negative, a width, size
+    or `figsize` entry is not positive, `fixed_every` is less than 1, or `line_samples`
+    is less than 2.
     """
 
     labels: WarpLabels = WarpLabels()
@@ -108,14 +111,18 @@ class WarpStyle:
     header_size: float = 12.0
     label_size: float = 11.0
     margin: float = 0.15
+    clip_pad: float = 0.04
     figsize: tuple[float, float] = (10.0, 6.0)
     fixed_every: int = 2
     line_samples: int = 200
 
     def __post_init__(self) -> None:
         """Check every validated field's range."""
-        if self.margin < 0:
-            raise ValueError(f"margin must not be negative, got {self.margin}.")
+        for name in ("margin", "clip_pad"):
+            if getattr(self, name) < 0:
+                raise ValueError(
+                    f"{name} must not be negative, got {getattr(self, name)}."
+                )
         for name in (
             "curve_width",
             "grid_width",
@@ -264,9 +271,9 @@ def draw_grid_sheet(
     a coupling layer keeps it where it is, and every line of constant $x_2$ in
     `style.moved_color` above them. The trajectories come last, by `draw_trajectories`
     at `style.sheet`. The grid lines and the trajectories, start markers included, are
-    clipped to the box, so an image that leaves it, as an affine one does, ends there as
-    the unmapped grid does. The limits are set last, with the collections added without
-    autoscaling. The panel has no ticks, spines or grid.
+    clipped to the box widened by `style.clip_pad`, so an image that leaves it, as an
+    affine one does, ends there as the unmapped grid does. The limits are set last, with
+    the collections added without autoscaling. The panel has no ticks, spines or grid.
 
     **Arguments:**
 
@@ -296,7 +303,8 @@ def draw_grid_sheet(
         ax.add_collection(collection, autolim=False)
     drawn = len(ax.lines)
     draw_trajectories(ax, np.asarray(sheet.trajectories), style.sheet)
-    lo, hi = box
+    pad = style.clip_pad * (box[1] - box[0])
+    lo, hi = box[0] - pad, box[1] + pad
     clip = Rectangle((lo, lo), hi - lo, hi - lo, transform=ax.transData)
     for artist in [*grid, *ax.lines[drawn:]]:
         artist.set_clip_path(clip)

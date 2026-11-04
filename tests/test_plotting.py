@@ -911,7 +911,7 @@ def test_grid_sheet_keeps_limits_for_a_map_that_leaves_the_box(warp_trajectories
     """The sheet's image under an affine layer of raw log-scale 2, which leaves the
     box several times over, is drawn at the box widened by the default margin,
     (-1.3, 1.3), once the figure is drawn, and every line collection and line of the
-    axes is clipped to the box, not to the axes."""
+    axes is clipped to the box widened by the default `clip_pad`, not to the axes."""
     box = (-1.0, 1.0)
     layer = schematic_affine_coupling(log_slope=2.0)
     image = schematic_sheet(box, warp_trajectories).map(eqx.filter_jit(layer))
@@ -927,20 +927,25 @@ def test_grid_sheet_keeps_limits_for_a_map_that_leaves_the_box(warp_trajectories
     ]
     assert len(artists) == 2 + 2 * len(warp_trajectories)
     to_data = ax.transData.inverted()
+    pad = WarpStyle().clip_pad * 2.0
     # `set_clip_path` stores a `Rectangle` as the clip box, not as a clip path.
     for artist in artists:
         extents = artist.get_clip_box().transformed(to_data).extents
         np.testing.assert_allclose(
-            extents, (-1.0, -1.0, 1.0, 1.0), rtol=0, atol=TOL["closed_form"]
+            extents,
+            (-1.0 - pad, -1.0 - pad, 1.0 + pad, 1.0 + pad),
+            rtol=0,
+            atol=TOL["closed_form"],
         )
     plt.close(fig)
 
 
 def test_warp_style_rejects_bad_values():
-    """A negative margin, a zero width or figure size, a zero line spacing and a
-    single sample each raise `ValueError` naming the field."""
+    """A negative margin or clip pad, a zero width or figure size, a zero line spacing
+    and a single sample each raise `ValueError` naming the field."""
     for field, value in [
         ("margin", -0.1),
+        ("clip_pad", -0.01),
         ("curve_width", 0.0),
         ("figsize", (0.0, 5.6)),
         ("fixed_every", 0),

@@ -95,6 +95,11 @@ code would ask about are in *Design*, written when the branch lands.
   `schematic_layers`.
 - `tests/test_plotting.py` — the tests of the builders move into a `schematic_layers`
   section, unchanged.
+- `src/deep_isochron/plotting/coupling_warp.py` — `WarpStyle.clip_pad`, 0.04 of the
+  box width on each side of the clip rectangle, so the edge lines and the outermost
+  start triangle draw whole.
+- `tests/test_plotting.py` — the clip box is the box widened by `clip_pad`, and a
+  negative `clip_pad` raises.
 
 ## Design
 
@@ -160,3 +165,5 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/inn_stack.py` — `schematic_linear` moves out | | |
 | `src/deep_isochron/plotting/__init__.py` — the builders from `schematic_layers` | | |
 | `tests/test_plotting.py` — the `schematic_layers` section | | |
+| `src/deep_isochron/plotting/coupling_warp.py` — the clip rectangle padded by `clip_pad` | | |
+| `tests/test_plotting.py` — the padded clip box and the `clip_pad` check | | |
