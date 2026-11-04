@@ -21,8 +21,10 @@ per trajectory, its style and labels as the schematic's, and its figure by its s
 panels, their shared limits and the headers. ``draw_trajectories`` is pinned by one
 start triangle per trajectory. The
 hand-set linear layer of ``plotting.inn_stack`` is pinned by NumPy's SVD of its matrix
-and its round trip, its style and labels as the schematic's, and its figure by its
-blocks, arrows, labels and inset axes.
+and its round trip, its style and labels as the schematic's with its coupling color
+equal to the warp figure's, and its figure by its blocks, arrows, labels and inset
+axes, each inset carrying one start triangle per trajectory and each after-panel the
+block's color.
 """
 
 import copy
@@ -914,8 +916,8 @@ def test_stack_labels_replace_one_field():
 
 
 def test_stack_style_rejects_bad_values():
-    """A negative inset margin, a zero size, gap or font size, and an ellipsis gap
-    below the block gap each raise `ValueError` naming the field."""
+    """A negative inset margin, a zero size, gap or font size, an ellipsis gap below
+    the block gap, and zero inset cells each raise `ValueError` naming the field."""
     for field, value in [
         ("inset_margin", -0.1),
         ("block_size", (0.0, 0.6)),
@@ -924,16 +926,24 @@ def test_stack_style_rejects_bad_values():
         ("arrow_label_size", 0.0),
         ("figsize", (12.0, 0.0)),
         ("ellipsis_gap", 0.1),
+        ("inset_cells", 0),
     ]:
         with pytest.raises(ValueError, match=field):
             StackStyle(**{field: value})
 
 
-def test_plot_inn_stack_blocks_and_arrows():
+def test_stack_style_defaults_match_warp_accent():
+    """The coupling blocks take the moved-line color of the warp figure."""
+    assert StackStyle().coupling_color == WarpStyle().moved_color
+
+
+def test_plot_inn_stack_blocks_and_arrows(warp_trajectories):
     """The overlay axes carries six blocks and seven arrows, five between blocks and
     the two long ones; every default label is a text of the figure; and four inset
     axes follow the overlay."""
-    fig = plot_inn_stack(schematic_linear(), schematic_spline_coupling())
+    fig = plot_inn_stack(
+        schematic_linear(), schematic_spline_coupling(), warp_trajectories
+    )
     overlay, *insets = fig.get_axes()
     blocks = [p for p in overlay.patches if isinstance(p, FancyBboxPatch)]
     arrows = [p for p in overlay.patches if isinstance(p, FancyArrowPatch)]
@@ -957,4 +967,23 @@ def test_plot_inn_stack_blocks_and_arrows():
     texts = {t.get_text() for t in fig.findobj(Text)}
     assert expected <= texts
     assert len(insets) == 4
+    plt.close(fig)
+
+
+def test_inn_stack_insets_map_the_sheet(warp_trajectories):
+    """Each of the four inset axes carries one start triangle per trajectory, and the
+    lines of constant $x_2$ in the after-panel of each pair take its block's color."""
+    style = StackStyle()
+    fig = plot_inn_stack(
+        schematic_linear(), schematic_spline_coupling(), warp_trajectories, style
+    )
+    _, *insets = fig.get_axes()
+    for ax in insets:
+        assert len(_start_markers(ax)) == len(warp_trajectories)
+    for ax, color in [
+        (insets[1], style.linear_color),
+        (insets[3], style.coupling_color),
+    ]:
+        _, moved = (c for c in ax.collections if isinstance(c, LineCollection))
+        assert to_rgba(moved.get_colors()[0]) == to_rgba(color)
     plt.close(fig)

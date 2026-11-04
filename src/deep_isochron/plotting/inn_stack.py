@@ -5,11 +5,12 @@ The chain has six blocks $h_1, h_2, h_3, h_4, \dots, h_{N-1}, h_N$, linear and c
 in turn from a linear block, as the experiment's network starts with a linear layer.
 Double-headed arrows join consecutive blocks, the forward map $H$ runs above the chain
 and the inverse $H^{-1}$ below it, and the words at its ends name the two spaces.
-Under the first linear block an inset pair shows a chiral glyph before and after the
-linear layer, so a rotation and a stretch without a flip are seen; under the first
-coupling block an inset pair shows a regular grid before and after the coupling
-layer, drawn by `coupling_warp.draw_grid_sheet`. `schematic_linear` builds the linear
-layer of the inset as a real `BiLipschitzLinear` with hand-set leaves. `StackLabels`
+Under the first linear block and under the first coupling block an inset pair shows
+one sheet before and after that layer: a regular grid on a square carrying
+trajectories of the Bautin normal form, drawn by `coupling_warp.draw_grid_sheet`. The
+start triangles turn the same way in both panels, which shows that neither layer
+flips the plane. `schematic_linear` builds the linear layer of the inset as a real
+`BiLipschitzLinear` with hand-set leaves. `StackLabels`
 holds every string of the figure and `StackStyle` its drawing constants, with the
 geometry in inches; `plot_inn_stack` draws the figure on an overlay axes whose data
 units are inches.
@@ -25,9 +26,10 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
+from jaxtyping import Float
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from matplotlib.patches import FancyArrow, FancyArrowPatch, FancyBboxPatch, Polygon
+from matplotlib.patches import FancyArrow, FancyArrowPatch, FancyBboxPatch
 
 from ..model.invertible import BiLipschitzLinear, CouplingFlow, MonotonicRQSpline
 from .coupling_warp import draw_grid_sheet, schematic_sheet, WarpStyle
@@ -35,13 +37,6 @@ from .coupling_warp import draw_grid_sheet, schematic_sheet, WarpStyle
 
 _NUM_BLOCKS = 6
 """The blocks of the chain: four from the start, two at the end."""
-
-_GLYPH = np.array(
-    [[0.0, 0.0], [0.6, 0.0], [0.6, 0.2], [0.2, 0.2], [0.2, 0.8], [0.0, 0.8]]
-) - np.array([0.3, 0.4])
-"""The vertices of the chiral glyph, an "L" centered at the origin: no rotation maps
-it onto its mirror image, so its image under the linear layer shows that there is no
-flip."""
 
 
 def schematic_linear(
@@ -126,12 +121,13 @@ class StackStyle:
     **Attributes:**
 
     - `labels`: The strings of the figure.
-    - `linear_color`: The color of the linear blocks and their type name.
+    - `linear_color`: The color of the linear blocks, their type name and the grid
+        lines of constant $x_2$ in the linear inset pair; Okabe–Ito vermilion.
     - `coupling_color`: The color of the coupling blocks, their type name and the
-        moved grid lines of the coupling inset; the default is `WarpStyle`'s
-        `moved_color`, so that the coupling figure of slide 9b uses the same color.
+        grid lines of constant $x_2$ in the coupling inset pair; the default is
+        `WarpStyle.moved_color`, Okabe–Ito bluish green, so that the moved lines of
+        slide 9b have the same color.
     - `block_text_color`: The color of the block labels, drawn on the block fill.
-    - `glyph_color`: The fill of the chiral glyph.
     - `arrow_color`: The color of every arrow and of the ellipsis.
     - `block_size`: The width and height of each block, in inches.
     - `block_gap`: The gap between consecutive blocks, in inches.
@@ -146,9 +142,13 @@ class StackStyle:
         small arrow, in inches.
     - `inset_separation`: The least gap between the two inset pairs, in inches; the
         pairs move apart from under their blocks when they would come closer.
+    - `inset_cells`: The number of grid cells along each axis of the inset sheet.
     - `inset_margin`: The fraction of an inset's box added on each side.
-    - `inset_line_width`: The width of the grid lines of the coupling inset, in
-        points.
+    - `inset_line_width`: The width of the grid lines of the insets, in points.
+    - `inset_curve_width`: The width of the trajectories of the insets, in points.
+    - `inset_halo_width`: The width of the white stroke under each trajectory of the
+        insets, in points.
+    - `inset_marker_size`: The size of the start triangles of the insets, in points.
     - `arrow_width`: The line width of the arrows, in points.
     - `arrow_head`: The size of the arrow heads, in points.
     - `block_label_size`: The font size of the block labels and the ellipsis, in
@@ -158,38 +158,42 @@ class StackStyle:
         points.
     - `inset_label_size`: The font size of the type names, in points.
     - `figsize`: The size of the figure, in inches: the width of a 13.33 × 7.5 inch
-        slide less its margins, and short.
+        slide less its margins, with the chain in the upper part and the inset pairs
+        below it.
 
     **Raises:**
 
     `ValueError` naming the field if `inset_margin` is negative, a size, gap, width,
-    offset or `figsize` entry is not positive, or `ellipsis_gap` is less than
-    `block_gap`.
+    offset or `figsize` entry is not positive, `inset_cells` is less than 1, or
+    `ellipsis_gap` is less than `block_gap`.
     """
 
     labels: StackLabels = StackLabels()
-    linear_color: str = "#c05621"
-    coupling_color: str = "#2b6cb0"
+    linear_color: str = "#D55E00"
+    coupling_color: str = WarpStyle.moved_color
     block_text_color: str = "white"
-    glyph_color: str = "0.25"
     arrow_color: str = "0.2"
-    block_size: tuple[float, float] = (0.75, 0.6)
-    block_gap: float = 0.55
-    ellipsis_gap: float = 1.0
+    block_size: tuple[float, float] = (0.9, 1.6)
+    block_gap: float = 0.35
+    ellipsis_gap: float = 0.7
     arrow_offset: float = 0.22
     label_pad: float = 0.08
-    inset_size: float = 1.0
-    inset_gap: float = 0.35
-    inset_separation: float = 0.45
+    inset_size: float = 1.15
+    inset_gap: float = 0.3
+    inset_separation: float = 0.3
+    inset_cells: int = 10
     inset_margin: float = 0.12
-    inset_line_width: float = 0.8
+    inset_line_width: float = 0.6
+    inset_curve_width: float = 1.1
+    inset_halo_width: float = 2.2
+    inset_marker_size: float = 4.5
     arrow_width: float = 1.2
     arrow_head: float = 12.0
     block_label_size: float = 15.0
     arrow_label_size: float = 16.0
     endpoint_label_size: float = 12.0
     inset_label_size: float = 12.0
-    figsize: tuple[float, float] = (12.0, 4.0)
+    figsize: tuple[float, float] = (12.0, 5.5)
 
     def __post_init__(self) -> None:
         """Check every validated field's range."""
@@ -207,6 +211,9 @@ class StackStyle:
             "inset_gap",
             "inset_separation",
             "inset_line_width",
+            "inset_curve_width",
+            "inset_halo_width",
+            "inset_marker_size",
             "arrow_width",
             "arrow_head",
             "block_label_size",
@@ -218,6 +225,8 @@ class StackStyle:
             value = getattr(self, name)
             if min(value if isinstance(value, tuple) else (value,)) <= 0:
                 raise ValueError(f"{name} must be positive, got {value}.")
+        if self.inset_cells < 1:
+            raise ValueError(f"inset_cells must be at least 1, got {self.inset_cells}.")
         if self.ellipsis_gap < self.block_gap:
             raise ValueError(
                 f"ellipsis_gap must be at least block_gap ({self.block_gap}), got "
@@ -230,36 +239,29 @@ def _text_height(size: float) -> float:
     return 1.2 * size / 72
 
 
-def _format_inset(ax: Axes, limits: tuple[float, float]) -> None:
-    """Set `limits` on both axes at equal aspect, and remove the ticks, the spines and
-    the grid."""
-    ax.set_xlim(*limits)
-    ax.set_ylim(*limits)
-    ax.set_aspect("equal")
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ax.grid(False)
-    for spine in ax.spines.values():
-        spine.set_visible(False)
-
-
-def _draw_glyph_pair(
-    left: Axes, right: Axes, linear: BiLipschitzLinear, style: StackStyle
-) -> None:
-    """Draw the chiral glyph on `left` and its image under `linear` on `right`, at the
-    same limits: a symmetric box around both, widened by `style.inset_margin`."""
-    image = np.asarray(jax.vmap(linear)(jnp.asarray(_GLYPH)))
-    half = (1 + style.inset_margin) * float(
-        max(np.abs(_GLYPH).max(), np.abs(image).max())
+def _inset_style(color: str, style: StackStyle) -> WarpStyle:
+    """The `WarpStyle` of an inset pair: `color` for the grid lines of constant $x_2$,
+    every line of constant $x_1$ drawn, and the inset's margin and line sizes."""
+    default = WarpStyle()
+    return copy.replace(
+        default,
+        moved_color=color,
+        margin=style.inset_margin,
+        grid_width=style.inset_line_width,
+        fixed_every=1,
+        sheet=copy.replace(
+            default.sheet,
+            curve_width=style.inset_curve_width,
+            halo_width=style.inset_halo_width,
+            marker_size=style.inset_marker_size,
+        ),
     )
-    for ax, vertices in [(left, _GLYPH), (right, image)]:
-        ax.add_patch(Polygon(vertices, closed=True, color=style.glyph_color))
-        _format_inset(ax, (-half, half))
 
 
 def plot_inn_stack(
     linear: BiLipschitzLinear,
     coupling: CouplingFlow[MonotonicRQSpline],
+    trajectories: Float[np.ndarray, "n samples 2"],
     style: StackStyle = StackStyle(),
 ) -> Figure:
     r"""The network figure: the chain of six blocks with the forward and inverse
@@ -271,13 +273,18 @@ def plot_inn_stack(
     The content is centered vertically. The row of the two words and the chain is
     centered horizontally, with the words measured as drawn. Each inset pair is
     centered under its block and moved outward when the two pairs would come closer
-    than `style.inset_separation`.
+    than `style.inset_separation`. Both pairs draw one `schematic_sheet` of
+    `style.inset_cells` cells on the spline's range, carrying `trajectories`, before and
+    after their layer, with `draw_grid_sheet`; the grid lines of constant $x_2$ take the
+    block's color.
 
     **Arguments:**
 
     - `linear`: The linear layer of the left inset pair, of dimension 2.
     - `coupling`: The spline coupling layer of the right inset pair, of dimension 2;
-        its grid is drawn on the spline's range.
+        the sheet is drawn on its spline's range.
+    - `trajectories`: The trajectories on the sheet, such as `schematic_trajectories`
+        of the spline's range.
     - `style`: The drawing constants.
 
     **Returns:**
@@ -432,22 +439,21 @@ def plot_inn_stack(
             )
         )
 
-    warp_style = copy.replace(
-        WarpStyle(),
-        moved_color=style.coupling_color,
-        grid_width=style.inset_line_width,
-        margin=style.inset_margin,
-    )
     box = coupling.template.xy_range
     inset_y = y(0.5 * (inset_top + inset_bottom))
-    pairs = []
-    for pair_left in pair_lefts:
-        before = inset(pair_left)
-        pairs.append((before, inset(pair_left + style.inset_size + style.inset_gap)))
-    _draw_glyph_pair(*pairs[0], linear, style)
-    sheet = schematic_sheet(box, np.zeros((0, 2, 2)), cells=8)
-    draw_grid_sheet(pairs[1][0], sheet, box, warp_style)
-    draw_grid_sheet(pairs[1][1], sheet.map(eqx.filter_jit(coupling)), box, warp_style)
+    sheet = schematic_sheet(box, trajectories, cells=style.inset_cells)
+    for pair_left, layer, color in [
+        (pair_lefts[0], linear, style.linear_color),
+        (pair_lefts[1], coupling, style.coupling_color),
+    ]:
+        warp_style = _inset_style(color, style)
+        draw_grid_sheet(inset(pair_left), sheet, box, warp_style)
+        draw_grid_sheet(
+            inset(pair_left + style.inset_size + style.inset_gap),
+            sheet.map(eqx.filter_jit(layer.__call__)),
+            box,
+            warp_style,
+        )
 
     head = 0.5 * style.arrow_head / 72
     for pair_left, name, color in [

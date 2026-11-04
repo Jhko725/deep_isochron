@@ -410,7 +410,7 @@ def draw_grid_sheet(
     r"""Draw the grid and the trajectories of `sheet`, a sheet of `schematic_sheet` or
     its image under a coupling layer.
 
-    The caller maps the sheet, as `sheet.map(eqx.filter_jit(layer))`. Every
+    The caller maps the sheet, as `sheet.map(eqx.filter_jit(layer.__call__))`. Every
     `style.fixed_every`-th line of constant $x_1$ is drawn in `style.fixed_color`, since
     a coupling layer keeps it where it is, and every line of constant $x_2$ in
     `style.moved_color` above them. The trajectories come last, by `draw_trajectories`
@@ -487,7 +487,9 @@ def plot_coupling_warps(
     draw_grid_sheet(axes[1, 0], sheet, box, style)
     for column, layer in [(1, affine), (2, spline)]:
         draw_warp_curve(axes[0, column], layer, box, x1, style)
-        draw_grid_sheet(axes[1, column], sheet.map(eqx.filter_jit(layer)), box, style)
+        draw_grid_sheet(
+            axes[1, column], sheet.map(eqx.filter_jit(layer.__call__)), box, style
+        )
     headers = [labels.identity_header, labels.affine_header, labels.spline_header]
     for ax, header in zip(axes[0], headers, strict=True):
         ax.set_title(header, fontsize=style.header_size)

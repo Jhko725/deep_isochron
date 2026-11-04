@@ -59,6 +59,16 @@ code would ask about are in *Design*, written when the branch lands.
 - `src/deep_isochron/plotting/coupling_warp.py` — the trajectories of `WarpStyle.sheet`
   take four Okabe–Ito colors, blue, reddish purple, orange and sky blue, so none is
   the green or vermilion accent.
+- `src/deep_isochron/plotting/inn_stack.py` — tall blocks, the chiral glyph removed,
+  and under each block type a before and an after panel of one `schematic_sheet`
+  with Bautin trajectories mapped through that layer; `plot_inn_stack` takes the
+  trajectories; Okabe–Ito vermilion for the linear block and `WarpStyle.moved_color`
+  for the coupling block.
+- `src/deep_isochron/plotting/coupling_warp.py` — the grid panels jit the bound
+  `layer.__call__`, as `stage_sheets` does; the `draw_grid_sheet` docstring says so.
+- `tests/test_plotting.py` — the insets' start triangles and the after-panels' block
+  colors, the coupling color equal to the warp figure's, and `inset_cells` checked.
+- `ksiam_schematics.ipynb` — the 9a cell passes `schematic_trajectories((-1.0, 1.0))`.
 
 ## Design
 
@@ -110,3 +120,7 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `tests/test_plotting.py` — the reworked `coupling_warp` tests and `draw_trajectories` | | |
 | `ksiam_schematics.ipynb` — the 9b cell passes the trajectories | | |
 | `src/deep_isochron/plotting/coupling_warp.py` — trajectory colors avoid the accents | | |
+| `src/deep_isochron/plotting/inn_stack.py` — tall blocks and before/after insets of a sheet | | |
+| `src/deep_isochron/plotting/coupling_warp.py` — layers jitted through the bound `__call__` | | |
+| `tests/test_plotting.py` — the inset and accent tests of `inn_stack` | | |
+| `ksiam_schematics.ipynb` — the 9a cell passes the trajectories | | |
