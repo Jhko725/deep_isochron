@@ -14,17 +14,17 @@ check, the animation's frames through a saved GIF, and ``draw_sheet`` by a custo
 metric's fill; ``plotting.style.set_limits`` by its length check. The drawers of
 ``plotting.schematic`` are pinned by their start markers' fill and their line styles,
 and its style and labels by a range check and ``copy.replace``. The hand-set layers
-of ``plotting.coupling_warp`` are pinned by their round trip and the spline's steep
-band, its trajectories by fitting the box, its drawers by the knot markers, the warp
-panels' spines and ticks, the fixed grid lines staying vertical and one start triangle
-per trajectory, its style and labels as the schematic's, and its figure by its six
-panels, their shared limits and the headers. ``draw_trajectories`` is pinned by one
-start triangle per trajectory. The
-hand-set linear layer of ``plotting.inn_stack`` is pinned by NumPy's SVD of its matrix
-and its round trip, its style and labels as the schematic's with its coupling color
-equal to the warp figure's, and its figure by its blocks, arrows, labels and inset
-axes, each inset carrying one start triangle per trajectory and each after-panel the
-block's color.
+of ``plotting.coupling_warp`` are pinned by their round trip, the spline's band and
+pinch, its band moving with $x_1$ and its layout's range checks, its trajectories by
+fitting the box, its drawers by the knot markers, the warp panels' spines and ticks, the
+fixed grid lines staying vertical, one start triangle per trajectory and the limits of a
+map that leaves the box, its style and labels as the schematic's, and its figure by its
+six panels, their shared limits after drawing and the headers. ``draw_trajectories``
+is pinned by one start triangle per trajectory. The hand-set linear layer of
+``plotting.inn_stack`` is pinned by NumPy's SVD of its matrix and its round trip, its
+style and labels as the schematic's with its coupling color equal to the warp figure's,
+and its figure by its blocks, arrows, labels and inset axes, each inset carrying one
+start triangle per trajectory and each after-panel the block's color.
 """
 
 import copy
@@ -733,15 +733,58 @@ def test_schematic_couplings_are_hand_set(warp_layers):
         assert float(jnp.max(jnp.abs(images - points))) > 0.01
 
 
-def test_spline_warp_is_steep_in_one_band(warp_layers):
-    """At $x_1 = 0$ the spline warp's largest slope is at least five times its slope
-    at either end of the box, where the boundary derivatives are 1."""
+def _warp_slopes(
+    spline: CouplingFlow, x1: float, x2s: Float[Array, " n"]
+) -> Float[Array, " n"]:
+    """The slopes of the spline's warp at `x1`, by autodiff, at `x2s`."""
+    bijection = jax.tree.map(lambda a: a[0], spline.make_bijection(jnp.array([x1])))
+    return jax.vmap(jax.grad(bijection))(x2s)
+
+
+def test_spline_warp_has_a_band_and_a_pinch(warp_layers):
+    """At the middle $x_1$ the default spline warp's largest slope exceeds 5, and its
+    smallest slope inside the pinch, $x_2 \\in (0.5, 0.9)$, is below 0.3 and below
+    half its slope at $x_2 = -0.6$, outside both features, so the pinch is a plateau
+    and not the warp's gentle slope everywhere."""
     _, spline = warp_layers
-    bijection = jax.tree.map(lambda a: a[0], spline.make_bijection(jnp.array([0.0])))
     lo, hi = spline.template.xy_range
-    slope = jax.grad(bijection)
-    largest = jnp.max(jax.vmap(slope)(jnp.linspace(lo, hi, 2001)))
-    assert float(largest) >= 5 * max(float(slope(lo)), float(slope(hi)))
+    x2s = jnp.linspace(lo, hi, 2001)
+    x1 = 0.5 * (lo + hi)
+    slopes = _warp_slopes(spline, x1, x2s)
+    assert float(jnp.max(slopes)) > 5
+    pinch = (x2s > 0.5) & (x2s < 0.9)
+    flattest = float(jnp.min(jnp.where(pinch, slopes, jnp.inf)))
+    assert flattest < 0.3
+    assert flattest < 0.5 * float(_warp_slopes(spline, x1, jnp.array([-0.6]))[0])
+
+
+def test_spline_band_moves_with_x1(warp_layers):
+    """The $x_2$ of the default spline warp's largest slope at $x_1 = $ `lo` and at
+    $x_1 = $ `hi` differ by at least 0.6 of the band center's travel, 0.8."""
+    _, spline = warp_layers
+    lo, hi = spline.template.xy_range
+    x2s = jnp.linspace(lo, hi, 2001)
+    steepest = [
+        float(x2s[jnp.argmax(_warp_slopes(spline, x1, x2s))]) for x1 in (lo, hi)
+    ]
+    assert steepest[1] - steepest[0] >= 0.6 * 0.8
+
+
+def test_spline_coupling_rejects_bad_layouts():
+    """Too few bins, a zero width or span, spans summing to 1, a band or pinch leaving
+    the range, and a pinch on the band's travel each raise `ValueError` naming the
+    argument."""
+    for field, kwargs in [
+        ("num_bins", {"num_bins": 4}),
+        ("band_width", {"band_width": 0.0}),
+        ("pinch_span", {"pinch_span": 0.0}),
+        ("band_span", {"band_span": 0.96}),
+        ("band_center", {"band_center": (-0.95, 0.3)}),
+        ("pinch_center", {"pinch_center": 0.85}),
+        ("pinch_center", {"pinch_center": 0.0}),
+    ]:
+        with pytest.raises(ValueError, match=field):
+            schematic_spline_coupling(**kwargs)
 
 
 def test_warp_curve_marks_knots_only_for_splines(warp_layers):
@@ -841,6 +884,35 @@ def test_grid_sheet_draws_trajectories(warp_layers, warp_trajectories):
     plt.close(fig)
 
 
+def test_grid_sheet_keeps_limits_for_a_map_that_leaves_the_box(warp_trajectories):
+    """The sheet's image under an affine layer of raw log-scale 2, which leaves the
+    box several times over, is drawn at the box widened by the default margin,
+    (-1.3, 1.3), once the figure is drawn, and every line collection and line of the
+    axes is clipped to the box, not to the axes."""
+    box = (-1.0, 1.0)
+    layer = schematic_affine_coupling(log_slope=2.0)
+    image = schematic_sheet(box, warp_trajectories).map(eqx.filter_jit(layer))
+    assert float(jnp.max(jnp.abs(image.lines))) > 2
+    fig, ax = plt.subplots()
+    draw_grid_sheet(ax, image, box)
+    fig.canvas.draw()
+    np.testing.assert_allclose(ax.get_xlim(), (-1.3, 1.3), rtol=0, atol=TOL["identity"])
+    np.testing.assert_allclose(ax.get_ylim(), (-1.3, 1.3), rtol=0, atol=TOL["identity"])
+    artists = [
+        *(c for c in ax.collections if isinstance(c, LineCollection)),
+        *ax.lines,
+    ]
+    assert len(artists) == 2 + 2 * len(warp_trajectories)
+    to_data = ax.transData.inverted()
+    # `set_clip_path` stores a `Rectangle` as the clip box, not as a clip path.
+    for artist in artists:
+        extents = artist.get_clip_box().transformed(to_data).extents
+        np.testing.assert_allclose(
+            extents, (-1.0, -1.0, 1.0, 1.0), rtol=0, atol=TOL["closed_form"]
+        )
+    plt.close(fig)
+
+
 def test_warp_style_rejects_bad_values():
     """A negative margin, a zero width or figure size, a zero line spacing and a
     single sample each raise `ValueError` naming the field."""
@@ -864,14 +936,20 @@ def test_warp_labels_replace_one_field():
 
 
 def test_plot_coupling_warps_draws_six_panels(warp_layers, warp_trajectories):
-    """The figure has six panels with identical limits, and the top row's titles are
-    the three default headers."""
+    """The figure has six panels whose limits, after the figure is drawn, are all the
+    box widened by the default margin, (-1.3, 1.3); the top row's titles are the three
+    default headers."""
     fig = plot_coupling_warps(*warp_layers, warp_trajectories)
+    fig.canvas.draw()
     axes = fig.get_axes()
     assert len(axes) == 6
-    assert len({ax.get_xlim() for ax in axes}) == 1
-    assert len({ax.get_ylim() for ax in axes}) == 1
-    assert axes[0].get_xlim() == axes[0].get_ylim()
+    for ax in axes:
+        np.testing.assert_allclose(
+            ax.get_xlim(), (-1.3, 1.3), rtol=0, atol=TOL["identity"]
+        )
+        np.testing.assert_allclose(
+            ax.get_ylim(), (-1.3, 1.3), rtol=0, atol=TOL["identity"]
+        )
     labels = WarpLabels()
     titles = [ax.get_title() for ax in axes[:3]]
     assert titles == [

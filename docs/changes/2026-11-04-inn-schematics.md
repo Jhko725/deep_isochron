@@ -77,6 +77,13 @@ code would ask about are in *Design*, written when the branch lands.
   after-panel; `coupling_color` is the literal Okabe–Ito bluish green.
 - `tests/test_plotting.py` — the after-panels carry a frame in the block color and
   the before-panels none, the moved lines are gray, and the accent test is deleted.
+- `src/deep_isochron/plotting/coupling_warp.py` — `schematic_spline_coupling` builds
+  its raw vector from a knot layout: a steep band whose center moves with $x_1$ and a
+  pinch fixed in $x_2$; `draw_grid_sheet` clips its grid lines and trajectories to the
+  box, adds its line collections without autoscaling and sets the limits last.
+- `tests/test_plotting.py` — the six panels' limits after drawing, the limits and clip
+  box of a map that leaves the box, the spline's band and pinch, the band moving with $x_1$, and the
+  layout's range checks.
 
 ## Design
 
@@ -135,3 +142,5 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/coupling_warp.py` — gray grids and warp curves | | |
 | `src/deep_isochron/plotting/inn_stack.py` — the after-panel frames in the block colors | | |
 | `tests/test_plotting.py` — the frame and gray-grid tests of `inn_stack` | | |
+| `src/deep_isochron/plotting/coupling_warp.py` — grid panels clipped to the box; a moving band and a pinch in the spline | | |
+| `tests/test_plotting.py` — limits and clipping after drawing, band and pinch | | |

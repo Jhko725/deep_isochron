@@ -9,8 +9,10 @@ column and its image under the column's layer in the others. The sheet holds a r
 grid, whose lines of constant $x_1$ stay where they are and whose lines of constant
 $x_2$ bend, and a few trajectories of the Bautin normal form.
 `schematic_affine_coupling` and `schematic_spline_coupling` build the two layers as
-real `CouplingFlow`s whose conditioners are hand-set functions of $x_1$, so that the
-spline's steep band is legible by design rather than by training;
+real `CouplingFlow`s whose conditioners are hand-set functions of $x_1$. The spline's
+conditioner builds a knot layout from $x_1$: a steep band whose center moves with $x_1$
+and a pinched region fixed in $x_2$, so that its warp shows a step and a plateau and
+its image grid bends in a way no affine layer can, by design rather than by training;
 `schematic_trajectories` and `schematic_sheet` build the sheet. `WarpLabels` holds the
 strings of the figure and `WarpStyle` its drawing constants; `draw_identity_warp`,
 `draw_warp_curve` and `draw_grid_sheet` draw one panel each, and `plot_coupling_warps`
@@ -33,6 +35,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Rectangle
 
 from ..model.invertible import Affine, CouplingFlow, MonotonicRQSpline
+from ..model.invertible.constraints import GreaterThan, Widths
 from ..model.invertible.splines import AbstractSpline
 from ..systems.normal_forms import BautinNormalForm
 from .deformation import draw_trajectories, Sheet, SheetConfig, SheetStyle
@@ -66,38 +69,57 @@ def schematic_affine_coupling(
     return CouplingFlow(dim=2, bijection=Affine(), conditioner=conditioner)
 
 
+def _allocate_gap_bins(
+    lengths: Float[np.ndarray, " 3"], num_bins: int
+) -> tuple[int, ...]:
+    """Split `num_bins` bins, at least 3, over three gaps: one bin each, and the rest
+    in proportion to the gaps' `lengths` by the largest remainder."""
+    share = (num_bins - 3) * lengths / lengths.sum()
+    extra = np.floor(share).astype(int)
+    largest_remainders = np.argsort(extra - share)
+    extra[largest_remainders[: num_bins - 3 - extra.sum()]] += 1
+    return tuple(int(n) + 1 for n in extra)
+
+
 def schematic_spline_coupling(
     num_bins: int = 9,
     xy_range: tuple[float, float] = (-1.0, 1.0),
-    x_width_raw: float = 0.26,
-    y_width_raw: float = 2.6,
-    derivative_raws: tuple[float, float] = (0.5, 0.9),
-    x1_slope: float = 0.3,
+    band_center: tuple[float, float] = (-0.5, 0.3),
+    band_width: float = 0.25,
+    band_span: float = 0.55,
+    pinch_center: float = 0.7,
+    pinch_width: float = 0.4,
+    pinch_span: float = 0.04,
 ) -> CouplingFlow[MonotonicRQSpline]:
     r"""The spline coupling layer of the figure: a `MonotonicRQSpline` warp of $x_2$
-    that is gentle everywhere and steep in one band, which narrows as $x_1$ grows.
+    with a steep band that moves with $x_1$ and a pinched region fixed in $x_2$, so
+    that the warp shows a step and a plateau.
 
-    The conditioner returns a raw vector that is zero except at four entries of the
-    middle bin. Its x-width raw `x_width_raw` sets the band's width, and its y-width
-    raw `y_width_raw`, much larger, makes the bin take most of the range's height
-    from the other bins, so that the band is steep. The raws of the interior
-    derivatives at its two ends, `derivative_raws`, are positive so that the slope
-    there exceeds 1 and the band joins its neighbors smoothly. The other bins share
-    the remaining width and height, so their slope is below 1. The vector
-    is scaled by $1 + c\, x_1$, $c$ = `x1_slope`. Since the nonzero widths are those
-    of the middle bin, the band stays centered at the range's midpoint; unequal
-    derivative raws move its steepest point off center by an amount that changes with
-    $x_1$.
+    The conditioner builds the spline's knot layout from $x_1$ and returns its raw
+    vector. The band is the interval of width `band_width` whose center moves linearly
+    from `band_center[0]` at $x_1 = $ `lo` to `band_center[1]` at $x_1 = $ `hi`, held
+    at those ends outside the range; its image takes the fraction `band_span` of the
+    range, so the warp is steep there. The pinch is the interval of width
+    `pinch_width` centered at `pinch_center`, and its image takes the fraction
+    `pinch_span`, so the warp is nearly flat there. Each feature is one bin. The
+    `num_bins - 2` other bins split the three gaps that the features leave, in
+    proportion to the gaps' lengths at the middle $x_1$ and at least one bin each,
+    and the gaps share the rest of the image at one common slope. Every interior knot
+    derivative is the geometric mean of the slopes of its two bins, so the map is
+    linear inside the gaps and joins each feature smoothly. The inverses of the
+    template's `Widths` and `GreaterThan` map the layout back to raws, after the widths
+    are clamped to twice the `Widths` floor.
 
     **Arguments:**
 
-    - `num_bins`: The number of bins, odd so that there is a middle bin, at least 3.
-    - `xy_range`: The range of the spline; the identity outside it.
-    - `x_width_raw`: The raw of the middle bin's x-width.
-    - `y_width_raw`: The raw of the middle bin's y-width.
-    - `derivative_raws`: The raws of the derivatives at the middle bin's lower and
-        upper knot.
-    - `x1_slope`: The relative change of the raw vector per unit of $x_1$.
+    - `num_bins`: The number of bins, at least 5.
+    - `xy_range`: The range `(lo, hi)` of the spline; the identity outside it.
+    - `band_center`: The center of the band in $x_2$ at $x_1 = $ `lo` and at `hi`.
+    - `band_width`: The width of the band in $x_2$.
+    - `band_span`: The fraction of the range that the band's image takes.
+    - `pinch_center`: The center of the pinch in $x_2$.
+    - `pinch_width`: The width of the pinch in $x_2$.
+    - `pinch_span`: The fraction of the range that the pinch's image takes.
 
     **Returns:**
 
@@ -105,22 +127,93 @@ def schematic_spline_coupling(
 
     **Raises:**
 
-    `ValueError` if `num_bins` is even or less than 3.
+    `ValueError` naming the argument if `num_bins` is less than 5, a width or span is
+    not positive, `band_span + pinch_span` is not below 1, the band at either end of
+    its travel or the pinch leaves the open range, or the pinch meets the band
+    anywhere along its travel.
     """
-    if num_bins < 3 or num_bins % 2 == 0:
-        raise ValueError(f"num_bins must be odd and at least 3, got {num_bins}.")
+    lo, hi = xy_range
+    if num_bins < 5:
+        raise ValueError(f"num_bins must be at least 5, got {num_bins}.")
+    for name, value in [
+        ("band_width", band_width),
+        ("band_span", band_span),
+        ("pinch_width", pinch_width),
+        ("pinch_span", pinch_span),
+    ]:
+        if value <= 0:
+            raise ValueError(f"{name} must be positive, got {value}.")
+    if band_span + pinch_span >= 1:
+        raise ValueError(
+            f"band_span + pinch_span must be below 1, got {band_span + pinch_span}."
+        )
+    band_lo = min(band_center) - 0.5 * band_width
+    band_hi = max(band_center) + 0.5 * band_width
+    pinch = (pinch_center - 0.5 * pinch_width, pinch_center + 0.5 * pinch_width)
+    if not lo < band_lo < band_hi < hi:
+        raise ValueError(
+            f"band_center and band_width must keep the band inside {xy_range}, got "
+            f"({band_lo}, {band_hi})."
+        )
+    if not lo < pinch[0] < pinch[1] < hi:
+        raise ValueError(
+            f"pinch_center and pinch_width must keep the pinch inside {xy_range}, got "
+            f"{pinch}."
+        )
+    if not (band_hi < pinch[0] or pinch[1] < band_lo):
+        raise ValueError(
+            f"pinch_center must keep the pinch {pinch} clear of the band's travel "
+            f"({band_lo}, {band_hi})."
+        )
+    band_first = band_hi < pinch[0]
     template = MonotonicRQSpline(num_bins, xy_range)
-    middle = num_bins // 2
-    raw = np.zeros(template.num_params)
-    # The layout of `MonotonicRQSpline.raw`: K x-widths, K y-widths, K - 1 interior
-    # derivatives, of which entry j is the derivative at knot j + 1.
-    raw[middle] = x_width_raw
-    raw[num_bins + middle] = y_width_raw
-    raw[2 * num_bins + middle - 1 : 2 * num_bins + middle + 1] = derivative_raws
+    width = template.range_width
+    widths = Widths(width, template.min_rel_width)
+    derivatives = GreaterThan(template.min_derivative, at_zero=1.0)
+    floor = 2 * template.min_rel_width * width
+    feature_spans = (band_span, pinch_span) if band_first else (pinch_span, band_span)
+    gap_span = 1 - band_span - pinch_span
+
+    def features(x1: Float[Array, ""]) -> Float[Array, "2 2"]:
+        """The band's and the pinch's ends at `x1`, lower feature first."""
+        t = jnp.clip((x1 - lo) / width, 0.0, 1.0)
+        center = band_center[0] + (band_center[1] - band_center[0]) * t
+        band = jnp.stack([center - 0.5 * band_width, center + 0.5 * band_width])
+        both = [band, jnp.asarray(pinch)]
+        return jnp.stack(both if band_first else both[::-1])
+
+    def gaps(ends: Float[Array, "2 2"]) -> Float[Array, " 3"]:
+        """The lengths of the three gaps the two features leave in the range."""
+        return jnp.stack([ends[0, 0] - lo, ends[1, 0] - ends[0, 1], hi - ends[1, 1]])
+
+    counts = _allocate_gap_bins(
+        np.asarray(gaps(features(jnp.asarray(0.5 * (lo + hi))))), num_bins - 2
+    )
 
     def conditioner(x_const: Float[Array, " 1"]) -> Float[Array, " raw"]:
-        """The raw vector for `x_const`, scaled linearly in $x_1$."""
-        return jnp.asarray(raw) * (1 + x1_slope * x_const[0])
+        """The raw vector of the knot layout at `x_const`."""
+        ends = features(x_const[0])
+        lengths = gaps(ends)
+        gap_slope = gap_span * width / jnp.sum(lengths)
+        x_pieces, y_pieces = [], []
+        for k, count in enumerate(counts):
+            gap = jnp.full(count, lengths[k] / count)
+            x_pieces.append(gap)
+            y_pieces.append(gap_slope * gap)
+            if k < 2:
+                x_pieces.append((ends[k, 1] - ends[k, 0])[None])
+                y_pieces.append(jnp.array([feature_spans[k] * width]))
+        x_widths = jnp.maximum(jnp.concatenate(x_pieces), floor)
+        y_widths = jnp.maximum(jnp.concatenate(y_pieces), floor)
+        slopes = y_widths / x_widths
+        knot_derivatives = jnp.sqrt(slopes[:-1] * slopes[1:])
+        return jnp.concatenate(
+            [
+                widths.inverse(x_widths),
+                widths.inverse(y_widths),
+                derivatives.inverse(knot_derivatives),
+            ]
+        )
 
     return CouplingFlow(dim=2, bijection=template, conditioner=conditioner)
 
@@ -415,7 +508,10 @@ def draw_grid_sheet(
     `style.fixed_every`-th line of constant $x_1$ is drawn in `style.fixed_color`, since
     a coupling layer keeps it where it is, and every line of constant $x_2$ in
     `style.moved_color` above them. The trajectories come last, by `draw_trajectories`
-    at `style.sheet`. The panel has no ticks, spines or grid.
+    at `style.sheet`. The grid lines and the trajectories, start markers included, are
+    clipped to the box, so an image that leaves it, as an affine one does, ends there as
+    the unmapped grid does. The limits are set last, with the collections added without
+    autoscaling. The panel has no ticks, spines or grid.
 
     **Arguments:**
 
@@ -427,23 +523,28 @@ def draw_grid_sheet(
     """
     cells = sheet.config.cells
     lines = np.asarray(sheet.lines)
-    ax.add_collection(
+    grid = [
         LineCollection(
             list(lines[: cells + 1 : style.fixed_every]),
             colors=style.fixed_color,
             linewidths=style.grid_width,
             zorder=1,
-        )
-    )
-    ax.add_collection(
+        ),
         LineCollection(
             list(lines[cells + 1 :]),
             colors=style.moved_color,
             linewidths=style.grid_width,
             zorder=2,
-        )
-    )
+        ),
+    ]
+    for collection in grid:
+        ax.add_collection(collection, autolim=False)
+    drawn = len(ax.lines)
     draw_trajectories(ax, np.asarray(sheet.trajectories), style.sheet)
+    lo, hi = box
+    clip = Rectangle((lo, lo), hi - lo, hi - lo, transform=ax.transData)
+    for artist in [*grid, *ax.lines[drawn:]]:
+        artist.set_clip_path(clip)
     _set_panel_limits(ax, box, style)
     ax.set_xticks([])
     ax.set_yticks([])
