@@ -58,6 +58,7 @@ if __name__ == "__mp_main__":  # a grain worker re-importing this script (spawn 
     os.environ.setdefault("JAX_PLATFORMS", "cpu")  # workers must never touch the GPU
 
 import argparse  # noqa: E402
+import functools  # noqa: E402
 import pickle  # noqa: E402
 import re  # noqa: E402
 import statistics  # noqa: E402
@@ -80,6 +81,7 @@ from deep_isochron.data import (  # noqa: E402
     TimeSeriesDataSource,
     to_device,
     window_batches,
+    WindowBatchSource,
     windows,
 )
 from deep_isochron.model import (  # noqa: E402
@@ -249,18 +251,13 @@ _HLO_INSTR = re.compile(r"^\s*(?:ROOT\s+)?%(\S+)\s*=\s*.+?\s([a-z\-]+)\(")
 _HLO_NO_LAUNCH = {"parameter", "constant", "get-tuple-element", "tuple", "bitcast"}
 
 
-def hlo_launch_estimate(
-    text: str,
-) -> tuple[int, list[tuple[str, int | None, int]], int, int]:
-    """``(instructions, loops, launches, conditionals)`` from optimized HLO text: the
-    module's instruction count, one ``(name, trip_count, launches_per_iteration)`` per
-    ``while`` (trip count from XLA's ``known_trip_count`` annotation when present), an
-    *estimate* of kernel launches per call — every instruction other than a parameter,
-    constant, tuple or bitcast counts one, a loop body counts ``trip_count`` times (once
-    when unknown), ``call``s are inlined, ``conditional`` branches are summed — and the
-    number of ``conditional`` executions per call (loop multiplicity included): on the
-    GPU backend each one needs its predicate on the host, i.e. a device-to-host copy the
-    launching thread waits for."""
+def hlo_computations(text: str) -> tuple[dict[str, list[str]], str]:
+    """``(computations, entry)`` from optimized HLO text: the instruction lines of
+    each computation by name, and the name of the ``ENTRY`` computation.
+
+    **Raises:**
+
+    `ValueError` when the text has no ``ENTRY`` computation."""
     comps: dict[str, list[str]] = {}
     entry: str | None = None
     current: list[str] | None = None
@@ -274,6 +271,22 @@ def hlo_launch_estimate(
             current.append(line)
     if entry is None:
         raise ValueError("no ENTRY computation in the HLO text")
+    return comps, entry
+
+
+def hlo_launch_estimate(
+    text: str,
+) -> tuple[int, list[tuple[str, int | None, int]], int, int]:
+    """``(instructions, loops, launches, conditionals)`` from optimized HLO text: the
+    module's instruction count, one ``(name, trip_count, launches_per_iteration)`` per
+    ``while`` (trip count from XLA's ``known_trip_count`` annotation when present), an
+    *estimate* of kernel launches per call — every instruction other than a parameter,
+    constant, tuple or bitcast counts one, a loop body counts ``trip_count`` times (once
+    when unknown), ``call``s are inlined, ``conditional`` branches are summed — and the
+    number of ``conditional`` executions per call (loop multiplicity included): on the
+    GPU backend each one needs its predicate on the host, i.e. a device-to-host copy the
+    launching thread waits for."""
+    comps, entry = hlo_computations(text)
     loops: list[tuple[str, int | None, int]] = []
     conditionals = [0]
 
@@ -355,6 +368,97 @@ def report_hlo_stats(trainer: Trainer, state, batch, device: jax.Device) -> None
         print(f"  {name:<32} dispatch {d:7.3f} ms   total {t:7.3f} ms per call")
 
 
+def training_pipeline(
+    train_source: TimeSeriesDataSource,
+    length: int,
+    batch: int,
+    wsrc: WindowBatchSource | None,
+) -> grain.MapDataset:
+    """The training loader (C9), one vectorized gather per batch: the config's own
+    window source `wsrc` when ``--config`` is given, else ``window_batches``."""
+    if wsrc is not None:
+        return grain.MapDataset.source(wsrc)
+    return window_batches(train_source, length, batch, seed=0, epochs=1000)
+
+
+def per_element_windows(
+    train_source: TimeSeriesDataSource, length: int, batch: int
+) -> grain.MapDataset:
+    """The per-element reference loader that C9 replaced: shuffle, random_map,
+    batch."""
+    return windows(train_source, length, seed=0).batch(batch, drop_remainder=True)
+
+
+def mp_prefetch_pipeline(
+    pipeline: Callable[[], grain.MapDataset], workers: int
+) -> grain.IterDataset:
+    """A fresh `pipeline()` read by `workers` ``mp_prefetch`` worker processes."""
+    return (
+        pipeline()
+        .to_iter_dataset()
+        .mp_prefetch(grain.MultiprocessingOptions(num_workers=workers))
+    )
+
+
+def mp_prefetch_works(
+    source: TimeSeriesDataSource, mp_pipeline: Callable[[], grain.IterDataset]
+) -> bool:
+    """Whether `source` pickles and `mp_pipeline()` yields a batch; a failure is
+    printed rather than raised, so that the benchmark runs without the
+    ``mp_prefetch`` rows."""
+    try:
+        pickle.loads(pickle.dumps(source))
+        next(iter(mp_pipeline()))
+    except Exception as e:  # noqa: BLE001 — report, do not crash the benchmark
+        print(f"mp_prefetch unavailable: {type(e).__name__}: {str(e)[:120]}")
+        return False
+    return True
+
+
+@eqx.filter_jit
+def trivial_step(s, b):
+    """A trivial jitted function over the same ``(state, batch)`` pytrees as the
+    training step, for the dispatch floor."""
+    return s.step + 1, jnp.sum(b["u"])
+
+
+def time_floor(state, loader: Iterable, n: int) -> float:
+    """The dispatch floor, in ms per call over `n` batches of `loader`: what the host
+    pays per call of `trivial_step` just to hand the arguments to JAX."""
+    it = iter(loader)
+    jax.block_until_ready(trivial_step(state, next(it)))
+    t0 = time.perf_counter()
+    for _ in range(n):
+        out = trivial_step(state, next(it))
+    jax.block_until_ready(out)
+    return 1e3 * (time.perf_counter() - t0) / n
+
+
+def cell(values: list[float]) -> str:
+    """The ``min / median`` table cell of the repeats `values`."""
+    return f"{min(values):8.1f} /{statistics.median(values):7.1f}"
+
+
+def print_table(
+    *,
+    fetch: dict[str, list[float]],
+    floor: dict[str, list[float]],
+    dispatch: dict[str, list[float]],
+    total: dict[str, list[float]],
+) -> None:
+    """Print the fetch, dispatch-floor and step tables, one row per configuration,
+    from the times of every repeat by configuration name."""
+    print(f"\n{'ms per batch or step: min / median':<48}{'fetch':>18}")
+    for name, values in fetch.items():
+        print(f"{name:<48}{cell(values):>18}")
+    print(f"\n{'dispatch floor (trivial jit on state + batch)':<48}{'ms/call':>18}")
+    for name, values in floor.items():
+        print(f"{'  ' + name + ' batch':<48}{cell(values):>18}")
+    print(f"\n{'':<48}{'dispatch':>18}{'total':>18}")
+    for name, values in dispatch.items():
+        print(f"{name:<48}{cell(values):>18}{cell(total[name]):>18}")
+
+
 def main() -> None:
     """Time the data pipeline variants against the training step and print a table."""
     args = parse_args()
@@ -406,27 +510,13 @@ def main() -> None:
         f"host: {cpu_allowance()}; jax {jax.__version__}"
     )
 
-    def pipeline() -> grain.MapDataset:
-        # the training loader (C9): one vectorized gather per batch — the config's own
-        # window source when --config is given
-        if wsrc is not None:
-            return grain.MapDataset.source(wsrc)
-        return window_batches(
-            train_source, args.length, args.batch, seed=0, epochs=1000
-        )
-
-    def per_element_pipeline() -> grain.MapDataset:
-        # the per-element reference: shuffle, random_map, batch — what C9 replaced
-        return windows(train_source, args.length, seed=0).batch(
-            args.batch, drop_remainder=True
-        )
-
-    def mp_pipeline() -> grain.IterDataset:
-        return (
-            pipeline()
-            .to_iter_dataset()
-            .mp_prefetch(grain.MultiprocessingOptions(num_workers=args.workers))
-        )
+    pipeline = functools.partial(
+        training_pipeline, train_source, args.length, args.batch, wsrc
+    )
+    per_element_pipeline = functools.partial(
+        per_element_windows, train_source, args.length, args.batch
+    )
+    mp_pipeline = functools.partial(mp_prefetch_pipeline, pipeline, args.workers)
 
     # one fetch of a few batches, three ways to hold them
     first = [next(it) for it in [iter(single_threaded(pipeline()))] for _ in range(8)]
@@ -456,51 +546,29 @@ def main() -> None:
         ("step, to_device (option C)", lambda: to_device(pipeline(), device)),
         ("step, to_device over cached batches", lambda: to_device(cached, device)),
     ]
-    mp_ok = not args.no_mp
-    if mp_ok:
-        try:
-            pickle.loads(pickle.dumps(source))
-            next(iter(mp_pipeline()))
-            fetch_rows.append((f"fetch only, mp_prefetch({args.workers})", mp_pipeline))
-            step_rows.append(
-                (
-                    f"step, mp_prefetch({args.workers}) + to_device",
-                    lambda: to_device(mp_pipeline(), device),
-                )
+    if not args.no_mp and mp_prefetch_works(source, mp_pipeline):
+        fetch_rows.append((f"fetch only, mp_prefetch({args.workers})", mp_pipeline))
+        step_rows.append(
+            (
+                f"step, mp_prefetch({args.workers}) + to_device",
+                lambda: to_device(mp_pipeline(), device),
             )
-        except Exception as e:  # noqa: BLE001 — report, do not crash the benchmark
-            print(f"mp_prefetch unavailable: {type(e).__name__}: {str(e)[:120]}")
-            mp_ok = False
-
-    # dispatch floor: a trivial jitted function over the same (state, batch) pytrees —
-    # what the host pays per call just to hand the arguments to JAX
-    @eqx.filter_jit
-    def trivial(s, b):
-        return s.step + 1, jnp.sum(b["u"])
-
-    def time_floor(loader: Iterable, n: int) -> float:
-        it = iter(loader)
-        jax.block_until_ready(trivial(state, next(it)))
-        t0 = time.perf_counter()
-        for _ in range(n):
-            out = trivial(state, next(it))
-        jax.block_until_ready(out)
-        return 1e3 * (time.perf_counter() - t0) / n
+        )
 
     # warm-up (compile, allocator, lazy CUDA state; several steps, not one), then
     # interleaved repeats
     time_steps(trainer, state, cycle(resident), 5)
     if args.hlo_stats:
         report_hlo_stats(trainer, state, resident[0], device)
-    time_floor(cycle(resident), 5)
+    time_floor(state, cycle(resident), 5)
     floor: dict[str, list[float]] = {"committed": [], "uncommitted": [], "numpy": []}
     fetch: dict[str, list[float]] = {name: [] for name, _ in fetch_rows}
     dispatch: dict[str, list[float]] = {name: [] for name, _ in step_rows}
     total: dict[str, list[float]] = {name: [] for name, _ in step_rows}
     for _ in range(args.repeats):
-        floor["committed"].append(time_floor(cycle(resident), args.steps))
-        floor["uncommitted"].append(time_floor(cycle(uncommitted), args.steps))
-        floor["numpy"].append(time_floor(cycle(first), args.steps))
+        floor["committed"].append(time_floor(state, cycle(resident), args.steps))
+        floor["uncommitted"].append(time_floor(state, cycle(uncommitted), args.steps))
+        floor["numpy"].append(time_floor(state, cycle(first), args.steps))
         for name, make in fetch_rows:
             fetch[name].append(time_fetch(make(), args.steps))
         for name, make in step_rows:
@@ -508,18 +576,7 @@ def main() -> None:
             dispatch[name].append(d)
             total[name].append(t)
 
-    def cell(values: list[float]) -> str:
-        return f"{min(values):8.1f} /{statistics.median(values):7.1f}"
-
-    print(f"\n{'ms per batch or step: min / median':<48}{'fetch':>18}")
-    for name, _ in fetch_rows:
-        print(f"{name:<48}{cell(fetch[name]):>18}")
-    print(f"\n{'dispatch floor (trivial jit on state + batch)':<48}{'ms/call':>18}")
-    for name, values in floor.items():
-        print(f"{'  ' + name + ' batch':<48}{cell(values):>18}")
-    print(f"\n{'':<48}{'dispatch':>18}{'total':>18}")
-    for name, _ in step_rows:
-        print(f"{name:<48}{cell(dispatch[name]):>18}{cell(total[name]):>18}")
+    print_table(fetch=fetch, floor=floor, dispatch=dispatch, total=total)
     print(
         "\nRead: dispatch ≈ total → the host is the bottleneck: Python dispatch / GIL "
         "if the floor is of the order of the step, otherwise kernel launches or a sync "

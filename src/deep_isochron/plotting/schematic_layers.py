@@ -129,6 +129,64 @@ def _allocate_gap_bins(
     return tuple(int(n) + 1 for n in extra)
 
 
+def _check_spline_layout(
+    *,
+    num_bins: int,
+    xy_range: tuple[float, float],
+    band_travel: tuple[float, float],
+    pinch: tuple[float, float],
+    band_width: float,
+    band_span: float,
+    pinch_width: float,
+    pinch_span: float,
+) -> None:
+    """Refuse a layout of `schematic_spline_coupling` that the spline cannot draw.
+
+    **Arguments:**
+
+    - `num_bins`, `xy_range`, `band_width`, `band_span`, `pinch_width`, `pinch_span`:
+        As in `schematic_spline_coupling`.
+    - `band_travel`: The interval that the band covers along its travel.
+    - `pinch`: The interval of the pinch.
+
+    **Raises:**
+
+    `ValueError` naming the argument, for each case that the **Raises:** section of
+    `schematic_spline_coupling` lists, checked in that order.
+    """
+    lo, hi = xy_range
+    band_lo, band_hi = band_travel
+    if num_bins < 5:
+        raise ValueError(f"num_bins must be at least 5, got {num_bins}.")
+    for name, value in [
+        ("band_width", band_width),
+        ("band_span", band_span),
+        ("pinch_width", pinch_width),
+        ("pinch_span", pinch_span),
+    ]:
+        if value <= 0:
+            raise ValueError(f"{name} must be positive, got {value}.")
+    if band_span + pinch_span >= 1:
+        raise ValueError(
+            f"band_span + pinch_span must be below 1, got {band_span + pinch_span}."
+        )
+    if not lo < band_lo < band_hi < hi:
+        raise ValueError(
+            f"band_center and band_width must keep the band inside {xy_range}, got "
+            f"({band_lo}, {band_hi})."
+        )
+    if not lo < pinch[0] < pinch[1] < hi:
+        raise ValueError(
+            f"pinch_center and pinch_width must keep the pinch inside {xy_range}, got "
+            f"{pinch}."
+        )
+    if not (band_hi < pinch[0] or pinch[1] < band_lo):
+        raise ValueError(
+            f"pinch_center must keep the pinch {pinch} clear of the band's travel "
+            f"({band_lo}, {band_hi})."
+        )
+
+
 def schematic_spline_coupling(
     num_bins: int = 9,
     xy_range: tuple[float, float] = (-1.0, 1.0),
@@ -181,38 +239,19 @@ def schematic_spline_coupling(
     anywhere along its travel.
     """
     lo, hi = xy_range
-    if num_bins < 5:
-        raise ValueError(f"num_bins must be at least 5, got {num_bins}.")
-    for name, value in [
-        ("band_width", band_width),
-        ("band_span", band_span),
-        ("pinch_width", pinch_width),
-        ("pinch_span", pinch_span),
-    ]:
-        if value <= 0:
-            raise ValueError(f"{name} must be positive, got {value}.")
-    if band_span + pinch_span >= 1:
-        raise ValueError(
-            f"band_span + pinch_span must be below 1, got {band_span + pinch_span}."
-        )
     band_lo = min(band_center) - 0.5 * band_width
     band_hi = max(band_center) + 0.5 * band_width
     pinch = (pinch_center - 0.5 * pinch_width, pinch_center + 0.5 * pinch_width)
-    if not lo < band_lo < band_hi < hi:
-        raise ValueError(
-            f"band_center and band_width must keep the band inside {xy_range}, got "
-            f"({band_lo}, {band_hi})."
-        )
-    if not lo < pinch[0] < pinch[1] < hi:
-        raise ValueError(
-            f"pinch_center and pinch_width must keep the pinch inside {xy_range}, got "
-            f"{pinch}."
-        )
-    if not (band_hi < pinch[0] or pinch[1] < band_lo):
-        raise ValueError(
-            f"pinch_center must keep the pinch {pinch} clear of the band's travel "
-            f"({band_lo}, {band_hi})."
-        )
+    _check_spline_layout(
+        num_bins=num_bins,
+        xy_range=xy_range,
+        band_travel=(band_lo, band_hi),
+        pinch=pinch,
+        band_width=band_width,
+        band_span=band_span,
+        pinch_width=pinch_width,
+        pinch_span=pinch_span,
+    )
     band_first = band_hi < pinch[0]
     template = MonotonicRQSpline(num_bins, xy_range)
     width = template.range_width

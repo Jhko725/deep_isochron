@@ -20,7 +20,7 @@ from __future__ import annotations
 import itertools
 import math
 import warnings
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from copy import replace
 from functools import cached_property
 from typing import Any, cast, Generic, TypeVar
@@ -122,6 +122,69 @@ def _expected_nan(keys: list[str]) -> bool:
     return all(k in ("val/mse_early", "val/mse_late") for k in keys)
 
 
+def _check_run_lengths(num_steps: int | None, eval_every: int) -> None:
+    """Refuse a non-positive `eval_every` or a negative `num_steps`.
+
+    **Raises:**
+
+    `ValueError` for either, `eval_every` first."""
+    if eval_every < 1:
+        raise ValueError("eval_every must be a positive integer.")
+    if num_steps is not None and num_steps < 0:
+        raise ValueError("num_steps must be non-negative or None.")
+
+
+def _evaluate_and_save(
+    evaluate: Callable[[M], Mapping[str, Any]],
+    state: TrainerState[M],
+    step: int,
+    *,
+    log: Logger,
+    ckpt: Checkpointer,
+    saved_step: int,
+    stop_on_nonfinite: bool,
+    force: bool = False,
+) -> int:
+    """Evaluate `state.model` at `step`, log the metrics, and pass them with `state`
+    to `ckpt.save`, with `force` overriding the save policy.
+
+    **Returns:**
+
+    The step of the last checkpoint: `step` when this one was saved, else
+    `saved_step`.
+
+    **Raises:**
+
+    `FloatingPointError` before the save, when `stop_on_nonfinite` is set and a metric
+    is non-finite that is not ``nan`` by design (`_expected_nan`)."""
+    val_metrics = {k: float(v) for k, v in evaluate(state.model).items()}
+    log.log(val_metrics, step)
+    bad = sorted(k for k, v in val_metrics.items() if not math.isfinite(v))
+    if stop_on_nonfinite and bad and not _expected_nan(bad):
+        raise FloatingPointError(
+            f"non-finite validation metrics at step {step}: {bad}; the state "
+            f"was not checkpointed (last checkpoint: step {saved_step}). "
+            "Hunt it with scripts/diagnostics/find_nan.py from that checkpoint."
+        )
+    return step if ckpt.save(step, state, val_metrics, force=force) else saved_step
+
+
+def _next_batch(
+    batches: Iterator[Batch], num_done: int, num_steps: int | None
+) -> Batch | None:
+    """The next batch of `batches`, or ``None`` when the loader has ended, with a
+    warning when it ends before `num_steps`, after `num_done` steps."""
+    try:
+        return next(batches)
+    except StopIteration:
+        if num_steps is not None:
+            warnings.warn(
+                f"the loader ended after {num_done} of {num_steps} steps.",
+                stacklevel=3,
+            )
+        return None
+
+
 def check_batch_dtype(batch: Batch, *, x64_enabled: bool | None = None) -> None:
     """Refuse float64 data when ``jax_enable_x64`` is off, since ``jnp.asarray`` would
     silently round it to float32 and every tolerance in the project assumes float64.
@@ -206,6 +269,21 @@ class Trainer(Generic[M]):
             metrics[f"w/{name}"] = w
         return state.take_step(grads, schedule_state), metrics
 
+    def _initial_state(
+        self, model_or_state: M | TrainerState[M], key: PRNGKeyArray | None
+    ) -> TrainerState[M]:
+        """`model_or_state` itself when it is a ``TrainerState``, else the initial
+        state of the model from `key`.
+
+        **Raises:**
+
+        `ValueError` for a model without `key`."""
+        if isinstance(model_or_state, TrainerState):
+            return model_or_state
+        if key is None:
+            raise ValueError("key is required when starting from a model.")
+        return self.init(model_or_state, key=key)
+
     def train(
         self,
         model_or_state: M | TrainerState[M],
@@ -258,52 +336,21 @@ class Trainer(Generic[M]):
 
         `ValueError` for a missing `key`, a non-positive `eval_every` or a negative
         `num_steps`; `FloatingPointError` as above."""
-        if isinstance(model_or_state, TrainerState):
-            state = model_or_state
-        else:
-            if key is None:
-                raise ValueError("key is required when starting from a model.")
-            state = self.init(model_or_state, key=key)
-        if eval_every < 1:
-            raise ValueError("eval_every must be a positive integer.")
+        state = self._initial_state(model_or_state, key)
+        _check_run_lengths(num_steps, eval_every)
         log: Logger = NullLogger() if logger is None else logger
         ckpt: Checkpointer = (
             NullCheckpointer() if checkpointer is None else checkpointer
         )
-
         saved_step = int(state.step) if isinstance(model_or_state, TrainerState) else -1
-
-        def evaluate_and_save(step: int, *, force: bool = False) -> None:
-            nonlocal saved_step
-            assert evaluate is not None
-            val_metrics = {k: float(v) for k, v in evaluate(state.model).items()}
-            log.log(val_metrics, step)
-            bad = sorted(k for k, v in val_metrics.items() if not math.isfinite(v))
-            if stop_on_nonfinite and bad and not _expected_nan(bad):
-                raise FloatingPointError(
-                    f"non-finite validation metrics at step {step}: {bad}; the state "
-                    f"was not checkpointed (last checkpoint: step {saved_step}). "
-                    "Hunt it with scripts/diagnostics/find_nan.py from that checkpoint."
-                )
-            if ckpt.save(step, state, val_metrics, force=force):
-                saved_step = step
-
-        if num_steps is not None and num_steps < 0:
-            raise ValueError("num_steps must be non-negative or None.")
         batches = iter(train_loader)
         step = int(state.step)  # Python-side counter: the device value is never read
         with log, ckpt:
             for i in itertools.count():
                 if num_steps is not None and i >= num_steps:
                     break
-                try:
-                    batch = next(batches)
-                except StopIteration:
-                    if num_steps is not None:
-                        warnings.warn(
-                            f"the loader ended after {i} of {num_steps} steps.",
-                            stacklevel=2,
-                        )
+                batch = _next_batch(batches, i, num_steps)
+                if batch is None:
                     break
                 if i == 0:
                     check_batch_dtype(batch)
@@ -311,12 +358,29 @@ class Trainer(Generic[M]):
                 step += 1
                 log.log(metrics, step)
                 if evaluate is not None and step % eval_every == 0:
-                    evaluate_and_save(step)
+                    saved_step = _evaluate_and_save(
+                        evaluate,
+                        state,
+                        step,
+                        log=log,
+                        ckpt=ckpt,
+                        saved_step=saved_step,
+                        stop_on_nonfinite=stop_on_nonfinite,
+                    )
             # the final state is always evaluated and checkpointed (``force`` overrides
             # the save policy), unless the loop's last step already did both
             if step != saved_step:
                 if evaluate is not None:
-                    evaluate_and_save(step, force=True)
+                    _evaluate_and_save(
+                        evaluate,
+                        state,
+                        step,
+                        log=log,
+                        ckpt=ckpt,
+                        saved_step=saved_step,
+                        stop_on_nonfinite=stop_on_nonfinite,
+                        force=True,
+                    )
                 else:
                     ckpt.save(step, state, {}, force=True)
         return state

@@ -15,6 +15,26 @@ import numpy as np
 from .common import _check_range, Batch, start_weights, TimeSeriesDataSource, WeightFn
 
 
+def _run_epochs(
+    epochs: int | None, num_steps: int | None, batches_per_epoch: int
+) -> int:
+    """The run's length in epochs: `epochs` itself, or the smallest number of epochs
+    of `batches_per_epoch` batches that covers `num_steps`, whichever of the two is
+    given.
+
+    **Raises:**
+
+    `ValueError` when the one given is not positive."""
+    if epochs is not None:
+        if epochs < 1:
+            raise ValueError("epochs must be positive.")
+        return epochs
+    assert num_steps is not None
+    if num_steps < 1:
+        raise ValueError("num_steps must be positive.")
+    return math.ceil(num_steps / batches_per_epoch)
+
+
 class WindowBatchSource:
     """A ``RandomAccessDataSource`` whose element ``i`` is the ``i``-th batch of
     training windows of the run.
@@ -111,15 +131,7 @@ class WindowBatchSource:
             raise ValueError(
                 f"batch {batch} exceeds the {self.num_windows} windows of an epoch."
             )
-        if epochs is not None:
-            if epochs < 1:
-                raise ValueError("epochs must be positive.")
-            self.epochs = epochs
-        else:
-            assert num_steps is not None
-            if num_steps < 1:
-                raise ValueError("num_steps must be positive.")
-            self.epochs = math.ceil(num_steps / self.batches_per_epoch)
+        self.epochs = _run_epochs(epochs, num_steps, self.batches_per_epoch)
         self._perm_cache: dict[int, np.ndarray] = {}
 
     @property

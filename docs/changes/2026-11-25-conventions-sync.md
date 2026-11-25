@@ -51,9 +51,9 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 |---|---|---|
 | `docs/plans/2026-11-25-conventions-sync.md` — the handoff of this round, committed verbatim under a frontmatter block. | | |
 | `scripts/checks/markdown.py` — UFR's Markdown reader, copied with a source line. | | |
-| `scripts/checks/check_changes.py` — UFR's rounds check in place of the rows check. A document's `base` field names the branch that round 1 starts from (`base_ref`), and the 24 old-format documents are skipped by name (`OLD_FORMAT`). | | |
+| `scripts/checks/check_changes.py` — UFR's rounds check in place of the rows check. A document's `base` field names the branch that round 1 starts from (`base_ref`), and the 24 old-format documents are skipped by name (`OLD_FORMAT`). The coverage of each round moves out of `problems` into `round_coverage_problems`, for `C901`. | | |
 | `prek.toml` — the `check-changes` hook always runs, and the `check-md-math` and `check-references` hooks take the files that `prek` passes, as in UFR. | | |
-| `pyproject.toml` — pytest and ty find `scripts/checks`, and `pyyaml` joins the `dev` group. | | |
+| `pyproject.toml` — pytest and ty find `scripts/checks`, and `pyyaml` joins the `dev` group. Ruff's `C901` runs with `max-complexity = 8`. | | |
 | `uv.lock` — `pyyaml` in the `dev` group. | | |
 | `.github/workflows/ci.yml` — the `checks` job fetches the full history. | | |
 | `docs/changes/2026-11-25-conventions-sync.md` — this document. | | |
@@ -69,3 +69,9 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `scripts/checks/check_md_math.py` — UFR's version under a source line: paragraphs render through `markdown.PARSER`, and under `docs/plans/` only the frontmatter is checked; with no path it still reads every Markdown file under `docs`. | | |
 | `scripts/checks/check_references.py` — UFR's version under a source line, without its `references.bib` rules: links are read through `markdown.py`, `docs/plans/` is skipped, and the italic-label rule and the `docs/references.md` keys stay. | | |
 | `scripts/checks/check_docstrings.py` — UFR's `PLAN_LABEL` rule: a docstring cannot open with a numbered plan label. | | |
+| `src/deep_isochron/training/trainer.py` — `Trainer.train` is split for `C901`: `_initial_state` takes the state or builds it, `_check_run_lengths` refuses a bad `eval_every` or `num_steps`, `_evaluate_and_save` replaces the nested closure and returns the step of the last checkpoint, and `_next_batch` reads the loader and warns when it ends early. | | |
+| `src/deep_isochron/training/evaluation.py` — `Evaluator.__call__` takes the split metrics from `_split_metrics` and the `latent/` metrics from `_latent_metrics`, for `C901`. | | |
+| `src/deep_isochron/data/windows/batched.py` — `WindowBatchSource.__init__` takes the run's epochs from `_run_epochs`, for `C901`. | | |
+| `src/deep_isochron/plotting/schematic_layers.py` — the argument checks of `schematic_spline_coupling` move into `_check_spline_layout`, for `C901`. | | |
+| `scripts/diagnostics/bench_dataloader.py` — split for `C901`: `hlo_computations` parses the HLO text for `hlo_launch_estimate`, and `main`'s closures become `training_pipeline`, `per_element_windows`, `mp_prefetch_pipeline`, `mp_prefetch_works`, `trivial_step`, `time_floor`, `cell` and `print_table`. | | |
+| `scripts/diagnostics/find_nan.py` — `main` loads its starting checkpoint through `load_finite_run`, which walks back past a non-finite one, for `C901`. | | |

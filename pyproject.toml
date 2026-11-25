@@ -52,8 +52,14 @@ ignore = ["E402", "E721", "E731", "E741", "F722"]
 # TID251 enforces banned-api below. W605 rejects an invalid escape, such as LaTeX's
 # "\Phi" in a docstring that is not raw, which Python only reports as a SyntaxWarning.
 # D100-D103 require a docstring on every public module, class, method and function;
-# the content rules are in docs/coding-standards.md.
-select = ["E", "F", "W605", "I001", "TID251", "D100", "D101", "D102", "D103"]
+# the content rules are in docs/coding-standards.md. C901 bounds the decision points
+# of one function (`if`, loop, `except`, `case`, nested `def`), as McCabe counts them.
+select = ["E", "F", "W605", "I001", "TID251", "D100", "D101", "D102", "D103", "C901"]
+
+[tool.ruff.lint.mccabe]
+# UFR's value, lower than ruff's default of 10: at 10 the rule would pass two functions
+# that it flags at 8, `evaluation.Evaluator.__call__` and `find_nan.main`.
+max-complexity = 8
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"  # the section parser; only the selected D rules run

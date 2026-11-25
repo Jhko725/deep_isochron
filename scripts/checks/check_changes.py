@@ -461,6 +461,33 @@ def absent_ref(ref: str) -> str:
     )
 
 
+def round_coverage_problems(
+    path: Path, written: list[Round], reviews: list[str], reviewing: bool
+) -> Iterator[str]:
+    """The `coverage_problems` of every round of `written`, the rounds of the change
+    document at `path`, round by round: each round is checked against the files that
+    its commit range changes, less those that the next round covers."""
+    starts = [
+        heading.group("commit")
+        for round_ in written
+        if (heading := ROUND_HEADING.fullmatch(round_.heading))
+    ]
+    last = reviews[-1] if written[-1].reviewed and not reviewing else None
+    # The files that each round's own review commit changes besides the document.
+    shared = [[], *(reviewer_files(path, start) for start in starts[1:]), []]
+    for number, (round_, start, end) in enumerate(
+        zip(written, starts, [*starts[1:], last], strict=True), 1
+    ):
+        changed = changed_files(start, end)
+        if number < len(written):
+            later = covered(written[number], shared[number])
+        else:
+            later = unopened_files(path, last, reviewing)
+        required = [name for name in changed if name not in later]
+        allowed = {*changed, *shared[number - 1]}
+        yield from coverage_problems(path, round_, required, allowed, number)
+
+
 def problems(path: Path) -> Iterator[str]:
     """Every problem of one change document, round by round."""
     text = path.read_text(encoding="utf-8")
@@ -488,25 +515,7 @@ def problems(path: Path) -> Iterator[str]:
         yield from frozen_problems(path, written)
     if found:
         return
-    starts = [
-        heading.group("commit")
-        for round_ in written
-        if (heading := ROUND_HEADING.fullmatch(round_.heading))
-    ]
-    last = reviews[-1] if written[-1].reviewed and not reviewing else None
-    # The files that each round's own review commit changes besides the document.
-    shared = [[], *(reviewer_files(path, start) for start in starts[1:]), []]
-    for number, (round_, start, end) in enumerate(
-        zip(written, starts, [*starts[1:], last], strict=True), 1
-    ):
-        changed = changed_files(start, end)
-        if number < len(written):
-            later = covered(written[number], shared[number])
-        else:
-            later = unopened_files(path, last, reviewing)
-        required = [name for name in changed if name not in later]
-        allowed = {*changed, *shared[number - 1]}
-        yield from coverage_problems(path, round_, required, allowed, number)
+    yield from round_coverage_problems(path, written, reviews, reviewing)
 
 
 def main(argv: list[str]) -> int:

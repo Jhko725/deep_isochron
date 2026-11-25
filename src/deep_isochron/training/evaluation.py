@@ -314,6 +314,38 @@ def learned_physics(model: AbstractPhaseAmplitudeModel) -> dict[str, Array]:
     return out
 
 
+def _split_metrics(pred: dict[str, Array]) -> dict[str, Array]:
+    """The metrics of the split at ``t_split`` from the prediction sums `pred`: the
+    mean error of each bucket and its window count. An empty bucket is reported as
+    ``nan`` rather than hidden or faked."""
+    n_early, n_late = pred["n_early"], pred["n"] - pred["n_early"]
+    return {
+        "val/mse_early": jnp.where(
+            n_early > 0, pred["mse_early"] / jnp.maximum(n_early, 1), jnp.nan
+        ),
+        "val/mse_late": jnp.where(
+            n_late > 0,
+            (pred["mse"] - pred["mse_early"]) / jnp.maximum(n_late, 1),
+            jnp.nan,
+        ),
+        "val/n_early": n_early,
+        "val/n_late": n_late,
+    }
+
+
+def _latent_metrics(extent: dict[str, Array]) -> dict[str, Array]:
+    """The ``latent/`` metrics from the combined latent extent `extent`: the fraction
+    of non-finite latents, the amplitude and radius bounds that `extent` holds, and
+    the fraction of non-finite images when it counts them."""
+    out = {"latent/nonfinite": extent["nonfinite"] / extent["n"]}
+    for k in ("amp_min", "amp_max", "r_min", "r_max"):
+        if k in extent:
+            out[f"latent/{k}"] = extent[k]
+    if "nonfinite_image" in extent:
+        out["latent/nonfinite_image"] = extent["nonfinite_image"] / extent["n"]
+    return out
+
+
 @dataclass
 class Evaluator:
     """The validation metrics of a model over a finite, re-iterable collection of
@@ -400,26 +432,10 @@ class Evaluator:
             "val/final_mse": pred["final"] / n,
         }
         if self.t_split is not None:
-            n_early, n_late = pred["n_early"], n - pred["n_early"]
-            # an empty bucket is reported as NaN rather than hidden or faked
-            out["val/mse_early"] = jnp.where(
-                n_early > 0, pred["mse_early"] / jnp.maximum(n_early, 1), jnp.nan
-            )
-            out["val/mse_late"] = jnp.where(
-                n_late > 0,
-                (pred["mse"] - pred["mse_early"]) / jnp.maximum(n_late, 1),
-                jnp.nan,
-            )
-            out["val/n_early"] = n_early
-            out["val/n_late"] = n_late
+            out.update(_split_metrics(pred))
         out.update(learned_physics(model))
         assert extent is not None
-        out["latent/nonfinite"] = extent["nonfinite"] / extent["n"]
-        for k in ("amp_min", "amp_max", "r_min", "r_max"):
-            if k in extent:
-                out[f"latent/{k}"] = extent[k]
-        if "nonfinite_image" in extent:
-            out["latent/nonfinite_image"] = extent["nonfinite_image"] / extent["n"]
+        out.update(_latent_metrics(extent))
         if isinstance(model, ConjugateLatentDynamics):
             out.update(bijection_grid_metrics(model.bijection, self.grid))
         if sums is not None:

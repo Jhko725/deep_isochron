@@ -35,8 +35,9 @@ from deep_isochron.experiment import (
     Loaders,
     Run,
 )
-from deep_isochron.training import OrbaxCheckpointer
+from deep_isochron.training import OrbaxCheckpointer, TrainerState
 from deep_isochron.training.evaluation import latent_extent
+from omegaconf import DictConfig
 
 
 def nonfinite_leaves(tree) -> list[str]:
@@ -66,6 +67,37 @@ def describe_extent(model, batch) -> str:
     return "  ".join(parts)
 
 
+def load_finite_run(
+    run_dir: Path, step: int | None
+) -> tuple[DictConfig | None, TrainerState]:
+    """``(cfg, state)`` of the run in `run_dir` at checkpoint `step`, the latest when
+    ``None``, or at the last earlier checkpoint with finite parameters when that one
+    holds non-finite ones (a run saved after the event).
+
+    **Raises:**
+
+    `SystemExit` when no checkpoint up to `step` is finite."""
+    cfg, state = load_run(run_dir, step)
+    assert cfg is not None
+    if nonfinite_leaves(state.model):
+        steps = available_steps(run_dir)
+        print(
+            f"checkpoint step {int(state.step)} already holds non-finite parameters; "
+            f"checkpoints on disk: {steps}"
+        )
+        for earlier in reversed([s for s in steps if s < int(state.step)]):
+            cfg, state = load_run(run_dir, earlier)
+            if not nonfinite_leaves(state.model):
+                print(f"starting from the last finite checkpoint, step {earlier}")
+                break
+        else:
+            raise SystemExit(
+                "no finite checkpoint in this run; rerun it (the trainer now stops "
+                "before checkpointing a non-finite state) and hunt from there."
+            )
+    return cfg, state
+
+
 def main() -> None:
     """Load a run's checkpoint and step it until a gradient turns non-finite."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -75,26 +107,7 @@ def main() -> None:
     ap.add_argument("--debug-nans", action="store_true")
     args = ap.parse_args()
 
-    cfg, state = load_run(args.run_dir, args.step)
-    assert cfg is not None
-    if nonfinite_leaves(state.model):
-        # the checkpoint itself is already poisoned (a run saved after the event):
-        # walk back to the last finite one
-        steps = available_steps(args.run_dir)
-        print(
-            f"checkpoint step {int(state.step)} already holds non-finite parameters; "
-            f"checkpoints on disk: {steps}"
-        )
-        for step in reversed([s for s in steps if s < int(state.step)]):
-            cfg, state = load_run(args.run_dir, step)
-            if not nonfinite_leaves(state.model):
-                print(f"starting from the last finite checkpoint, step {step}")
-                break
-        else:
-            raise SystemExit(
-                "no finite checkpoint in this run; rerun it (the trainer now stops "
-                "before checkpointing a non-finite state) and hunt from there."
-            )
+    cfg, state = load_finite_run(args.run_dir, args.step)
     device = configure_jax(cfg)
     source: TimeSeriesDataSource = build_source(cfg.data)
     trainer = build_trainer(cfg)
