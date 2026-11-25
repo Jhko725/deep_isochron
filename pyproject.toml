@@ -90,6 +90,7 @@ dev = [
     { include-group = "slurm" },
     "absl-py>=2.5.0",
     "beartype>=0.22.9",
+    "bibtexparser>=2.1.0",
     "hypothesis>=6.168.3",
     "ipykernel>=7.3.0",
     "markdown-it-py>=3.0.0",

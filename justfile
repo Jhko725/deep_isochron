@@ -67,6 +67,10 @@ smoke:
         hydra.run.dir=ci-run
     uv run python -c "from deep_isochron.experiment import load_run; cfg, state = load_run('ci-run'); assert int(state.step) == 20, int(state.step); print('reopened run at step', int(state.step))"
 
+# Write docs/references.md from docs/references.bib
+references:
+    uv run python scripts/docs/generate_references.py
+
 # Every [unconfirmed] marker under docs/ with its file and line. The conventions
 # document is left out: it defines the marker rather than using it.
 pending:
