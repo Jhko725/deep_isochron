@@ -1,6 +1,7 @@
 """Check what ruff's docstring rules leave unchecked: the form of the headers
 `**Arguments:**`, `**Returns:**`, `**Raises:**` and `**Attributes:**`; a docstring on
-every private function and class under ``src``; and a bound on a module's length.
+every private function and class under ``src``; a bound on a module's length; and a
+docstring that opens with a label from a plan.
 
 `docs/coding-standards.md` § Docstrings fixes the form diffrax writes: each header
 stands on its own line, followed by a blank line and then the bullets or the paragraph.
@@ -18,6 +19,13 @@ A module under ``src`` is bounded at `MAX_MODULE_LINES`. The isochron pipeline r
 853 lines in one module before review called it "hard to grasp at once" and it became
 four; the bound fires before that, and a module that needs more is split by what serves
 what (`code-conventions` § Code goes where it belongs).
+
+A docstring whose first line opens with a numbered label of a plan, such as
+``Item 4:`` or ``Pass 2, unit 11:``, is flagged. The label names a handoff document
+that the reader of the code does not have (`clear-prose` § Documents), and the reviews
+of ``refactor-foundation`` in UniversalForceReconstruction found twelve such docstrings
+in the tests. The rule was adapted from Jhko725/UniversalForceReconstruction
+``scripts/checks/check_docstrings.py`` at b9e4cc3.
 
 Usage: `uv run python scripts/checks/check_docstrings.py [path ...]` (default:
 `src`, `tests`, `scripts`). Exits 1 when anything is flagged.
@@ -37,6 +45,8 @@ EXCLUDED: tuple[str, ...] = ()
 DEFAULT_PATHS = ("src", "tests", "scripts")
 PRIVATE_SCOPE = "src"
 MAX_MODULE_LINES = 600
+PLAN_LABEL = re.compile(r"(?:Item|Unit|Pass|Round|Phase|Q) ?\d+\b", re.IGNORECASE)
+"""A numbered label of a plan, where a docstring's first line opens with it."""
 
 
 def python_files(paths: list[Path]) -> Iterator[Path]:
@@ -85,11 +95,28 @@ def length_problems(path: Path, lines: list[str]) -> Iterator[str]:
         )
 
 
+def label_problems(path: Path, source: str) -> Iterator[str]:
+    """The docstrings of `path` whose first line opens with a plan label."""
+    for node in ast.walk(ast.parse(source, filename=str(path))):
+        if not isinstance(
+            node, ast.Module | ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+        ):
+            continue
+        label = PLAN_LABEL.match(ast.get_docstring(node) or "")
+        if label is not None:
+            line = node.body[0].lineno
+            yield (
+                f"{path}:{line}: the docstring opens with the plan label"
+                f" `{label.group()}`; say what the code does"
+            )
+
+
 def problems(path: Path) -> Iterator[str]:
     """Every flagged line of `path`, as ``file:line: reason``."""
     source = path.read_text(encoding="utf-8")
     lines = source.split("\n")
     yield from header_problems(path, lines)
+    yield from label_problems(path, source)
     if path.as_posix().startswith(PRIVATE_SCOPE):
         yield from private_problems(path, source)
         yield from length_problems(path, lines)

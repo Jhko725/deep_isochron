@@ -52,7 +52,7 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `docs/plans/2026-11-25-conventions-sync.md` — the handoff of this round, committed verbatim under a frontmatter block. | | |
 | `scripts/checks/markdown.py` — UFR's Markdown reader, copied with a source line. | | |
 | `scripts/checks/check_changes.py` — UFR's rounds check in place of the rows check. A document's `base` field names the branch that round 1 starts from (`base_ref`), and the 24 old-format documents are skipped by name (`OLD_FORMAT`). | | |
-| `prek.toml` — the `check-changes` hook always runs. | | |
+| `prek.toml` — the `check-changes` hook always runs, and the `check-md-math` and `check-references` hooks take the files that `prek` passes, as in UFR. | | |
 | `pyproject.toml` — pytest and ty find `scripts/checks`, and `pyyaml` joins the `dev` group. | | |
 | `uv.lock` — `pyyaml` in the `dev` group. | | |
 | `.github/workflows/ci.yml` — the `checks` job fetches the full history. | | |
@@ -66,3 +66,6 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `.claude/settings.json` — UFR's Bash hook registration for `block_history_rewrite.py`, without the dissertation matcher. | | |
 | `.claude/hooks/block_history_rewrite.py` — UFR's hook that blocks history rewrites, unchanged under a source line. | | |
 | `.claude/hooks/block_push.py` — UFR's hook that blocks `git push` for the implementer, unchanged under a source line. | | |
+| `scripts/checks/check_md_math.py` — UFR's version under a source line: paragraphs render through `markdown.PARSER`, and under `docs/plans/` only the frontmatter is checked; with no path it still reads every Markdown file under `docs`. | | |
+| `scripts/checks/check_references.py` — UFR's version under a source line, without its `references.bib` rules: links are read through `markdown.py`, `docs/plans/` is skipped, and the italic-label rule and the `docs/references.md` keys stay. | | |
+| `scripts/checks/check_docstrings.py` — UFR's `PLAN_LABEL` rule: a docstring cannot open with a numbered plan label. | | |

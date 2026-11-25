@@ -1,3 +1,5 @@
+# Adapted from Jhko725/UniversalForceReconstruction scripts/checks/check_md_math.py
+# at b9e4cc3.
 r"""Check that the math in Markdown files survives GitHub's rendering pipeline.
 
 GitHub runs Markdown *before* MathJax, so inside inline ``$...$`` any backslash
@@ -9,24 +11,28 @@ Standalone ``$$`` blocks (a line that is exactly ``$$``, content, a line that is
 exactly ``$$``) are treated as raw math and are safe. VS Code's KaTeX preview is
 tolerant of all of this, so a document can look right in VS Code and break on GitHub.
 
-This script emulates GitHub: it renders each paragraph with markdown-it (CommonMark,
-HTML on) and reports every inline span whose text did not come through verbatim, and
-every display formula not in a standalone block. Fixes that render in both: ``\\,`` ->
-``\\thinspace``, ``\;`` -> ``\\medspace``, ``\\{`` ``\\}`` -> ``\\lbrace``
-``\\rbrace``, ``\\|`` -> ``\\Vert``, ``*`` -> ``\\ast``, matrices (``\\\\``) in ``$$``
-blocks, ``|_{..}`` -> ``\\vert_{..}``, ``\\mathbf{e}_r`` -> ``\\mathbf e_r``,
-``C^{k}_{\\rm loc}`` -> ``C_{\\rm loc}^{k}`` (an ``_`` preceded by a letter cannot
-open emphasis), spaces around ``<`` and ``>``.
+This script emulates GitHub: it renders each paragraph with ``markdown.PARSER``
+(CommonMark, which allows HTML, with tables) and reports every inline span whose text
+did not come through verbatim, and every display formula not in a standalone block.
+Fixes that render in both: ``\\,`` -> ``\\thinspace``, ``\;`` -> ``\\medspace``, ``\\{``
+``\\}`` -> ``\\lbrace`` ``\\rbrace``, ``\\|`` -> ``\\Vert``, ``*`` -> ``\\ast``,
+matrices (``\\\\``) in ``$$`` blocks, ``|_{..}`` -> ``\\vert_{..}``, ``\\mathbf{e}_r``
+-> ``\\mathbf e_r``, ``C^{k}_{\\rm loc}`` -> ``C_{\\rm loc}^{k}`` (an ``_`` preceded by
+a letter cannot open emphasis), spaces around ``<`` and ``>``.
 
 The frontmatter block is checked too, since GitHub renders it as a table only when it
 is valid YAML: it has to parse, carry ``type``, ``status`` and ``updated``, and write
 ``sources`` as a block list of quoted items. A flow list ``[a (b, c), d]`` parses, but
 splits at every comma, so ``a (b`` and ``c)`` become two sources
 (``docs/document-conventions.md`` § Frontmatter). A file with no block is not checked
-for one: the change documents that predate the block are history.
+for one: the change documents that predate the block are history. Under
+``docs/plans/`` only the frontmatter is checked, since the body of a committed plan is a
+frozen record of what was said (``docs/document-conventions.md`` § Plans).
 
-Usage: ``uv run python scripts/checks/check_md_math.py docs/**/*.md`` (exit code 1 on
-problems). Requires ``markdown-it-py`` and ``PyYAML`` (dev dependencies).
+Usage: ``uv run python scripts/checks/check_md_math.py [path ...]``, where `prek` passes
+every tracked Markdown file; with no path, every Markdown file under ``docs`` is
+checked. A named file outside ``docs`` is not checked (exit code 1 on problems).
+Requires ``markdown-it-py`` and ``PyYAML`` (dev dependencies).
 """
 
 from __future__ import annotations
@@ -36,14 +42,16 @@ import re
 import sys
 from pathlib import Path
 
+import markdown
 import yaml
-from markdown_it import MarkdownIt
 
 
 CODE = re.compile(r"`[^`\n]+`")
 INLINE = re.compile(r"(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)", flags=re.S)
 DISPLAY_INLINE = re.compile(r"\$\$(.+?)\$\$", flags=re.S)
 TAG = "␟"  # marks where a tag stood in the rendered output
+DOCS = Path(__file__).resolve().parents[2] / "docs"
+PLANS = DOCS / "plans"
 
 
 def _split_blocks(text: str) -> list[tuple[str, str]]:
@@ -93,6 +101,32 @@ def frontmatter_problems(block: str) -> list[str]:
     return problems
 
 
+def paragraph_problems(paragraph: str) -> list[str]:
+    """The math problems of one `paragraph` of Markdown text: display math inside
+    it, and an inline span that Markdown processing removes, adds or changes."""
+    para = CODE.sub("`code`", paragraph)  # inline code is not Markdown-processed
+    head = para.strip().replace("\n", " ")[:80]
+    problems = []
+    if DISPLAY_INLINE.search(para):
+        problems.append(f"display math inside a paragraph: {head}…")
+    spans = INLINE.findall(DISPLAY_INLINE.sub("", para))
+    if not spans:
+        return problems
+    rendered = html.unescape(re.sub(r"<[^>]+>", TAG, markdown.PARSER.render(para)))
+    got = INLINE.findall(rendered)
+    if len(got) != len(spans):
+        problems.append(
+            f"{len(spans)} inline spans became {len(got)} after Markdown: {head}…"
+        )
+        return problems
+    problems += [
+        f"inline span changed by Markdown: ${src}$ -> ${out}$"
+        for src, out in zip(spans, got)
+        if src != out
+    ]
+    return problems
+
+
 def check(path: Path) -> list[str]:
     """The math problems of the Markdown file at `path`, and its frontmatter's."""
     text = path.read_text()
@@ -101,38 +135,24 @@ def check(path: Path) -> list[str]:
         end = text.index("\n---", 3)
         problems += frontmatter_problems(text[4:end])
         text = text[end + 4 :]
-    md = MarkdownIt("commonmark", {"html": True})
+    if path.resolve().is_relative_to(PLANS):
+        return problems
     for kind, chunk in _split_blocks(text):
-        if kind != "text":
-            continue
-        for para in re.split(r"\n\s*\n", chunk):
-            para = CODE.sub("`code`", para)  # inline code is not Markdown-processed
-            spans = INLINE.findall(DISPLAY_INLINE.sub("", para))
-            if DISPLAY_INLINE.search(para):
-                head = para.strip().replace("\n", " ")[:80]
-                problems.append(f"display math inside a paragraph: {head}…")
-            if not spans:
-                continue
-            rendered = html.unescape(re.sub(r"<[^>]+>", TAG, md.render(para)))
-            got = INLINE.findall(rendered)
-            if len(got) != len(spans):
-                head = para.strip().replace("\n", " ")[:80]
-                problems.append(
-                    f"{len(spans)} inline spans became {len(got)} after Markdown: "
-                    f"{head}…"
-                )
-                continue
-            for src, out in zip(spans, got):
-                if src != out:
-                    problems.append(
-                        f"inline span changed by Markdown: ${src}$ -> ${out}$"
-                    )
+        if kind == "text":
+            for paragraph in re.split(r"\n\s*\n", chunk):
+                problems += paragraph_problems(paragraph)
     return problems
 
 
 def main(argv: list[str]) -> int:
-    """Check `argv`, or every Markdown file under ``docs``; return the exit code."""
-    paths = [Path(a) for a in argv] or sorted(Path("docs").rglob("*.md"))
+    """Check the Markdown files under ``docs`` named in `argv`, or all of them when
+    `argv` is empty; return the exit code."""
+    named = [Path(a) for a in argv] or sorted(DOCS.rglob("*.md"))
+    paths = [
+        path
+        for path in named
+        if path.suffix == ".md" and path.resolve().is_relative_to(DOCS)
+    ]
     total = 0
     for path in paths:
         problems = check(path)
