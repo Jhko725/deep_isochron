@@ -83,3 +83,5 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `docs/design/` — each design document names its `kind` (A3). `isochrons.md`, `phase-field.md` and `normal-forms.md` take a status from the closed vocabulary, `normal-forms.md` names its tentative sections under the title (A4), and the headings of four method documents become the template's, with the removed words as the first line of the section. | | |
 | `docs/roadmap.md` — the ledger row of 2026-10-27 for Steps C–D of `auto-isochrons` moves above the two rows of 2026-10-28 (A5). | | |
 | `justfile` — the `pending` recipe lists every marker of an unconfirmed decision under `docs/`. | | |
+| `scripts/checks/check_handoff.py` — new, adapted from UFR's: a handoff's paths, `path:line` references, `just` recipes and test selectors are checked against the repository before its round starts; run by hand, not a hook. | | |
+| `tests/test_checks.py` — new, from UFR's: the four tests of `check_handoff` (six cases); UFR's file holds no tests of other checks. | | |
