@@ -460,7 +460,9 @@ dependencies = [
     { name = "jaxtyping" },
     { name = "matplotlib" },
     { name = "numpy" },
+    { name = "omegaconf" },
     { name = "optax" },
+    { name = "optimistix" },
     { name = "orbax-checkpoint" },
     { name = "sympy" },
     { name = "sympy2jax" },
@@ -481,6 +483,7 @@ auto = [
     { name = "auto-07p" },
 ]
 dev = [
+    { name = "absl-py" },
     { name = "auto-07p" },
     { name = "beartype" },
     { name = "hydra-submitit-launcher" },
@@ -488,11 +491,13 @@ dev = [
     { name = "ipykernel" },
     { name = "markdown-it-py" },
     { name = "nbformat" },
+    { name = "pillow" },
     { name = "prek" },
     { name = "pytest" },
     { name = "pytest-xdist" },
     { name = "pyyaml" },
     { name = "rust-just" },
+    { name = "scipy" },
     { name = "ty" },
 ]
 slurm = [
@@ -516,7 +521,9 @@ requires-dist = [
     { name = "jaxtyping", specifier = ">=0.3.11" },
     { name = "matplotlib", specifier = ">=3.11.0" },
     { name = "numpy", specifier = ">=2.5.1" },
+    { name = "omegaconf", specifier = ">=2.3.1" },
     { name = "optax", specifier = ">=0.2.8" },
+    { name = "optimistix", specifier = ">=0.1.0" },
     { name = "orbax-checkpoint", specifier = ">=0.12.4" },
     { name = "sympy", specifier = ">=1.14.0" },
     { name = "sympy2jax", specifier = ">=0.0.8" },
@@ -528,6 +535,7 @@ provides-extras = ["cuda", "video"]
 [package.metadata.requires-dev]
 auto = [{ name = "auto-07p", git = "https://github.com/auto-07p/auto-07p?rev=44cc1c42a888179bdbd608a40613caee9cbc4675" }]
 dev = [
+    { name = "absl-py", specifier = ">=2.5.0" },
     { name = "auto-07p", git = "https://github.com/auto-07p/auto-07p?rev=44cc1c42a888179bdbd608a40613caee9cbc4675" },
     { name = "beartype", specifier = ">=0.22.9" },
     { name = "hydra-submitit-launcher", specifier = ">=1.2.0" },
@@ -535,11 +543,13 @@ dev = [
     { name = "ipykernel", specifier = ">=7.3.0" },
     { name = "markdown-it-py", specifier = ">=3.0.0" },
     { name = "nbformat", specifier = ">=5.11.1" },
+    { name = "pillow", specifier = ">=12.3.0" },
     { name = "prek", specifier = ">=0.2" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rust-just", specifier = ">=1.59.0" },
+    { name = "scipy", specifier = ">=1.18.1" },
     { name = "ty", specifier = ">=0.0.88" },
 ]
 slurm = [{ name = "hydra-submitit-launcher", specifier = ">=1.2.0" }]

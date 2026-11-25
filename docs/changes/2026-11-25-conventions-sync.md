@@ -52,9 +52,9 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `docs/plans/2026-11-25-conventions-sync.md` — the handoff of this round, committed verbatim under a frontmatter block. | | |
 | `scripts/checks/markdown.py` — UFR's Markdown reader, copied with a source line. | | |
 | `scripts/checks/check_changes.py` — UFR's rounds check in place of the rows check. A document's `base` field names the branch that round 1 starts from (`base_ref`), and the 24 old-format documents are skipped by name (`OLD_FORMAT`). The coverage of each round moves out of `problems` into `round_coverage_problems`, for `C901`. | | |
-| `prek.toml` — the `check-changes` hook always runs, and the `check-md-math` and `check-references` hooks take the files that `prek` passes, as in UFR. | | |
-| `pyproject.toml` — pytest and ty find `scripts/checks`, and `pyyaml` joins the `dev` group. Ruff's `C901` runs with `max-complexity = 8`. | | |
-| `uv.lock` — `pyyaml` in the `dev` group. | | |
+| `prek.toml` — the `check-changes` hook always runs, and the `check-md-math` and `check-references` hooks take the files that `prek` passes, as in UFR. The `check-dependencies` hook runs the new dependency check. | | |
+| `pyproject.toml` — pytest and ty find `scripts/checks`, and `pyyaml` joins the `dev` group. Ruff's `C901` runs with `max-complexity = 8`. `omegaconf` and `optimistix` join `dependencies`, and `absl-py`, `pillow` and `scipy` join the `dev` group, as every import under `src`, `tests` and `scripts` must be declared. | | |
+| `uv.lock` — `pyyaml` in the `dev` group. The five packages above are locked, from `uv lock` without `--upgrade`. | | |
 | `.github/workflows/ci.yml` — the `checks` job fetches the full history. | | |
 | `docs/changes/2026-11-25-conventions-sync.md` — this document. | | |
 | `docs/document-conventions.md` — § Change documents in the rounds form, with the `base` field and the old-format rule, and a new § Plans. | | |
@@ -75,3 +75,5 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `src/deep_isochron/plotting/schematic_layers.py` — the argument checks of `schematic_spline_coupling` move into `_check_spline_layout`, for `C901`. | | |
 | `scripts/diagnostics/bench_dataloader.py` — split for `C901`: `hlo_computations` parses the HLO text for `hlo_launch_estimate`, and `main`'s closures become `training_pipeline`, `per_element_windows`, `mp_prefetch_pipeline`, `mp_prefetch_works`, `trivial_step`, `time_floor`, `cell` and `print_table`. | | |
 | `scripts/diagnostics/find_nan.py` — `main` loads its starting checkpoint through `load_finite_run`, which walks back past a non-finite one, for `C901`. | | |
+| `scripts/checks/check_dependencies.py` — new, adapted from UFR's: every imported package is declared in `pyproject.toml`, and `src` imports nothing from `scripts`, `notebooks` or `tests`. | | |
+| `tests/test_imports.py` — new, from UFR's: every module of `deep_isochron` imports on CPU; no module imports `auto` at import time, so none is skipped. | | |
