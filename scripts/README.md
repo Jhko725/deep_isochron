@@ -24,11 +24,24 @@ entry points take `key=value` overrides and `--config-name`; the configs are in
 `prek` runs these on every commit and CI runs them on every push (`prek.toml`; `just
 check` runs them all). What each one catches, and why it exists, is in
 [`docs/coding-standards.md`](../docs/coding-standards.md) § Deterministic checks and
-[`docs/document-conventions.md`](../docs/document-conventions.md): `check_spelling.py`
-(the `-ise` families), `check_md_math.py` (Markdown that renders in both previews; the frontmatter),
-`check_references.py` (every citation and relative link resolves),
-`check_docstrings.py` (docstring headers, private functions documented, modules under
-600 lines) and `check_containers.py` (no `jax.Array` in a frozen dataclass or a static field,
-no `NamedTuple` outside the `*Params` bundles; it walks `src` itself) and
-`check_changes.py` (a *Review notes* row per *Files* bullet of a change document; it
-walks `docs/changes` itself). Each exits 1 when it flags anything.
+[`docs/document-conventions.md`](../docs/document-conventions.md). Each exits 1 when it
+flags anything.
+
+| Script | What it checks |
+|---|---|
+| `check_spelling.py` | the `-ise` families of British spelling |
+| `check_md_math.py` | Markdown that renders in both previews, and the frontmatter |
+| `check_references.py` | every citation and relative link resolves, and `docs/references.md` equals the page generated from `docs/references.bib` |
+| `check_docs.py` | the closed vocabularies, required headings, the index, the ledger, the architecture's module map, superseded ADRs and unconfirmed decisions |
+| `check_docstrings.py` | docstring headers, private functions documented, modules under 600 lines, no plan label at the start of a docstring |
+| `check_changes.py` | each review round of a change document covers exactly the files changed in it |
+| `check_containers.py` | no `jax.Array` in a frozen dataclass or a static field, no `NamedTuple` outside the `*Params` bundles |
+| `check_dependencies.py` | every imported package is declared, and the package imports nothing from `scripts`, `notebooks` or `tests` |
+| `check_handoff.py` | the paths, lines, recipes and tests that a handoff names exist at a commit; run by hand, `uv run python scripts/checks/check_handoff.py <plan> --commit <commit>` |
+
+`markdown.py` is the Markdown reader that the document checks share.
+
+## `docs/` — generated documents
+
+`generate_references.py` writes `docs/references.md` from `docs/references.bib`; `just
+references` runs it.

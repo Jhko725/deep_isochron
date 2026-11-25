@@ -24,8 +24,9 @@ uvx --from rust-just just setup
 the environment, builds AUTO's Fortran library at the pinned commit, and installs the
 pre-commit hooks. AUTO's tree goes to `~/.local/opt/auto-07p`; to put it elsewhere, or
 to use a tree you already have, set `DEEP_ISOCHRON_AUTO_DIR` (or AUTO's own `AUTO_DIR`)
-to its path before `just setup` and whenever the package runs. Afterward the commands
-are recipes in the `justfile`:
+to its path before `just setup` and whenever the package runs. The git hooks are
+installed once in every clone, so a new clone needs `just setup` before its first commit.
+Afterward the commands are recipes in the `justfile`:
 
 ```bash
 uv run just --list        # every recipe, with what it does

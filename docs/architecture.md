@@ -1,7 +1,7 @@
 ---
 type: architecture
 status: current
-updated: 2026-10-30
+updated: 2026-11-25
 sources:
   - "code"
 ---
@@ -255,13 +255,19 @@ scripts/                                        the command-line entry points (s
 │   ├── bench_dataloader.py                     data-pipeline vs training-step benchmark
 │   │                                           (also --config <overrides>: a config's own run)
 │   └── find_nan.py                             first non-finite gradient of a run, with the latent extent
+├── docs/                                       generated documents
+│   └── generate_references.py                  docs/references.md from docs/references.bib (just references)
 └── checks/                                     the deterministic checks (prek.toml; docs/coding-standards.md)
-    ├── check_md_math.py                        GitHub-safe Markdown math check
+    ├── markdown.py                             the Markdown reader that the document checks share
+    ├── check_md_math.py                        GitHub-safe Markdown math check; the frontmatter
     ├── check_spelling.py                       the -ise families (American English)
-    ├── check_references.py                     every citation and relative link resolves
-    ├── check_docstrings.py                     docstring headers; private functions documented; modules under 600 lines
+    ├── check_references.py                     every citation and relative link resolves; references.md is generated
+    ├── check_docs.py                           vocabularies, headings, index, ledger, module map, ADRs, unconfirmed decisions
+    ├── check_docstrings.py                     docstring headers; private functions documented; modules under 600 lines; no plan label
     ├── check_containers.py                     the container rule: no Array in a frozen dataclass or a static field; NamedTuple only for *Params
-    └── check_changes.py                        a Review notes row per Files bullet of a change document
+    ├── check_changes.py                        each review round of a change document covers the files changed in it
+    ├── check_dependencies.py                   every imported package is declared; the package imports no scripts, notebooks or tests
+    └── check_handoff.py                        a handoff's paths, lines, recipes and tests exist at a commit (run by hand)
 .github/workflows/ci.yml                        lint · ty · math · spelling · citations · tests; slow + end-to-end run
 ```
 

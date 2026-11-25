@@ -22,6 +22,9 @@ the conventions for code, tests and docstrings are in
 | `guides/` | how to do something: install AUTO, compute isochrons, run an experiment from a notebook | doing that thing |
 | `changes/` | one document per branch, the reviewer's map of the change | reviewing or continuing a branch |
 | `plans/` | the handoff of each implementation round, frozen when committed | reading why a branch was built the way it was |
+| [`glossary.md`](glossary.md) | every quantity once: its name, its symbol, its code name, its unit or range | naming anything |
+| [`findings.md`](findings.md) | the append-only ledger of anything that bears on a reported result | before trusting a result |
+| [`verification.md`](verification.md) | one row per numerical claim: its test, its oracle, its tolerance | making or checking a claim |
 | [`references.md`](references.md) | the one bibliography, generated from `references.bib` | citing |
 | [`index.md`](index.md) | every document above, with its status | finding a document |
 
@@ -190,6 +193,27 @@ labels stay when the text is edited, and a `[code]` claim is re-read rather than
 recalled: ADR-0004's *Consequences* once described a `# ty: ignore` three branches
 after it was removed. The italic forms `*cited*`, `*deduced*` and `*secondary*` were
 the older spelling; `scripts/checks/check_references.py` refuses them under `design/`.
+
+## Glossary and notation
+
+`glossary.md` names every quantity once. A name used in code, a document or a figure label is the glossary's name.
+
+| Column | Holds |
+|---|---|
+| Term | the one name used in prose |
+| Symbol | the symbol in the design documents |
+| Code name | the identifier in the package |
+| Unit or range | the unit of the quantity or the set it lies in, such as "turns, in [0, 1)" |
+| Definition | one sentence |
+| Avoid | the synonyms that are not used |
+
+The fourth column is a unit or a range because this repository has no table of named dimensions. The *Avoid* column is what a prose pass removes.
+
+## Findings and verification
+
+`findings.md` is an append-only table: number, date, finding, evidence, what it affects, action and state. It holds anything discovered that bears on a reported result or constrains a later branch. Cleanup goes in the roadmap.
+
+`verification.md` has one row per numerical claim: number, claim, test, oracle, tolerance, tier, state. A claim with no row is unverified. A row is added when the claim is made and marked green, with the commit, when the test passes. The table was seeded on 2026-11-25 from § 5 of the five `method` design documents, and a claim outside them gets its row when its code is next touched.
 
 ## Unconfirmed decisions
 

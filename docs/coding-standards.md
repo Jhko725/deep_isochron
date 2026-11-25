@@ -1,7 +1,7 @@
 ---
 type: reference
 status: current
-updated: 2026-10-29
+updated: 2026-11-25
 ---
 
 # Coding standards
@@ -82,14 +82,17 @@ outcome appears.
 | Rotations by Cayley transform, never `jax.scipy.linalg.expm` | `model/invertible/linear.py` | 0010 |
 | Every concrete `AbstractBijection` registered in `tests/registry.py`, or in `UNTESTED` with a reason; `tests/test_registry.py` enforces it | `tests/registry.py` | — |
 | A system is declared once in SymPy; the JAX `rhs` and the AUTO Fortran are derived from the same expressions | `systems/`, `analysis/ode/auto/` | 0016 |
+| float64 throughout: a library driver raises when `jax_enable_x64` is off, and a notebook or script enables it at the top | `training/trainer.py` (`check_batch_dtype`), the notebooks, `scripts/` | — |
+| A check reads, and a test executes: a check script reads text or syntax and never imports the package, and a test executes the package | `scripts/checks/`, `tests/` | — |
+| A test pins a property of our code that could be wrong. It never pins the behavior of JAX, diffrax or NumPy, and a formula is not tested against a second copy of the same formula | `tests/` | — |
 
 `periodic_schur` raises `NotImplementedError` above two dimensions on purpose, naming
 `slycot.math.mb03wd` as the route if a three-dimensional system appears.
 
 ## Deterministic checks
 
-The configuration lives in `pyproject.toml`, in `[tool.codespell]` and in the `banned-api`
-table with `TID251` in ruff's `select`, with a comment there on each non-obvious setting.
+The configuration lives in `pyproject.toml`, in `[tool.codespell]`, in the `banned-api`
+table with `TID251` in ruff's `select`, and in `[tool.ruff.lint.mccabe]`, with a comment there on each non-obvious setting.
 This section says what each check is for; the file has the current values.
 
 | Rule | Check | Runs in |
@@ -97,12 +100,16 @@ This section says what each check is for; the file has the current values.
 | American English, irregulars and typos | `codespell` 2.4.3 | `prek`, CI |
 | American English, the productive families | `scripts/checks/check_spelling.py` | `prek`, CI |
 | `copy.replace` (this project's floor is Python 3.13); Cayley rotations | ruff `TID251` banned-api | `prek`, CI |
-| the documents: both Markdown previews, the frontmatter, every citation and relative link resolves | `scripts/checks/check_md_math.py`, `scripts/checks/check_references.py`; [`document-conventions.md`](document-conventions.md) | `prek`, CI |
+| the documents: both Markdown previews, the frontmatter, every citation resolves to `references.bib`, every relative link resolves, and `references.md` equals the page generated from `references.bib` | `scripts/checks/check_md_math.py`, `scripts/checks/check_references.py`; [`document-conventions.md`](document-conventions.md) | `prek`, CI |
+| the documents: closed vocabularies of `type` and `status`, required headings, the index, the ledger's order, the architecture's module map, superseded ADRs, no unconfirmed decision in a settled document | `scripts/checks/check_docs.py`; [`document-conventions.md`](document-conventions.md) § Checks | `prek`, CI |
 | a docstring on every public module, class, method and function | ruff `D100`–`D103` (notebooks exempt) | `prek`, CI |
-| `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after; a docstring on every `_`-prefixed function and class under `src/` (dunders exempt), since ruff's `D103` skips them; no module under `src/` over 600 lines | `scripts/checks/check_docstrings.py` | `prek`, CI |
+| `**Arguments:**`, `**Returns:**`, `**Raises:**`, `**Attributes:**` each on its own line with a blank line after; a docstring on every `_`-prefixed function and class under `src/` (dunders exempt), since ruff's `D103` skips them; no module under `src/` over 600 lines; no docstring that opens with a numbered plan label, such as "Unit 3" | `scripts/checks/check_docstrings.py` | `prek`, CI |
 | no invalid escape such as `\Phi` in a docstring that is not raw (Python only warns) | ruff `W605` | `prek`, CI |
-| a *Review notes* row per *Files* bullet of a change document, so that no change escapes review; the documents written before 2026-10-29 are history | `scripts/checks/check_changes.py` | `prek`, CI |
+| each round of *Review notes* in a change document covers exactly the files changed in its range, so that no change escapes review, and a closed round is not edited; the 24 documents written before 2026-11-25 keep the earlier form and are skipped | `scripts/checks/check_changes.py` | `prek`, CI |
 | the container rule (§ Containers): no `Array` field in a frozen dataclass or in a static field, no `NamedTuple` outside the `*Params` bundles; `Array` inside a `Callable[...]` is a signature, not an array | `scripts/checks/check_containers.py` | `prek`, CI |
+| no function with more than 8 decision points, so that a nested function is split before it reaches review (ruff's default is 10) | ruff `C901`, `max-complexity = 8` | `prek`, CI |
+| every imported package is declared in `pyproject.toml`, and the package imports nothing from `scripts`, `notebooks` or `tests` | `scripts/checks/check_dependencies.py` | `prek`, CI |
+| every module of the package imports on CPU | `tests/test_imports.py` | `just test` |
 | no merge-conflict marker left in any file, in or out of a merge (`84438de` carried four into master) | `check-merge-conflict --assume-in-merge` | `prek`, CI |
 | a driver called again with new values compiles nothing: times and parameters reach `filter_jit` as arrays, a vector field is a module-level function or a bound method, loops run under a jit | `tests/helpers.py` `CompileCounter` in `test_find_limit_cycle_compiles_nothing_for_new_values` and `test_integrations_compile_nothing_for_new_parameters` | `prek`, CI (the tests) |
 | no `# ty: ignore` under `src/` | `! grep -rn 'ty: ignore' src` (ty itself honors the comments) | CI |

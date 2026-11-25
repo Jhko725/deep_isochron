@@ -21,7 +21,10 @@ document opens with and what its `status` means are in
 | [`roadmap.md`](roadmap.md) | roadmap | the single current plan, phase by phase, with the Done ledger |
 | [`coding-standards.md`](coding-standards.md) | reference | where each convention is enforced here: tiers, named tolerances, the contracts the ADRs fix, the docstring form, the checks that replace prose |
 | [`document-conventions.md`](document-conventions.md) | reference | what each kind of document is for and the form it takes: frontmatter and status, change documents, ADRs, references, the Markdown rules, the checks |
-| [`references.md`](references.md) | reference | the one bibliography: every work the documents, docstrings and tests cite, by key, with DOI and the locators used |
+| [`references.md`](references.md) | reference | the one bibliography: every work the documents, docstrings and tests cite, by key, generated from `references.bib` |
+| [`glossary.md`](glossary.md) | glossary | every quantity once: its name, symbol, code name, and unit or range |
+| [`findings.md`](findings.md) | findings | the append-only ledger of anything that bears on a reported result |
+| [`verification.md`](verification.md) | verification | one row per numerical claim: its test, oracle, tolerance, tier and state |
 
 ## Guides (`guides/`) — how to do something
 

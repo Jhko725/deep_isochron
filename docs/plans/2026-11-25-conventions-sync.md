@@ -1,6 +1,6 @@
 ---
 type: plan
-status: planned
+status: executed
 updated: 2026-11-25
 sources:
   - "Project document claude/conventions-sync-handoff-2026-11-25.md"
