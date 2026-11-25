@@ -1,7 +1,7 @@
 ---
 type: index
 status: current
-updated: 2026-10-30
+updated: 2026-11-25
 ---
 
 # `deep_isochron` documentation — index
@@ -100,3 +100,10 @@ Numbers are allocated when a branch is cut, so merge order can leave a temporary
 | `ksiam-animations` | [`2026-11-02-ksiam-animations.md`](changes/2026-11-02-ksiam-animations.md) |
 | `conjugacy-schematic` | [`2026-11-04-conjugacy-schematic.md`](changes/2026-11-04-conjugacy-schematic.md) |
 | `inn-schematics` | [`2026-11-04-inn-schematics.md`](changes/2026-11-04-inn-schematics.md) |
+| `conventions-sync` | [`2026-11-25-conventions-sync.md`](changes/2026-11-25-conventions-sync.md) |
+
+## Plans (`plans/`) — the handoff of each implementation round, frozen when committed
+
+| Branch | Document |
+|---|---|
+| `conventions-sync` | [`2026-11-25-conventions-sync.md`](plans/2026-11-25-conventions-sync.md) |

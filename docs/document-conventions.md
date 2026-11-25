@@ -1,7 +1,7 @@
 ---
 type: reference
 status: current
-updated: 2026-10-29
+updated: 2026-11-25
 ---
 
 # Document conventions
@@ -21,6 +21,7 @@ the conventions for code, tests and docstrings are in
 | `decisions/` | numbered ADRs: why the structure is what it is, each describing the current design with its history | touching the area an ADR covers |
 | `guides/` | how to do something: install AUTO, compute isochrons, run an experiment from a notebook | doing that thing |
 | `changes/` | one document per branch, the reviewer's map of the change | reviewing or continuing a branch |
+| `plans/` | the handoff of each implementation round, frozen when committed | reading why a branch was built the way it was |
 | [`references.md`](references.md) | the one bibliography | citing |
 | [`index.md`](index.md) | every document above, with its status | finding a document |
 
@@ -36,7 +37,7 @@ one document starts to carry both, it is split.
 ## Frontmatter and status
 
 Every document opens with a frontmatter block: `type` (`architecture`, `roadmap`,
-`design`, `decision`, `guide`, `change`, `reference`, `index`), `status`, `updated` (the
+`design`, `decision`, `guide`, `change`, `plan`, `reference`, `index`), `status`, `updated` (the
 date of the last edit, changed in the same commit as the text), and where relevant
 `verified_by` (who or what has checked the claims), `sources` (what the document rests
 on) and `id`. The block is the useful part of Google's Open Knowledge Format, adopted
@@ -64,31 +65,59 @@ not checked for one.
 
 ## Change documents
 
-Every branch has a companion document `changes/<YYYY-MM-DD>-<branch>.md`, committed with
-the code and updated in the same commit as any later change on the branch. It is the
-reviewer's map of the change, not a changelog. Its sections:
+Every branch has a companion document `changes/<YYYY-MM-DD>-<branch>.md`, committed with the code and updated in the same commit as any later change on the branch. It is the reviewer's map of the change, not a changelog.
 
-- **Summary**: what the branch does and why.
-- **Files**: every file touched, one line each, confirmable against `git diff --stat`.
-- **Design**: the decisions not obvious from the code, each with the alternative that was
-  rejected, linking an ADR when the decision is structural, and one line saying whether
-  the change can be undone.
-- **Bugs fixed**, with the symptom.
-- **Tests**: what they pin down and how to run them. The section is the baseline the next
-  session reads, so its counts are precise, and a test's outcome is stated only after
-  that test has run on the code the document describes; until then the document says
-  the run is pending.
-- **Open issues**, with the reason each is open.
-- **Review notes**: a table *Change* | *Thoughts* | *Modifications*, one row per
-  *Files* bullet, appended in the commit that adds the bullet, so that every change the
-  branch makes gets its review. *Change* is the bullet's files plus a one-line summary;
-  the other two columns are Joon's, filled in while vetting, and never edited by Claude
-  except when asked. A new row is appended after the table's last line, never inserted
-  by matching the text of an existing row, since Joon's edits change that text.
-  `scripts/checks/check_changes.py` fails `prek` on a bullet without a row.
+```markdown
+## Summary        what the branch does and why
+## Design         the decisions not obvious from the code, each with the rejected alternative, and one line on whether the change can be undone
+## Bugs fixed     with the symptom
+## Tests          what they pin down and how to run them, with exact counts
+## Open issues    with the reason each is open
+## Review notes   a log of review rounds, each a table Change | Thoughts | Modifications; the only list of changes
+```
 
-A landed change document is history: its review columns keep Joon's words verbatim,
-typos included, and the spelling checks skip `changes/` for that reason.
+- *Tests* is the baseline the next session reads. A test's outcome is stated only after that test has run on the code the document describes.
+- The change document has no *Files* section. *Review notes* is the only list of changes. It is a log of review rounds, appended at the end: each round has a subheading ``### Round <n>: from `<commit>` `` and a table with the columns `Change | Thoughts | Modifications`.
+- A round lists the files changed since the commit it starts from. Round 1 starts from the merge base of `HEAD` with `origin/master`, or with the branch that the frontmatter names (see the next bullet). Each later round starts from a review commit that comes after the start of the round before it, and the open round starts from the latest review commit. A file other than the change document that a review commit changes is listed in the round that the commit closes or in the round that it opens.
+- A change document's frontmatter may carry `base: <branch>`. Round 1 of that document starts from the merge base of `origin/<branch>` and `HEAD`. Without the field the base is `master`. A branch cut from an unmerged branch names that branch, so that its first round lists only its own files.
+- A review commit is a commit to the change document that Claude did not author and that changes a *Thoughts* or *Modifications* cell.
+- A round is reviewed, and so closed, once one of its *Thoughts* cells is filled. A filled *Modifications* cell does not close a round, because Claude fills that column when asked. The open round is the last subsection of *Review notes*, and every round before it is reviewed.
+- Joon reviews the open round only. The check takes his latest review commit as the start of the next round, so an edit of his to a *Thoughts* cell of an older round, made while a later round is open, would move that start; the check does not support it.
+- The rows of a closed round are never edited, so a verdict always sits beside the change it was about. A later change to the same file gets a row in the open round, and a change after the last round is reviewed opens a new round.
+- A *Change* cell is one backticked path, a dash, and what changed, on one line. A path that ends in `/` covers every changed file under it. A later commit of the same round that changes the file again extends the cell's text.
+- Every file in `git diff --name-only` over a round's range is covered by a row of that round, and every row covers at least one such file. `scripts/checks/check_changes.py` fails on each of the following:
+  - a changed file without a row, or a row that covers no changed file;
+  - a row outside a round;
+  - a subheading that does not name a review commit, or that names one no later than the start of the round before it;
+  - an open round that does not start from the latest review commit;
+  - a round before the last that is not reviewed;
+  - a staged change after the last round is reviewed, which needs a new round;
+  - in a commit by Claude, an edited row of a closed round.
+- A review commit passes the check as it is made. The last round then runs to the staged index. A file other than the change document that the review changes needs no row yet: its row comes with the next commit, which opens the next round.
+- The *Thoughts* and *Modifications* cells are Joon's, and Claude edits them only when asked.
+- When a handoff document planned the branch, the frontmatter's `sources` links its committed copy under `plans/` by relative path.
+- A `merged` change document keeps Joon's words verbatim, and the spelling checks skip `changes/`.
+- The 24 change documents dated before 2026-11-25 are in the old format: a *Files* section and one review table with a row per *Files* bullet. They keep that form, because a reviewed table is not rewritten. `check_changes.py` lists them by name in `OLD_FORMAT` and skips them. The tuple never grows.
+
+## Plans
+
+`plans/<YYYY-MM-DD>-<branch>[-<suffix>].md` is the handoff of one implementation round. A handoff is committed once and then frozen. The planning session writes and revises a handoff in the Project. The implementing session commits it verbatim under `plans/` at the start of the round, and nobody edits its body afterward. Only its frontmatter `status` changes, from `planned` to `executed`, when the round's documents are written. The change document's `sources` links to it by relative path.
+
+```markdown
+## 1. Header                     goal, date, who settled the design, repository, branch and tip, earlier documents
+## 2. Out of scope and assumptions   what the round leaves alone, and the writer's assumptions, each confirmed or not
+## 3. What the implementing session does   a table of the units and who implements each
+## 4. Before anything            access, the tip, the environment, and what to read first
+## 5. Rule text                  the rules not yet in the repository, verbatim
+## 6. Units                      one subsection per unit: goal, model, what it may change, items, evidence, decisions
+## 7. Baseline                   the commands and their outputs before the first unit
+## 8. The documents unit         the documents written last, after the code
+## 9. Gates                      what is run between units, and the one condition that stops the run
+## 10. Decisions and where they are recorded   each decision and the document that records it
+```
+
+- The frontmatter block stands above the verbatim body, and its `sources` names the handoff's Project path.
+- The spelling checks, `check_md_math.py` (except for the frontmatter), and `check_references.py` skip `plans/`, as they skip `changes/`: a plan is a record of what was said, and its line numbers refer to the commit it names.
 
 ## Decision records
 

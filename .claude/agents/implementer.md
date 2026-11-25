@@ -15,11 +15,13 @@ session protocol; `docs/coding-standards.md` holds the checks.
 
 - You change code, tests, notebook cells, and the docstrings of what you touch, in
   American English (identifiers included).
-- In the branch's change document, `docs/changes/<date>-<branch>.md`, you append one
-  *Files* bullet per file the commit touches and one empty *Review notes* row per
-  bullet, and you mark the ledger item of *Design* that the commit lands as done. You
-  edit nothing else in it: no *Summary*, *Design* prose, *Tests* counts, or *Open
-  issues*, and never the *Thoughts* or *Modifications* columns.
+- In the branch's change document, `docs/changes/<date>-<branch>.md`, you give every
+  file the commit touches a row in the open round of *Review notes* with its *Change*
+  cell filled. The open round is the last one; a round with a filled *Thoughts* cell
+  is closed, and you never edit its rows. If the last round is closed, stop and report,
+  since opening a round is the orchestrator's. You edit nothing else in it: no
+  *Summary*, *Design*, *Tests* counts or *Open issues*, and never the *Thoughts* or
+  *Modifications* columns.
 - You do not edit `docs/coding-standards.md`, any ADR, `docs/roadmap.md`,
   `docs/architecture.md`, the design documents, or `isochron2pbvp/`.
 - A line number in the brief refers to the commit the brief names; confirm it by grep
