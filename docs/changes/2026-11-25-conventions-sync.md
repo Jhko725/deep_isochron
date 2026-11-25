@@ -58,5 +58,11 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `.github/workflows/ci.yml` — the `checks` job fetches the full history. | | |
 | `docs/changes/2026-11-25-conventions-sync.md` — this document. | | |
 | `docs/document-conventions.md` — § Change documents in the rounds form, with the `base` field and the old-format rule, and a new § Plans. | | |
-| `.claude/agents/implementer.md` — the implementer fills rows of the open round, in place of *Files* bullets. | | |
+| `.claude/agents/implementer.md` — the implementer fills rows of the open round, in place of *Files* bullets; it gains `disallowedTools: Agent`, the `block_push.py` hook, the precedence and no-subagent lines, a *Skills* report line, and loses notebook cells. | | |
 | `docs/index.md` — the plan and this document listed. | | |
+| `.claude/rules/working-rules.md` — UFR's working rules at b9e4cc3, copied. | | |
+| `.claude/rules/python.md` — UFR's design, Python and JAX rules at b9e4cc3, copied. | | |
+| `.claude/rules/notebooks.md` — UFR's notebook rule for `*.ipynb`, without the three bullets on UFR's own notebooks. | | |
+| `.claude/settings.json` — UFR's Bash hook registration for `block_history_rewrite.py`, without the dissertation matcher. | | |
+| `.claude/hooks/block_history_rewrite.py` — UFR's hook that blocks history rewrites, unchanged under a source line. | | |
+| `.claude/hooks/block_push.py` — UFR's hook that blocks `git push` for the implementer, unchanged under a source line. | | |
