@@ -77,3 +77,4 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `scripts/diagnostics/find_nan.py` — `main` loads its starting checkpoint through `load_finite_run`, which walks back past a non-finite one, for `C901`. | | |
 | `scripts/checks/check_dependencies.py` — new, adapted from UFR's: every imported package is declared in `pyproject.toml`, and `src` imports nothing from `scripts`, `notebooks` or `tests`. | | |
 | `tests/test_imports.py` — new, from UFR's: every module of `deep_isochron` imports on CPU; no module imports `auto` at import time, so none is skipped. | | |
+| `scripts/checks/check_docs.py` — new, adapted from UFR's: the eight document rules without the `paper`, `experiment`, `dataset` and `format` types, and the architecture rule also reads the fenced module tree (A6); run by hand, not a hook yet. | | |
