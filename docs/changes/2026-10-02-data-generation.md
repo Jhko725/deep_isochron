@@ -1,3 +1,9 @@
+---
+type: change
+status: merged
+updated: 2026-11-25
+---
+
 # 2026-10-02 — `data-generation`
 
 Phase B of `docs/roadmap.md`: the ODE layer and the data layer, as decided on 2026-10-02

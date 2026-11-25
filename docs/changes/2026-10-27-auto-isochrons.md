@@ -1,7 +1,7 @@
 ---
 type: change
-status: Steps A–E reviewed 2026-10-28; the review's changes in progress
-updated: 2026-10-28
+status: merged
+updated: 2026-11-25
 branch: auto-isochrons
 ---
 
@@ -966,3 +966,5 @@ No phase failed; the curves have 4749–7058 points, and every half stopped at
 | `scripts/compute_isochrons.py`, `tests/test_experiment_isochrons.py` — on the schema; the hashes pinned; refusals | Looks good. | None |
 | `docs/decisions/0011-experiment-layer.md`, `docs/architecture.md`, `docs/auto.md` — Decision 1 rewritten; the schemas in the map | Confirmed. | None |
 | `src/deep_isochron/utils/numerics.py`, `foliation.py`, `tests/test_phase.py` — `wrap_phase` against the array API; `wrap_phases` inside the session, no x64 context | Looks good. | None |
+
+Status before 2026-11-25: Steps A–E reviewed 2026-10-28; the review's changes in progress

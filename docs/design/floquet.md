@@ -1,7 +1,8 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-29
+kind: method
+updated: 2026-11-25
 verified_by: pending (Joon); the O2 tests in tests/test_analysis_ode.py pass
 sources:
   - "ADR-0012 (analysis layout)"
@@ -72,7 +73,9 @@ $$
 
 **What the packages do** ([cited] from documentation): BifurcationKit uses `FloquetQaD` on the product of shooting Jacobians by default, `FloquetPQZ` (periodic Schur) for accuracy, and the return-map eigenvalues for Poincaré shooting; AUTO takes the multipliers from the collocation Jacobian (Fairgrieve & Jepson), improved from AUTO86 to AUTO97 (G&M §5.4); `multiflap` takes the product of segment Jacobians through `numpy.linalg.eig`. None of them exploits the planar Liouville identity, because none is planar-specific.
 
-## 3. The method (`analysis/ode/floquet.py`, ADR-0015)
+## 3. The method
+
+The implementation is `analysis/ode/floquet.py`, and ADR-0015 records the decision.
 
 Functions over a `LimitCycle` (which, as of O2, is a fixed-shape `eqx.Module` carrying its `ode`, the shooting mesh `x0s`, `period`, `config`, `reverse_time` and a light `FixedPoint`; analysis functions take the cycle — ADR-0015 §5):
 
@@ -96,7 +99,9 @@ attracting cycle gets its multiplier from the chain and not from $M$ (§2). The 
 multiplier's distance from $1$ and the chain's closure are reported as the error
 estimate.
 
-## 5. Oracles (`tests/test_analysis_ode.py`, O2 block)
+## 5. Oracles
+
+The tests are the O2 block of `tests/test_analysis_ode.py`.
 
 | System | Exact | Pinned |
 |---|---|---|
@@ -109,7 +114,9 @@ estimate.
 | The chain | — | $Q_{i+1}R_i = M_iQ_i$ exactly, $R_i$ upper triangular with positive diagonal, the seed is $Q_1$'s first column, $D = I$, `monodromy` is the ordered product; `periodic_schur` under `vmap` |
 | Refusals | — | `periodic_schur` on $3\times3$ factors: `NotImplementedError`; Liouville and `orientation` on a 3-D cycle: `ValueError` |
 
-## 6. Limits and consequences
+## 6. Limits
+
+Each limit is given with its consequence.
 
 - **Planar only, by construction**: the seed fixes one Schur vector, which in the plane is all there is; `dim \geq 3` needs the periodic QR iteration on the transverse block (`slycot`) or BifurcationKit-style section-reduced products — open.
 - **The orbit's error is the floor**: $\kappa$ inherits O1's $10^{-8}$; the trivial multiplier and the closure report it (Lust 2001, Figs. 5, 9: the trivial multiplier's error is the same with and without the periodic Schur decomposition — it is set by the discretization).

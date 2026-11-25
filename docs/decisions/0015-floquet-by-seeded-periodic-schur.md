@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0015
-status: accepted; amended 2026-10-20 (review round 5 - jit rule, light FixedPoint)
-updated: 2026-10-29
+status: amended
+updated: 2026-11-25
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-19/20 after the O2 survey and his notebook prototype)
 sources:
   - "Bojanczyk et al. 1992"

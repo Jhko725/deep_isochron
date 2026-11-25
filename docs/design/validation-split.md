@@ -1,7 +1,8 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-27
+kind: note
+updated: 2026-11-25
 verified_by: pending (Joon; the remedy chosen in discussion 2026-10-06)
 sources:
   - "ADR-0008 (window sampling)"

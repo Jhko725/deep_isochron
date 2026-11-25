@@ -1,7 +1,8 @@
 ---
 type: design
 status: agreed
-updated: 2026-10-27
+kind: derivation
+updated: 2026-11-25
 verified_by: joon (review 2026-10-02)
 sources:
   - "Hong & Chun 2023"

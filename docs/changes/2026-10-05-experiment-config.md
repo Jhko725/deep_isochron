@@ -1,7 +1,7 @@
 ---
 type: change
-status: review round 2 applied (utils/, validation split); D5 (notebook) done by Joon
-updated: 2026-10-05
+status: merged
+updated: 2026-11-25
 branch: experiment-config
 ---
 
@@ -239,3 +239,5 @@ The full suite is green for the first time since Phase B: 471 passed, 1 xfail.
 | `src/deep_isochron/experiment/data.py`: `validation_t_split`; `experiment/run.py` passes it; `configs/train.yaml`: `validation.t_split` | Looks good. | None |
 | `docs/design/validation-split.md` (new); ADR-0009 §5 amended; `docs/index.md`; `docs/architecture.md`; roadmap Phase E items | Looks good for now. | None |
 | `tests/test_training.py`: `test_evaluator_splits_the_prediction_error_by_window_start`; `tests/test_experiment.py`: `test_validation_split_follows_the_mixed_sampler` | Looks good. | None |
+
+Status before 2026-11-25: review round 2 applied (utils/, validation split); D5 (notebook) done by Joon

@@ -1,7 +1,7 @@
 ---
 type: change
-status: landed on the branch; review pending
-updated: 2026-11-03
+status: landed
+updated: 2026-11-25
 ---
 
 # `ksiam-animations` — animations of a known oscillator for the KSIAM talk
@@ -297,3 +297,5 @@ None.
 | `src/deep_isochron/plotting/phase_portrait/__init__.py` — the export of `animate_phase_field` | | |
 | `src/deep_isochron/plotting/__init__.py` — the export of `animate_phase_field` | | |
 | `tests/test_phase_portrait.py` — the masks, the lap-1 sweep, the frame count and the errors of `animate_phase_field` | | |
+
+Status before 2026-11-25: landed on the branch; review pending

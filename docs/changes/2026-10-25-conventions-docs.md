@@ -1,3 +1,9 @@
+---
+type: change
+status: merged
+updated: 2026-11-25
+---
+
 # 2026-10-25 · `conventions-docs`
 
 Base commit: `symbolic-systems` tip (the latest work in the repository on this date).

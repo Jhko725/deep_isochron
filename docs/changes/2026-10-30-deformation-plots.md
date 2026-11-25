@@ -1,7 +1,7 @@
 ---
 type: change
-status: landed 2026-11-02 (units 1–3, the review of 2026-10-31, units 5–8, the documents); review of units 5–8 and the documents pending
-updated: 2026-11-02
+status: landed
+updated: 2026-11-25
 ---
 
 # `deformation-plots` — rubber-sheet figures of a planar bijection
@@ -315,3 +315,5 @@ None.
 | `src/deep_isochron/plotting/deformation/figures.py` — `SheetStyle` imported, `draw_sheet` on `_curve_colors` | | |
 | `src/deep_isochron/plotting/deformation/__init__.py` — `SheetStyle` from `.style` | | |
 | `tests/test_plotting.py` — `test_curve_colors_forms`, the explicit `fill_alpha` | | |
+
+Status before 2026-11-25: landed 2026-11-02 (units 1–3, the review of 2026-10-31, units 5–8, the documents); review of units 5–8 and the documents pending

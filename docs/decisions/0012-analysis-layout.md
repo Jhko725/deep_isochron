@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0012
-status: accepted; amended 2026-10-15; amended 2026-10-20 (ADR-0015)
-updated: 2026-10-29
+status: amended
+updated: 2026-11-25
 verified_by: pending (Joon; the split and the ordering were decided in discussion 2026-10-06)
 ---
 

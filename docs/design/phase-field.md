@@ -1,7 +1,8 @@
 ---
 type: design
-status: tentative (survey; route (a) of §3.1 landed)
-updated: 2026-10-30
+status: tentative
+kind: method
+updated: 2026-11-25
 verified_by: pending (Joon)
 sources:
   - "ADR-0012 (analysis layout, amendment)"

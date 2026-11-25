@@ -1,7 +1,7 @@
 ---
 type: change
-status: implemented 2026-10-28; review pending
-updated: 2026-10-28
+status: merged
+updated: 2026-11-25
 ---
 
 # `phase-field` — the asymptotic phase fields of fhn and fhn-easy (O3, route (a))
@@ -170,3 +170,5 @@ tier gives 643 passed, 10 skipped, 1 xfailed and 1 failed: the worker running
 | `docs/architecture.md`, `docs/index.md`, `docs/roadmap.md`, `CLAUDE.md`: module map, document list, O3 row and ledger, float64 rule | | |
 | `docs/references.md`: 17 entries for the survey's citations | | |
 | `scripts/check_references.py`: the particle "de la" in a surname | | |
+
+Status before 2026-11-25: implemented 2026-10-28; review pending

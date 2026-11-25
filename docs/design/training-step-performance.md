@@ -1,7 +1,8 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-29
+kind: note
+updated: 2026-11-25
 verified_by: joon (2026-10-05; §6.3 C9 update pending)
 sources:
   - "JAX docs: async dispatch"

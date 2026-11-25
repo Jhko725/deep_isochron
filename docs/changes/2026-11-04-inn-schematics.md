@@ -1,7 +1,7 @@
 ---
 type: change
-status: landed on the branch; review pending
-updated: 2026-11-04
+status: landed
+updated: 2026-11-25
 ---
 
 # `inn-schematics` — the two INN schematics of KSIAM slides 9a and 9b
@@ -262,3 +262,5 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `docs/architecture.md` — the plotting tree | | |
 | `docs/roadmap.md` — the Done row | | |
 | `.claude/agents/implementer.md` — staging new files before the check | | |
+
+Status before 2026-11-25: landed on the branch; review pending

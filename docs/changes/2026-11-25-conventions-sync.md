@@ -59,7 +59,7 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `docs/changes/2026-11-25-conventions-sync.md` — this document. | | |
 | `docs/document-conventions.md` — § Change documents in the rounds form, with the `base` field and the old-format rule, and a new § Plans. | | |
 | `.claude/agents/implementer.md` — the implementer fills rows of the open round, in place of *Files* bullets; it gains `disallowedTools: Agent`, the `block_push.py` hook, the precedence and no-subagent lines, a *Skills* report line, and loses notebook cells. | | |
-| `docs/index.md` — the plan and this document listed. | | |
+| `docs/index.md` — the plan and this document listed. The decision table is split into *In force* and *Superseded*, and the status cells of the ADRs and design documents repeat the frontmatter. | | |
 | `.claude/rules/working-rules.md` — UFR's working rules at b9e4cc3, copied. | | |
 | `.claude/rules/python.md` — UFR's design, Python and JAX rules at b9e4cc3, copied. | | |
 | `.claude/rules/notebooks.md` — UFR's notebook rule for `*.ipynb`, without the three bullets on UFR's own notebooks. | | |
@@ -78,3 +78,7 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `scripts/checks/check_dependencies.py` — new, adapted from UFR's: every imported package is declared in `pyproject.toml`, and `src` imports nothing from `scripts`, `notebooks` or `tests`. | | |
 | `tests/test_imports.py` — new, from UFR's: every module of `deep_isochron` imports on CPU; no module imports `auto` at import time, so none is skipped. | | |
 | `scripts/checks/check_docs.py` — new, adapted from UFR's: the eight document rules without the `paper`, `experiment`, `dataset` and `format` types, and the architecture rule also reads the fenced module tree (A6); run by hand, not a hook yet. | | |
+| `docs/changes/` — the 24 earlier change documents take a status from the closed vocabulary: `merged` for the 20 that `master` holds, `landed` for `deformation-plots`, `ksiam-animations` and `inn-schematics`, `in-progress` for `conjugacy-schematic`. The six without a frontmatter block get one, and each replaced status sentence is kept as the last line (A1). | | |
+| `docs/decisions/` — eleven ADRs take a status from the closed vocabulary: `amended` for 0005, 0007, 0008, 0009, 0011, 0012, 0014 and 0015, and `accepted` for 0016, 0017 and 0020 (A2). | | |
+| `docs/design/` — each design document names its `kind` (A3). `isochrons.md`, `phase-field.md` and `normal-forms.md` take a status from the closed vocabulary, `normal-forms.md` names its tentative sections under the title (A4), and the headings of four method documents become the template's, with the removed words as the first line of the section. | | |
+| `docs/roadmap.md` — the ledger row of 2026-10-27 for Steps C–D of `auto-isochrons` moves above the two rows of 2026-10-28 (A5). | | |

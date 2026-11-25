@@ -1,7 +1,8 @@
 ---
 type: design
-status: draft for review; decisions settled 2026-10-27 (ADR-0017)
-updated: 2026-10-30
+status: draft for review
+kind: method
+updated: 2026-11-25
 verified_by: pending (Joon); the measurements in §3.1, §2.3 and §4 were made on 2026-10-27 with AUTO-07p at commit 44cc1c4 and are recorded in the branch's change document
 sources:
   - "Langfield et al. 2014"
@@ -41,7 +42,9 @@ The implementation plan was the Project document "Isochrons from AUTO-07p" of
 2026-10-27 and are recorded in [ADR-0017](../decisions/0017-isochrons-by-auto-continuation.md)
 and the branch's change document.
 
-## 1. The problem: what is computed
+## 1. The problem
+
+This section states what is computed.
 
 **An isochron is a level set of the asymptotic phase.** Let $\dot x = F(x)$ be a planar
 system with an attracting periodic orbit $\Gamma$ of period $T$, and let
@@ -301,7 +304,9 @@ the polyline of the other is $3.6\times 10^{-6}$ [code]. The distance between ne
 points, $7.8\times 10^{-4}$, is larger only because the points lie up to 0.19 apart; it
 measures the spacing, not a difference between the curves.
 
-## 3. The method: our algorithm, stage by stage
+## 3. The method
+
+The algorithm is ours, and it is given stage by stage.
 
 **Our pipeline keeps the coworker's rotating structure and replaces its first four runs.**
 The mapping is:
@@ -552,7 +557,9 @@ source (Langfield et al. 2014, §IV), so there a small error in the stored posit
 in the integration becomes a large error in phase, and this check cannot yet tell
 AUTO's error from its own (§5) [deduced].
 
-## 5. Oracles and the tolerances they justify
+## 5. Oracles
+
+Each oracle comes with the tolerance that it justifies.
 
 | Oracle | What it checks | Tolerance and its reason |
 |---|---|---|
@@ -588,7 +595,9 @@ field is constant along every AUTO isochron, and $w$ is parallel to $Z(\Theta)$.
 - `IsochronFoliation.save` and `load` round-trip every field.
 - Refusals: a non-planar system, an unknown phase type, a missing AUTO tree.
 
-## 6. Limits and deferred work
+## 6. Limits
+
+The limits include the work that is deferred.
 
 - **Planar systems only.** The extended system stacks planar pieces, and the end
   direction $Jw$ is a planar construction. A system with more states needs a stable

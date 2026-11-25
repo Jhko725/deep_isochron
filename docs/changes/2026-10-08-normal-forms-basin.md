@@ -1,7 +1,7 @@
 ---
 type: change
-status: review round 3 applied (trainer stops before checkpointing a non-finite state; find_nan.py walks back to a finite checkpoint); nan hunt pending Joon's rerun
-updated: 2026-10-14
+status: merged
+updated: 2026-11-25
 branch: normal-forms-basin
 ---
 
@@ -241,3 +241,5 @@ Full suite: 479 passed, 1 xfail (`-m "not slow"`, `--hypothesis-profile=dev`).
 |---|---|---|
 | `training/trainer.py`: `stop_on_nonfinite` (stop before checkpointing; empty-bucket `nan`s exempt); test | Looks good. | None |
 | `scripts/find_nan.py`: walk back to the last finite checkpoint | Confirmed. Looks good. NaN problem was solved with the Bautin change, so have not had a change to use yet, though. | None |
+
+Status before 2026-11-25: review round 3 applied (trainer stops before checkpointing a non-finite state; find_nan.py walks back to a finite checkpoint); nan hunt pending Joon's rerun

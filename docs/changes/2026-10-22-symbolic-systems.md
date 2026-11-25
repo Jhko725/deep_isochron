@@ -1,7 +1,7 @@
 ---
 type: change
-status: review closed 2026-10-27 (round 1 applied); merged to master
-updated: 2026-10-27
+status: merged
+updated: 2026-11-25
 branch: symbolic-systems
 ---
 
@@ -95,3 +95,5 @@ Review round 1 (2026-10-27) unified the normal forms' contract with the observed
 | `docs/decisions/0007-…` (round 1): defining-data paragraphs restated | Confirmed. | None |
 | `docs/design/normal-forms.md` (round 1): §9 note revised | Confirmed. | None |
 | `docs/architecture.md`, `docs/index.md`, `docs/roadmap.md` (round 1): map, ADR summary, O7 row and Done ledger | Confirmed | None
+
+Status before 2026-11-25: review closed 2026-10-27 (round 1 applied); merged to master

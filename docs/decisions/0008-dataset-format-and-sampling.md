@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0008
-status: accepted; amended
-updated: 2026-10-27
+status: amended
+updated: 2026-11-25
 verified_by: joon (through 2026-10-03); Decision 3 pending review
 ---
 

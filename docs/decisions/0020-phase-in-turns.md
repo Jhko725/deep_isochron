@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0020
-status: accepted (review pending)
-updated: 2026-10-30
+status: accepted
+updated: 2026-11-25
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-29/30 with Andrus Giraldo)
 ---
 

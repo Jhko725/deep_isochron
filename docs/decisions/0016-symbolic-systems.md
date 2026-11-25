@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0016
-status: accepted (review pending)
-updated: 2026-10-29
+status: accepted
+updated: 2026-11-25
 verified_by: pending (Joon; the decisions were taken in discussion 2026-10-22, plan `claude/isochron-auto-plan-2026-10-22`)
 ---
 

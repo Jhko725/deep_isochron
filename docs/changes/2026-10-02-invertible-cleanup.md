@@ -1,3 +1,9 @@
+---
+type: change
+status: merged
+updated: 2026-11-25
+---
+
 # 2026-10-02 — `invertible-cleanup`
 
 Phase A of `docs/roadmap.md`: structural follow-ups from the two reviews of the

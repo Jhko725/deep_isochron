@@ -1,7 +1,8 @@
 ---
 type: design
-status: agreed; §5.3–5.4 tentative; §3.3/§9 amendment of 2026-10-08 tentative; §9 amendment of 2026-10-22 (ADR-0016) pending review
-updated: 2026-10-30
+status: agreed
+kind: derivation
+updated: 2026-11-25
 verified_by: joon (2026-10-03; §5.3–5.4 and the 2026-10-08 amendment pending)
 sources:
   - "Wilson & Moehlis 2016"
@@ -21,6 +22,8 @@ sources:
 ---
 
 # Normal forms — conventions, derivations, and the API they imply
+
+Still tentative: §5.3–5.4, the amendment of 2026-10-08 to §3.3 and §9, and the amendment of 2026-10-22 to §9 (ADR-0016), which awaits review.
 
 **Status: agreed (roadmap B10), 2026-10-03; implemented in B11 (2026-10-03).** Amended 2026-10-03: §5.1 corollary sign (confirmed); §5.3 Yawata paragraph rewritten from the paper's equations and §5.4 (Kvalheim & Revzen) added, both *tentative*, to be revisited by Joon as the claims are checked. **Amended 2026-10-08 (ADR-0013, branch `normal-forms-basin`)**: evenness in $r$ is demoted from a requirement on every normal form to the defining property of the *even family* (`AbstractEvenNormalForm`: Hopf, Bautin); the basin is an annulus $(r_{\rm in}, r_{\rm out})$ with a possibly non-trivial phaseless set inside; §3.3 adds Winfree's model with a hole (Langfield et al. 2025), whose $\rho$ and $\omega$ are not even. This document merges the
 B10 design note with Joon's earlier derivation notes (LaTeX, "Tractable periodic

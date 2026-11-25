@@ -1,8 +1,8 @@
 ---
 type: decision
 id: ADR-0007
-status: accepted; amended (ADR-0013 - basins, even subfamily; ADR-0016 - symbolic defining data)
-updated: 2026-10-30
+status: amended
+updated: 2026-11-25
 verified_by: joon
 ---
 

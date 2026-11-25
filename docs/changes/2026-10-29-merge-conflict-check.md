@@ -1,7 +1,7 @@
 ---
 type: change
-status: implemented 2026-10-29; review pending
-updated: 2026-10-29
+status: merged
+updated: 2026-11-25
 ---
 
 # `merge-conflict-check` — conflict markers refused by a hook
@@ -56,3 +56,5 @@ None.
 |---|---|---|
 | `prek.toml` — `check-merge-conflict --assume-in-merge` | Confirmed. | None |
 | `docs/coding-standards.md`, `docs/roadmap.md` — the check's row; the ledger | Confirmed. | None |
+
+Status before 2026-11-25: implemented 2026-10-29; review pending

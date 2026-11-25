@@ -1,7 +1,8 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-29
+kind: method
+updated: 2026-11-25
 verified_by: pending (Joon); the O1 tests in tests/test_analysis_ode.py pass
 sources:
   - "ADR-0012 (analysis layout)"
@@ -58,7 +59,9 @@ What the two modern papers add, and do not [cited]. Guckenheimer & Meloon's accu
 
 **The initial guess** is not packaged anywhere (BifurcationKit, BoundaryValueDiffEq, MatCont, CoCo, AUTO take an orbit guess from the user or start from a Hopf point; [cited] from their documentation, or [cited via citing papers]). The recipe is Parker & Chua's brute force on a section: settle, place $\Sigma$ normal to the flow at the settled point ("let the program automatically set $h = f(x^{(0)})$ and $x_\Sigma = x^{(0)}$", §5.5), count positive crossings (footnote 4), measure the return time. Crossings are located by event detection with a root finder (Shampine & Thompson 2000, Comput. Math. Appl. 39:43–54 — *verify*; the classical remedy for the final-step error is Hénon 1982, via Tucker 2002, [cited]). Peak-to-peak timing is inferior: a smooth extremum localizes time to $\sqrt{2\varepsilon/\vert\ddot x\vert}$, a transversal crossing to $\varepsilon/\vert\dot x\vert$ [deduced].
 
-## 3. The method (`analysis/ode/`)
+## 3. The method
+
+The implementation is in `analysis/ode/`.
 
 `CrossSection` (`sections.py`): $\Sigma = (p, n)$ with unit normal, `signed_distance(x)`, `normal_to_flow(ode, p)` the flow-normal section.
 
@@ -84,7 +87,9 @@ is replaced by the polished $T$; the two agree to $10^{-6}$ on FitzHugh–Nagumo
 `nearest_cycle_time` is a Newton solve on the stationarity condition and reports whether
 it converged, so a point it returns is exact to that solve's tolerance.
 
-## 5. Oracles (`tests/test_analysis_ode.py`)
+## 5. Oracles
+
+The tests are in `tests/test_analysis_ode.py`.
 
 | System | Exact | Pinned |
 |---|---|---|

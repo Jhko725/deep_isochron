@@ -1,3 +1,9 @@
+---
+type: change
+status: merged
+updated: 2026-11-25
+---
+
 # 2026-09-30 · `splines-refactor`
 
 Base commit: `18d6908`. Branch commit(s): see `git log main..splines-refactor`.

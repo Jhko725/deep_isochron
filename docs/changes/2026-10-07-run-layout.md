@@ -1,7 +1,7 @@
 ---
 type: change
-status: review rounds 1–2 applied; optimizer group reworked 2026-10-14 (adam default, adabelief, adamw+mask, clip_norm)
-updated: 2026-10-14
+status: merged
+updated: 2026-11-25
 branch: run-layout
 ---
 
@@ -237,3 +237,5 @@ split and the loaders come from one place.
 | Change | Thoughts | Modifications |
 |---|---|---|
 | `configs/optimizer/adam.yaml` (default again), `adabelief.yaml` (new), `adamw.yaml` (mask kept); `configs/train.yaml` `clip_norm`; `build_optimizer(cfg, clip_norm)`; tests | Confirmed. | None |
+
+Status before 2026-11-25: review rounds 1–2 applied; optimizer group reworked 2026-10-14 (adam default, adabelief, adamw+mask, clip_norm)

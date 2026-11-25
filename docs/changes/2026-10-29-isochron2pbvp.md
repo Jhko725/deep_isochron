@@ -1,7 +1,7 @@
 ---
 type: change
-status: implemented 2026-10-29; review pending
-updated: 2026-10-29
+status: merged
+updated: 2026-11-25
 ---
 
 # `isochron2pbvp` — the coworker's AUTO-07p reproduction as a project of its own
@@ -81,3 +81,5 @@ None.
 | `isochron2pbvp/` — 110 files from `d3edbfe`, no `.DS_Store`; the README | Confirmed. | None |
 | `prek.toml`, `pyproject.toml`, `scripts/checks/check_spelling.py` — the four exclusions | Confirmed.| Noned |
 | `stages.py`, `docs/design/isochrons.md`, `docs/decisions/0016`, `0017`, `docs/coding-standards.md`, `docs/document-conventions.md`, `docs/architecture.md`, `CLAUDE.md`, `docs/roadmap.md` — the project named | Confirmed. | None |
+
+Status before 2026-11-25: implemented 2026-10-29; review pending

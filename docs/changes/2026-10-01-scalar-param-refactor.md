@@ -1,3 +1,9 @@
+---
+type: change
+status: merged
+updated: 2026-11-25
+---
+
 # 2026-10-01 · `scalar-param-refactor`
 
 Base commit: `eed3731`. Plan: `claude/refactor-plan-2026-10-01.md` (project doc). Branch

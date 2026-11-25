@@ -1,7 +1,7 @@
 ---
 type: change
-status: landed 2026-10-30 (nine units, the period unit, the review's cleanup, the CI change, the documents); review of the documents commit pending
-updated: 2026-10-30
+status: merged
+updated: 2026-11-25
 ---
 
 # `phase-turns` — the phase as a fraction of the period in $[0, 1)$
@@ -418,3 +418,5 @@ ADR-0020's; the rest are this branch's.
 | `tests/conftest.py`, `.github/workflows/ci.yml`, `CLAUDE.md`, `docs/coding-standards.md` — retro: the cache in `conftest.py`, the facts written down | Confirmed. | None |
 | `docs/design/normal-forms.md`, `docs/design/phase-field.md`, `docs/design/isochrons.md`, `docs/design/cycle-estimation.md` — converted to the turn convention, the amendment lines removed | Looks good. | None |
 | `docs/decisions/0020-phase-in-turns.md` — History: the design documents rewritten, not amended | Looks good. | None |
+
+Status before 2026-11-25: landed 2026-10-30 (nine units, the period unit, the review's cleanup, the CI change, the documents); review of the documents commit pending

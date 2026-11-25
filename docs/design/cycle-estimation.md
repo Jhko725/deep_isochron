@@ -1,7 +1,8 @@
 ---
 type: design
 status: tentative
-updated: 2026-10-30
+kind: method
+updated: 2026-11-25
 verified_by: pending (Joon); the E1 oracle tests in tests/test_analysis.py pass
 sources:
   - "ADR-0012 (analysis layout)"
@@ -199,7 +200,9 @@ Fourier series truncated at order $K$ and fitted by least squares, whose residua
 noise floor (steps 6–7). A tail still in the transient biases all three toward the
 transient, which `converged` reports (step 7) and §6 leaves to E2.
 
-## 5. Oracles (`tests/test_analysis.py`)
+## 5. Oracles
+
+The tests are in `tests/test_analysis.py`.
 
 
 | Test | Pins down |

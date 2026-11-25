@@ -1,7 +1,7 @@
 ---
 type: change
-status: reviewed 2026-10-29; the design-document format round in
-updated: 2026-10-29
+status: merged
+updated: 2026-11-25
 ---
 
 # `docs-layout` — guides, document conventions, one design document per analysis, the scripts in three kinds
@@ -221,3 +221,5 @@ No test changes. The checks that cover this branch, each run on the final tree:
 | `scripts/checks/check_references.py` — refuses `*cited*`, `*deduced*`, `*secondary*` under `docs/design/` | Confirmed. | None |
 | the section numbers in `analysis/`, `auto/`, three test files, ADR-0012, `index.md`, `references.md`, `roadmap.md` | Confirmed. | None |
 | the `style:` commit `2453581` — 163 labels converted | Confirmed. | None |
+
+Status before 2026-11-25: reviewed 2026-10-29; the design-document format round in

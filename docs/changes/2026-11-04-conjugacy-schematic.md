@@ -1,7 +1,7 @@
 ---
 type: change
-status: in progress; commits 1–2 landed, commit 3 waits for the notebook
-updated: 2026-11-04
+status: in-progress
+updated: 2026-11-25
 ---
 
 # `conjugacy-schematic` — the training pipeline drawn as a commutative square
@@ -128,3 +128,5 @@ One row per *Files* bullet; *Thoughts* and *Modifications* are Joon's.
 | `src/deep_isochron/plotting/schematic.py` — `SchematicLabels`, `SchematicStyle` and the four drawers | | |
 | `src/deep_isochron/plotting/__init__.py` — the exports of the schematic and the package docstring | | |
 | `tests/test_plotting.py` — the `schematic` section | | |
+
+Status before 2026-11-25: in progress; commits 1–2 landed, commit 3 waits for the notebook
