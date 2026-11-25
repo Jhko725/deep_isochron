@@ -491,6 +491,7 @@ dev = [
     { name = "prek" },
     { name = "pytest" },
     { name = "pytest-xdist" },
+    { name = "pyyaml" },
     { name = "rust-just" },
     { name = "ty" },
 ]
@@ -537,6 +538,7 @@ dev = [
     { name = "prek", specifier = ">=0.2" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "rust-just", specifier = ">=1.59.0" },
     { name = "ty", specifier = ">=0.0.88" },
 ]

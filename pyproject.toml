@@ -88,6 +88,7 @@ dev = [
     "prek>=0.2",  # the pre-commit runner of prek.toml; `just setup` installs its hook
     "pytest>=9.1.1",
     "pytest-xdist>=3.8.0",
+    "pyyaml>=6.0",
     "rust-just>=1.59.0",  # the task runner: `uv run just --list` (justfile)
     "ty>=0.0.88",
 ]
@@ -100,8 +101,16 @@ slurm = [
 [tool.uv.sources]
 auto-07p = { git = "https://github.com/auto-07p/auto-07p", rev = "44cc1c42a888179bdbd608a40613caee9cbc4675" }
 
+[tool.ty.environment]
+# The tests import `markdown` from scripts/checks, as the pytest pythonpath below lets
+# them; the check scripts import it from their own directory.
+extra-paths = ["scripts/checks"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# --import-mode=importlib puts no test directory on sys.path; this lets the tests import
+# their shared module `helpers`, and `markdown` from scripts/checks.
+pythonpath = ["tests", "scripts/checks"]
 addopts = "-ra --import-mode=importlib --strict-markers"
 markers = [
     "slow: full-pipeline tests; deselect with -m 'not slow'",
