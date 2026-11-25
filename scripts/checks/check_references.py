@@ -2,20 +2,27 @@
 # at b9e4cc3.
 """Check that every citation and every relative link in the tree resolves.
 
-A citation resolves to an entry in ``docs/references.md``; a relative Markdown link
+A citation resolves to an entry in ``docs/references.bib``; a relative Markdown link
 resolves to a file in the repository.
 
 A citation is an author-year key, ``Lust 2001``, ``Wilson & Moehlis 2016``,
 ``Langfield et al. 2014``, optionally followed by a locator after a comma:
 ``(Lust 2001, Eq. 10)``, ``(Wilson & Moehlis 2016, Eq. 7; Kvalheim & Revzen 2021, Prop.
-5)``. The bibliography ``docs/references.md`` has one entry per key, and this script
-fails on any key in the documents, docstrings or tests that is not an entry there. It
-also lists the entries that nothing cites, as information rather than failure, so that
-the bibliography can be pruned by hand.
+5)``. The bibliography ``docs/references.bib`` has one entry per key, the key derived
+from the entry's authors and year by ``scripts/docs/generate_references.py`` (or given
+by the entry's ``key`` field), and this script fails on any key in the documents,
+docstrings or tests that is not an entry there. It also lists the entries that nothing
+cites, as information rather than failure, so that the bibliography can be pruned by
+hand.
 
-Both drifts this catches happened before the bibliography existed: the same paper
-cited under three forms (the full author list, the surnames joined by en dashes, and
-the ``et al.`` form), and five documents each carrying their own reference list.
+The page ``docs/references.md`` is generated from the ``.bib`` file, and this script
+fails when the page differs from the generator's output, apart from its ``updated``
+date; ``just references`` rewrites it. The generator is loaded by file path, and this
+script writes nothing.
+
+The check catches a paper cited under more than one form (the full author list, the
+surnames joined by en dashes, or the ``et al.`` form) and a document that carries its
+own reference list.
 
 A relative link is a Markdown link ``[text](target)`` whose target is not a URL or a
 bare ``#anchor``; the target, percent-decoded and without its ``#anchor``, must name an
@@ -38,23 +45,28 @@ passes every tracked Python and Markdown file; with no path, every file in `SCOP
 checked. A named file outside `SCOPE`, or in a skipped directory, is not checked. The
 entries that nothing cites are those that the checked files do not cite, so the list is
 complete only when every file is checked, as in ``just check``. Exits 1 on an
-unresolved key, a broken link or an italic provenance label.
+unresolved key, a broken link, an italic provenance label, an entry that the generator
+cannot list, or a page that differs from the generated one.
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import re
 import sys
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 import markdown
 
 
 ROOT = Path(__file__).resolve().parents[2]
 BIBLIOGRAPHY = ROOT / "docs" / "references.md"
+SOURCE = ROOT / "docs" / "references.bib"
+GENERATOR = ROOT / "scripts" / "docs" / "generate_references.py"
 # The files checked, relative to the root: a directory covers every file under it.
 SCOPE = (
     "docs",
@@ -85,18 +97,27 @@ KEY = re.compile(
 )
 # A target with a scheme (``https:``, ``mailto:``) or a bare anchor is not checked.
 EXTERNAL = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|#)")
-# An entry line of the bibliography: ``- **Key** — ...``.
-ENTRY = re.compile(r"^- \*\*(?P<key>[^*]+)\*\* ")
 
 
-def bibliography_keys(path: Path = BIBLIOGRAPHY) -> set[str]:
-    """The keys defined in the bibliography, one per ``- **Key** —`` line."""
-    keys: set[str] = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        match = ENTRY.match(line)
-        if match:
-            keys.add(match.group("key").strip())
-    return keys
+def load_generator(path: Path = GENERATOR) -> ModuleType:
+    """The module ``scripts/docs/generate_references.py``, loaded from its file, since
+    ``scripts/docs`` is not a package on the import path."""
+    spec = importlib.util.spec_from_file_location("generate_references", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    # A dataclass looks its module up in sys.modules while it is being defined.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def stale_page(generator: ModuleType, source: str) -> bool:
+    """Whether ``docs/references.md`` differs from the page that `generator` renders
+    from the BibTeX `source`, dated as the page is dated."""
+    page = BIBLIOGRAPHY.read_text(encoding="utf-8") if BIBLIOGRAPHY.exists() else ""
+    updated = generator.page_date(page)
+    return updated is None or generator.render(source, updated) != page
 
 
 def scope_files() -> Iterator[Path]:
@@ -199,13 +220,13 @@ def scan(files: Iterable[Path], known: set[str]) -> ScanResult:
     return found
 
 
-def print_report(found: ScanResult, uncited: list[str]) -> None:
-    """Print each flagged line of `found`, the `uncited` keys of the bibliography and
-    the counts."""
+def print_report(found: ScanResult, uncited: list[str], stale: bool) -> None:
+    """Print each flagged line of `found`, the `uncited` keys of the bibliography, the
+    counts, and whether the generated page is `stale`."""
     for line in found.unresolved + found.broken + found.labels:
         print(line)
     if uncited:
-        print(f"uncited entries in {BIBLIOGRAPHY.relative_to(ROOT).as_posix()}:")
+        print(f"uncited entries in {SOURCE.relative_to(ROOT).as_posix()}:")
         for key in uncited:
             print(f"  {key}")
     if found.unresolved:
@@ -214,6 +235,12 @@ def print_report(found: ScanResult, uncited: list[str]) -> None:
         print(f"{len(found.broken)} broken relative link(s)")
     if found.labels:
         print(f"{len(found.labels)} italic provenance label(s) under {LABEL_SCOPE}")
+    if stale:
+        print(
+            f"{BIBLIOGRAPHY.relative_to(ROOT).as_posix()} differs from the page "
+            f"generated from {SOURCE.relative_to(ROOT).as_posix()}; "
+            "run `just references`"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -223,11 +250,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("paths", nargs="*", type=Path)
     arguments = parser.parse_args(argv)
 
-    known = bibliography_keys()
+    generator = load_generator()
+    source = SOURCE.read_text(encoding="utf-8")
+    try:
+        known = {reference.key for reference in generator.references(source)}
+    except ValueError as error:
+        print(f"{SOURCE.relative_to(ROOT).as_posix()}: {error}")
+        return 1
+    stale = stale_page(generator, source)
     files = arguments.paths or scope_files()
     found = scan(filter(in_scope, files), known)
-    print_report(found, sorted(known - found.cited))
-    if found.unresolved or found.broken or found.labels:
+    print_report(found, sorted(known - found.cited), stale)
+    if found.unresolved or found.broken or found.labels or stale:
         return 1
     print(f"all {len(found.cited)} cited keys resolve; no broken relative links")
     return 0
