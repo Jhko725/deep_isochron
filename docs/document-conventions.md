@@ -22,7 +22,7 @@ the conventions for code, tests and docstrings are in
 | `guides/` | how to do something: install AUTO, compute isochrons, run an experiment from a notebook | doing that thing |
 | `changes/` | one document per branch, the reviewer's map of the change | reviewing or continuing a branch |
 | `plans/` | the handoff of each implementation round, frozen when committed | reading why a branch was built the way it was |
-| [`references.md`](references.md) | the one bibliography | citing |
+| [`references.md`](references.md) | the one bibliography, generated from `references.bib` | citing |
 | [`index.md`](index.md) | every document above, with its status | finding a document |
 
 `isochron2pbvp/` at the repository's root is the coworker's project, under his
@@ -204,18 +204,13 @@ last sentence of every paragraph) is the check.
 
 ## References
 
-The repository has one bibliography, `references.md`, and one in-text form. The key is
-`Author Year` for one author (`Lust 2001`), `Author & Author Year` for two
-(`Wilson & Moehlis 2016`), `Author et al. Year` for three or more (`Dieci et al. 1997`),
-with a letter suffix on a collision (`Langfield et al. 2025a`). <!-- references:ignore: the example --> A locator follows the key after a comma, in one of
-the forms `Eq. 7`, `Eqs. 9–14`, `§3`, `Prop. 5`, `Theorem 2`, `Table 5`, `Fig. 9`,
-`pp. 210–214`, `Ch. 8`, `App. D`, `Remark 4`, and several citations are separated by
-semicolons inside one pair of parentheses. Every key resolves to an entry in
-`references.md`, which `scripts/checks/check_references.py` enforces, and the entry
-carries the full reference, a DOI or arXiv identifier, and the locators the repository
-uses. Design documents and ADRs carry no reference list of their own; their frontmatter
-`sources:` lists keys. `README.md` is in the check's scope too: its acknowledgment once
-named a paper without a citation.
+The repository has one bibliography, `references.bib`, and one in-text form. The key is `Author Year` for one author (`Lust 2001`), `Author & Author Year` for two (`Wilson & Moehlis 2016`), `Author et al. Year` for three or more (`Dieci et al. 1997`), with a letter suffix on a collision (`Langfield et al. 2025a`). <!-- references:ignore: the example --> A locator follows the key after a comma, in one of the forms `Eq. 7`, `Eqs. 9–14`, `§3`, `Prop. 5`, `Theorem 2`, `Table 5`, `Fig. 9`, `pp. 210–214`, `Ch. 8`, `App. D`, `Remark 4`, and several citations are separated by semicolons inside one pair of parentheses. Every key resolves to an entry, which `scripts/checks/check_references.py` enforces. Design documents and ADRs carry no reference list of their own; their frontmatter `sources` lists keys. `README.md` is in the check's scope too.
+
+The page `references.md` is generated from `references.bib` by `scripts/docs/generate_references.py` (`just references`) and is not edited by hand. The generator derives each in-text key from the entry's `author` and `year` fields, and gives colliding keys their letter suffixes in the order of the entries' titles. Names and titles are written in Unicode in the `.bib` file, since the generator removes braces and decodes no other LaTeX.
+
+An entry may carry a `key` field. The generator uses it as the in-text key and then requires neither `author` nor `year`. The field is for software and documentation pages, such as `AUTO-07p` and `JAX docs: profiling`.
+
+An entry's `note` holds what a lookup could not confirm. "doi: not verified" means that no DOI was confirmed for the entry, and "details unverified" names the venue, volume or page data that rest on the repository's own text. The flags were checked against CrossRef on 2026-11-25, and a flag is removed when a lookup confirms the entry.
 
 ## Markdown that renders in both previews
 

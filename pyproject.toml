@@ -145,4 +145,4 @@ xfail_strict = true
 # passes. docs/coding-standards.md says why that directory is out of scope.
 builtin = "clear,en-GB_to_en-US"
 skip = "*.lock,*.ipynb,.git,*.npz,*.nc,*.inc,*.f90,./isochron2pbvp,isochron2pbvp/*,./docs/changes,docs/changes/*"
-ignore-words-list = "oint,numer,Numer,Commun,Stoer,INOUT,nd"
+ignore-words-list = "oint,numer,Numer,Commun,Stoer,Troup,INOUT,nd"
