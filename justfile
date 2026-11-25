@@ -66,3 +66,11 @@ smoke:
         validation.batch=16 num_steps=20 eval_every=10 log_every=5 checkpoint.every=10 \
         hydra.run.dir=ci-run
     uv run python -c "from deep_isochron.experiment import load_run; cfg, state = load_run('ci-run'); assert int(state.step) == 20, int(state.step); print('reopened run at step', int(state.step))"
+
+# Every [unconfirmed] marker under docs/ with its file and line. The conventions
+# document is left out: it defines the marker rather than using it.
+pending:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -d docs ] || exit 0
+    grep -rnF --include='*.md' --exclude=document-conventions.md --exclude-dir=plans '[unconfirmed]' docs || true

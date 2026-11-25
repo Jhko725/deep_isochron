@@ -42,5 +42,6 @@ hooks = [
   { id = "check-docstrings", name = "check-docstrings (headers on their own line; private functions documented; modules under 600 lines)", entry = "uv run python scripts/checks/check_docstrings.py", language = "system", types = ["python"] },
   { id = "check-changes", name = "check-changes (each review round of a change document covers exactly the files changed in it)", entry = "uv run python scripts/checks/check_changes.py", language = "system", pass_filenames = false, always_run = true },
   { id = "check-containers", name = "check-containers (eqx.Module, frozen dataclass of NumPy, NamedTuple only for *Params)", entry = "uv run python scripts/checks/check_containers.py", language = "system", pass_filenames = false, types = ["python"] },
+  { id = "check-docs", name = "check-docs (vocabularies, headings, index, ledger, architecture, ADRs, unconfirmed markers, templates)", entry = "uv run python scripts/checks/check_docs.py", language = "system", pass_filenames = false, files = "^(docs/.*\\.md|src/.*\\.py|scripts/checks/check_docs\\.py)$" },
   { id = "check-dependencies", name = "check-dependencies (declared packages; src/ imports no scripts, notebooks or tests)", entry = "uv run python scripts/checks/check_dependencies.py", language = "system", pass_filenames = false, files = "(\\.py|^pyproject\\.toml)$" },
 ]

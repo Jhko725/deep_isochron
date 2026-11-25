@@ -52,12 +52,12 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `docs/plans/2026-11-25-conventions-sync.md` — the handoff of this round, committed verbatim under a frontmatter block. | | |
 | `scripts/checks/markdown.py` — UFR's Markdown reader, copied with a source line. | | |
 | `scripts/checks/check_changes.py` — UFR's rounds check in place of the rows check. A document's `base` field names the branch that round 1 starts from (`base_ref`), and the 24 old-format documents are skipped by name (`OLD_FORMAT`). The coverage of each round moves out of `problems` into `round_coverage_problems`, for `C901`. | | |
-| `prek.toml` — the `check-changes` hook always runs, and the `check-md-math` and `check-references` hooks take the files that `prek` passes, as in UFR. The `check-dependencies` hook runs the new dependency check. | | |
+| `prek.toml` — the `check-changes` hook always runs, and the `check-md-math` and `check-references` hooks take the files that `prek` passes, as in UFR. The `check-dependencies` hook runs the new dependency check. The `check-docs` hook is added. | | |
 | `pyproject.toml` — pytest and ty find `scripts/checks`, and `pyyaml` joins the `dev` group. Ruff's `C901` runs with `max-complexity = 8`. `omegaconf` and `optimistix` join `dependencies`, and `absl-py`, `pillow` and `scipy` join the `dev` group, as every import under `src`, `tests` and `scripts` must be declared. | | |
 | `uv.lock` — `pyyaml` in the `dev` group. The five packages above are locked, from `uv lock` without `--upgrade`. | | |
 | `.github/workflows/ci.yml` — the `checks` job fetches the full history. | | |
 | `docs/changes/2026-11-25-conventions-sync.md` — this document. | | |
-| `docs/document-conventions.md` — § Change documents in the rounds form, with the `base` field and the old-format rule, and a new § Plans. | | |
+| `docs/document-conventions.md` — § Change documents in the rounds form, with the `base` field and the old-format rule, and a new § Plans. § Frontmatter and status gives the closed vocabularies; § Required sections, § Unconfirmed decisions and the rules for a superseded ADR are added, and the *Checks* table lists the new checks. | | |
 | `.claude/agents/implementer.md` — the implementer fills rows of the open round, in place of *Files* bullets; it gains `disallowedTools: Agent`, the `block_push.py` hook, the precedence and no-subagent lines, a *Skills* report line, and loses notebook cells. | | |
 | `docs/index.md` — the plan and this document listed. The decision table is split into *In force* and *Superseded*, and the status cells of the ADRs and design documents repeat the frontmatter. | | |
 | `.claude/rules/working-rules.md` — UFR's working rules at b9e4cc3, copied. | | |
@@ -82,3 +82,4 @@ No test file has changed so far. `uv run just check` passes at each commit. The 
 | `docs/decisions/` — eleven ADRs take a status from the closed vocabulary: `amended` for 0005, 0007, 0008, 0009, 0011, 0012, 0014 and 0015, and `accepted` for 0016, 0017 and 0020 (A2). | | |
 | `docs/design/` — each design document names its `kind` (A3). `isochrons.md`, `phase-field.md` and `normal-forms.md` take a status from the closed vocabulary, `normal-forms.md` names its tentative sections under the title (A4), and the headings of four method documents become the template's, with the removed words as the first line of the section. | | |
 | `docs/roadmap.md` — the ledger row of 2026-10-27 for Steps C–D of `auto-isochrons` moves above the two rows of 2026-10-28 (A5). | | |
+| `justfile` — the `pending` recipe lists every marker of an unconfirmed decision under `docs/`. | | |

@@ -36,19 +36,22 @@ one document starts to carry both, it is split.
 
 ## Frontmatter and status
 
-Every document opens with a frontmatter block: `type` (`architecture`, `roadmap`,
-`design`, `decision`, `guide`, `change`, `plan`, `reference`, `index`), `status`, `updated` (the
-date of the last edit, changed in the same commit as the text), and where relevant
-`verified_by` (who or what has checked the claims), `sources` (what the document rests
-on) and `id`. The block is the useful part of Google's Open Knowledge Format, adopted
-2026-10-04 so that a document's standing can be read without reading the document.
+Every document opens with a frontmatter block: `type`, `status`, `updated` (the date of the last edit, changed in the same commit as the text), and where relevant `verified_by` (who or what has checked the claims), `sources` (what the document rests on), `base` (§ Change documents) and `id`. A reader learns a document's standing from the block, without reading the document.
 
-`status` values: `current` (kept true at all times), `agreed` (a design settled with
-Joon), `accepted` (a decision in force; `amended` when later changed in place),
-`tentative` (written by Claude, not yet checked by Joon), `draft for review`.
+`type` and `status` are closed vocabularies, and `scripts/checks/check_docs.py` fails on a value outside them. Each type allows these statuses:
 
-The block has to be valid YAML, since GitHub renders it as a table only then, and
-`sources` is a block list with every item quoted:
+| Type | Allowed status | Meaning |
+|---|---|---|
+| architecture, roadmap, glossary, findings, verification, reference, index | `current` | kept true at all times |
+| design | `draft for review`, `tentative`, `agreed` | written and awaiting Joon; written by Claude and unchecked; settled with Joon |
+| decision | `accepted`, `amended`, `superseded` | in force; in force and changed in place; replaced by a later ADR, which it names |
+| change | `planned`, `in-progress`, `landed`, `merged` | written before the work; work under way; work complete on the branch; branch merged |
+| guide | `tentative`, `current` | unchecked; checked against the tool |
+| plan | `planned`, `executed` | committed at the start of its round; the round's documents are written |
+
+A `merged` change document is history. Its text is not rewritten, and a correction is appended as a dated line.
+
+The block is valid YAML, since GitHub renders it as a table only then, and `sources` is a block list with every item quoted:
 
 ```yaml
 sources:
@@ -56,12 +59,11 @@ sources:
   - "Wilson & Moehlis 2016"
 ```
 
-A flow list `[ADR-0012 (analysis layout), Wilson & Moehlis 2016]` parses, but YAML splits
-it at every comma, so a parenthesized remark becomes two sources; the review of
-`docs-layout` found the guides' lists rendered that way. `scripts/checks/check_md_math.py`
-fails on a block that does not parse, lacks `type`, `status` or `updated`, or writes
-`sources` as a flow list. The change documents that predate the block carry none and are
-not checked for one.
+A flow list `[ADR-0012 (analysis layout), Wilson & Moehlis 2016]` parses, but YAML splits it at every comma, so a parenthesized remark becomes two sources. `scripts/checks/check_md_math.py` fails on a block that does not parse, lacks `type`, `status` or `updated`, or writes `sources` as a flow list.
+
+## Required sections
+
+Each type has required headings, in a fixed order, so that a heading means the same thing in every document of the type. A section with nothing to say is one sentence, never left out. The required headings live in one table in `scripts/checks/check_docs.py`, which fails on a missing or reordered heading. The same check asserts that each form of that table is quoted by exactly one template of this document, so the two cannot drift.
 
 ## Change documents
 
@@ -117,7 +119,7 @@ Every branch has a companion document `changes/<YYYY-MM-DD>-<branch>.md`, commit
 ```
 
 - The frontmatter block stands above the verbatim body, and its `sources` names the handoff's Project path.
-- The spelling checks, `check_md_math.py` (except for the frontmatter), and `check_references.py` skip `plans/`, as they skip `changes/`: a plan is a record of what was said, and its line numbers refer to the commit it names.
+- `check_md_math.py` checks the frontmatter of a plan and skips its body, and `check_references.py` skips `plans/` as it skips `changes/`: a plan is a record of what was said, and its line numbers refer to the commit it names. The spelling checks read a plan like any other document.
 
 ## Decision records
 
@@ -137,14 +139,19 @@ order:
 ## History        one dated line per change, with its branch
 ```
 
-A change to a decision rewrites Decision and Consequences in the same commit; a change
-that reverses the decision is a new ADR. The first mention of an ADR, design document or
-code file in each section is a relative link, and `scripts/checks/check_references.py`
-fails on a link whose target does not exist.
+A change to a decision rewrites *Decision* and *Consequences* in the same commit, and the status becomes `amended`. A change that reverses the decision is a new ADR. The first mention of an ADR, design document or code file in each section is a relative link, and `scripts/checks/check_references.py` fails on a link whose target does not exist.
+
+Every ADR keeps one path for its whole life, `decisions/<NNNN>-<slug>.md`, and a number is never reused. A superseded ADR is not moved, because other ADRs, docstrings and merged change documents link to it, and a merged change document is not rewritten. Its standing is shown in three places:
+
+- **The index groups decisions.** `index.md` lists them in two tables, *In force* and *Superseded*.
+- **The frontmatter links both ways.** The superseded ADR carries `superseded_by: ADR-<NNNN>`, and its successor carries `supersedes: ADR-<NNNN>`.
+- **The first line redirects.** A superseded ADR opens, above *Context*, with one sentence naming its successor.
+
+`scripts/checks/check_docs.py` fails when the status, the two frontmatter fields, the opening line and the index table disagree.
 
 ## Design documents
 
-A design document under `design/` is one of three kinds. A **method** document takes a numerical method from
+A design document under `design/` is one of three kinds, named in its frontmatter as `kind`. A **method** document takes a numerical method from
 the literature to tested code and follows the `numerical-method` skill; a **derivation**
 (`normal-forms.md`, `cubic-bspline.md`) fixes conventions, derives the quantities in one
 convention stated once, and ends with the API and the tests it implies; a **note**
@@ -183,6 +190,10 @@ labels stay when the text is edited, and a `[code]` claim is re-read rather than
 recalled: ADR-0004's *Consequences* once described a `# ty: ignore` three branches
 after it was removed. The italic forms `*cited*`, `*deduced*` and `*secondary*` were
 the older spelling; `scripts/checks/check_references.py` refuses them under `design/`.
+
+## Unconfirmed decisions
+
+A decision that Claude took and Joon has not confirmed is marked **[unconfirmed]** where it is stated. `just pending` lists every marker with its file and line. `check_docs.py` fails on a marker inside a document whose status is `agreed`, `accepted`, `amended` or `merged`, so that nothing unconfirmed is recorded as settled. The marker written in code font is a mention of it and does not count.
 
 ## Paragraphs
 
@@ -230,7 +241,17 @@ previews agree.
 
 | Rule | Check | Runs in |
 |---|---|---|
-| both Markdown previews; the frontmatter parses, carries `type`, `status`, `updated`, and lists `sources` in block form | `scripts/checks/check_md_math.py` | `prek`, CI |
-| every citation resolves to `references.md`; every relative Markdown link resolves; no italic provenance label under `design/` | `scripts/checks/check_references.py` | `prek`, CI |
-| American English | `codespell` and `scripts/checks/check_spelling.py`, described in [`coding-standards.md`](coding-standards.md) § Deterministic checks | `prek`, CI |
-| `index.md` lists every document; `architecture.md` follows every module move; the Done ledger is append-only | review | — |
+| both Markdown previews; the frontmatter parses, carries `type`, `status`, `updated`, and lists `sources` in block form | `check_md_math.py` | `prek`, CI |
+| `type` and `status` are in the closed vocabularies | `check_docs.py` | `prek`, CI |
+| required headings present and in order | `check_docs.py` | `prek`, CI |
+| `index.md` links every document | `check_docs.py` | `prek`, CI |
+| the Done ledger is chronological | `check_docs.py` | `prek`, CI |
+| every package directory appears in `architecture.md` | `check_docs.py` | `prek`, CI |
+| a superseded ADR's status, frontmatter, opening line and index table agree | `check_docs.py` | `prek`, CI |
+| no `[unconfirmed]` in a settled document | `check_docs.py`; `just pending` lists all | `prek`, CI |
+| the templates in this document match the check's table | `check_docs.py` | `prek`, CI |
+| every citation resolves to `references.md`; every relative Markdown link resolves; no italic provenance label under `design/` | `check_references.py` | `prek`, CI |
+| each round of *Review notes* covers exactly the files changed in its range; closed rounds are not edited | `check_changes.py` | `prek`, CI |
+| American English | `codespell` and `check_spelling.py`, described in [`coding-standards.md`](coding-standards.md) § Deterministic checks | `prek`, CI |
+
+The check scripts are in `scripts/checks/`.
